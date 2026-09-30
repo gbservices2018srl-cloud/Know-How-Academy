@@ -37,6 +37,6 @@ services:
 databases:
   - name: mappa-protocolli-db
     databaseName: mappa_protocolli
-    # ATTENZIONE: il database gratuito scade dopo 30 giorni e dopo altri 14 viene cancellato con tutti i dati.
-    # Prima della scadenza passalo a un piano a pagamento dalla dashboard di Render (nessun dato si perde).
-    plan: free
+    # Database più piccolo a pagamento (non scade), con disco da 1 GB: circa 6,30 $/mese.
+    # Il disco si può aumentare dalla dashboard di Render, non diminuire.
+    diskSizeGB: 1
