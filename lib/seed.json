@@ -1,5 +1,4 @@
 {
- "v": 1,
  "flows": [
   {
    "id": "paziente",
@@ -701,8 +700,7 @@
      "attiv",
      "loop"
     ]
-   ],
-   "auto": true
+   ]
   },
   {
    "id": "sterilizzazione",
@@ -807,8 +805,7 @@
      "s5",
      "s7"
     ]
-   ],
-   "auto": true
+   ]
   }
  ],
  "docs": [
@@ -961,85 +958,6 @@
    "updated": "2026-07-14",
    "body": "## Prima del ciclo\n- Test di Bowie-Dick all'accensione\n- Carico non superiore al 80% della capacità\n\n## Durante\nCiclo B a 134 °C. Non aprire lo sportello prima della fine dell'asciugatura.\n\n## Controllo\n- Verifica viraggio degli indicatori sulle buste\n- Stampa e firma del report di ciclo\n\n> Ciclo non conforme: tutto il carico torna al lavaggio e va segnalato nel registro.",
    "example": true
-  }
- ],
- "users": [
-  {
-   "id": "u_admin",
-   "name": "Giancarlo",
-   "title": "Titolare",
-   "role": "admin",
-   "access": {}
-  },
-  {
-   "id": "u_mart",
-   "name": "Martina Rossi",
-   "title": "Segreteria",
-   "role": "collab",
-   "access": {
-    "paziente": {
-     "mode": "some",
-     "hide": false,
-     "nodes": [
-      "ads_paro",
-      "ads_est",
-      "ads_kit",
-      "giornate",
-      "eventi",
-      "libro",
-      "polimedica",
-      "followup",
-      "lead_on",
-      "lead_off",
-      "chiamata",
-      "presa",
-      "nonrisp",
-      "sipres",
-      "nonpres",
-      "display",
-      "email",
-      "accoglienza",
-      "richiami",
-      "recens",
-      "garanzie",
-      "kasco"
-     ]
-    }
-   }
-  },
-  {
-   "id": "u_luca",
-   "name": "Luca Bianchi",
-   "title": "Igienista",
-   "role": "collab",
-   "access": {
-    "paziente": {
-     "mode": "some",
-     "hide": true,
-     "nodes": [
-      "igiene",
-      "paro",
-      "richiami",
-      "care",
-      "visita",
-      "finecure"
-     ]
-    },
-    "sterilizzazione": {
-     "mode": "all"
-    }
-   }
-  },
-  {
-   "id": "u_sara",
-   "name": "Sara Conti",
-   "title": "Consulente clinica",
-   "role": "collab",
-   "access": {
-    "paziente": {
-     "mode": "all"
-    }
-   }
   }
  ]
 }
