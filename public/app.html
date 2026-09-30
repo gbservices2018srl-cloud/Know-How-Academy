@@ -1,0 +1,1539 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Mappa dei Protocolli</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: una tela a tutto schermo (come Freeform) con barra in alto, pannello laterale per la fase e cassetto per l'assistente */
+:root{
+  --bg:#E9EFEE; --dot:#C3CFCD; --surface:#FFFFFF; --surface-2:#F3F7F6; --fg:#13201F; --muted:#586866;
+  --line:#D3DDDB; --accent:#0B6B63; --accent-soft:#D6ECE9; --accent-fg:#FFFFFF; --edge:#33423F;
+  --danger:#B42318; --danger-soft:#FBE3E0; --wm:rgba(11,107,99,.11); --shadow:0 1px 2px rgba(16,32,30,.06),0 8px 28px rgba(16,32,30,.10);
+  --n-mkt:#F3AE66; --n-fase:#F5D568; --n-op:#8EC7F0; --n-ok:#8DD09D; --n-ko:#EF8C80; --n-care:#EF8DB9; --n-fg:#171A19;
+  --f-display:"Bricolage Grotesque", "Figtree", system-ui, sans-serif;
+  --f-body:"Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --r:12px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E1615; --dot:#23312F; --surface:#162120; --surface-2:#1C2928; --fg:#E3EDEB; --muted:#94A6A3;
+  --line:#2A3A38; --accent:#4DBDB0; --accent-soft:#16312E; --accent-fg:#06201D; --edge:#9FB2AF;
+  --danger:#FF8A7A; --danger-soft:#3A1D1A; --wm:rgba(120,210,200,.10); --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
+  --n-mkt:#E39A50; --n-fase:#E2C052; --n-op:#79B5E0; --n-ok:#78BD89; --n-ko:#E07A6E; --n-care:#DE7BA8; --n-fg:#121514; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1615; --dot:#23312F; --surface:#162120; --surface-2:#1C2928; --fg:#E3EDEB; --muted:#94A6A3;
+  --line:#2A3A38; --accent:#4DBDB0; --accent-soft:#16312E; --accent-fg:#06201D; --edge:#9FB2AF;
+  --danger:#FF8A7A; --danger-soft:#3A1D1A; --wm:rgba(120,210,200,.10); --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
+  --n-mkt:#E39A50; --n-fase:#E2C052; --n-op:#79B5E0; --n-ok:#78BD89; --n-ko:#E07A6E; --n-care:#DE7BA8; --n-fg:#121514; color-scheme:dark}
+
+*{box-sizing:border-box}
+html{height:100%}
+body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 var(--f-body);overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+svg.i{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+#app{display:flex;flex-direction:column;height:100%}
+/* Header */
+.top{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--line);flex-wrap:nowrap;position:relative;z-index:5}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand-mark{width:30px;height:30px;border-radius:9px;background:var(--accent);display:grid;place-items:center;color:var(--accent-fg);flex:none}
+.brand-mark svg{width:18px;height:18px}
+.brand h1{font:700 18px/1.1 var(--f-display);margin:0;letter-spacing:-.01em;white-space:nowrap}
+.tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;min-width:0;flex:1 1 0;padding:2px}
+.tabs::-webkit-scrollbar{display:none}
+.tab{border:1px solid transparent;background:none;padding:6px 12px;border-radius:999px;white-space:nowrap;color:var(--muted);font-weight:600;font-size:14px}
+.tab:hover{background:var(--surface-2)}
+.tab.on{background:var(--accent-soft);color:var(--fg);border-color:color-mix(in srgb,var(--accent) 35%,transparent)}
+.tab.add{color:var(--accent);display:flex;align-items:center;gap:4px}
+.tab.add svg{width:15px;height:15px}
+.actions{display:flex;gap:6px;align-items:center;margin-left:auto}
+.btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--surface);padding:7px 12px;border-radius:10px;font-weight:600;font-size:14px;white-space:nowrap}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.btn.ghost{border-color:transparent;background:none}
+.btn.danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,transparent)}
+.btn.danger.armed{background:var(--danger);color:var(--surface);border-color:var(--danger)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.who{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:3px 10px 3px 3px;font-size:13px;line-height:1.15;text-align:left}
+.who b{display:block;font-weight:700}
+.who span{color:var(--muted)}
+.av{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:12px;background:var(--accent-soft);color:var(--accent);flex:none}
+.av.admin{background:var(--accent);color:var(--accent-fg)}
+
+/* Stage & canvas */
+#stage{position:relative;flex:1;min-height:0;overflow:hidden}
+#viewport{position:absolute;inset:0;touch-action:none;cursor:grab;
+  background-image:radial-gradient(var(--dot) 1.2px,transparent 1.3px);background-size:22px 22px}
+#viewport.grabbing{cursor:grabbing}
+#world{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
+#edges{position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none}
+#edges path{fill:none;stroke:var(--edge);stroke-width:1.6;stroke-linejoin:round}
+#edges marker path{fill:var(--edge);stroke:none}
+.node{position:absolute;width:calc(180px*var(--z,1));transform:translate(-50%,-50%);border:none;border-radius:calc(11px*var(--z,1));padding:calc(9px*var(--z,1)) calc(12px*var(--z,1)) calc(10px*var(--z,1));
+  background:var(--n-op);color:var(--n-fg);text-align:center;box-shadow:0 1px 0 rgba(0,0,0,.08),0 3px 10px rgba(0,0,0,.08);
+  transition:box-shadow .15s, transform .15s;user-select:none;-webkit-user-select:none;touch-action:none}
+.node:hover{box-shadow:0 0 0 2px color-mix(in srgb,var(--n-fg) 30%,transparent),0 6px 18px rgba(0,0,0,.14)}
+.node .nl{display:block;font-weight:800;font-size:calc(12.5px*var(--z,1));line-height:1.2;text-transform:uppercase;letter-spacing:.02em;text-wrap:balance}
+.node ul{margin:calc(5px*var(--z,1)) 0 0;padding:0;list-style:none;text-align:left;font-size:calc(11.5px*var(--z,1));line-height:1.3;font-weight:600}
+.node li{padding-left:10px;position:relative}
+.node li::before{content:"•";position:absolute;left:0}
+.node .badge{position:absolute;top:-8px;right:-8px;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:var(--surface);color:var(--fg);
+  font-size:11.5px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:3px;box-shadow:0 1px 4px rgba(0,0,0,.18);font-variant-numeric:tabular-nums}
+.node .badge svg{width:11px;height:11px;stroke-width:2.2}
+.node.locked{opacity:.38;filter:saturate(.25);cursor:not-allowed}
+.node.locked:hover{box-shadow:none}
+.node.sel{box-shadow:0 0 0 3px var(--surface),0 0 0 5.5px var(--accent)}
+.node.linking{outline:2.5px dashed var(--accent);outline-offset:4px}
+.c-mkt{background:var(--n-mkt)}.c-fase{background:var(--n-fase)}.c-op{background:var(--n-op)}.c-ok{background:var(--n-ok)}.c-ko{background:var(--n-ko)}.c-care{background:var(--n-care)}
+.editing .node{cursor:move}
+.editing #viewport,#viewport.editing{cursor:default}
+#viewport.editing.space,#viewport.space{cursor:grab}
+.node.drop{box-shadow:0 0 0 3px var(--surface),0 0 0 6px var(--accent)}
+#edges .hit{stroke:transparent;stroke-width:16;fill:none}
+.editing #edges .hit{pointer-events:stroke;cursor:pointer}
+#edges g.on .ln{stroke:var(--accent);stroke-width:3}
+#edges marker.on path{fill:var(--accent)}
+#edges .tmp{fill:none;stroke:var(--accent);stroke-width:2.2;stroke-dasharray:6 5}
+#selLayer{position:absolute;left:0;top:0}
+.selbox{position:absolute;border:calc(1.5px*var(--inv,1)) dashed var(--accent);border-radius:calc(8px*var(--inv,1));pointer-events:none}
+.h-resize{position:absolute;width:calc(16px*var(--inv,1));height:calc(16px*var(--inv,1));transform:translate(-50%,-50%);background:var(--surface);border:calc(2.5px*var(--inv,1)) solid var(--accent);border-radius:calc(4px*var(--inv,1));cursor:nwse-resize;touch-action:none}
+.h-conn{position:absolute;width:calc(24px*var(--inv,1));height:calc(24px*var(--inv,1));transform:translate(-50%,-50%);border-radius:50%;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;cursor:crosshair;box-shadow:0 1px 4px rgba(0,0,0,.25);touch-action:none}
+.h-conn svg{width:62%;height:62%;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.h-conn:hover{transform:translate(-50%,-50%) scale(1.15)}
+.marq{position:absolute;border:calc(1.5px*var(--inv,1)) solid var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);pointer-events:none}
+.editbar .sep{width:1px;align-self:stretch;background:var(--line)}
+.editbar .ctx{font-size:14px;flex:0 1 auto;min-width:0}
+.seg.tools{flex:none}
+.seg.tools button{display:flex;align-items:center;gap:6px}
+.auto-on{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--accent);padding:0 6px;white-space:nowrap}
+.mini-sw{display:flex;gap:5px;flex-wrap:wrap}
+.mini-sw .swatch{width:26px;height:26px;border-radius:8px}
+
+/* Floating controls */
+.zoom{position:absolute;right:16px;bottom:16px;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;z-index:3}
+.zoom button{border:none;background:none;width:40px;height:40px;display:grid;place-items:center}
+.zoom button+button{border-top:1px solid var(--line)}
+.zoom button:hover{background:var(--surface-2)}
+.legend-btn{position:absolute;left:16px;bottom:16px;z-index:3}
+.legend{position:absolute;left:16px;bottom:64px;z-index:4;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:12px 14px;display:grid;gap:7px;font-size:13.5px}
+.legend div{display:flex;align-items:center;gap:9px}
+.sw{width:16px;height:12px;border-radius:4px;flex:none}
+.ask{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);z-index:3;display:flex;align-items:center;gap:9px;
+  background:var(--fg);color:var(--bg);border:none;border-radius:999px;padding:12px 20px 12px 16px;font-weight:700;font-size:15px;box-shadow:var(--shadow)}
+.ask:hover{transform:translateX(-50%) translateY(-1px)}
+.hint{position:absolute;left:50%;top:14px;transform:translateX(-50%);z-index:3;background:var(--surface);border:1px solid var(--line);border-radius:999px;
+  box-shadow:var(--shadow);padding:7px 8px 7px 16px;font-size:13.5px;display:flex;align-items:center;gap:8px;max-width:calc(100% - 32px)}
+.hint button{border:none;background:var(--surface-2);border-radius:999px;width:26px;height:26px;display:grid;place-items:center;flex:none}
+.hint button svg{width:14px;height:14px}
+.editbar{position:absolute;left:16px;right:16px;top:12px;z-index:3;display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:8px}
+.editbar input{border:1px solid var(--line);background:var(--surface-2);border-radius:9px;padding:6px 10px;font-weight:700;min-width:0;flex:1 1 180px;max-width:320px}
+.editbar .tip{font-size:13px;color:var(--muted);flex:1 1 220px}
+.linkbar{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.linkbar .tip{color:var(--accent-fg);font-weight:600}
+.empty-flow{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:var(--muted);pointer-events:none}
+
+/* Side sheet */
+.sheet{position:absolute;top:12px;right:12px;bottom:12px;width:min(390px,calc(100% - 24px));background:var(--surface);border:1px solid var(--line);
+  border-radius:16px;box-shadow:var(--shadow);z-index:6;display:flex;flex-direction:column;overflow:hidden}
+.sheet-h{padding:16px 18px 12px;border-bottom:1px solid var(--line);position:relative}
+.eyebrow{display:flex;align-items:center;gap:7px;font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;font-weight:700;color:var(--muted)}
+.sheet-h h2{font:700 21px/1.2 var(--f-display);margin:6px 36px 0 0;text-wrap:balance}
+.sheet-h ul{margin:8px 0 0;padding-left:18px;color:var(--muted);font-size:14px}
+.x{position:absolute;top:12px;right:12px;border:none;background:var(--surface-2);width:32px;height:32px;border-radius:50%;display:grid;place-items:center}
+.sheet-b{padding:14px 18px 18px;overflow:auto;flex:1;display:flex;flex-direction:column;gap:14px}
+.sec-t{font-size:12px;letter-spacing:.07em;text-transform:uppercase;font-weight:700;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+.docs{display:flex;flex-direction:column;gap:8px}
+.doc-row{display:flex;gap:12px;align-items:flex-start;text-align:left;border:1px solid var(--line);background:var(--surface-2);border-radius:12px;padding:11px 12px}
+.doc-row:hover{border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}
+.doc-ic{width:34px;height:40px;border-radius:6px;background:var(--surface);border:1px solid var(--line);display:grid;place-items:center;color:var(--accent);flex:none}
+.doc-row b{display:block;font-weight:700;line-height:1.3}
+.doc-row small{color:var(--muted);font-size:12.5px}
+.tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.03em;border-radius:6px;padding:1px 6px;background:var(--accent-soft);color:var(--fg);margin-right:4px}
+.tag.ex{background:var(--n-fase);color:var(--n-fg)}
+.muted{color:var(--muted)}
+.note{font-size:13.5px;color:var(--muted);background:var(--surface-2);border-radius:10px;padding:10px 12px}
+
+/* Forms */
+.field{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;color:var(--muted)}
+.field input,.field textarea,.field select{border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:9px 11px;color:var(--fg);font-weight:500;font-size:15px;width:100%}
+.field textarea{resize:vertical;min-height:90px;line-height:1.45}
+.swatches{display:flex;flex-wrap:wrap;gap:8px}
+.swatch{width:34px;height:34px;border-radius:10px;border:2px solid transparent}
+.swatch.on{border-color:var(--fg);box-shadow:inset 0 0 0 2px var(--surface)}
+.conn{display:flex;flex-direction:column;gap:6px}
+.conn div{display:flex;align-items:center;gap:8px;background:var(--surface-2);border-radius:9px;padding:6px 6px 6px 10px;font-size:13.5px}
+.conn div span{flex:1;min-width:0}
+.conn button{border:none;background:none;width:28px;height:28px;border-radius:7px;display:grid;place-items:center;color:var(--muted)}
+.conn button:hover{background:var(--danger-soft);color:var(--danger)}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.seg{display:flex;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px;flex-wrap:wrap}
+.seg button{flex:1 1 auto;border:none;background:none;border-radius:8px;padding:6px 10px;font-weight:600;font-size:13.5px;color:var(--muted)}
+.seg button.on{background:var(--surface);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+
+/* Overlays */
+.scrim{position:fixed;inset:0;background:rgba(8,16,15,.42);z-index:20;display:flex;align-items:center;justify-content:center;padding:16px}
+.modal{background:var(--surface);border-radius:18px;box-shadow:var(--shadow);width:min(560px,100%);max-height:100%;display:flex;flex-direction:column;overflow:hidden;position:relative}
+.modal.wide{width:min(900px,100%)}
+.modal-h{padding:18px 20px 12px;border-bottom:1px solid var(--line)}
+.modal-h h2{font:700 21px/1.2 var(--f-display);margin:0 40px 0 0}
+.modal-h p{margin:4px 0 0;color:var(--muted);font-size:14px}
+.modal-b{padding:16px 20px;overflow:auto;display:flex;flex-direction:column;gap:14px}
+.modal-f{padding:12px 20px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+
+/* Profiles */
+.profiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.profile{display:flex;gap:12px;align-items:center;text-align:left;border:1px solid var(--line);background:var(--surface-2);border-radius:14px;padding:12px}
+.profile:hover,.profile.on{border-color:var(--accent)}
+.profile b{display:block}
+.profile small{color:var(--muted);display:block;line-height:1.3}
+.av.lg{width:40px;height:40px;font-size:14px}
+
+/* Users admin */
+.users{display:grid;grid-template-columns:230px 1fr;gap:16px;min-height:0}
+.u-list{display:flex;flex-direction:column;gap:6px}
+.u-row{display:flex;gap:10px;align-items:center;text-align:left;border:1px solid transparent;background:none;border-radius:11px;padding:8px}
+.u-row:hover{background:var(--surface-2)}
+.u-row.on{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 35%,transparent)}
+.u-row b{display:block;font-size:14px}
+.u-row small{color:var(--muted);font-size:12.5px;display:block;line-height:1.25}
+.u-edit{display:flex;flex-direction:column;gap:14px;min-width:0}
+.acc{border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.acc h4{margin:0;font:700 16px/1.2 var(--f-display)}
+.nodes-pick{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:4px 10px;max-height:260px;overflow:auto;padding:2px}
+.chk{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:500;color:var(--fg);padding:3px 0;cursor:pointer}
+.chk input{width:17px;height:17px;accent-color:var(--accent);flex:none;margin:0}
+.linkish{border:none;background:none;color:var(--accent);font-weight:700;font-size:13px;padding:2px 4px}
+
+/* Reader */
+.reader{width:min(760px,100%);height:100%}
+.reader .modal-h{background:var(--surface)}
+.doc-wrap{position:relative;overflow:auto;flex:1}
+.doc-body{padding:24px 28px 40px;max-width:68ch;margin:0 auto;font-size:16px;line-height:1.65;position:relative;z-index:1}
+.doc-body h3{font:700 18px/1.3 var(--f-display);margin:22px 0 6px}
+.doc-body h3:first-child{margin-top:0}
+.doc-body p{margin:0 0 10px}
+.doc-body ul,.doc-body ol{margin:0 0 12px;padding-left:22px}
+.doc-body li{margin:3px 0}
+.doc-body blockquote{margin:12px 0;padding:10px 14px;border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 10px 10px 0}
+.wm{position:absolute;inset:0;z-index:2;pointer-events:none;background-repeat:repeat}
+.protected .doc-body{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.shield .doc-body{filter:blur(9px)}
+.readonly{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);padding:10px 20px;border-top:1px solid var(--line)}
+.readonly svg{width:15px;height:15px}
+.example{margin:14px 28px 0;font-size:13.5px;background:var(--n-fase);color:var(--n-fg);border-radius:10px;padding:8px 12px;font-weight:600}
+
+/* Chat */
+.chat{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:var(--surface);border-left:1px solid var(--line);box-shadow:var(--shadow);z-index:15;display:flex;flex-direction:column;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.chat-h{padding:14px 18px 12px;border-bottom:1px solid var(--line);position:relative}
+.chat-h h2{font:700 20px/1.2 var(--f-display);margin:0}
+.chat-h p{margin:2px 40px 0 0;color:var(--muted);font-size:13.5px}
+.src{border-bottom:1px solid var(--line)}
+.src summary{list-style:none;padding:10px 18px;display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:700;font-size:14px}
+.src summary::-webkit-details-marker{display:none}
+.src summary .chev{margin-left:auto;transition:transform .2s}
+.src[open] summary .chev{transform:rotate(180deg)}
+.src-list{padding:0 18px 12px;max-height:34vh;overflow:auto;display:flex;flex-direction:column;gap:2px}
+.src-list .grp{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;font-weight:700;color:var(--muted);margin:8px 0 2px}
+.log{flex:1;overflow:auto;padding:16px 18px;display:flex;flex-direction:column;gap:14px}
+.msg{max-width:92%;line-height:1.55;font-size:15px}
+.msg.user{align-self:flex-end;background:var(--accent);color:var(--accent-fg);padding:9px 14px;border-radius:16px 16px 4px 16px}
+.msg.bot{align-self:flex-start;background:var(--surface-2);border:1px solid var(--line);padding:11px 14px;border-radius:16px 16px 16px 4px}
+.msg.bot p{margin:0 0 8px}.msg.bot p:last-child{margin:0}
+.msg.bot ul,.msg.bot ol{margin:4px 0 8px;padding-left:20px}
+.msg.bot h3{font:700 15.5px/1.3 var(--f-body);margin:8px 0 4px}
+.msg.bot blockquote{margin:6px 0;padding:6px 10px;border-left:3px solid var(--accent);background:var(--surface)}
+.cite{border:none;background:var(--accent);color:var(--accent-fg);font-size:11px;font-weight:800;min-width:19px;height:19px;border-radius:6px;padding:0 5px;vertical-align:1px;margin:0 1px;font-variant-numeric:tabular-nums}
+.msg .err{color:var(--danger);font-size:13.5px;margin-top:6px}
+.msg .mnote{color:var(--muted);font-size:13px;margin-top:6px}
+.thinking{display:flex;gap:5px;align-items:center;color:var(--muted);font-size:14px}
+.thinking i{width:6px;height:6px;border-radius:50%;background:var(--muted);animation:b 1.2s infinite}
+.thinking i:nth-child(2){animation-delay:.15s}.thinking i:nth-child(3){animation-delay:.3s}
+@keyframes b{0%,80%,100%{opacity:.25}40%{opacity:1}}
+.sugg{display:flex;flex-direction:column;gap:8px}
+.sugg button{text-align:left;border:1px solid var(--line);background:var(--surface-2);border-radius:12px;padding:10px 12px;font-size:14px}
+.sugg button:hover{border-color:var(--accent)}
+.compose{display:flex;gap:8px;padding:12px 14px;border-top:1px solid var(--line);align-items:flex-end}
+.compose textarea{flex:1;min-width:0;border:1px solid var(--line);background:var(--surface-2);border-radius:14px;padding:10px 12px;resize:none;max-height:140px;font-size:15px;line-height:1.4}
+.send{width:44px;height:44px;border-radius:50%;border:none;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;flex:none}
+
+/* Ricerca */
+.search .modal-h{padding-bottom:14px}
+.sbox{display:flex;align-items:center;gap:10px;border:1.5px solid var(--accent);background:var(--surface-2);border-radius:12px;padding:0 12px;margin-top:12px}
+.sbox input{flex:1;min-width:0;border:none;background:none;padding:11px 0;font-size:16px;outline:none}
+.sbox svg{color:var(--muted)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 11px;font-size:13px;font-weight:600;color:var(--muted)}
+.chip.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.results{display:flex;flex-direction:column;gap:8px}
+.res{display:flex;flex-direction:column;gap:4px;border:1px solid var(--line);background:var(--surface-2);border-radius:12px;padding:11px 13px;text-align:left;width:100%}
+.res:hover{border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}
+.res-t{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.res b{font-weight:700;line-height:1.3}
+.res .where{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.res .snip{font-size:14px;line-height:1.45;color:var(--fg)}
+.res-foot{display:flex;gap:6px;flex-wrap:wrap}
+.res-foot .linkish{padding:2px 0;margin-right:12px}
+mark{background:color-mix(in srgb,var(--n-fase) 75%,transparent);color:inherit;border-radius:3px;padding:0 1px}
+.phase-hit{display:flex;align-items:center;gap:10px;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 11px;text-align:left;font-size:14px}
+.phase-hit:hover{border-color:var(--accent)}
+.phase-hit .sw{width:14px;height:11px}
+.phase-hits{display:flex;flex-wrap:wrap;gap:6px}
+a.btn{text-decoration:none;color:inherit}
+a.btn.primary{color:var(--accent-fg)}
+.doc-body.pdf{max-width:none;padding:16px}
+.pdf-page{display:block;margin:0 auto 14px;max-width:900px;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.15);border-radius:4px}
+.toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:999px;font-size:14px;font-weight:600;z-index:40;box-shadow:var(--shadow);max-width:calc(100% - 32px);text-align:center}
+
+@media (max-width:720px){
+  .top{padding:8px 12px;gap:8px;flex-wrap:wrap}
+  .tabs{order:3;flex-basis:100%}
+  .btn .lbl{display:none}
+  .btn{padding:7px 9px}
+  .who .txt{display:none}
+  .who{padding:3px}
+  .sheet{top:auto;left:0;right:0;bottom:0;width:100%;max-height:72%;border-radius:18px 18px 0 0;border-bottom:none;padding-bottom:env(safe-area-inset-bottom,0px)}
+  .users{grid-template-columns:1fr}
+  .u-list{flex-direction:row;overflow-x:auto;padding-bottom:4px}
+  .u-row{flex:none}
+  .scrim{padding:0;align-items:flex-end}
+  .modal{border-radius:18px 18px 0 0;max-height:94%}
+  .reader{height:94%}
+  .doc-body{padding:18px 18px 32px}
+  .example{margin:12px 18px 0}
+  .zoom{bottom:84px}
+  .legend-btn{bottom:84px}
+  .legend{bottom:132px}
+  .editbar .tip{display:none}
+  .seg.tools span{display:none}
+  .editbar .sep{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+html{height:100%;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <header class="top">
+    <div class="brand">
+      <div class="brand-mark"><svg viewBox="0 0 24 24" class="i"><rect x="3" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="10" width="7" height="5" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/><path d="M6.5 8v8M10 5.5h3.5a2 2 0 0 1 2 2V10"/></svg></div>
+      <h1>Mappa dei protocolli</h1>
+    </div>
+    <nav class="tabs" id="tabs" aria-label="Flussi"></nav>
+    <div class="actions" id="actions"></div>
+  </header>
+  <main id="stage">
+    <div id="viewport"><div id="world"><svg id="edges"></svg><div id="nodes"></div><div id="selLayer"></div></div></div>
+    <div id="overlay"></div>
+    <button class="btn legend-btn" id="legendBtn"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="6" height="4" rx="1"/><rect x="3" y="10" width="6" height="4" rx="1"/><rect x="3" y="16" width="6" height="4" rx="1"/><path d="M13 6h8M13 12h8M13 18h8"/></svg><span class="lbl">Legenda</span></button>
+    <div class="zoom">
+      <button id="zin" aria-label="Ingrandisci"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button id="zout" aria-label="Riduci"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+      <button id="zfit" aria-label="Mostra tutto il flusso"><svg class="i" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+    </div>
+    <button class="ask" id="askBtn"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.5L12 15l-1.8-4.5L5.5 9l4.7-1.4z"/><path d="M18 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>Chiedi ai protocolli</button>
+  </main>
+</div>
+<div id="layers"></div>
+
+<script>
+/* ---------- utilità ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = p => p + Math.random().toString(36).slice(2, 8);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const today = () => new Date().toISOString().slice(0, 10);
+const fmtDate = d => { try { return new Date(d + 'T12:00').toLocaleDateString('it-IT', {day:'numeric', month:'long', year:'numeric'}); } catch(e) { return d; } };
+const initials = n => (n || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+const I = {
+  x:'<svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  lock:'<svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+  doc:'<svg class="i" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>',
+  edit:'<svg class="i" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>',
+  users:'<svg class="i" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><path d="M16 4.8a3.3 3.3 0 0 1 0 6.4M18 14.8c2 .6 3.2 2.3 3.5 5.2"/></svg>',
+  plus:'<svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  trash:'<svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+  link:'<svg class="i" viewBox="0 0 24 24"><path d="M5 12h12M13 7l5 5-5 5"/></svg>',
+  send:'<svg class="i" viewBox="0 0 24 24"><path d="M5 12h13M12 5l7 7-7 7"/></svg>',
+  stop:'<svg class="i" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor"/></svg>',
+  chev:'<svg class="i chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
+  search:'<svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>',
+  pin:'<svg class="i" viewBox="0 0 24 24"><path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg>',
+  marquee:'<svg class="i" viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 0 1 1-1h3M12 4h0M16 4h3a1 1 0 0 1 1 1v3M20 12h0M20 16v3a1 1 0 0 1-1 1h-3M12 20h0M8 20H5a1 1 0 0 1-1-1v-3M4 12h0" stroke-dasharray="0"/></svg>',
+  hand:'<svg class="i" viewBox="0 0 24 24"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V11M11 10V4.5a1.5 1.5 0 0 1 3 0V11M14 10.5V6a1.5 1.5 0 0 1 3 0v7c0 4-2.5 7-6.5 7S5 17.5 4 15l-1-2.5a1.5 1.5 0 0 1 2.7-1.2L8 14"/></svg>',
+  undo:'<svg class="i" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>',
+  minus:'<svg class="i" viewBox="0 0 24 24"><path d="M5 12h14"/></svg>',
+  swap:'<svg class="i" viewBox="0 0 24 24"><path d="M7 7h13M16 3l4 4-4 4M17 17H4M8 13l-4 4 4 4"/></svg>',
+  wand:'<svg class="i" viewBox="0 0 24 24"><path d="M4 20L15 9M13 7l4 4"/><path d="M18 3v3M16.5 4.5h3M20 9v2M19 10h2M9 3v2M8 4h2"/></svg>',
+  shield:'<svg class="i" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3.2 8.3-7 10-3.8-1.7-7-5-7-10V6z"/></svg>',
+};
+const COLORS = {
+  mkt:  'Acquisizione e marketing',
+  fase: 'Fasi e campagne',
+  op:   'Attività operativa',
+  ok:   'Esito positivo',
+  ko:   'Esito negativo',
+  care: 'Customer care',
+};
+const DOC_TYPES = ['Protocollo', 'Procedura', 'Script', 'Checklist', 'Modulo'];
+
+/* ---------- stato (dal server) ---------- */
+const MODE = location.pathname.startsWith('/admin') ? 'admin' : 'view';
+const store = {
+  get(k){ try { return localStorage.getItem(k); } catch(e) { return null; } },
+  set(k, v){ try { localStorage.setItem(k, v); } catch(e) {} },
+  del(k){ try { localStorage.removeItem(k); } catch(e) {} },
+};
+let S = {flows: [], docs: [], users: []};
+let me = null, aiReady = false;
+let curFlowId = store.get('mp-flow');
+let editMode = false, linkFrom = null, sheetNode = null, legendOpen = false;
+const view = {x: 0, y: 0, s: 1};
+
+const flow = () => S.flows.find(f => f.id === curFlowId);
+const getNode = (id, f = flow()) => f?.nodes.find(n => n.id === id);
+const isAdmin = () => me?.role === 'admin' && MODE === 'admin';
+function access(u, fid){ if (u.role === 'admin') return {mode:'all'}; return u.access?.[fid] || {mode:'none'}; }
+function canOpen(u, fid, nid){ if (u.role === 'admin') return true; const n = getNode(nid, S.flows.find(f => f.id === fid)); return !!n && !n.locked; }
+function visibleFlows(){ return S.flows; }
+function docsFor(fid, nid){ return S.docs.filter(d => d.flowId === fid && d.nodeId === nid).sort((a, b) => a.title.localeCompare(b.title)); }
+function accessibleDocs(){ return S.docs.filter(d => { const f = S.flows.find(x => x.id === d.flowId); return f && f.nodes.some(n => n.id === d.nodeId) && canOpen(me, d.flowId, d.nodeId); }); }
+
+async function api(method, url, body){
+  const opt = {method, headers: {}, credentials: 'same-origin'};
+  if (body instanceof FormData) opt.body = body;
+  else if (body !== undefined) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); opt.keepalive = method === 'PUT' && opt.body.length < 60000; }
+  let r;
+  try { r = await fetch(url, opt); } catch (e) { throw new Error('Connessione assente. Controlla internet e riprova.'); }
+  if (r.status === 401) { location.href = '/login' + (MODE === 'admin' ? '?next=/admin' : ''); throw new Error('Accesso richiesto'); }
+  let j = {}; try { j = await r.json(); } catch(e) {}
+  if (!r.ok) throw new Error(j.error || 'Qualcosa non ha funzionato. Riprova.');
+  return j;
+}
+async function loadState(){
+  const j = await api('GET', '/api/state');
+  me = j.me; aiReady = j.ai; S.flows = j.flows; S.docs = j.docs; S.users = j.users || [];
+  markSynced();
+}
+// salvataggio dei flussi sul server (solo area admin)
+const synced = {};
+const flowJSON = f => JSON.stringify({name: f.name, nodes: f.nodes.map(({locked, ...n}) => n), edges: f.edges, manual: !!f.manual});
+function markSynced(){ S.flows.forEach(f => synced[f.id] = flowJSON(f)); }
+let saveT, saving = false;
+function save(){ if (!isAdmin()) return; clearTimeout(saveT); saveT = setTimeout(syncFlows, 500); }
+async function syncFlows(){
+  if (saving) { save(); return; }
+  saving = true; clearTimeout(saveT); saveT = null;
+  try {
+    for (const f of S.flows) {
+      const j = flowJSON(f); if (synced[f.id] === j) continue;
+      try { await api('PUT', '/api/flows/' + f.id, JSON.parse(j)); synced[f.id] = j; }
+      catch (e) { toast('Modifica non salvata: ' + e.message); }
+    }
+  } finally { saving = false; }
+}
+const unsaved = () => isAdmin() && S.flows.some(f => synced[f.id] !== flowJSON(f));
+window.addEventListener('beforeunload', e => { if (unsaved()) { syncFlows(); e.preventDefault(); e.returnValue = ''; } });
+
+/* ---------- toast ---------- */
+let toastT;
+function toast(msg){
+  let t = $('.toast'); if (!t) { t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); document.body.append(t); }
+  t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 2600);
+}
+
+/* ---------- header ---------- */
+function renderHeader(){
+  const flows = visibleFlows();
+  $('#tabs').innerHTML = flows.map(f => `<button class="tab ${f.id === curFlowId ? 'on' : ''}" data-flow="${f.id}">${esc(f.name)}</button>`).join('')
+    + (isAdmin() ? `<button class="tab add" id="newFlow">${I.plus}Nuovo flusso</button>` : '');
+  $('#actions').innerHTML = `<button class="btn" id="searchBtn" title="Cerca nei protocolli (Ctrl+K)">${I.search}<span class="lbl">Cerca</span></button>` + (isAdmin() ? `
+      <button class="btn ${editMode ? 'on' : ''}" id="editBtn" title="Modifica il flusso">${I.edit}<span class="lbl">${editMode ? 'Fine modifica' : 'Modifica flusso'}</span></button>
+      <button class="btn" id="usersBtn" title="Collaboratori e permessi">${I.users}<span class="lbl">Collaboratori</span></button>`
+      : me.role === 'admin' ? `<a class="btn" href="/admin" title="Apri l'area amministratore">${I.edit}<span class="lbl">Area admin</span></a>` : '')
+    + `<button class="who" id="whoBtn" title="Il tuo account"><span class="av ${me.role === 'admin' ? 'admin' : ''}">${esc(initials(me.name || me.username))}</span><span class="txt"><b>${esc(me.name || me.username)}</b><span>${isAdmin() ? 'Area admin' : me.role === 'admin' ? 'Amministratore' : esc(me.title)}</span></span></button>`;
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-flow]'); if (t) { switchFlow(t.dataset.flow); return; }
+  if (e.target.closest('#newFlow')) openNewFlow();
+  if (e.target.closest('#editBtn')) setEdit(!editMode);
+  if (e.target.closest('#usersBtn')) openUsers();
+  if (e.target.closest('#searchBtn')) openSearch();
+  if (e.target.closest('#whoBtn')) openAccount();
+});
+
+/* ---------- selezione, annulla ---------- */
+let sel = new Set(), selEdge = null, spaceDown = false;
+let tool = matchMedia('(pointer: fine)').matches ? 'select' : 'hand';
+const undoStack = [];
+function pushUndo(){ undoStack.push(JSON.stringify(S.flows)); if (undoStack.length > 60) undoStack.shift(); const u = $('#undoBtn'); if (u) u.disabled = false; }
+function undo(){
+  const snap = undoStack.pop(); if (!snap) { toast('Non c\'è nulla da annullare'); return; }
+  const prev = JSON.parse(snap), ids = new Set(S.flows.map(f => f.id));
+  S.flows = prev.filter(f => ids.has(f.id)); save();
+  S.docs.forEach(d => { const fl = S.flows.find(x => x.id === d.flowId); d.orphan = !fl?.nodes.some(n => n.id === d.nodeId); });
+  if (!flow()) curFlowId = visibleFlows()[0]?.id || null;
+  sel = new Set([...sel].filter(id => getNode(id))); selEdge = null;
+  renderHeader(); renderFlow(); renderOverlay(); refreshSheet(); toast('Modifica annullata');
+}
+function refreshSheet(){ if (sheetNode && getNode(sheetNode)) openSheet(sheetNode); else closeSheet(); }
+
+function switchFlow(id, keepView){
+  curFlowId = id; if (id) store.set('mp-flow', id); sel.clear(); selEdge = null; linkFrom = null; sheetNode = null;
+  renderHeader(); renderFlow(); renderOverlay(); closeSheet();
+  const f = flow();
+  if (f && !f.manual) (document.fonts?.ready || Promise.resolve()).then(() => { if (flow() === f) autoLayout(keepView ? 'change' : 'open'); });
+  else if (!keepView) requestAnimationFrame(() => fitView(true));
+}
+function setEdit(on){
+  editMode = on; sel.clear(); selEdge = null; linkFrom = null;
+  $('#viewport').classList.toggle('editing', on);
+  if (!on) syncFlows();
+  closeSheet(); renderHeader(); renderFlow(); renderOverlay();
+}
+
+/* ---------- canvas ---------- */
+const vp = $('#viewport'), world = $('#world'), nodesEl = $('#nodes'), edgesEl = $('#edges'), selLayer = $('#selLayer');
+function nodeVisible(n){ const a = access(me, curFlowId); return !(a.mode === 'some' && a.hide && !canOpen(me, curFlowId, n.id)); }
+function renderFlow(){
+  const f = flow();
+  if (!f) { nodesEl.innerHTML = ''; edgesEl.innerHTML = ''; selLayer.innerHTML = ''; return; }
+  nodesEl.innerHTML = f.nodes.filter(nodeVisible).map(n => {
+    const open = canOpen(me, f.id, n.id); const cnt = docsFor(f.id, n.id).length;
+    const cls = ['node', 'c-' + n.c, (!open && !editMode) ? 'locked' : '', sel.has(n.id) ? 'sel' : '', linkFrom === n.id ? 'linking' : ''].join(' ');
+    const badge = (!open && !editMode) ? `<span class="badge">${I.lock}</span>` : cnt ? `<span class="badge" title="${cnt} documenti">${I.doc}${cnt}</span>` : '';
+    return `<button class="${cls}" data-id="${n.id}" style="left:${n.x}px;top:${n.y}px;--z:${n.z || 1}" aria-label="${esc(n.label)}${open ? '' : ' (non accessibile)'}">
+      <span class="nl">${esc(n.label)}</span>${n.sub.length ? `<ul>${n.sub.map(s => `<li>${esc(s)}</li>`).join('')}</ul>` : ''}${badge}</button>`;
+  }).join('');
+  drawEdges(); drawSel();
+}
+function placeNodes(ids){
+  ids.forEach(id => { const n = getNode(id), el = nodesEl.querySelector(`[data-id="${id}"]`); if (n && el) { el.style.left = n.x + 'px'; el.style.top = n.y + 'px'; el.style.setProperty('--z', n.z || 1); } });
+}
+function nodeBox(id){ const n = getNode(id), el = nodesEl.querySelector(`[data-id="${id}"]`); return (n && el) ? {x: n.x, y: n.y, w: el.offsetWidth, h: el.offsetHeight} : null; }
+function drawEdges(){
+  const f = flow(); if (!f) return;
+  const els = {}; nodesEl.querySelectorAll('.node').forEach(el => els[el.dataset.id] = el);
+  const box = id => { const n = getNode(id), el = els[id]; return (n && el) ? {x: n.x, y: n.y, w: el.offsetWidth, h: el.offsetHeight} : null; };
+  let minX = Infinity, maxY = -Infinity;
+  Object.keys(els).forEach(id => { const b = box(id); minX = Math.min(minX, b.x - b.w / 2); maxY = Math.max(maxY, b.y + b.h / 2); });
+  let out = '';
+  f.edges.forEach(([a, b, opt], i) => {
+    const A = box(a), B = box(b); if (!A || !B) return;
+    let p;
+    if (opt && opt.k) {
+      const sy = A.y + A.h / 2, ey = B.y - B.h / 2;
+      p = opt.k === 'v' ? `M${A.x} ${sy} V${opt.y} H${B.x} V${ey}` : `M${A.x} ${sy} V${opt.y1} H${opt.x} V${opt.y2} H${B.x} V${ey}`;
+    } else if (opt === 'loop') {
+      p = `M${A.x} ${A.y + A.h / 2} V${maxY + 70} H${minX - 70} V${B.y} H${B.x - B.w / 2}`;
+    } else {
+      const dx = B.x - A.x, dy = B.y - A.y;
+      const vOverlap = Math.abs(dy) < (A.h + B.h) / 2 + 8;
+      const horiz = vOverlap || (Math.abs(dx) > Math.abs(dy) * 1.6 && Math.abs(dx) > (A.w + B.w) / 2);
+      if (horiz) { const sg = Math.sign(dx) || 1, sx = A.x + sg * A.w / 2, ex = B.x - sg * B.w / 2, mx = Math.round((sx + ex) / 2); p = `M${sx} ${A.y} H${mx} V${B.y} H${ex}`; }
+      else { const sg = Math.sign(dy), sy = A.y + sg * A.h / 2, ey = B.y - sg * B.h / 2, my = Math.round((sy + ey) / 2); p = `M${A.x} ${sy} V${my} H${B.x} V${ey}`; }
+    }
+    const on = selEdge === i;
+    out += `<g data-edge="${i}" class="${on ? 'on' : ''}"><path class="hit" d="${p}"/><path class="ln" d="${p}" marker-end="url(#${on ? 'arrOn' : 'arr'})"/></g>`;
+  });
+  if (G?.type === 'connect' && G.moved) {
+    const A = box(G.from);
+    if (A) {
+      const dx = G.wx - A.x, dy = G.wy - A.y; let sx = A.x, sy = A.y;
+      if (Math.abs(dx) / A.w > Math.abs(dy) / A.h) sx += Math.sign(dx) * A.w / 2; else sy += Math.sign(dy) * A.h / 2;
+      out += `<path class="tmp" d="M${sx} ${sy} L${G.wx} ${G.wy}" marker-end="url(#arrOn)"/>`;
+    }
+  }
+  edgesEl.innerHTML = `<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 1 L10 5 L0 9 z"/></marker>
+    <marker id="arrOn" class="on" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 1 L10 5 L0 9 z"/></marker></defs>` + out;
+}
+function selBBox(ids = [...sel]){
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  ids.forEach(id => { const b = nodeBox(id); if (!b) return; x0 = Math.min(x0, b.x - b.w / 2); x1 = Math.max(x1, b.x + b.w / 2); y0 = Math.min(y0, b.y - b.h / 2); y1 = Math.max(y1, b.y + b.h / 2); });
+  return x0 === Infinity ? null : {x0, y0, x1, y1};
+}
+function drawSel(){
+  if (!editMode || !sel.size || linkFrom) { selLayer.innerHTML = ''; return; }
+  const bb = selBBox(); if (!bb) { selLayer.innerHTML = ''; return; }
+  const p = 7 / view.s, off = 20 / view.s;
+  let h = `<div class="selbox" style="left:${bb.x0 - p}px;top:${bb.y0 - p}px;width:${bb.x1 - bb.x0 + 2 * p}px;height:${bb.y1 - bb.y0 + 2 * p}px"></div>
+    <div class="h-resize" data-resize title="Trascina per ingrandire o ridurre" style="left:${bb.x1 + p}px;top:${bb.y1 + p}px"></div>`;
+  if (sel.size === 1) {
+    const id = [...sel][0], b = nodeBox(id);
+    const sides = {r: [b.x + b.w / 2 + off, b.y, 0], b: [b.x, b.y + b.h / 2 + off, 90], l: [b.x - b.w / 2 - off, b.y, 180], t: [b.x, b.y - b.h / 2 - off, 270]};
+    h += Object.entries(sides).map(([k, [x, y, rot]]) => `<div class="h-conn" data-conn="${id}" title="Trascina per creare una freccia" style="left:${x}px;top:${y}px"><svg viewBox="0 0 24 24" style="transform:rotate(${rot}deg)"><path d="M6 12h11M13 7l5 5-5 5"/></svg></div>`).join('');
+  }
+  selLayer.innerHTML = h;
+}
+function applyView(){
+  world.style.transform = `translate(${view.x}px,${view.y}px) scale(${view.s})`;
+  world.style.setProperty('--inv', 1 / view.s);
+  const g = 22 * view.s; vp.style.backgroundSize = `${g}px ${g}px`; vp.style.backgroundPosition = `${view.x}px ${view.y}px`;
+  if (editMode && sel.size) drawSel();
+}
+function bounds(){
+  const els = [...nodesEl.querySelectorAll('.node')]; if (!els.length) return {x: -200, y: -200, w: 400, h: 400};
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  els.forEach(el => { const n = getNode(el.dataset.id), w = el.offsetWidth / 2, h = el.offsetHeight / 2; x0 = Math.min(x0, n.x - w); x1 = Math.max(x1, n.x + w); y0 = Math.min(y0, n.y - h); y1 = Math.max(y1, n.y + h); });
+  if (flow()?.edges.some(e => e[2] === 'loop')) { x0 -= 80; y1 += 80; }
+  flow()?.edges.forEach(e => { if (e[2]?.k === 'r') x1 = Math.max(x1, e[2].x + 20); });
+  return {x: x0, y: y0, w: x1 - x0, h: y1 - y0};
+}
+function fitView(initial){
+  const r = vp.getBoundingClientRect(), b = bounds(), pad = 40;
+  let s = Math.min((r.width - pad * 2) / b.w, (r.height - pad * 2 - 60) / b.h, 1.1);
+  if (initial) s = clamp((r.width - pad) / b.w, r.width < 720 ? 0.42 : 0.55, 1);
+  view.s = s;
+  view.x = r.width / 2 - (b.x + b.w / 2) * s;
+  view.y = (b.h * s < r.height - 100) ? (r.height - 60) / 2 - (b.y + b.h / 2) * s : pad + 50 - b.y * s;
+  applyView();
+}
+function zoomAt(cx, cy, k){
+  const r = vp.getBoundingClientRect(), ns = clamp(view.s * k, 0.15, 2.5);
+  const wx = (cx - r.left - view.x) / view.s, wy = (cy - r.top - view.y) / view.s;
+  view.s = ns; view.x = cx - r.left - wx * ns; view.y = cy - r.top - wy * ns; applyView();
+}
+const toWorld = (cx, cy) => { const r = vp.getBoundingClientRect(); return {x: (cx - r.left - view.x) / view.s, y: (cy - r.top - view.y) / view.s}; };
+$('#zin').onclick = () => { const r = vp.getBoundingClientRect(); zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1.25); };
+$('#zout').onclick = () => { const r = vp.getBoundingClientRect(); zoomAt(r.left + r.width / 2, r.top + r.height / 2, 0.8); };
+$('#zfit').onclick = () => fitView(false);
+vp.addEventListener('wheel', e => { e.preventDefault(); if (e.ctrlKey || e.metaKey) zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.01)); else { view.x -= e.deltaX; view.y -= e.deltaY; applyView(); } }, {passive: false});
+
+/* ---------- gesti: pan, pinch, selezione a riquadro, trascinamento, frecce, ridimensionamento ---------- */
+const ptrs = new Map(); let G = null;
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y), mid = (a, b) => ({x: (a.x + b.x) / 2, y: (a.y + b.y) / 2});
+vp.addEventListener('contextmenu', e => { if (editMode) e.preventDefault(); });
+vp.addEventListener('pointerdown', e => {
+  if (e.pointerType === 'mouse' && e.button === 2) return;
+  vp.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, {x: e.clientX, y: e.clientY});
+  if (ptrs.size === 1) {
+    const t = e.target, w = toWorld(e.clientX, e.clientY);
+    const conn = t.closest('.h-conn'), rs = t.closest('.h-resize'), el = t.closest('.node'), edge = t.closest('[data-edge]');
+    const forcePan = e.button === 1 || spaceDown;
+    const base = {sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y, moved: false};
+    if (!editMode || forcePan || linkFrom) G = {...base, type: 'pan', el: forcePan ? null : el};
+    else if (conn) G = {...base, type: 'connect', from: conn.dataset.conn, wx: w.x, wy: w.y, target: null};
+    else if (rs) G = {...base, type: 'resize', start: w, bb: selBBox(), snap: [...sel].map(id => { const n = getNode(id); return {id, x: n.x, y: n.y, z: n.z || 1}; })};
+    else if (el) G = {...base, type: 'drag', el, id: el.dataset.id, shift: e.shiftKey || e.metaKey || e.ctrlKey};
+    else if (edge) G = {...base, type: 'edge', i: +edge.dataset.edge};
+    else if (tool === 'select') G = {...base, type: 'marquee', start: w, base: new Set((e.shiftKey || e.metaKey) ? sel : [])};
+    else G = {...base, type: 'pan', el: null};
+  } else if (ptrs.size === 2) {
+    const [a, b] = [...ptrs.values()];
+    if (G?.type === 'marquee') $('#marq')?.remove();
+    G = {type: 'pinch', d: dist(a, b) || 1, s: view.s, m: mid(a, b), vx: view.x, vy: view.y, moved: true};
+  }
+});
+vp.addEventListener('pointermove', e => {
+  if (!ptrs.has(e.pointerId) || !G) return;
+  ptrs.set(e.pointerId, {x: e.clientX, y: e.clientY});
+  if (G.type === 'pinch') {
+    if (ptrs.size < 2) return;
+    const [a, b] = [...ptrs.values()], r = vp.getBoundingClientRect(), m = mid(a, b);
+    const ns = clamp(G.s * dist(a, b) / G.d, 0.15, 2.5);
+    const wx = (G.m.x - r.left - G.vx) / G.s, wy = (G.m.y - r.top - G.vy) / G.s;
+    view.s = ns; view.x = m.x - r.left - wx * ns; view.y = m.y - r.top - wy * ns; applyView(); return;
+  }
+  const dx = e.clientX - G.sx, dy = e.clientY - G.sy;
+  if (!G.moved && Math.hypot(dx, dy) < 5) return;
+  const first = !G.moved; G.moved = true;
+  const w = toWorld(e.clientX, e.clientY);
+  if (G.type === 'edge') G.type = 'pan';
+  if (G.type === 'pan') { vp.classList.add('grabbing'); view.x = G.vx + dx; view.y = G.vy + dy; applyView(); return; }
+  if (G.type === 'drag') {
+    if (first) {
+      if (!sel.has(G.id)) { if (!G.shift) sel.clear(); sel.add(G.id); selEdge = null; nodesEl.querySelectorAll('.node').forEach(x => x.classList.toggle('sel', sel.has(x.dataset.id))); }
+      pushUndo(); G.starts = [...sel].map(id => { const n = getNode(id); return {id, x: n.x, y: n.y}; });
+    }
+    G.starts.forEach(s => { const n = getNode(s.id); n.x = Math.round(s.x + dx / view.s); n.y = Math.round(s.y + dy / view.s); });
+    placeNodes(G.starts.map(s => s.id)); drawEdges(); drawSel(); return;
+  }
+  if (G.type === 'connect') {
+    G.wx = w.x; G.wy = w.y;
+    const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('.node');
+    const tid = over && over.dataset.id !== G.from ? over.dataset.id : null;
+    if (tid !== G.target) { nodesEl.querySelector('.drop')?.classList.remove('drop'); G.target = tid; if (tid) over.classList.add('drop'); }
+    drawEdges(); return;
+  }
+  if (G.type === 'resize') {
+    if (first) pushUndo();
+    const {x0, y0} = G.bb;
+    const kx = (w.x - x0) / Math.max(20, G.start.x - x0), ky = (w.y - y0) / Math.max(20, G.start.y - y0);
+    const k = clamp((kx + ky) / 2, 0.3, 4);
+    G.snap.forEach(s => { const n = getNode(s.id); n.x = Math.round(x0 + (s.x - x0) * k); n.y = Math.round(y0 + (s.y - y0) * k); n.z = +clamp(s.z * k, 0.45, 3).toFixed(3); });
+    placeNodes(G.snap.map(s => s.id)); drawEdges(); drawSel(); return;
+  }
+  if (G.type === 'marquee') {
+    let m = $('#marq'); if (!m) { m = document.createElement('div'); m.id = 'marq'; m.className = 'marq'; world.append(m); }
+    const x0 = Math.min(G.start.x, w.x), y0 = Math.min(G.start.y, w.y), x1 = Math.max(G.start.x, w.x), y1 = Math.max(G.start.y, w.y);
+    Object.assign(m.style, {left: x0 + 'px', top: y0 + 'px', width: (x1 - x0) + 'px', height: (y1 - y0) + 'px'});
+    sel = new Set(G.base);
+    nodesEl.querySelectorAll('.node').forEach(el => {
+      const b = nodeBox(el.dataset.id);
+      if (b.x + b.w / 2 > x0 && b.x - b.w / 2 < x1 && b.y + b.h / 2 > y0 && b.y - b.h / 2 < y1) sel.add(el.dataset.id);
+      el.classList.toggle('sel', sel.has(el.dataset.id));
+    });
+    selEdge = null; drawSel();
+  }
+});
+function endPtr(e){
+  if (!ptrs.has(e.pointerId)) return;
+  ptrs.delete(e.pointerId); vp.classList.remove('grabbing');
+  const up = e.type === 'pointerup';
+  if (G && G.type !== 'pinch') {
+    const g = G;
+    if (g.type === 'pan' && !g.moved && up) {
+      if (g.el) nodeTap(g.el.dataset.id);
+      else if (!editMode) closeSheet();
+      else clearSelection();
+    } else if (g.type === 'drag') {
+      if (g.moved) { clearRoutes(g.starts.map(s => s.id)); setManual(); save(); drawEdges(); renderOverlay(); }
+      else if (up) {
+        if (g.shift) { sel.has(g.id) ? sel.delete(g.id) : sel.add(g.id); } else sel = new Set([g.id]);
+        selEdge = null; afterSelChange();
+      }
+    } else if (g.type === 'resize' && g.moved) { clearRoutes(g.snap.map(s => s.id)); setManual(); save(); renderFlow(); refreshSheet(); }
+    else if (g.type === 'edge' && up) { selEdge = g.i; sel.clear(); closeSheet(); renderFlow(); renderOverlay(); }
+    else if (g.type === 'marquee') { $('#marq')?.remove(); if (!g.moved) clearSelection(); else afterSelChange(); }
+    else if (g.type === 'connect') {
+      nodesEl.querySelector('.drop')?.classList.remove('drop');
+      if (g.moved && up) finishConnect(g);
+      G = null; drawEdges();
+    }
+  }
+  if (ptrs.size === 0) G = null;
+  else if (G?.type === 'pinch') { const p = [...ptrs.values()][0]; G = {type: 'pan', sx: p.x, sy: p.y, vx: view.x, vy: view.y, moved: true}; }
+}
+vp.addEventListener('pointerup', endPtr); vp.addEventListener('pointercancel', endPtr);
+nodesEl.addEventListener('click', e => { if (e.detail === 0) { const el = e.target.closest('.node'); if (!el) return; if (editMode && !linkFrom) { sel = new Set([el.dataset.id]); afterSelChange(); } else nodeTap(el.dataset.id); } });
+
+function finishConnect(g){
+  const f = flow();
+  pushUndo();
+  if (g.target) {
+    if (f.edges.some(([a, b]) => a === g.from && b === g.target)) { undoStack.pop(); toast('Queste due fasi sono già collegate'); return; }
+    f.edges.push([g.from, g.target]); save(); toast('Freccia collegata');
+    renderFlow(); relayout(); refreshSheet(); return;
+  }
+  const src = getNode(g.from);
+  const n = {id: uid('n'), label: 'Nuova fase', sub: [], c: src?.c || 'op', z: src?.z || 1, x: Math.round(g.wx), y: Math.round(g.wy)};
+  f.nodes.push(n); f.edges.push([g.from, n.id]); save();
+  sel = new Set([n.id]); renderFlow(); openSheet(n.id); relayout(n.id); renderOverlay();
+  setTimeout(() => { const i = $('#nf-label'); i?.focus(); i?.select(); }, 30);
+  toast('Nuova fase creata e collegata');
+}
+function clearSelection(){ sel.clear(); selEdge = null; closeSheet(); renderFlow(); renderOverlay(); }
+function afterSelChange(){
+  nodesEl.querySelectorAll('.node').forEach(x => x.classList.toggle('sel', sel.has(x.dataset.id)));
+  drawEdges(); drawSel();
+  if (sel.size === 1) openSheet([...sel][0]); else closeSheet();
+  renderOverlay();
+}
+function nodeTap(id){
+  const f = flow();
+  if (editMode) {
+    if (linkFrom) {
+      if (linkFrom !== id && !f.edges.some(([a, b]) => a === linkFrom && b === id)) { pushUndo(); f.edges.push([linkFrom, id]); save(); toast('Freccia collegata'); }
+      const from = linkFrom; linkFrom = null; sel = new Set([from]); renderFlow(); relayout(); renderOverlay(); openSheet(from); return;
+    }
+    sel = new Set([id]); afterSelChange(); return;
+  }
+  if (!canOpen(me, f.id, id)) { toast('Questa fase non è tra i tuoi permessi. Chiedi all\'amministratore.'); return; }
+  openSheet(id);
+}
+
+/* azioni di gruppo */
+function scaleSel(k){
+  const bb = selBBox(); if (!bb) return;
+  pushUndo();
+  const cx = (bb.x0 + bb.x1) / 2, cy = (bb.y0 + bb.y1) / 2;
+  clearRoutes([...sel]); setManual();
+  sel.forEach(id => { const n = getNode(id); if (sel.size > 1) { n.x = Math.round(cx + (n.x - cx) * k); n.y = Math.round(cy + (n.y - cy) * k); } n.z = +clamp((n.z || 1) * k, 0.45, 3).toFixed(3); });
+  save(); renderFlow();
+}
+function colorSel(c){ pushUndo(); sel.forEach(id => getNode(id).c = c); save(); renderFlow(); renderOverlay(); }
+function deleteSel(){
+  const f = flow(); if (!sel.size) return;
+  pushUndo();
+  const ids = new Set(sel), nd = S.docs.filter(d => d.flowId === f.id && ids.has(d.nodeId)).length;
+  f.nodes = f.nodes.filter(n => !ids.has(n.id)); f.edges = f.edges.filter(e => !ids.has(e[0]) && !ids.has(e[1]));
+  S.docs.forEach(d => { if (d.flowId === f.id && ids.has(d.nodeId)) d.orphan = true; });
+  save(); sel.clear(); closeSheet(); renderFlow(); relayout(); renderOverlay();
+  toast(`${ids.size === 1 ? 'Fase eliminata' : ids.size + ' fasi eliminate'}${nd ? ` · ${nd} documenti archiviati` : ''} · Annulla per ripristinare`);
+}
+function deleteEdge(){ const f = flow(); if (selEdge === null) return; pushUndo(); f.edges.splice(selEdge, 1); selEdge = null; save(); renderFlow(); relayout(); renderOverlay(); toast('Freccia eliminata'); }
+function flipEdge(){ const f = flow(); const e = f.edges[selEdge]; if (!e) return; pushUndo(); f.edges[selEdge] = [e[1], e[0]]; save(); renderFlow(); relayout(); renderOverlay(); }
+
+document.addEventListener('keydown', e => {
+  const typing = e.target.closest?.('input, textarea, select, [contenteditable]');
+  if (e.key === ' ' && editMode && !typing) { if (!spaceDown) { spaceDown = true; vp.classList.add('space'); } e.preventDefault(); return; }
+  if (!editMode || typing || $('#layers').children.length) return;
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return; }
+  if (mod && e.key.toLowerCase() === 'a') { e.preventDefault(); sel = new Set(flow().nodes.map(n => n.id)); afterSelChange(); return; }
+  if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); if (selEdge !== null) deleteEdge(); else deleteSel(); return; }
+  const arrows = {ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1]};
+  if (arrows[e.key] && sel.size) {
+    e.preventDefault(); const st = e.shiftKey ? 20 : 4; pushUndo();
+    sel.forEach(id => { const n = getNode(id); n.x += arrows[e.key][0] * st; n.y += arrows[e.key][1] * st; });
+    clearRoutes([...sel]); setManual(); save(); placeNodes([...sel]); drawEdges(); drawSel();
+  }
+});
+document.addEventListener('keyup', e => { if (e.key === ' ') { spaceDown = false; vp.classList.remove('space'); } });
+
+/* ---------- riordino automatico (layout a livelli) ---------- */
+function clearRoutes(ids){
+  const f = flow(); if (!f) return; const s = new Set(ids);
+  f.edges.forEach(e => { if (e[2] && (s.has(e[0]) || s.has(e[1]))) e.length = 2; });
+}
+function relayout(focusId){ const f = flow(); if (f && !f.manual) { autoLayout('change'); if (focusId) ensureVisible(focusId); } }
+function setManual(){ const f = flow(); if (f && !f.manual) { f.manual = true; save(); renderOverlay(); toast('Hai spostato a mano: ordine automatico in pausa. Premi “Riordina” per riattivarlo.'); } }
+function ensureVisible(id){
+  const n = getNode(id), r = vp.getBoundingClientRect(); if (!n) return;
+  const sx = view.x + n.x * view.s, sy = view.y + n.y * view.s, right = r.width - (innerWidth >= 720 && sheetNode ? 410 : 0);
+  if (sx < 60 || sx > right - 60 || sy < 90 || sy > r.height - 90) { view.x = right / 2 - n.x * view.s; view.y = r.height / 2 - n.y * view.s; applyView(); }
+}
+function autoLayout(mode = 'button'){
+  const f = flow(); if (!f || !f.nodes.length) return;
+  if (mode === 'button') pushUndo();
+  f.manual = false;
+  f.nodes.forEach(n => n.z = 1);
+  f.edges.forEach(e => e.length = 2);
+  renderFlow();
+  const W = 180, GAPX = 46, GAPY = 84, DW = 14;
+  const H = {}; f.nodes.forEach(n => { const b = nodeBox(n.id); H[n.id] = b ? b.h : 48; });
+  const ids = f.nodes.map(n => n.id), has = new Set(ids);
+  const edges = f.edges.map((e, i) => ({a: e[0], b: e[1], i})).filter(e => has.has(e.a) && has.has(e.b) && e.a !== e.b);
+  const order = [...ids].sort((p, q) => (getNode(p).y - getNode(q).y) || (getNode(p).x - getNode(q).x));
+  const out = {}; ids.forEach(id => out[id] = []); edges.forEach(e => out[e.a].push(e));
+  // 1. frecce che tornano indietro (cicli)
+  const st = {}, back = new Set(), hasIn = new Set(edges.map(e => e.b));
+  const dfs = u => { st[u] = 1; for (const e of out[u]) { if (st[e.b] === 1) back.add(e.i); else if (!st[e.b]) dfs(e.b); } st[u] = 2; };
+  [...order.filter(id => !hasIn.has(id)), ...order].forEach(id => { if (!st[id]) dfs(id); });
+  const fwd = edges.filter(e => !back.has(e.i));
+  // 2. livelli (percorso più lungo)
+  const indeg = {}, fo = {}, layer = {}; ids.forEach(id => { indeg[id] = 0; fo[id] = []; });
+  fwd.forEach(e => { indeg[e.b]++; fo[e.a].push(e); });
+  const q = order.filter(id => !indeg[id]); q.forEach(id => layer[id] = 0);
+  for (let k = 0; k < q.length; k++) { const u = q[k]; for (const e of fo[u]) { layer[e.b] = Math.max(layer[e.b] ?? 0, layer[u] + 1); if (--indeg[e.b] === 0) q.push(e.b); } }
+  const fin = new Set(fwd.map(e => e.b));
+  ids.forEach(id => { if (!fin.has(id) && fo[id].length) layer[id] = Math.min(...fo[id].map(e => layer[e.b])) - 1; });
+  const L = Math.max(...ids.map(id => layer[id])) + 1;
+  // 3. nodi fittizi per le frecce lunghe
+  const V = {}; ids.forEach(id => V[id] = {id, layer: layer[id], w: W, ups: [], downs: [], src: id});
+  const chain = {};
+  fwd.forEach(e => {
+    let prev = e.a; chain[e.i] = [];
+    for (let l = layer[e.a] + 1; l < layer[e.b]; l++) { const d = `~${e.i}_${l}`; V[d] = {id: d, layer: l, w: DW, ups: [prev], downs: [], src: e.a, dummy: true}; V[prev].downs.push(d); chain[e.i].push(d); prev = d; }
+    V[prev].downs.push(e.b); V[e.b].ups.push(prev);
+  });
+  const layers = Array.from({length: L}, () => []);
+  Object.values(V).forEach(v => layers[v.layer].push(v.id));
+  const ox = id => getNode(V[id].src).x;
+  layers.forEach(Ly => Ly.sort((p, r) => ox(p) - ox(r)));
+  // 4. ordine nei livelli (baricentro) — tiene l'ordine con meno incroci
+  const pos = {}; const idxs = () => layers.forEach(Ly => Ly.forEach((id, i) => pos[id] = i)); idxs();
+  const crossings = () => { let c = 0; for (let l = 0; l < L - 1; l++) { const segs = []; layers[l].forEach(id => V[id].downs.forEach(d => segs.push([pos[id], pos[d]]))); for (let i = 0; i < segs.length; i++) for (let j = i + 1; j < segs.length; j++) if ((segs[i][0] - segs[j][0]) * (segs[i][1] - segs[j][1]) < 0) c++; } return c; };
+  let best = layers.map(Ly => [...Ly]), bestC = crossings();
+  for (let it = 0; it < 24; it++) {
+    const down = it % 2 === 0, seq = down ? layers.slice(1) : layers.slice(0, -1).reverse();
+    seq.forEach(Ly => {
+      const bc = {}; Ly.forEach(id => { const nb = down ? V[id].ups : V[id].downs; bc[id] = nb.length ? nb.reduce((s, x) => s + pos[x], 0) / nb.length : pos[id]; });
+      Ly.sort((p, r) => bc[p] - bc[r]); Ly.forEach((id, i) => pos[id] = i);
+    });
+    const c = crossings(); if (c < bestC) { bestC = c; best = layers.map(Ly => [...Ly]); }
+  }
+  best.forEach((Ly, l) => layers[l] = Ly); idxs();
+  // 5. posizioni orizzontali (minimi quadrati con distanza minima)
+  const X = {};
+  layers.forEach(Ly => { let x = 0; Ly.forEach((id, i) => { if (i) x += (V[Ly[i - 1]].w + V[id].w) / 2 + GAPX; X[id] = x; }); });
+  const place = (Ly, des) => {
+    const blocks = [];
+    Ly.forEach(id => {
+      blocks.push({items: [id], rel: {[id]: 0}, sum: des[id], n: 1, pos: des[id]});
+      while (blocks.length > 1) {
+        const B = blocks[blocks.length - 1], A = blocks[blocks.length - 2];
+        const lastA = A.items[A.items.length - 1], gap = (V[lastA].w + V[B.items[0]].w) / 2 + GAPX;
+        if (A.pos + A.rel[lastA] + gap <= B.pos) break;
+        const off = A.rel[lastA] + gap;
+        B.items.forEach(it => { A.rel[it] = B.rel[it] + off; A.items.push(it); });
+        A.sum += B.sum - off * B.n; A.n += B.n; A.pos = A.sum / A.n; blocks.pop();
+      }
+    });
+    blocks.forEach(b => b.items.forEach(it => X[it] = b.pos + b.rel[it]));
+  };
+  for (let it = 0; it < 30; it++) {
+    const mode = it < 24 ? (it % 2 ? 'up' : 'down') : 'both';
+    const seq = mode === 'up' ? layers.slice(0, -1).reverse() : mode === 'down' ? layers.slice(1) : layers;
+    seq.forEach(Ly => {
+      const des = {};
+      Ly.forEach(id => { const v = V[id]; let nb = mode === 'down' ? v.ups : mode === 'up' ? v.downs : [...v.ups, ...v.downs]; if (!nb.length) nb = [...v.ups, ...v.downs]; des[id] = nb.length ? nb.reduce((s, x) => s + X[x], 0) / nb.length : X[id]; });
+      place(Ly, des);
+    });
+  }
+  // 6. posizioni verticali: fasi dello stesso livello allineate in alto
+  const top = [], bot = []; let y = 0;
+  for (let l = 0; l < L; l++) { const hh = Math.max(24, ...layers[l].filter(id => !V[id].dummy).map(id => H[id])); top[l] = y; bot[l] = y + hh; y += hh + GAPY; }
+  const minX = Math.min(...Object.values(X));
+  ids.forEach(id => { const n = getNode(id); n.x = Math.round(X[id] - minX); n.y = Math.round(top[layer[id]] + H[id] / 2); });
+  // 7. percorsi delle frecce
+  const srcSlots = {};
+  for (let l = 0; l < L; l++) { const srcs = layers[l].filter(id => V[id].downs.length); srcs.forEach((id, k) => srcSlots[id] = (k + 1) / (srcs.length + 1)); }
+  const trunkY = (fromId, l) => Math.round(bot[l] + 14 + (GAPY - 28) * (srcSlots[fromId] ?? .5));
+  edges.forEach(e => {
+    const E = f.edges[e.i];
+    if (back.has(e.i)) return;
+    const la = layer[e.a], lb = layer[e.b];
+    if (lb === la + 1) { E[2] = {k: 'v', y: trunkY(e.a, la)}; return; }
+    const ch = chain[e.i]; const lx = Math.round(ch.reduce((s, d) => s + X[d], 0) / ch.length - minX);
+    E[2] = {k: 'r', x: lx, y1: trunkY(e.a, la), y2: Math.round(top[lb] - 16)};
+  });
+  // frecce all'indietro: corsia libera a destra delle fasi coinvolte
+  let bi = 0;
+  [...back].forEach(i => {
+    const E = f.edges[i], a = getNode(E[0]), b = getNode(E[1]);
+    const la = layer[E[0]], lb = layer[E[1]], lo = Math.min(la, lb), hi = Math.max(la, lb);
+    let right = -Infinity; ids.forEach(id => { if (layer[id] >= lo && layer[id] <= hi) right = Math.max(right, getNode(id).x + W / 2); });
+    E[2] = {k: 'r', x: Math.round(right + 34 + (bi++ % 4) * 16), y1: Math.round(bot[la] + 10), y2: Math.round(top[lb] - 10)};
+  });
+  save(); renderFlow(); if (mode !== 'open') refreshSheet(); renderOverlay();
+  if (mode === 'open') fitView(true);
+  if (mode === 'button') { requestAnimationFrame(() => fitView(false)); toast('Flusso riordinato: da ora si riordina da solo a ogni modifica'); }
+}
+
+/* ---------- overlay: suggerimento, barra modifica ---------- */
+function renderOverlay(){
+  const f = flow(); const o = $('#overlay'); let h = '';
+  if (!f) {
+    h = `<div class="empty-flow"><div><b>Nessun flusso disponibile</b><br>Non hai ancora accesso a nessun flusso. Chiedi all'amministratore di abilitarti.</div></div>`;
+  } else if (editMode && linkFrom) {
+    h = `<div class="editbar linkbar"><span class="tip">Tocca la fase di arrivo per collegare “${esc(getNode(linkFrom)?.label)}”</span><button class="btn" id="cancelLink">Annulla</button></div>`;
+  } else if (editMode) {
+    const toolSeg = `<div class="seg tools" role="group" aria-label="Strumento"><button data-tool="select" class="${tool === 'select' ? 'on' : ''}" title="Trascina sul vuoto per selezionare più fasi">${I.marquee}<span>Seleziona</span></button><button data-tool="hand" class="${tool === 'hand' ? 'on' : ''}" title="Trascina per muovere la vista">${I.hand}<span>Muovi</span></button></div>`;
+    const common = `${toolSeg}<button class="btn primary" id="addNode">${I.plus}<span class="lbl">Aggiungi fase</span></button>${f.manual ? `<button class="btn" id="autoBtn" title="Riattiva l'ordine automatico: allinea le fasi, uniforma le dimensioni e sistema le frecce">${I.wand}<span class="lbl">Riordina</span></button>` : `<span class="auto-on" title="Il flusso si riordina da solo a ogni modifica. Se sposti una fase a mano, l'ordine automatico va in pausa.">${I.wand}<span class="lbl">Ordine automatico</span></span>`}<button class="btn" id="undoBtn" title="Annulla (Ctrl+Z)" ${undoStack.length ? '' : 'disabled'}>${I.undo}<span class="lbl">Annulla</span></button>`;
+    let ctx;
+    if (selEdge !== null && f.edges[selEdge]) {
+      const [a, b] = f.edges[selEdge];
+      ctx = `<span class="ctx"><b>Freccia</b> ${esc(getNode(a)?.label)} → ${esc(getNode(b)?.label)}</span><button class="btn" id="flipEdge">${I.swap}<span class="lbl">Inverti</span></button><button class="btn danger" id="delEdge">${I.trash}<span class="lbl">Elimina freccia</span></button>`;
+    } else if (sel.size > 1) {
+      ctx = `<span class="ctx"><b>${sel.size}</b> fasi selezionate</span>
+        <button class="btn" id="shrink" title="Riduci">${I.minus}<span class="lbl">Riduci</span></button><button class="btn" id="grow" title="Ingrandisci">${I.plus}<span class="lbl">Ingrandisci</span></button>
+        <span class="mini-sw">${Object.entries(COLORS).map(([k, v]) => `<button class="swatch c-${k}" data-gcolor="${k}" title="${v}" aria-label="Colore: ${v}"></button>`).join('')}</span>
+        <button class="btn danger" id="delSel">${I.trash}<span class="lbl">Elimina</span></button>`;
+    } else if (sel.size === 1) {
+      ctx = `<span class="tip">Trascina un pallino blu verso un'altra fase per collegarla, o nel vuoto per creare una fase nuova. L'angolo in basso a destra ingrandisce o riduce.</span>`;
+    } else {
+      ctx = `<input id="flowName" aria-label="Nome del flusso" value="${esc(f.name)}"><span class="tip">Trascina sul vuoto per selezionare più fasi · Maiusc+clic per aggiungerne · Spazio+trascina per muovere la vista</span>
+        ${S.flows.length > 1 ? `<button class="btn danger" id="delFlow">${I.trash}<span class="lbl">Elimina flusso</span></button>` : ''}`;
+    }
+    h = `<div class="editbar">${common}<span class="sep"></span>${ctx}</div>`;
+    if (!f.nodes.length) h += `<div class="empty-flow"><div><b>Flusso vuoto</b><br>Premi “Aggiungi fase” per creare il primo rettangolo.</div></div>`;
+  } else if (!store.get('mp-hint')) {
+    h = `<div class="hint"><span>Tocca una fase per aprire i suoi protocolli. Trascina per muoverti, pizzica per lo zoom.</span><button id="hintX" aria-label="Chiudi">${I.x}</button></div>`;
+  }
+  o.innerHTML = h;
+  $('#legendBtn').hidden = !f;
+  renderLegend();
+}
+function renderLegend(){
+  let l = $('#legend'); if (l) l.remove();
+  if (!legendOpen) return;
+  l = document.createElement('div'); l.id = 'legend'; l.className = 'legend';
+  l.innerHTML = Object.entries(COLORS).map(([k, v]) => `<div><span class="sw c-${k}"></span>${v}</div>`).join('') + `<div><span class="sw" style="background:var(--surface);border:1px solid var(--line)"></span><span class="muted">Sbiadita: fase non accessibile</span></div>`;
+  $('#stage').append(l);
+}
+$('#legendBtn').onclick = () => { legendOpen = !legendOpen; renderLegend(); };
+$('#overlay').addEventListener('click', e => {
+  const q = s => e.target.closest(s);
+  if (q('#hintX')) { store.set('mp-hint', '1'); renderOverlay(); }
+  if (q('#cancelLink')) { linkFrom = null; renderFlow(); renderOverlay(); }
+  if (q('#addNode')) addNode();
+  if (q('#undoBtn')) undo();
+  if (q('#autoBtn')) autoLayout();
+  const t = q('[data-tool]'); if (t) { tool = t.dataset.tool; renderOverlay(); }
+  if (q('#shrink')) scaleSel(0.9);
+  if (q('#grow')) scaleSel(1.1);
+  const gc = q('[data-gcolor]'); if (gc) colorSel(gc.dataset.gcolor);
+  if (q('#delSel')) deleteSel();
+  if (q('#delEdge')) deleteEdge();
+  if (q('#flipEdge')) flipEdge();
+  const del = q('#delFlow');
+  if (del) {
+    if (!del.classList.contains('armed')) { del.classList.add('armed'); del.innerHTML = `${I.trash}<span>Conferma: elimina flusso e documenti</span>`; return; }
+    const id = curFlowId;
+    api('DELETE', '/api/flows/' + id).then(() => {
+      S.flows = S.flows.filter(f => f.id !== id); S.docs = S.docs.filter(d => d.flowId !== id); S.users.forEach(u => { if (u.access) delete u.access[id]; });
+      undoStack.length = 0; toast('Flusso eliminato'); setEdit(false); switchFlow(visibleFlows()[0]?.id);
+    }).catch(err => toast(err.message));
+  }
+});
+$('#overlay').addEventListener('focusin', e => { if (e.target.id === 'flowName') pushUndo(); });
+$('#overlay').addEventListener('input', e => { if (e.target.id === 'flowName') { flow().name = e.target.value || 'Senza nome'; save(); renderHeader(); } });
+function addNode(){
+  const f = flow(), r = vp.getBoundingClientRect();
+  pushUndo();
+  const n = {id: uid('n'), label: 'Nuova fase', sub: [], c: 'op', x: Math.round((r.width / 2 - view.x) / view.s), y: Math.round((r.height / 2 - view.y) / view.s)};
+  f.nodes.push(n); save(); sel = new Set([n.id]); selEdge = null; renderFlow(); openSheet(n.id); relayout(n.id); renderOverlay();
+  setTimeout(() => { const i = $('#nf-label'); i?.focus(); i?.select(); }, 30);
+}
+
+/* ---------- pannello della fase ---------- */
+function closeSheet(){ sheetNode = null; $('#sheet')?.remove(); }
+function openSheet(id){
+  const f = flow(), n = getNode(id); if (!n) return;
+  sheetNode = id; let s = $('#sheet');
+  if (!s) { s = document.createElement('aside'); s.id = 'sheet'; s.className = 'sheet'; $('#stage').append(s); }
+  editMode ? renderInspector(s, f, n) : renderDocsPanel(s, f, n);
+}
+function renderDocsPanel(s, f, n){
+  const docs = docsFor(f.id, n.id);
+  s.innerHTML = `<div class="sheet-h"><div class="eyebrow"><span class="sw c-${n.c}"></span>${esc(f.name)}</div><h2>${esc(n.label)}</h2>
+      ${n.sub.length ? `<ul>${n.sub.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}<button class="x" data-close aria-label="Chiudi">${I.x}</button></div>
+    <div class="sheet-b">
+      <div class="sec-t"><span>Protocolli e procedure · ${docs.length}</span>${isAdmin() ? `<button class="linkish" data-newdoc>+ Aggiungi</button>` : ''}</div>
+      ${docs.length ? `<div class="docs">${docs.map(d => `<button class="doc-row" data-doc="${d.id}"><span class="doc-ic">${I.doc}</span><span><b>${esc(d.title)}</b><small><span class="tag">${esc(d.type)}</span>${d.example ? '<span class="tag ex">Esempio</span>' : ''}Aggiornato il ${fmtDate(d.updated)}</small></span></button>`).join('')}</div>`
+        : `<p class="note">${isAdmin() ? 'Nessun documento per questa fase. Aggiungi il primo protocollo con “+ Aggiungi”.' : 'Per questa fase non ci sono ancora documenti.'}</p>`}
+      ${docs.length ? `<button class="btn" data-askphase style="align-self:flex-start">${I.shield}Chiedi all'assistente su questa fase</button>` : ''}
+    </div>`;
+}
+function renderInspector(s, f, n){
+  const out = f.edges.filter(e => e[0] === n.id), inn = f.edges.filter(e => e[1] === n.id);
+  const nd = docsFor(f.id, n.id).length;
+  s.innerHTML = `<div class="sheet-h"><div class="eyebrow">Modifica fase</div><h2>${esc(n.label)}</h2><button class="x" data-close aria-label="Chiudi">${I.x}</button></div>
+    <div class="sheet-b">
+      <label class="field">Titolo<input id="nf-label" value="${esc(n.label)}"></label>
+      <label class="field">Punti (uno per riga)<textarea id="nf-sub" rows="3" placeholder="Es. Firma contratto">${esc(n.sub.join('\n'))}</textarea></label>
+      <div class="field">Colore<div class="swatches">${Object.entries(COLORS).map(([k, v]) => `<button class="swatch c-${k} ${n.c === k ? 'on' : ''}" data-color="${k}" title="${v}" aria-label="${v}"></button>`).join('')}</div><small class="muted" style="font-weight:500">${COLORS[n.c]}</small></div>
+      <div class="field">Dimensione<div class="row" style="align-items:center"><button class="btn" data-size="0.9" aria-label="Riduci">${I.minus}</button><span style="font-weight:600;color:var(--fg);min-width:52px;text-align:center;font-variant-numeric:tabular-nums">${Math.round((n.z || 1) * 100)}%</span><button class="btn" data-size="1.1" aria-label="Ingrandisci">${I.plus}</button>${(n.z || 1) !== 1 ? `<button class="linkish" data-size="reset">Ripristina</button>` : ''}</div></div>
+      <div class="field">Collegamenti
+        <div class="conn">${out.map(e => `<div><span>→ ${esc(getNode(e[1])?.label)}</span><button data-unlink="${e[0]}|${e[1]}" aria-label="Rimuovi collegamento">${I.x}</button></div>`).join('')}
+        ${inn.map(e => `<div><span class="muted">← ${esc(getNode(e[0])?.label)}</span><button data-unlink="${e[0]}|${e[1]}" aria-label="Rimuovi collegamento">${I.x}</button></div>`).join('')}
+        ${!out.length && !inn.length ? '<span class="muted" style="font-weight:500">Nessun collegamento</span>' : ''}</div>
+        <small class="muted" style="font-weight:500">Sulla mappa trascina un pallino blu verso un'altra fase. Oppure:</small>
+        <button class="btn" data-link style="align-self:flex-start;margin-top:2px">${I.link}Tocca per collegare a un'altra fase</button></div>
+      <div class="field">Documenti<span style="font-weight:500;color:var(--fg)">${nd} ${nd === 1 ? 'documento collegato' : 'documenti collegati'}</span><button class="btn" data-newdoc style="align-self:flex-start">${I.plus}Aggiungi documento</button></div>
+      <button class="btn danger" data-delnode style="align-self:flex-start">${I.trash}Elimina fase</button>
+    </div>`;
+}
+document.addEventListener('click', e => {
+  const s = e.target.closest('#sheet'); if (!s) return;
+  const f = flow(), n = getNode(sheetNode);
+  if (e.target.closest('[data-close]')) { if (editMode) clearSelection(); else closeSheet(); return; }
+  const d = e.target.closest('[data-doc]'); if (d) return openReader(d.dataset.doc);
+  if (e.target.closest('[data-newdoc]')) return openDocEditor(null, sheetNode);
+  if (e.target.closest('[data-askphase]')) { openChat(); setTimeout(() => sendChat(`Riassumi i protocolli della fase “${n.label}”: cosa devo fare, in che ordine e a cosa fare attenzione?`), 50); return; }
+  const c = e.target.closest('[data-color]'); if (c) { pushUndo(); n.c = c.dataset.color; save(); renderFlow(); openSheet(n.id); return; }
+  const sz = e.target.closest('[data-size]');
+  if (sz) { pushUndo(); setManual(); n.z = sz.dataset.size === 'reset' ? 1 : +clamp((n.z || 1) * +sz.dataset.size, 0.45, 3).toFixed(3); save(); renderFlow(); openSheet(n.id); return; }
+  const ul = e.target.closest('[data-unlink]'); if (ul) { pushUndo(); const [a, b] = ul.dataset.unlink.split('|'); f.edges = f.edges.filter(x => !(x[0] === a && x[1] === b)); save(); renderFlow(); relayout(); openSheet(n.id); return; }
+  if (e.target.closest('[data-link]')) { linkFrom = n.id; renderFlow(); renderOverlay(); if (innerWidth < 720) $('#sheet')?.remove(); return; }
+  const del = e.target.closest('[data-delnode]');
+  if (del) { sel = new Set([n.id]); deleteSel(); }
+});
+document.addEventListener('focusin', e => { if (e.target.closest('#sheet') && (e.target.id === 'nf-label' || e.target.id === 'nf-sub')) { pushUndo(); } });
+document.addEventListener('change', e => { if (e.target.closest('#sheet') && (e.target.id === 'nf-label' || e.target.id === 'nf-sub')) relayout(); });
+document.addEventListener('input', e => {
+  if (!e.target.closest('#sheet')) return;
+  const n = getNode(sheetNode); if (!n) return;
+  if (e.target.id === 'nf-label') { n.label = e.target.value; $('#sheet h2').textContent = n.label || 'Senza titolo'; }
+  else if (e.target.id === 'nf-sub') n.sub = e.target.value.split('\n').map(x => x.trim()).filter(Boolean);
+  else return;
+  save(); renderFlow();
+});
+
+/* ---------- livelli modali ---------- */
+function layer(html, cls = ''){
+  const l = document.createElement('div'); l.className = 'scrim'; l.innerHTML = `<div class="modal ${cls}" role="dialog" aria-modal="true">${html}</div>`;
+  l.addEventListener('pointerdown', e => { if (e.target === l) l.dataset.down = '1'; });
+  l.addEventListener('click', e => { if (e.target === l && l.dataset.down) closeLayer(l); l.dataset.down = ''; });
+  $('#layers').append(l); return l;
+}
+function closeLayer(l){ l?.remove(); }
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  const ls = $('#layers').lastElementChild; if (ls) return closeLayer(ls);
+  if ($('#chat')) return closeChat();
+  if (linkFrom) { linkFrom = null; renderFlow(); renderOverlay(); return; }
+  if (editMode && (sel.size || selEdge !== null)) { clearSelection(); return; }
+  if (sheetNode) closeSheet();
+});
+document.addEventListener('click', e => { const x = e.target.closest('[data-x]'); if (x) closeLayer(x.closest('.scrim')); });
+
+/* ---------- account ---------- */
+function openAccount(){
+  const l = layer(`<div class="modal-h"><h2>${esc(me.name || me.username)}</h2><p>Nome utente: <b>${esc(me.username)}</b> · ${me.role === 'admin' ? 'Amministratore' : esc(me.title || 'Collaboratore')}</p><button class="x" data-x aria-label="Chiudi">${I.x}</button></div>
+    <div class="modal-b">
+      ${me.role === 'admin' ? `<div class="row">${MODE === 'admin' ? `<a class="btn" href="/">Apri la vista di lettura</a>` : `<a class="btn primary" href="/admin">Apri l'area admin</a>`}</div>` : ''}
+      <form id="pw-form" class="u-edit"><div class="sec-t">Cambia password</div>
+        <label class="field">Password attuale<input id="pw-cur" type="password" autocomplete="current-password" required></label>
+        <label class="field">Nuova password (almeno 8 caratteri)<input id="pw-new" type="password" autocomplete="new-password" minlength="8" required></label>
+        <button class="btn" type="submit" style="align-self:flex-start">Aggiorna password</button></form>
+    </div>
+    <div class="modal-f"><button class="btn danger" id="logout">Esci</button></div>`);
+  l.querySelector('#pw-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    try { await api('POST', '/api/me/password', {current: $('#pw-cur').value, next: $('#pw-new').value}); toast('Password aggiornata'); closeLayer(l); }
+    catch (err) { toast(err.message); }
+  });
+  l.querySelector('#logout').addEventListener('click', async () => { await syncFlows(); await api('POST', '/api/logout').catch(() => {}); location.href = '/login'; });
+}
+async function boot(){
+  try { await loadState(); }
+  catch (e) { $('#overlay').innerHTML = `<div class="empty-flow"><div><b>Non riesco a caricare i dati</b><br>${esc(e.message)}</div></div>`; return; }
+  const fl = visibleFlows(); curFlowId = fl.find(f => f.id === curFlowId)?.id || fl[0]?.id || null;
+  switchFlow(curFlowId);
+}
+
+/* ---------- nuovo flusso ---------- */
+function openNewFlow(){
+  let copy = false;
+  const l = layer(`<div class="modal-h"><h2>Nuovo flusso</h2><p>Crea un flusso da zero o parti da una copia di quello aperto.</p><button class="x" data-x aria-label="Chiudi">${I.x}</button></div>
+    <div class="modal-b"><label class="field">Nome del flusso<input id="nfl-name" placeholder="Es. Onboarding nuovo collaboratore"></label>
+      <div class="field">Punto di partenza<div class="seg" id="nfl-seg"><button class="on" data-c="0">Flusso vuoto</button>${flow() ? `<button data-c="1">Copia di “${esc(flow().name)}”</button>` : ''}</div></div>
+      <p class="note">Il nuovo flusso è visibile solo agli amministratori finché non lo abiliti ai collaboratori da “Collaboratori”.</p></div>
+    <div class="modal-f"><button class="btn" data-x>Annulla</button><button class="btn primary" id="nfl-ok">Crea flusso</button></div>`);
+  setTimeout(() => $('#nfl-name').focus(), 30);
+  l.addEventListener('click', async e => {
+    const b = e.target.closest('[data-c]'); if (b) { copy = b.dataset.c === '1'; l.querySelectorAll('[data-c]').forEach(x => x.classList.toggle('on', x === b)); }
+    const ok = e.target.closest('#nfl-ok');
+    if (ok) {
+      ok.disabled = true;
+      const name = $('#nfl-name').value.trim() || 'Nuovo flusso', src = flow();
+      const f = copy && src ? {name, nodes: src.nodes.map(({locked, ...n}) => ({...n, sub: [...n.sub]})), edges: src.edges.map(e => [...e]), manual: !!src.manual}
+        : {name, nodes: [{id: uid('n'), label: 'Inizio', sub: [], c: 'fase', x: 0, y: 0}], edges: [], manual: false};
+      try {
+        const r = await api('POST', '/api/flows', f); f.id = r.id; S.flows.push(f); synced[f.id] = flowJSON(f);
+        closeLayer(l); curFlowId = f.id; editMode = true; $('#viewport').classList.add('editing'); switchFlow(f.id); toast('Flusso creato: ora aggiungi le fasi');
+      } catch (err) { ok.disabled = false; toast(err.message); }
+    }
+  });
+}
+
+/* ---------- collaboratori e permessi ---------- */
+let selUser = null;
+const genPassword = () => { const c = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'; const a = new Uint32Array(12); crypto.getRandomValues(a); return [...a].map(x => c[x % c.length]).join(''); };
+function openUsers(){
+  selUser = selUser && S.users.some(u => u.id === selUser) ? selUser : S.users.find(u => u.role !== 'admin')?.id || S.users[0]?.id;
+  const l = layer(`<div class="modal-h"><h2>Collaboratori e permessi</h2><p>Crea gli accessi con nome utente e password e decidi chi vede quali flussi. Le modifiche si salvano da sole.</p><button class="x" data-x aria-label="Chiudi">${I.x}</button></div>
+    <div class="modal-b"><div class="users"><div><div class="u-list" id="u-list"></div><button class="btn" id="u-add" style="margin-top:8px">${I.plus}Nuovo collaboratore</button></div><div class="u-edit" id="u-edit"></div></div></div>`, 'wide');
+  renderUserList(); renderUserEdit();
+  l.addEventListener('click', usersClick); l.addEventListener('change', usersChange);
+}
+function renderUserList(){
+  $('#u-list').innerHTML = S.users.map(u => `<button class="u-row ${u.id === selUser ? 'on' : ''}" data-u="${u.id}"><span class="av ${u.role === 'admin' ? 'admin' : ''}">${esc(initials(u.name || u.username))}</span><span><b>${esc(u.name || u.username)}</b><small>${esc(u.username)} · ${u.role === 'admin' ? 'Amministratore' : esc(u.title || 'Collaboratore')}</small></span></button>`).join('');
+}
+function renderNewUser(){
+  $('#u-edit').innerHTML = `<div class="sec-t">Nuovo collaboratore</div>
+    <form id="nu-form" class="u-edit">
+      <div class="row"><label class="field" style="flex:1 1 180px">Nome e cognome<input id="nu-name" required placeholder="Es. Martina Rossi"></label><label class="field" style="flex:1 1 180px">Mansione<input id="nu-title" placeholder="Es. Segreteria"></label></div>
+      <div class="row"><label class="field" style="flex:1 1 180px">Nome utente<input id="nu-user" required minlength="3" autocomplete="off" placeholder="Es. martina.rossi"></label>
+        <label class="field" style="flex:1 1 180px">Password iniziale<input id="nu-pass" required minlength="8" autocomplete="off" value="${genPassword()}"></label></div>
+      <p class="note">Comunica nome utente e password al collaboratore: potrà cambiare la password dal suo account. Dopo averlo creato scegli quali flussi può vedere.</p>
+      <div class="row"><button class="btn primary" type="submit">Crea accesso</button><button class="btn" type="button" id="nu-cancel">Annulla</button></div>
+    </form>`;
+  $('#nu-name').addEventListener('input', e => { const u = $('#nu-user'); if (!u.dataset.touched) u.value = e.target.value.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, '.').replace(/[^a-z0-9._-]/g, ''); });
+  $('#nu-user').addEventListener('input', e => e.target.dataset.touched = '1');
+  $('#nu-cancel').onclick = () => renderUserEdit();
+  $('#nu-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const body = {name: $('#nu-name').value.trim(), title: $('#nu-title').value.trim(), username: $('#nu-user').value.trim(), password: $('#nu-pass').value, role: 'collab'};
+    try {
+      const r = await api('POST', '/api/users', body);
+      S.users.push({id: r.id, username: r.username, name: body.name, title: body.title, role: 'collab', access: {}});
+      selUser = r.id; renderUserList(); renderUserEdit(); toast(`Accesso creato: ${r.username}`);
+    } catch (err) { toast(err.message); }
+  });
+}
+function renderUserEdit(){
+  const u = S.users.find(x => x.id === selUser); if (!u) { $('#u-edit').innerHTML = '<p class="note">Nessun collaboratore. Premi “Nuovo collaboratore”.</p>'; return; }
+  const self = u.id === me.id, locked = self || u.fromEnv;
+  $('#u-edit').innerHTML = `
+    <div class="row"><label class="field" style="flex:1 1 180px">Nome<input id="uf-name" value="${esc(u.name)}"></label><label class="field" style="flex:1 1 180px">Mansione<input id="uf-title" value="${esc(u.title)}" placeholder="Es. Assistente alla poltrona"></label></div>
+    <div class="row"><label class="field" style="flex:1 1 180px">Nome utente<input id="uf-user" value="${esc(u.username)}" ${u.fromEnv ? 'disabled' : ''}></label>
+      <div class="field" style="flex:1 1 180px">Nuova password${u.fromEnv ? '<small class="muted" style="font-weight:500">Si cambia da Render (ADMIN_PASSWORD).</small>' : `<div class="row" style="flex-wrap:nowrap"><input id="uf-pass" autocomplete="off" placeholder="Almeno 8 caratteri" style="flex:1;min-width:0;border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:9px 11px"><button class="btn" id="uf-gen" title="Genera">${I.wand}</button><button class="btn" id="uf-setpass">Imposta</button></div>`}</div></div>
+    <div class="field">Tipo di account<div class="seg"><button data-role="collab" class="${u.role !== 'admin' ? 'on' : ''}" ${locked ? 'disabled' : ''}>Collaboratore · sola lettura</button><button data-role="admin" class="${u.role === 'admin' ? 'on' : ''}" ${locked ? 'disabled' : ''}>Amministratore</button></div>
+      ${u.fromEnv ? '<small class="muted" style="font-weight:500">Amministratore principale, definito nelle impostazioni di Render.</small>' : self ? '<small class="muted" style="font-weight:500">Non puoi cambiare il tuo stesso ruolo.</small>' : ''}</div>
+    ${u.role === 'admin' ? '<p class="note">Gli amministratori vedono tutti i flussi e da /admin possono modificare flussi, documenti e permessi.</p>' : S.flows.map(f => {
+      const a = access(u, f.id);
+      return `<section class="acc"><h4>${esc(f.name)}</h4>
+        <div class="seg">${[['none', 'Nessun accesso'], ['all', 'Tutto il flusso'], ['some', 'Solo alcune fasi']].map(([m, t]) => `<button data-mode="${f.id}|${m}" class="${a.mode === m ? 'on' : ''}">${t}</button>`).join('')}</div>
+        ${a.mode === 'some' ? `
+          <label class="chk"><input type="checkbox" id="hide-${f.id}" data-hide="${f.id}" ${a.hide ? 'checked' : ''}>Nascondi le fasi non autorizzate (altrimenti le vede sbiadite)</label>
+          <div class="row"><button class="linkish" data-all="${f.id}">Seleziona tutte</button><button class="linkish" data-none="${f.id}">Nessuna</button><span class="muted" style="font-size:13px" id="cnt-${f.id}">${(a.nodes || []).length} di ${f.nodes.length} fasi</span></div>
+          <div class="nodes-pick">${f.nodes.map(n => `<label class="chk"><input type="checkbox" id="pk-${f.id}-${n.id}" data-pick="${f.id}|${n.id}" ${(a.nodes || []).includes(n.id) ? 'checked' : ''}><span class="sw c-${n.c}"></span>${esc(n.label)}</label>`).join('')}</div>` : ''}
+      </section>`;
+    }).join('')}
+    ${locked ? '' : `<button class="btn danger" id="u-del" style="align-self:flex-start">${I.trash}Elimina l'accesso di ${esc(u.name || u.username)}</button>`}`;
+}
+function curU(){ return S.users.find(x => x.id === selUser); }
+const accTimers = {};
+function pushAccess(u, fid){
+  clearTimeout(accTimers[u.id + fid]);
+  accTimers[u.id + fid] = setTimeout(() => { const a = u.access[fid] || {mode: 'none'}; api('PUT', `/api/users/${u.id}/access/${fid}`, {mode: a.mode, hide: !!a.hide, nodes: a.nodes || []}).catch(e => toast(e.message)); }, 400);
+}
+async function usersClick(e){
+  const r = e.target.closest('[data-u]'); if (r) { selUser = r.dataset.u; renderUserList(); renderUserEdit(); return; }
+  if (e.target.closest('#u-add')) { selUser = null; renderUserList(); renderNewUser(); setTimeout(() => $('#nu-name').focus(), 30); return; }
+  const u = curU(); if (!u) return;
+  if (e.target.closest('#uf-gen')) { $('#uf-pass').value = genPassword(); return; }
+  if (e.target.closest('#uf-setpass')) {
+    const p = $('#uf-pass').value;
+    try { await api('PATCH', '/api/users/' + u.id, {password: p}); $('#uf-pass').value = ''; toast(`Password impostata. Comunicala a ${u.name || u.username}.`); } catch (err) { toast(err.message); }
+    return;
+  }
+  const ro = e.target.closest('[data-role]');
+  if (ro && !ro.disabled) { try { await api('PATCH', '/api/users/' + u.id, {role: ro.dataset.role}); u.role = ro.dataset.role; u.access = u.access || {}; renderUserList(); renderUserEdit(); } catch (err) { toast(err.message); } return; }
+  const m = e.target.closest('[data-mode]');
+  if (m) { const [fid, mode] = m.dataset.mode.split('|'); const prev = u.access[fid] || {}; u.access[fid] = mode === 'some' ? {mode, hide: !!prev.hide, nodes: prev.nodes || []} : {mode}; pushAccess(u, fid); renderUserEdit(); return; }
+  const al = e.target.closest('[data-all]'), no = e.target.closest('[data-none]');
+  if (al || no) { const fid = al ? al.dataset.all : no.dataset.none; const f = S.flows.find(x => x.id === fid); u.access[fid].nodes = al ? f.nodes.map(n => n.id) : []; pushAccess(u, fid); renderUserEdit(); return; }
+  const d = e.target.closest('#u-del');
+  if (d) {
+    if (!d.classList.contains('armed')) { d.classList.add('armed'); d.textContent = 'Conferma: elimina questo accesso'; return; }
+    try { await api('DELETE', '/api/users/' + u.id); S.users = S.users.filter(x => x.id !== u.id); selUser = S.users[0]?.id; renderUserList(); renderUserEdit(); toast('Accesso eliminato'); } catch (err) { toast(err.message); }
+  }
+}
+async function usersChange(e){
+  const u = curU(); const t = e.target; if (!u) return;
+  const field = {'uf-name': 'name', 'uf-title': 'title', 'uf-user': 'username'}[t.id];
+  if (field) {
+    try { await api('PATCH', '/api/users/' + u.id, {[field]: t.value.trim()}); u[field] = field === 'username' ? t.value.trim().toLowerCase().replace(/\s+/g, '.') : t.value.trim(); renderUserList(); toast('Salvato'); }
+    catch (err) { toast(err.message); t.value = u[field]; }
+    return;
+  }
+  if (t.dataset.hide) { u.access[t.dataset.hide].hide = t.checked; pushAccess(u, t.dataset.hide); }
+  if (t.dataset.pick) {
+    const [fid, nid] = t.dataset.pick.split('|'); const a = u.access[fid]; const set = new Set(a.nodes || []);
+    t.checked ? set.add(nid) : set.delete(nid); a.nodes = [...set]; pushAccess(u, fid);
+    const f = S.flows.find(x => x.id === fid); const c = $('#cnt-' + fid); if (c) c.textContent = `${a.nodes.length} di ${f.nodes.length} fasi`;
+  }
+}
+// quando si chiude un pannello, aggiorna la tela
+new MutationObserver(() => { if (!$('#layers').children.length) { renderFlow(); } }).observe($('#layers'), {childList: true});
+
+/* ---------- lettore documento ---------- */
+function mdLite(src, cite){
+  const inline = s => { s = esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>'); if (cite) s = s.replace(/\[(\d+(?:\s*[,;]\s*\d+)*)\]/g, (m, g) => cite(g.split(/[,;]/).map(x => +x.trim()))); return s; };
+  let html = '', list = null, para = [];
+  const fp = () => { if (para.length) { html += `<p>${inline(para.join(' '))}</p>`; para = []; } };
+  const fl = () => { if (list) { html += `</${list}>`; list = null; } };
+  for (const raw of String(src).split('\n')) {
+    const l = raw.trim(); let m;
+    if (!l) { fp(); fl(); continue; }
+    if ((m = l.match(/^#{1,4}\s+(.*)/))) { fp(); fl(); html += `<h3>${inline(m[1])}</h3>`; continue; }
+    if ((m = l.match(/^[-*•]\s+(.*)/))) { fp(); if (list !== 'ul') { fl(); html += '<ul>'; list = 'ul'; } html += `<li>${inline(m[1])}</li>`; continue; }
+    if ((m = l.match(/^\d+[.)]\s+(.*)/))) { fp(); if (list !== 'ol') { fl(); html += '<ol>'; list = 'ol'; } html += `<li>${inline(m[1])}</li>`; continue; }
+    if ((m = l.match(/^>\s?(.*)/))) { fp(); fl(); html += `<blockquote>${inline(m[1])}</blockquote>`; continue; }
+    fl(); para.push(l);
+  }
+  fp(); fl(); return html;
+}
+function watermarkCss(){
+  const c = getComputedStyle(document.documentElement).getPropertyValue('--wm').trim() || 'rgba(0,0,0,.08)';
+  const t = `${me.name || me.username} · ${new Date().toLocaleDateString('it-IT')} · Riservato`;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='360' height='210'><text x='180' y='110' text-anchor='middle' transform='rotate(-24 180 105)' font-family='Figtree, sans-serif' font-weight='700' font-size='15' fill='${c}'>${esc(t)}</text></svg>`;
+  return `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}")`;
+}
+let pdfjsReady = null;
+function loadPdfJs(){
+  if (pdfjsReady) return pdfjsReady;
+  pdfjsReady = new Promise((ok, ko) => {
+    const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload = () => { window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; ok(window.pdfjsLib); };
+    s.onerror = () => { pdfjsReady = null; ko(new Error('Lettore PDF non disponibile')); };
+    document.head.append(s);
+  });
+  return pdfjsReady;
+}
+async function renderPdf(docId, host){
+  host.innerHTML = '<p class="muted">Apro il documento…</p>';
+  try {
+    const [lib, buf] = await Promise.all([loadPdfJs(), fetch(`/api/docs/${docId}/file`, {credentials: 'same-origin'}).then(r => { if (!r.ok) throw new Error('Documento non disponibile'); return r.arrayBuffer(); })]);
+    const pdf = await lib.getDocument({data: buf}).promise;
+    host.innerHTML = '';
+    const width = Math.min(host.clientWidth || 700, 900), ratio = Math.min(devicePixelRatio || 1, 2);
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const v1 = page.getViewport({scale: 1}), scale = width / v1.width, vpt = page.getViewport({scale: scale * ratio});
+      const c = document.createElement('canvas'); c.width = vpt.width; c.height = vpt.height; c.style.width = '100%'; c.className = 'pdf-page';
+      host.append(c);
+      await page.render({canvasContext: c.getContext('2d'), viewport: vpt}).promise;
+      if (!host.isConnected) return;
+    }
+  } catch (e) { host.innerHTML = `<p class="note">${esc(e.message)}</p>`; }
+}
+function openReader(docId, terms){
+  const d = S.docs.find(x => x.id === docId); if (!d) return;
+  const f = S.flows.find(x => x.id === d.flowId), n = getNode(d.nodeId, f);
+  const prot = !isAdmin();
+  const l = layer(`<div class="modal-h"><div class="eyebrow"><span class="sw c-${n?.c || 'op'}"></span>${esc(d.type)} · ${esc(n?.label || 'fase eliminata')}</div><h2 style="margin-top:6px">${esc(d.title)}</h2><p>${esc(f?.name || '')} · aggiornato il ${fmtDate(d.updated)}</p><button class="x" data-x aria-label="Chiudi">${I.x}</button>
+      ${isAdmin() ? `<div class="row" style="margin-top:10px"><button class="btn" data-edoc>${I.edit}Modifica</button><button class="btn danger" data-ddoc>${I.trash}Elimina</button></div>` : ''}</div>
+    ${d.example ? `<div class="example">Documento di esempio: sostituiscilo con il vostro protocollo reale.</div>` : ''}
+    ${d.orphan && isAdmin() ? `<div class="example">La fase di questo documento è stata eliminata: i collaboratori non lo vedono. Premi “Modifica” per collegarlo a un'altra fase.</div>` : ''}
+    <div class="doc-wrap ${prot ? 'protected' : ''}"><div class="wm" style="background-image:${watermarkCss()}"></div><article class="doc-body ${d.hasFile ? 'pdf' : ''}">${d.hasFile ? '' : mdLite(d.body)}</article></div>
+    <div class="readonly">${I.lock}${prot ? 'Sola lettura · download e copia disattivati · filigrana nominativa' : 'Vista amministratore: i collaboratori vedono questo documento in sola lettura con la loro filigrana'}</div>`, 'reader');
+  const wrap = l.querySelector('.doc-wrap');
+  if (d.hasFile) renderPdf(d.id, l.querySelector('.doc-body'));
+  else if (terms?.length) { const first = highlightIn(l.querySelector('.doc-body'), terms); if (first) setTimeout(() => first.scrollIntoView({block: 'center'}), 60); }
+  if (prot) ['copy', 'cut', 'contextmenu', 'dragstart', 'selectstart'].forEach(ev => wrap.addEventListener(ev, e => { e.preventDefault(); if (ev === 'copy') toast('La copia dei documenti è disattivata.'); }));
+  l.addEventListener('click', async e => {
+    if (e.target.closest('[data-edoc]')) { closeLayer(l); openDocEditor(d.id); }
+    const del = e.target.closest('[data-ddoc]');
+    if (del) {
+      if (!del.classList.contains('armed')) { del.classList.add('armed'); del.innerHTML = `${I.trash}Conferma eliminazione`; return; }
+      try { await api('DELETE', '/api/docs/' + d.id); S.docs = S.docs.filter(x => x.id !== d.id); closeLayer(l); renderFlow(); if (sheetNode) openSheet(sheetNode); toast('Documento eliminato'); }
+      catch (err) { toast(err.message); }
+    }
+  });
+}
+document.addEventListener('visibilitychange', () => document.querySelectorAll('.doc-wrap.protected').forEach(w => w.classList.toggle('shield', document.hidden)));
+
+/* ---------- editor documento (solo admin) ---------- */
+function openDocEditor(docId, nodeId){
+  const d = docId ? S.docs.find(x => x.id === docId) : null;
+  const fid = d ? d.flowId : flow().id; const fl = S.flows.find(x => x.id === fid);
+  const nid = d ? d.nodeId : nodeId;
+  const l = layer(`<div class="modal-h"><h2>${d ? 'Modifica documento' : 'Nuovo documento'}</h2><p>Carica un PDF o un Word, oppure scrivi il testo. I collaboratori con accesso alla fase lo leggeranno in sola lettura.</p><button class="x" data-x aria-label="Chiudi">${I.x}</button></div>
+    <div class="modal-b">
+      <label class="field">Titolo<input id="df-title" value="${esc(d?.title || '')}" placeholder="Es. Protocollo accoglienza"></label>
+      <div class="row"><label class="field" style="flex:1 1 160px">Tipo<select id="df-type">${DOC_TYPES.map(t => `<option ${d?.type === t ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+        <label class="field" style="flex:2 1 220px">Fase del flusso<select id="df-node">${d?.orphan ? '<option value="" selected disabled>Scegli la fase</option>' : ''}${fl.nodes.map(n => `<option value="${n.id}" ${n.id === nid ? 'selected' : ''}>${esc(n.label)}</option>`).join('')}</select></label></div>
+      <div class="field">File<div class="row" style="align-items:center">
+        <label class="btn" style="cursor:pointer">${I.doc}<span id="df-fname">${d?.hasFile ? esc(d.fileName || 'PDF caricato') + ' · sostituisci' : 'Carica PDF, Word o testo'}</span><input type="file" id="df-file" accept=".pdf,.docx,.txt,.md,application/pdf" hidden></label>
+        ${d?.hasFile ? `<label class="chk"><input type="checkbox" id="df-rmfile">Rimuovi il PDF e usa solo il testo</label>` : ''}</div>
+        <small class="muted" style="font-weight:500">PDF: si vede com'è, con filigrana; il testo viene estratto per ricerca e assistente. Word: viene convertito in testo modificabile.</small></div>
+      <label class="field">Testo${d?.hasFile ? ' estratto dal PDF (usato da ricerca e assistente)' : ''}<textarea id="df-body" rows="10" placeholder="## Titolo di sezione&#10;Testo normale&#10;- punto elenco&#10;1. passaggio numerato&#10;> nota importante">${esc(d?.body || '')}</textarea></label>
+      <small class="muted">Formattazione: <b>##</b> titolo · <b>-</b> elenco · <b>1.</b> passaggi · <b>&gt;</b> nota · <b>**grassetto**</b></small>
+    </div>
+    <div class="modal-f"><button class="btn" data-x>Annulla</button><button class="btn primary" id="df-save">Salva documento</button></div>`);
+  setTimeout(() => $('#df-title').focus(), 30);
+  let file = null;
+  l.querySelector('#df-file').addEventListener('change', e => {
+    file = e.target.files[0] || null; if (!file) return;
+    $('#df-fname').textContent = file.name;
+    if (!$('#df-title').value) $('#df-title').value = file.name.replace(/\.[^.]+$/, '');
+    if (/\.(txt|md)$/i.test(file.name)) { const r = new FileReader(); r.onload = () => { $('#df-body').value = r.result; file = null; toast('Testo importato'); }; r.readAsText(file); }
+    else if (/\.docx$/i.test(file.name)) { $('#df-body').value = ''; $('#df-body').placeholder = 'Il testo del Word verrà convertito al salvataggio.'; }
+    else if (/\.pdf$/i.test(file.name)) { $('#df-body').value = ''; $('#df-body').placeholder = 'Il testo del PDF verrà estratto al salvataggio.'; }
+  });
+  l.querySelector('#df-save').addEventListener('click', async ev => {
+    const title = $('#df-title').value.trim(), body = $('#df-body').value.trim(), nodeSel = $('#df-node').value;
+    if (!title) { toast('Scrivi un titolo per il documento.'); $('#df-title').focus(); return; }
+    if (!nodeSel) { toast('Scegli la fase del flusso.'); return; }
+    if (!body && !file && !d?.hasFile) { toast('Il documento è vuoto: carica un file o scrivi il testo.'); $('#df-body').focus(); return; }
+    const fd = new FormData();
+    fd.append('title', title); fd.append('type', $('#df-type').value); fd.append('flowId', fid); fd.append('nodeId', nodeSel); fd.append('body', body);
+    if (file) fd.append('file', file);
+    if ($('#df-rmfile')?.checked) fd.append('removeFile', '1');
+    ev.target.disabled = true; ev.target.textContent = 'Salvataggio…';
+    try {
+      await api(d ? 'PUT' : 'POST', d ? '/api/docs/' + d.id : '/api/docs', fd);
+      await loadState(); closeLayer(l); renderFlow(); if (sheetNode) openSheet(sheetNode); toast(d ? 'Documento aggiornato' : 'Documento aggiunto');
+    } catch (err) { toast(err.message); ev.target.disabled = false; ev.target.textContent = 'Salva documento'; }
+  });
+}
+
+/* ---------- ricerca ---------- */
+const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const plain = s => String(s || '').replace(/^#+\s*/gm, '').replace(/^\s*[-*•>]\s*/gm, '').replace(/^\s*\d+[.)]\s*/gm, '').replace(/\*\*/g, '').replace(/\s+/g, ' ').trim();
+// radice semplice: "richiamo" trova anche "richiami", "obiezione" anche "obiezioni"
+const termsOf = q => [...new Set(norm(q).split(/[^a-z0-9]+/).filter(t => t.length > 1).map(t => t.length > 4 ? t.replace(/[aeio]$/, '') : t))];
+function markText(text, terms){
+  // evidenzia i termini ignorando accenti e maiuscole; la stringa normalizzata ha la stessa lunghezza per le lettere italiane
+  const n = norm(text); if (n.length !== text.length) return esc(text);
+  const hits = [];
+  terms.forEach(t => { let i = 0; while ((i = n.indexOf(t, i)) !== -1) { hits.push([i, i + t.length]); i += t.length; } });
+  if (!hits.length) return esc(text);
+  hits.sort((a, b) => a[0] - b[0]); const merged = [];
+  hits.forEach(h => { const l = merged[merged.length - 1]; if (l && h[0] <= l[1]) l[1] = Math.max(l[1], h[1]); else merged.push([...h]); });
+  let out = '', p = 0; merged.forEach(([a, b]) => { out += esc(text.slice(p, a)) + '<mark>' + esc(text.slice(a, b)) + '</mark>'; p = b; });
+  return out + esc(text.slice(p));
+}
+function highlightIn(root, terms){
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); const nodes = []; while (w.nextNode()) nodes.push(w.currentNode);
+  nodes.forEach(t => { const h = markText(t.nodeValue, terms); if (h.includes('<mark>')) { const s = document.createElement('span'); s.innerHTML = h; t.replaceWith(s); } });
+  return root.querySelector('mark');
+}
+function snippet(body, terms){
+  const t = plain(body), n = norm(t); let at = -1;
+  for (const x of terms) { const i = n.indexOf(x); if (i !== -1 && (at === -1 || i < at)) at = i; }
+  if (at === -1) return esc(t.slice(0, 150)) + (t.length > 150 ? '…' : '');
+  const a = Math.max(0, at - 60), b = Math.min(t.length, at + 110);
+  return (a ? '…' : '') + markText(t.slice(a, b), terms) + (b < t.length ? '…' : '');
+}
+function searchAll(q, type){
+  const terms = termsOf(q); if (!terms.length) return {terms, docs: [], phases: []};
+  const docs = (isAdmin() ? S.docs : accessibleDocs()).filter(d => type === 'Tutti' || d.type === type).map(d => {
+    const f = S.flows.find(x => x.id === d.flowId), n = getNode(d.nodeId, f);
+    const title = norm(d.title), body = norm(plain(d.body)), phase = norm(n?.label + ' ' + (n?.sub || []).join(' '));
+    let score = 0;
+    for (const t of terms) {
+      const inT = title.includes(t), inB = body.includes(t), inP = phase.includes(t);
+      if (!inT && !inB && !inP) return null;
+      score += (inT ? 6 : 0) + (inP ? 3 : 0) + (inB ? 1 + Math.min(4, body.split(t).length - 1) * .5 : 0);
+    }
+    return {d, f, n, score};
+  }).filter(Boolean).sort((a, b) => b.score - a.score);
+  const phases = [];
+  if (type === 'Tutti') visibleFlows().forEach(f => f.nodes.forEach(n => {
+    if (!canOpen(me, f.id, n.id)) return;
+    const hay = norm(n.label + ' ' + n.sub.join(' '));
+    if (terms.every(t => hay.includes(t))) phases.push({f, n});
+  }));
+  return {terms, docs, phases};
+}
+let sQuery = '', sType = 'Tutti';
+function openSearch(){
+  if ($('.search')) return;
+  const l = layer(`<div class="modal-h"><h2>Cerca nei protocolli</h2><p>In tutti i flussi e in tutti i documenti che puoi leggere.</p><button class="x" data-x aria-label="Chiudi">${I.x}</button>
+      <div class="sbox">${I.search}<input id="sq" type="search" placeholder="Es. obiezioni, richiamo, autoclave…" autocomplete="off" value="${esc(sQuery)}"></div>
+      <div class="chips" id="schips">${['Tutti', ...DOC_TYPES].map(t => `<button class="chip ${t === sType ? 'on' : ''}" data-type="${t}">${t}</button>`).join('')}</div></div>
+    <div class="modal-b" id="sres"></div>`, 'wide search');
+  const input = l.querySelector('#sq');
+  const run = () => renderResults(l.querySelector('#sres'));
+  input.addEventListener('input', () => { sQuery = input.value; run(); });
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') { const r = l.querySelector('[data-open]'); if (r) r.click(); } });
+  l.addEventListener('click', e => {
+    const c = e.target.closest('[data-type]'); if (c) { sType = c.dataset.type; l.querySelectorAll('[data-type]').forEach(x => x.classList.toggle('on', x === c)); run(); return; }
+    const go = e.target.closest('[data-goto]'); if (go) { e.stopPropagation(); const [fid, nid] = go.dataset.goto.split('|'); closeLayer(l); goToPhase(fid, nid); return; }
+    const o = e.target.closest('[data-open]'); if (o) openReader(o.dataset.open, termsOf(sQuery));
+  });
+  run(); setTimeout(() => { input.focus(); input.select(); }, 30);
+}
+function renderResults(el){
+  const {terms, docs, phases} = searchAll(sQuery, sType);
+  const all = isAdmin() ? S.docs : accessibleDocs();
+  if (!terms.length) {
+    const recent = [...all].sort((a, b) => b.updated.localeCompare(a.updated)).slice(0, 5);
+    el.innerHTML = `<div class="sec-t">Aggiornati di recente</div><div class="results">${recent.map(d => resRow({d, f: S.flows.find(x => x.id === d.flowId), n: getNode(d.nodeId, S.flows.find(x => x.id === d.flowId))}, [])).join('')}</div>
+      <p class="muted" style="margin:0;font-size:13px">Puoi leggere ${all.length} documenti. Scorciatoia da tastiera: Ctrl+K.</p>`;
+    return;
+  }
+  el.innerHTML = (phases.length ? `<div class="sec-t">Fasi del flusso · ${phases.length}</div><div class="phase-hits">${phases.slice(0, 12).map(({f, n}) => `<button class="phase-hit" data-goto="${f.id}|${n.id}"><span class="sw c-${n.c}"></span><span>${markText(n.label, terms)} <span class="muted">· ${esc(f.name)}</span></span></button>`).join('')}</div>` : '')
+    + `<div class="sec-t">Documenti · ${docs.length}</div>`
+    + (docs.length ? `<div class="results">${docs.map(r => resRow(r, terms)).join('')}</div>`
+      : `<p class="note">Nessun documento contiene “${esc(sQuery)}”${sType !== 'Tutti' ? ` tra i documenti di tipo ${sType}` : ''}. Prova con meno parole o con un sinonimo.</p>`);
+}
+function resRow({d, f, n}, terms){
+  return `<div class="res" role="button" tabindex="0" data-open="${d.id}">
+    <div class="res-t"><b>${markText(d.title, terms)}</b><span class="tag">${esc(d.type)}</span></div>
+    <div class="where"><span class="sw c-${n?.c || 'op'}"></span>${esc(f?.name)} › ${esc(n?.label || 'fase eliminata')}</div>
+    <div class="snip">${snippet(d.body, terms)}</div>
+    <div class="res-foot"><button class="linkish" data-open="${d.id}">Leggi</button><button class="linkish" data-goto="${f.id}|${n?.id}">${'Mostra sulla mappa'}</button></div></div>`;
+}
+function goToPhase(fid, nid){
+  closeChat();
+  if (editMode) setEdit(false);
+  if (curFlowId !== fid) switchFlow(fid, true);
+  requestAnimationFrame(() => {
+    const n = getNode(nid), r = vp.getBoundingClientRect(); if (!n) return;
+    view.s = Math.max(view.s, 0.9);
+    const sheetW = innerWidth >= 720 ? 400 : 0, usableH = innerWidth >= 720 ? r.height : r.height * 0.28;
+    view.x = (r.width - sheetW) / 2 - n.x * view.s; view.y = usableH / 2 + (innerWidth >= 720 ? 0 : 10) - n.y * view.s;
+    applyView(); openSheet(nid);
+    const el = nodesEl.querySelector(`[data-id="${nid}"]`); el?.animate?.([{transform: 'translate(-50%,-50%) scale(1.12)'}, {transform: 'translate(-50%,-50%) scale(1)'}], {duration: 500, iterations: 2});
+  });
+}
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openSearch(); }
+  if (e.key === 'Enter' && e.target.matches?.('.res[data-open]')) e.target.click();
+});
+
+/* ---------- assistente (stile NotebookLM) ---------- */
+let chatSel = null, msgs = [], busy = false, chatCtl = null;
+$('#askBtn').onclick = () => openChat();
+function openChat(){
+  if ($('#chat')) return;
+  const docs = accessibleDocs();
+  if (!chatSel) chatSel = new Set(docs.map(d => d.id));
+  const c = document.createElement('section'); c.id = 'chat'; c.className = 'chat'; c.setAttribute('aria-label', 'Assistente protocolli');
+  c.innerHTML = `<div class="chat-h"><h2>Chiedi ai protocolli</h2><p>Risponde solo con i documenti che puoi leggere e indica da quale li ha presi.</p><button class="x" id="chatX" aria-label="Chiudi">${I.x}</button></div>
+    <details class="src"><summary>${I.doc}<span id="srcCount"></span>${I.chev}</summary><div class="src-list" id="srcList"></div></details>
+    <div class="log" id="log" aria-live="polite"></div>
+    <form class="compose" id="compose"><textarea id="q" rows="1" placeholder="Scrivi una domanda sui protocolli…"></textarea><button class="send" id="sendBtn" type="submit" aria-label="Invia">${I.send}</button></form>`;
+  document.body.append(c);
+  renderSources(); renderChat();
+  const q = $('#q');
+  q.addEventListener('input', () => { q.style.height = 'auto'; q.style.height = Math.min(q.scrollHeight, 140) + 'px'; });
+  q.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#compose').requestSubmit(); } });
+  $('#compose').addEventListener('submit', e => { e.preventDefault(); if (busy) { chatCtl?.abort(); return; } const v = q.value.trim(); if (v) { q.value = ''; q.style.height = 'auto'; sendChat(v); } });
+  $('#chatX').onclick = closeChat;
+  c.addEventListener('change', e => { const t = e.target; if (t.dataset.src) { t.checked ? chatSel.add(t.dataset.src) : chatSel.delete(t.dataset.src); updateSrcCount(); } });
+  c.addEventListener('click', e => {
+    const s = e.target.closest('[data-sugg]'); if (s) sendChat(s.textContent);
+    const ci = e.target.closest('[data-cite]'); if (ci) openReader(ci.dataset.cite);
+    const all = e.target.closest('[data-srcall]'); if (all) { const on = all.dataset.srcall === '1'; accessibleDocs().forEach(d => on ? chatSel.add(d.id) : chatSel.delete(d.id)); renderSources(); }
+  });
+  if (innerWidth >= 720) setTimeout(() => q.focus(), 30);
+}
+function closeChat(){ chatCtl?.abort(); $('#chat')?.remove(); }
+function updateSrcCount(){ const n = accessibleDocs().filter(d => chatSel.has(d.id)).length; const t = $('#srcCount'); if (t) t.textContent = `Fonti selezionate: ${n} di ${accessibleDocs().length}`; }
+function renderSources(){
+  const docs = accessibleDocs(); const el = $('#srcList'); if (!el) return;
+  const groups = {};
+  docs.forEach(d => { const f = S.flows.find(x => x.id === d.flowId); (groups[f.name] = groups[f.name] || []).push(d); });
+  el.innerHTML = `<div class="row"><button class="linkish" data-srcall="1">Seleziona tutte</button><button class="linkish" data-srcall="0">Nessuna</button></div>`
+    + (docs.length ? Object.entries(groups).map(([g, ds]) => `<div class="grp">${esc(g)}</div>` + ds.map(d => `<label class="chk"><input type="checkbox" id="src-${d.id}" data-src="${d.id}" ${chatSel.has(d.id) ? 'checked' : ''}>${esc(d.title)} <span class="muted">· ${esc(getNode(d.nodeId, S.flows.find(x => x.id === d.flowId))?.label)}</span></label>`).join('')).join('')
+      : '<p class="muted">Non hai ancora documenti a cui accedere.</p>');
+  updateSrcCount();
+}
+const SUGG = ['Cosa faccio se il paziente non risponde dopo la terza chiamata?', 'Come rispondo a un paziente che dice che costa troppo?', 'Cosa devo controllare in una prima visita?', 'Ogni quanto si fanno i richiami di igiene?'];
+function renderChat(){
+  const log = $('#log'); if (!log) return;
+  const docs = accessibleDocs();
+  if (!msgs.length) {
+    const kw = docs.map(d => d.title + ' ' + d.body).join(' ').toLowerCase();
+    const sug = SUGG.filter(s => s.toLowerCase().split(/\W+/).filter(w => w.length > 5).some(w => kw.includes(w))).slice(0, 3);
+    log.innerHTML = `<p class="muted" style="margin:0">Fai una domanda come la faresti a un collega esperto. Ad esempio:</p><div class="sugg">${(sug.length ? sug : SUGG.slice(0, 2)).map(s => `<button data-sugg>${esc(s)}</button>`).join('')}</div>`;
+  } else {
+    log.innerHTML = msgs.map(m => {
+      if (m.role === 'user') return `<div class="msg user">${esc(m.text)}</div>`;
+      const cite = nums => nums.map(k => { const id = m.srcIds[k - 1]; return id ? `<button class="cite" data-cite="${id}" title="${esc(S.docs.find(d => d.id === id)?.title || '')}">${k}</button>` : ''; }).join('');
+      const body = m.pending ? `<div class="thinking"><i></i><i></i><i></i><span>Sto leggendo i documenti…</span></div>` : mdLite(m.text, cite);
+      return `<div class="msg bot">${body}${m.note ? `<div class="mnote">${esc(m.note)}</div>` : ''}${m.error ? `<div class="err">${esc(m.error)}</div>` : ''}</div>`;
+    }).join('');
+  }
+  log.scrollTop = log.scrollHeight;
+  const sb = $('#sendBtn'); if (sb) { sb.innerHTML = busy ? I.stop : I.send; sb.setAttribute('aria-label', busy ? 'Interrompi' : 'Invia'); }
+}
+async function sendChat(q){
+  if (busy) return;
+  if (!$('#chat')) openChat();
+  const srcs = accessibleDocs().filter(d => chatSel.has(d.id));
+  msgs.push({role: 'user', text: q});
+  if (!srcs.length) { msgs.push({role: 'bot', text: '', srcIds: [], error: 'Seleziona almeno una fonte in “Fonti selezionate”.'}); renderChat(); return; }
+  if (!aiReady) { msgs.push({role: 'bot', text: '', srcIds: [], error: me.role === 'admin' ? 'L\'assistente non è ancora configurato: imposta AI_PROVIDER e la chiave API su Render.' : 'L\'assistente non è ancora attivo. Avvisa l\'amministratore.'}); renderChat(); return; }
+  const a = {role: 'bot', text: '', srcIds: srcs.map(d => d.id), pending: true}; msgs.push(a);
+  const hist = msgs.slice(0, -1).filter(m => m.text && !m.error).slice(-10).map(m => ({role: m.role === 'user' ? 'user' : 'assistant', content: m.text}));
+  busy = true; chatCtl = new AbortController(); renderChat();
+  try {
+    const r = await fetch('/api/chat', {method: 'POST', credentials: 'same-origin', signal: chatCtl.signal, headers: {'Content-Type': 'application/json'}, body: JSON.stringify({messages: hist, sourceIds: srcs.map(d => d.id)})});
+    const j = await r.json().catch(() => ({}));
+    if (r.status === 401) { location.href = '/login'; return; }
+    if (!r.ok) throw new Error(j.error || 'L\'assistente non ha risposto. Riprova.');
+    a.text = j.text; a.srcIds = j.sourceIds || a.srcIds;
+  } catch (e) {
+    if (e.name === 'AbortError') a.note = 'Domanda annullata.'; else a.error = e.message;
+  }
+  a.pending = false; busy = false; chatCtl = null; renderChat();
+}
+
+/* ---------- avvio ---------- */
+const stageEl = $('#stage'); stageEl.addEventListener('scroll', () => { stageEl.scrollTop = 0; stageEl.scrollLeft = 0; });
+boot();
+</script>
+
+</body>
+</html>

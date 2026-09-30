@@ -1,0 +1,1045 @@
+{
+ "v": 1,
+ "flows": [
+  {
+   "id": "paziente",
+   "name": "Percorso paziente",
+   "nodes": [
+    {
+     "id": "ads_paro",
+     "label": "ADS Paro",
+     "sub": [],
+     "c": "mkt",
+     "x": 471,
+     "y": 69
+    },
+    {
+     "id": "ads_est",
+     "label": "ADS esterne",
+     "sub": [
+      "Pagina a sé"
+     ],
+     "c": "mkt",
+     "x": 711,
+     "y": 69
+    },
+    {
+     "id": "ads_kit",
+     "label": "ADS kit prevenzione",
+     "sub": [],
+     "c": "mkt",
+     "x": 957,
+     "y": 69
+    },
+    {
+     "id": "giornate",
+     "label": "Giornate informative",
+     "sub": [],
+     "c": "mkt",
+     "x": 1323,
+     "y": 69
+    },
+    {
+     "id": "eventi",
+     "label": "Eventi",
+     "sub": [],
+     "c": "mkt",
+     "x": 1559,
+     "y": 69
+    },
+    {
+     "id": "libro",
+     "label": "Libro To Smile",
+     "sub": [],
+     "c": "mkt",
+     "x": 1796,
+     "y": 69
+    },
+    {
+     "id": "polimedica",
+     "label": "Polimedica",
+     "sub": [],
+     "c": "mkt",
+     "x": 2052,
+     "y": 69
+    },
+    {
+     "id": "followup",
+     "label": "Follow up 1, 2",
+     "sub": [],
+     "c": "fase",
+     "x": 957,
+     "y": 212
+    },
+    {
+     "id": "lead_on",
+     "label": "Lead online",
+     "sub": [],
+     "c": "op",
+     "x": 711,
+     "y": 320
+    },
+    {
+     "id": "lead_off",
+     "label": "Lead offline",
+     "sub": [],
+     "c": "op",
+     "x": 1559,
+     "y": 320
+    },
+    {
+     "id": "chiamata",
+     "label": "Chiamata 1, 2, 3 + WhatsApp",
+     "sub": [
+      "Capire se è parodontale o implantare"
+     ],
+     "c": "op",
+     "x": 1148,
+     "y": 488
+    },
+    {
+     "id": "presa",
+     "label": "Presa appuntamento",
+     "sub": [],
+     "c": "ok",
+     "x": 869,
+     "y": 596
+    },
+    {
+     "id": "nonrisp",
+     "label": "Non risponde",
+     "sub": [],
+     "c": "ko",
+     "x": 1424,
+     "y": 596
+    },
+    {
+     "id": "sipres",
+     "label": "Si presenta",
+     "sub": [],
+     "c": "ok",
+     "x": 598,
+     "y": 734
+    },
+    {
+     "id": "nonpres",
+     "label": "Non si presenta",
+     "sub": [],
+     "c": "ko",
+     "x": 1148,
+     "y": 734
+    },
+    {
+     "id": "display",
+     "label": "Display e remarketing",
+     "sub": [],
+     "c": "mkt",
+     "x": 1559,
+     "y": 734
+    },
+    {
+     "id": "email",
+     "label": "Email marketing",
+     "sub": [],
+     "c": "mkt",
+     "x": 1559,
+     "y": 892
+    },
+    {
+     "id": "accoglienza",
+     "label": "Accoglienza",
+     "sub": [],
+     "c": "op",
+     "x": 874,
+     "y": 980
+    },
+    {
+     "id": "fase1",
+     "label": "Fase 1",
+     "sub": [
+      "Approccio",
+      "Indagine dei bisogni"
+     ],
+     "c": "fase",
+     "x": 874,
+     "y": 1132
+    },
+    {
+     "id": "nonnec",
+     "label": "Non necessità / volontà di impianti",
+     "sub": [],
+     "c": "op",
+     "x": 713,
+     "y": 1256
+    },
+    {
+     "id": "nec",
+     "label": "Necessità / volontà di impianti",
+     "sub": [],
+     "c": "op",
+     "x": 1042,
+     "y": 1256
+    },
+    {
+     "id": "informo",
+     "label": "Informo dottore",
+     "sub": [],
+     "c": "op",
+     "x": 874,
+     "y": 1394
+    },
+    {
+     "id": "opt",
+     "label": "OPT",
+     "sub": [],
+     "c": "op",
+     "x": 713,
+     "y": 1532
+    },
+    {
+     "id": "tac",
+     "label": "TAC",
+     "sub": [],
+     "c": "op",
+     "x": 1042,
+     "y": 1532
+    },
+    {
+     "id": "briefing",
+     "label": "Briefing e studio",
+     "sub": [
+      "TAC: misure impianti",
+      "OPT: valutazione generale / Orto"
+     ],
+     "c": "op",
+     "x": 874,
+     "y": 1697
+    },
+    {
+     "id": "visita",
+     "label": "Visita",
+     "sub": [
+      "Foto",
+      "Scansione 3D",
+      "Valutazione soggettiva paro",
+      "Esame obiettivo",
+      "Diario clinico"
+     ],
+     "c": "op",
+     "x": 874,
+     "y": 1897
+    },
+    {
+     "id": "fase3",
+     "label": "Fase 3",
+     "sub": [
+      "Chiusura e gestione obiezioni"
+     ],
+     "c": "fase",
+     "x": 874,
+     "y": 2070
+    },
+    {
+     "id": "accetta",
+     "label": "Accetta",
+     "sub": [
+      "Pagamento"
+     ],
+     "c": "ok",
+     "x": 435,
+     "y": 2203
+    },
+    {
+     "id": "nonacc",
+     "label": "Non accetta",
+     "sub": [],
+     "c": "ko",
+     "x": 1093,
+     "y": 2203
+    },
+    {
+     "id": "attiv",
+     "label": "Attivazione ID",
+     "sub": [
+      "Firma contratto",
+      "Attivazione utenza",
+      "Sconti su spesa dalla piramide"
+     ],
+     "c": "fase",
+     "x": 435,
+     "y": 2358
+    },
+    {
+     "id": "paro",
+     "label": "Trattamento parodontale",
+     "sub": [],
+     "c": "op",
+     "x": 159,
+     "y": 2507
+    },
+    {
+     "id": "igiene",
+     "label": "Igiene To Smile",
+     "sub": [],
+     "c": "op",
+     "x": 435,
+     "y": 2507
+    },
+    {
+     "id": "cure",
+     "label": "Cure",
+     "sub": [
+      "Urgenze",
+      "Impianti o estrazioni",
+      "Conservativa ed endo / Orto",
+      "Protesi"
+     ],
+     "c": "op",
+     "x": 435,
+     "y": 2680
+    },
+    {
+     "id": "cambi",
+     "label": "Gestione cambi PDC",
+     "sub": [],
+     "c": "op",
+     "x": 697,
+     "y": 2680
+    },
+    {
+     "id": "finecure",
+     "label": "Fine cure",
+     "sub": [],
+     "c": "op",
+     "x": 435,
+     "y": 2891
+    },
+    {
+     "id": "camp_int",
+     "label": "Campagne interne commerciali",
+     "sub": [],
+     "c": "fase",
+     "x": 1352,
+     "y": 1992
+    },
+    {
+     "id": "entro30",
+     "label": "Entro 30 giorni",
+     "sub": [],
+     "c": "fase",
+     "x": 1681,
+     "y": 1847
+    },
+    {
+     "id": "old",
+     "label": "Old contact",
+     "sub": [],
+     "c": "fase",
+     "x": 1681,
+     "y": 1992
+    },
+    {
+     "id": "dorm",
+     "label": "Dormiente",
+     "sub": [],
+     "c": "fase",
+     "x": 1681,
+     "y": 2130
+    },
+    {
+     "id": "camp_mkt",
+     "label": "Campagne marketing",
+     "sub": [],
+     "c": "mkt",
+     "x": 1352,
+     "y": 2325
+    },
+    {
+     "id": "emailtag",
+     "label": "Email di tag",
+     "sub": [],
+     "c": "mkt",
+     "x": 1681,
+     "y": 2325
+    },
+    {
+     "id": "c11",
+     "label": "Campagna 1+1",
+     "sub": [],
+     "c": "fase",
+     "x": 1352,
+     "y": 2475
+    },
+    {
+     "id": "campl",
+     "label": "Campagna ampliamenti",
+     "sub": [],
+     "c": "fase",
+     "x": 1352,
+     "y": 2581
+    },
+    {
+     "id": "richiami",
+     "label": "Richiami igiene",
+     "sub": [],
+     "c": "op",
+     "x": 1093,
+     "y": 2537
+    },
+    {
+     "id": "care",
+     "label": "Customer care",
+     "sub": [],
+     "c": "care",
+     "x": 1093,
+     "y": 2668
+    },
+    {
+     "id": "recens",
+     "label": "Richiesta recensione",
+     "sub": [],
+     "c": "op",
+     "x": 1093,
+     "y": 2801
+    },
+    {
+     "id": "garanzie",
+     "label": "Garanzie e libretti",
+     "sub": [],
+     "c": "op",
+     "x": 1093,
+     "y": 2933
+    },
+    {
+     "id": "kasco",
+     "label": "Assicurazione Kasco 2027",
+     "sub": [],
+     "c": "fase",
+     "x": 1093,
+     "y": 3064
+    },
+    {
+     "id": "voto_hi",
+     "label": "Voto ≥ 4/5",
+     "sub": [],
+     "c": "ok",
+     "x": 1674,
+     "y": 2597
+    },
+    {
+     "id": "voto_lo",
+     "label": "Voto < 4/5",
+     "sub": [],
+     "c": "ko",
+     "x": 1674,
+     "y": 2746
+    },
+    {
+     "id": "referral",
+     "label": "Tentativo referral",
+     "sub": [],
+     "c": "op",
+     "x": 1957,
+     "y": 2597
+    },
+    {
+     "id": "modprot",
+     "label": "Modifica protocolli",
+     "sub": [],
+     "c": "op",
+     "x": 1957,
+     "y": 2746
+    },
+    {
+     "id": "scambio",
+     "label": "Scambio abbondanza",
+     "sub": [],
+     "c": "op",
+     "x": 1957,
+     "y": 2864
+    }
+   ],
+   "edges": [
+    [
+     "ads_paro",
+     "lead_on"
+    ],
+    [
+     "ads_est",
+     "lead_on"
+    ],
+    [
+     "ads_kit",
+     "followup"
+    ],
+    [
+     "followup",
+     "lead_on"
+    ],
+    [
+     "giornate",
+     "lead_off"
+    ],
+    [
+     "eventi",
+     "lead_off"
+    ],
+    [
+     "libro",
+     "lead_off"
+    ],
+    [
+     "polimedica",
+     "lead_off"
+    ],
+    [
+     "lead_on",
+     "chiamata"
+    ],
+    [
+     "lead_off",
+     "chiamata"
+    ],
+    [
+     "chiamata",
+     "presa"
+    ],
+    [
+     "chiamata",
+     "nonrisp"
+    ],
+    [
+     "presa",
+     "sipres"
+    ],
+    [
+     "presa",
+     "nonpres"
+    ],
+    [
+     "nonpres",
+     "chiamata"
+    ],
+    [
+     "nonrisp",
+     "display"
+    ],
+    [
+     "nonrisp",
+     "email"
+    ],
+    [
+     "sipres",
+     "accoglienza"
+    ],
+    [
+     "accoglienza",
+     "fase1"
+    ],
+    [
+     "fase1",
+     "nonnec"
+    ],
+    [
+     "fase1",
+     "nec"
+    ],
+    [
+     "nonnec",
+     "informo"
+    ],
+    [
+     "nec",
+     "informo"
+    ],
+    [
+     "nonnec",
+     "opt"
+    ],
+    [
+     "nec",
+     "tac"
+    ],
+    [
+     "opt",
+     "briefing"
+    ],
+    [
+     "tac",
+     "briefing"
+    ],
+    [
+     "briefing",
+     "visita"
+    ],
+    [
+     "visita",
+     "fase3"
+    ],
+    [
+     "fase3",
+     "accetta"
+    ],
+    [
+     "fase3",
+     "nonacc"
+    ],
+    [
+     "accetta",
+     "attiv"
+    ],
+    [
+     "attiv",
+     "igiene"
+    ],
+    [
+     "igiene",
+     "paro"
+    ],
+    [
+     "igiene",
+     "cure"
+    ],
+    [
+     "paro",
+     "cure"
+    ],
+    [
+     "cure",
+     "cambi"
+    ],
+    [
+     "cambi",
+     "fase3"
+    ],
+    [
+     "cure",
+     "finecure"
+    ],
+    [
+     "nonacc",
+     "camp_int"
+    ],
+    [
+     "nonacc",
+     "camp_mkt"
+    ],
+    [
+     "camp_int",
+     "entro30"
+    ],
+    [
+     "entro30",
+     "old"
+    ],
+    [
+     "old",
+     "dorm"
+    ],
+    [
+     "camp_mkt",
+     "emailtag"
+    ],
+    [
+     "finecure",
+     "richiami"
+    ],
+    [
+     "finecure",
+     "care"
+    ],
+    [
+     "finecure",
+     "recens"
+    ],
+    [
+     "finecure",
+     "garanzie"
+    ],
+    [
+     "finecure",
+     "kasco"
+    ],
+    [
+     "garanzie",
+     "kasco"
+    ],
+    [
+     "richiami",
+     "nonacc"
+    ],
+    [
+     "richiami",
+     "c11"
+    ],
+    [
+     "richiami",
+     "campl"
+    ],
+    [
+     "care",
+     "voto_hi"
+    ],
+    [
+     "care",
+     "voto_lo"
+    ],
+    [
+     "voto_hi",
+     "referral"
+    ],
+    [
+     "voto_lo",
+     "modprot"
+    ],
+    [
+     "voto_lo",
+     "scambio"
+    ],
+    [
+     "referral",
+     "attiv",
+     "loop"
+    ]
+   ],
+   "auto": true
+  },
+  {
+   "id": "sterilizzazione",
+   "name": "Sterilizzazione strumenti",
+   "nodes": [
+    {
+     "id": "s1",
+     "label": "Raccolta strumenti",
+     "sub": [
+      "A fine seduta, in vaschetta chiusa"
+     ],
+     "c": "op",
+     "x": 0,
+     "y": 0
+    },
+    {
+     "id": "s2",
+     "label": "Decontaminazione",
+     "sub": [
+      "Immersione in disinfettante"
+     ],
+     "c": "fase",
+     "x": 0,
+     "y": 170
+    },
+    {
+     "id": "s3",
+     "label": "Lavaggio e asciugatura",
+     "sub": [
+      "Ultrasuoni o termodisinfettore"
+     ],
+     "c": "op",
+     "x": 0,
+     "y": 340
+    },
+    {
+     "id": "s4",
+     "label": "Imbustamento",
+     "sub": [
+      "Busta con indicatore"
+     ],
+     "c": "op",
+     "x": 0,
+     "y": 510
+    },
+    {
+     "id": "s5",
+     "label": "Autoclave",
+     "sub": [
+      "Ciclo B 134 °C"
+     ],
+     "c": "fase",
+     "x": 0,
+     "y": 680
+    },
+    {
+     "id": "s6",
+     "label": "Ciclo non conforme",
+     "sub": [],
+     "c": "ko",
+     "x": 280,
+     "y": 680
+    },
+    {
+     "id": "s7",
+     "label": "Tracciabilità e stoccaggio",
+     "sub": [
+      "Etichetta lotto",
+      "Registro cicli"
+     ],
+     "c": "ok",
+     "x": 0,
+     "y": 860
+    }
+   ],
+   "edges": [
+    [
+     "s1",
+     "s2"
+    ],
+    [
+     "s2",
+     "s3"
+    ],
+    [
+     "s3",
+     "s4"
+    ],
+    [
+     "s4",
+     "s5"
+    ],
+    [
+     "s5",
+     "s6"
+    ],
+    [
+     "s6",
+     "s3"
+    ],
+    [
+     "s5",
+     "s7"
+    ]
+   ],
+   "auto": true
+  }
+ ],
+ "docs": [
+  {
+   "id": "d1",
+   "flowId": "paziente",
+   "nodeId": "chiamata",
+   "title": "Script chiamate 1, 2, 3",
+   "type": "Script",
+   "updated": "2026-09-10",
+   "body": "## Obiettivo\nFissare la prima visita e capire se il bisogno del paziente è parodontale o implantare.\n\n## Tempi\n- Chiamata 1: entro 15 minuti dall'arrivo del lead\n- Chiamata 2: lo stesso giorno, in una fascia oraria diversa\n- Chiamata 3: il giorno successivo, poi messaggio WhatsApp\n\n## Apertura\n\"Buongiorno, sono [nome] dello studio. Mi ha lasciato il suo contatto per avere informazioni: ha due minuti per parlarne?\"\n\n## Domande per capire il bisogno\n- Ha denti che si muovono o gengive che sanguinano? Probabile bisogno **parodontale**\n- Le manca uno o più denti, o porta una protesi mobile? Probabile bisogno **implantare**\n- Da quanto tempo ha questo problema? Le dà fastidio quando mangia o sorride?\n\n## Chiusura\nProponi sempre due date alternative (\"martedì alle 10 o giovedì alle 17?\"). Conferma nome, cognome e numero di cellulare.\n\n> Registra l'esito di ogni chiamata nel gestionale prima di passare al contatto successivo.",
+   "example": true
+  },
+  {
+   "id": "d2",
+   "flowId": "paziente",
+   "nodeId": "chiamata",
+   "title": "Messaggio WhatsApp dopo la terza chiamata",
+   "type": "Script",
+   "updated": "2026-09-10",
+   "body": "## Quando si usa\nDopo tre chiamate senza risposta, lo stesso giorno della terza.\n\n## Testo\n\"Buongiorno [nome], sono [operatore] dello studio. Abbiamo provato a chiamarla per la sua richiesta di informazioni. Può rispondere qui con l'orario in cui preferisce essere richiamato. Buona giornata!\"\n\n## Dopo l'invio\n- Se risponde entro 48 ore: richiama all'orario indicato\n- Se non risponde: sposta il contatto in **Non risponde** e attiva display, remarketing ed email marketing",
+   "example": true
+  },
+  {
+   "id": "d3",
+   "flowId": "paziente",
+   "nodeId": "presa",
+   "title": "Conferma dell'appuntamento",
+   "type": "Procedura",
+   "updated": "2026-09-02",
+   "body": "## Passaggi\n1. Invia l'SMS di conferma subito dopo la telefonata\n2. 48 ore prima: messaggio di promemoria con indirizzo e parcheggio\n3. 24 ore prima: se non ha confermato, chiama\n\n## Cosa chiedere di portare\n- Documento d'identità e tessera sanitaria\n- Radiografie o esami precedenti, anche vecchi\n- Elenco dei farmaci che assume\n\n> Se il paziente disdice, proponi subito una nuova data entro 7 giorni.",
+   "example": true
+  },
+  {
+   "id": "d4",
+   "flowId": "paziente",
+   "nodeId": "nonpres",
+   "title": "Recupero appuntamenti mancati",
+   "type": "Protocollo",
+   "updated": "2026-08-28",
+   "body": "## Entro un'ora dall'orario mancato\nChiama il paziente con tono cordiale: \"Volevamo sapere se va tutto bene: la aspettavamo alle [ora].\"\n\n## Riprogrammare\n- Proponi una nuova data entro 7 giorni\n- Segna il mancato appuntamento nella scheda paziente\n\n## Dopo due mancate presentazioni\nIl contatto torna nel ciclo **Chiamata 1, 2, 3** e viene seguito come un nuovo lead.",
+   "example": true
+  },
+  {
+   "id": "d5",
+   "flowId": "paziente",
+   "nodeId": "accoglienza",
+   "title": "Accoglienza del paziente",
+   "type": "Protocollo",
+   "updated": "2026-09-15",
+   "body": "## Prima dell'arrivo\n- Stampa la scheda anamnestica e il consenso privacy\n- Controlla che la sala d'attesa sia in ordine\n\n## All'arrivo\n1. Accogli il paziente per nome, in piedi, guardandolo negli occhi\n2. Offri acqua e accompagnalo alla compilazione dell'anamnesi\n3. Presenta chi lo seguirà durante la visita\n4. Rispetta l'orario: se c'è ritardo, avvisa subito e indica quanti minuti\n\n> Il primo minuto decide la fiducia. Nessun paziente deve aspettare da solo senza sapere cosa succede.",
+   "example": true
+  },
+  {
+   "id": "d6",
+   "flowId": "paziente",
+   "nodeId": "fase1",
+   "title": "Indagine dei bisogni",
+   "type": "Procedura",
+   "updated": "2026-09-15",
+   "body": "## Obiettivo\nCapire cosa desidera il paziente, cosa lo preoccupa e cosa si aspetta, prima di parlare di cure.\n\n## Domande aperte\n- \"Cosa l'ha spinta a venire da noi proprio adesso?\"\n- \"Cosa le piacerebbe cambiare del suo sorriso?\"\n- \"Ha avuto esperienze dal dentista che l'hanno messa a disagio?\"\n- \"Come immagina la situazione ideale tra sei mesi?\"\n\n## Regole\n- Ascolta più di quanto parli\n- Riassumi con le parole del paziente\n- Annota paure e aspettative nel diario clinico\n\n## Esito\nSe emerge necessità o volontà di impianti, prescrivi la **TAC**; altrimenti l'**OPT**. In entrambi i casi informa il dottore.",
+   "example": true
+  },
+  {
+   "id": "d7",
+   "flowId": "paziente",
+   "nodeId": "visita",
+   "title": "Checklist prima visita",
+   "type": "Checklist",
+   "updated": "2026-09-12",
+   "body": "## Documentazione\n- Foto extraorali: frontale, sorriso, profilo\n- Foto intraorali: arcate e occlusione\n- Scansione 3D delle arcate\n\n## Esame clinico\n- Valutazione soggettiva parodontale (sanguinamento, mobilità)\n- Esame obiettivo completo\n- Aggiornamento del diario clinico\n\n> Prima di chiudere la visita verifica che le foto siano salvate nella cartella del paziente.",
+   "example": true
+  },
+  {
+   "id": "d8",
+   "flowId": "paziente",
+   "nodeId": "fase3",
+   "title": "Gestione delle obiezioni",
+   "type": "Script",
+   "updated": "2026-09-18",
+   "body": "## Metodo\n1. Ascolta l'obiezione fino in fondo, senza interrompere\n2. Riformula: \"Se ho capito bene, la preoccupa...\"\n3. Rispondi con un fatto, poi fai una domanda\n\n## \"Costa troppo\"\nMostra le soluzioni di pagamento e il piano a rate. \"Se trovassimo una rata che rientra nel suo budget mensile, sarebbe pronto a iniziare?\"\n\n## \"Devo pensarci\"\n\"È giusto. Cosa le serve sapere per decidere con serenità?\" Fissa comunque una data di ricontatto.\n\n## \"Ho paura del dolore\"\nSpiega sedazione e anestesia; racconta come si svolge la prima seduta passo per passo.\n\n## \"Ne parlo con mio marito / mia moglie\"\nProponi un secondo incontro insieme, anche in videochiamata.\n\n## \"Voglio un secondo parere\"\nConsegna il piano di cura scritto e le immagini: dimostra trasparenza.\n\n> Se il paziente non accetta, passa il contatto in **Non accetta** e attiva le campagne interne entro 30 giorni.",
+   "example": true
+  },
+  {
+   "id": "d9",
+   "flowId": "paziente",
+   "nodeId": "nonacc",
+   "title": "Paziente che non accetta",
+   "type": "Procedura",
+   "updated": "2026-09-01",
+   "body": "## Entro 30 giorni\nChiamata di ricontatto con eventuale proposta della campagna commerciale attiva.\n\n## Old contact\nDopo 30 giorni senza risposta il paziente diventa \"old contact\": riceve le email di tag e le campagne marketing.\n\n## Dormiente\nDopo 12 mesi senza interazioni il contatto è dormiente: solo campagne stagionali, massimo una ogni tre mesi.",
+   "example": true
+  },
+  {
+   "id": "d10",
+   "flowId": "paziente",
+   "nodeId": "attiv",
+   "title": "Attivazione ID paziente",
+   "type": "Procedura",
+   "updated": "2026-09-05",
+   "body": "## Passaggi\n1. Firma del contratto e del piano di cura\n2. Registrazione del pagamento o del piano rateale\n3. Attivazione dell'utenza nell'app dello studio\n4. Spiegazione degli sconti sulla spesa previsti dalla piramide\n\n> Consegna sempre la copia firmata e l'elenco dei prossimi appuntamenti.",
+   "example": true
+  },
+  {
+   "id": "d11",
+   "flowId": "paziente",
+   "nodeId": "igiene",
+   "title": "Seduta Igiene To Smile",
+   "type": "Protocollo",
+   "updated": "2026-09-08",
+   "body": "## Durata\n50 minuti.\n\n## Sequenza\n1. Rilevazione indici di placca e sanguinamento\n2. Detartrasi e levigatura dove necessario\n3. Air polishing\n4. Istruzioni di igiene domiciliare personalizzate\n5. Fissare il richiamo prima che il paziente lasci lo studio\n\n> Se il sondaggio supera i 4 mm, segnala al dottore per il trattamento parodontale.",
+   "example": true
+  },
+  {
+   "id": "d12",
+   "flowId": "paziente",
+   "nodeId": "richiami",
+   "title": "Richiami igiene",
+   "type": "Procedura",
+   "updated": "2026-09-08",
+   "body": "## Frequenza\n- Paziente sano: ogni 6 mesi\n- Paziente parodontale: ogni 3-4 mesi\n\n## Sequenza di contatto\n1. SMS tre settimane prima della scadenza\n2. Chiamata se non prenota entro una settimana\n3. Proposta della Campagna 1+1 o della Campagna ampliamenti se pertinente\n\n> Un richiamo mancato per due volte porta il paziente in \"Non accetta\".",
+   "example": true
+  },
+  {
+   "id": "d13",
+   "flowId": "paziente",
+   "nodeId": "care",
+   "title": "Customer care e valutazione",
+   "type": "Protocollo",
+   "updated": "2026-09-20",
+   "body": "## Quando\nChiamata 7 giorni dopo la fine delle cure.\n\n## Domanda chiave\n\"Da 1 a 5, quanto consiglierebbe il nostro studio a un amico?\"\n\n## Se il voto è 4 o 5\n- Ringrazia e chiedi la recensione\n- Passa al **tentativo di referral**\n\n## Se il voto è sotto 4\n- Chiedi cosa non ha funzionato e annota le parole esatte\n- Segnala al titolare entro 24 ore: può portare a una **modifica dei protocolli**\n- Offri un gesto di attenzione (scambio abbondanza)",
+   "example": true
+  },
+  {
+   "id": "d14",
+   "flowId": "paziente",
+   "nodeId": "referral",
+   "title": "Richiesta di referral",
+   "type": "Script",
+   "updated": "2026-09-20",
+   "body": "## Testo\n\"Siamo felici che si sia trovato bene. Molti dei nostri pazienti arrivano grazie al passaparola: se c'è una persona a cui tiene che potrebbe avere bisogno di noi, le daremmo lo stesso trattamento.\"\n\n## Dopo\nConsegna il biglietto invito. Se il nuovo paziente arriva, registra chi lo ha presentato e attiva il vantaggio previsto per entrambi.",
+   "example": true
+  },
+  {
+   "id": "d15",
+   "flowId": "sterilizzazione",
+   "nodeId": "s5",
+   "title": "Ciclo di sterilizzazione in autoclave",
+   "type": "Protocollo",
+   "updated": "2026-07-14",
+   "body": "## Prima del ciclo\n- Test di Bowie-Dick all'accensione\n- Carico non superiore al 80% della capacità\n\n## Durante\nCiclo B a 134 °C. Non aprire lo sportello prima della fine dell'asciugatura.\n\n## Controllo\n- Verifica viraggio degli indicatori sulle buste\n- Stampa e firma del report di ciclo\n\n> Ciclo non conforme: tutto il carico torna al lavaggio e va segnalato nel registro.",
+   "example": true
+  }
+ ],
+ "users": [
+  {
+   "id": "u_admin",
+   "name": "Giancarlo",
+   "title": "Titolare",
+   "role": "admin",
+   "access": {}
+  },
+  {
+   "id": "u_mart",
+   "name": "Martina Rossi",
+   "title": "Segreteria",
+   "role": "collab",
+   "access": {
+    "paziente": {
+     "mode": "some",
+     "hide": false,
+     "nodes": [
+      "ads_paro",
+      "ads_est",
+      "ads_kit",
+      "giornate",
+      "eventi",
+      "libro",
+      "polimedica",
+      "followup",
+      "lead_on",
+      "lead_off",
+      "chiamata",
+      "presa",
+      "nonrisp",
+      "sipres",
+      "nonpres",
+      "display",
+      "email",
+      "accoglienza",
+      "richiami",
+      "recens",
+      "garanzie",
+      "kasco"
+     ]
+    }
+   }
+  },
+  {
+   "id": "u_luca",
+   "name": "Luca Bianchi",
+   "title": "Igienista",
+   "role": "collab",
+   "access": {
+    "paziente": {
+     "mode": "some",
+     "hide": true,
+     "nodes": [
+      "igiene",
+      "paro",
+      "richiami",
+      "care",
+      "visita",
+      "finecure"
+     ]
+    },
+    "sterilizzazione": {
+     "mode": "all"
+    }
+   }
+  },
+  {
+   "id": "u_sara",
+   "name": "Sara Conti",
+   "title": "Consulente clinica",
+   "role": "collab",
+   "access": {
+    "paziente": {
+     "mode": "all"
+    }
+   }
+  }
+ ]
+}

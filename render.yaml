@@ -1,0 +1,36 @@
+# Blueprint di Render: crea il sito e il database in un colpo solo.
+# Su Render: New > Blueprint > scegli questo repository.
+services:
+  - type: web
+    name: mappa-protocolli
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mappa-protocolli-db
+          property: connectionString
+      - key: SESSION_SECRET
+        generateValue: true
+      # Amministratore principale: li inserisci tu nella dashboard di Render
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      # Assistente AI: openai, anthropic oppure gemini
+      - key: AI_PROVIDER
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+
+databases:
+  - name: mappa-protocolli-db
+    databaseName: mappa_protocolli
