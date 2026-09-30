@@ -36,6 +36,13 @@ Sempre in **Environment**: cambia `AI_PROVIDER` e inserisci la chiave del nuovo 
 
 I nomi dei modelli cambiano nel tempo: se l'assistente risponde con un errore, controlla sul sito del fornitore il nome di un modello attuale e mettilo in `AI_MODEL`.
 
+### Come l'assistente trova le risposte
+- **Pochi documenti** (fino a 20, modificabile con `RAG_THRESHOLD`): l'assistente li legge tutti a ogni domanda.
+- **Più documenti**: ogni documento viene diviso in brani e indicizzato quando lo salvi. A ogni domanda l'app cerca i brani più pertinenti in due modi insieme, **per parole** (con il database, gratis) e **per significato** (con le "impronte" calcolate da Gemini o OpenAI), e manda all'assistente solo i 10 migliori. Così costa circa 10 volte meno ed è più veloce.
+- Se nella chat scegli a mano da 1 a 3 fonti, l'assistente le legge per intero.
+- La ricerca per significato usa la chiave Gemini o OpenAI. Se usi Claude per la chat, aggiungi anche una chiave Gemini o OpenAI per le impronte; senza, la ricerca resta solo per parole. Si può forzare con `EMBED_PROVIDER` (`gemini` o `openai`) e `EMBED_MODEL`.
+- Se cambi fornitore, al riavvio le impronte vengono ricalcolate da sole.
+
 ### Costi
 Render fa pagare a parte il sito e il database. Il blueprint usa i piani più piccoli a pagamento, perché il database gratuito di Render ha una durata limitata e rischieresti di perdere i dati. I prezzi aggiornati sono su render.com/pricing. L'assistente AI si paga a consumo al fornitore scelto.
 

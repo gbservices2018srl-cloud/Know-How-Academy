@@ -1524,6 +1524,7 @@ async function sendChat(q){
     if (r.status === 401) { location.href = '/login'; return; }
     if (!r.ok) throw new Error(j.error || 'L\'assistente non ha risposto. Riprova.');
     a.text = j.text; a.srcIds = j.sourceIds || a.srcIds;
+    if (j.mode === 'search') a.note = j.chunks ? `Ho cercato nei documenti e letto ${j.chunks} passaggi da ${a.srcIds.length} ${a.srcIds.length === 1 ? 'protocollo' : 'protocolli'}.` : 'Non ho trovato passaggi pertinenti: prova con altre parole o scegli le fonti a mano.';
   } catch (e) {
     if (e.name === 'AbortError') a.note = 'Domanda annullata.'; else a.error = e.message;
   }

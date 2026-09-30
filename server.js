@@ -8,6 +8,8 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const db = require('./lib/db');
 const ai = require('./lib/ai');
+const rag = require('./lib/rag');
+const reindex = id => rag.reindexDoc(id).catch(e => console.warn('Indicizzazione non riuscita:', e.message));
 const { pdfText, wordText } = require('./lib/extract');
 
 const PORT = process.env.PORT || 3000;
@@ -197,6 +199,7 @@ app.post('/api/docs', needAdmin, upload.single('file'), wrap(async (req, res) =>
   await db.q(`insert into docs (id, flow_id, node_id, title, type, body, file, file_name, file_mime, updated_by)
               values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
     [id, d.flowId, d.nodeId, d.title, d.type, d.body, d.file?.buf || null, d.file?.name || null, d.file?.mime || null, req.user.id]);
+  reindex(id);
   res.json({ id });
 }));
 app.put('/api/docs/:id', needAdmin, upload.single('file'), wrap(async (req, res) => {
@@ -209,6 +212,7 @@ app.put('/api/docs/:id', needAdmin, upload.single('file'), wrap(async (req, res)
   else if (removeFile) sets.push('file=null', 'file_name=null', 'file_mime=null');
   const r = await db.q(`update docs set ${sets.join(', ')} where id = $1`, params);
   if (!r.rowCount) return bad(res, 404, 'Documento non trovato');
+  reindex(req.params.id);
   res.json({ ok: true });
 }));
 app.delete('/api/docs/:id', needAdmin, wrap(async (req, res) => {
@@ -294,9 +298,26 @@ app.post('/api/chat', needUser, wrap(async (req, res) => {
   if (wanted.size) docs = docs.filter(d => wanted.has(d.id));
   if (!docs.length) return bad(res, 400, 'Nessuna fonte selezionata.');
 
+  const msgs = (Array.isArray(req.body.messages) ? req.body.messages : []).slice(-10)
+    .map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '').slice(0, 4000) }))
+    .map(m => m.role === 'assistant' ? { ...m, content: m.content.replace(/\s?\[\d+(?:\s*[,;]\s*\d+)*\]/g, '') } : m) // i numeri delle fonti cambiano a ogni domanda
+    .filter(m => m.content);
+  while (msgs.length && msgs[0].role !== 'user') msgs.shift();
+  if (!msgs.length || msgs[msgs.length - 1].role !== 'user') return bad(res, 400, 'Domanda mancante.');
+
+  // cosa cercare: l'ultima domanda più la precedente (per le domande di seguito, tipo "e se non risponde?")
+  const userTurns = msgs.filter(m => m.role === 'user').map(m => m.content);
+  const query = userTurns.slice(-2).join('\n');
+  const explicit = wanted.size > 0 && wanted.size <= 3;
+  const found = await rag.retrieve(docs, query, explicit);
+
   const label = d => { const f = flows.find(x => x.id === d.flowId); const n = f?.nodes.find(x => x.id === d.nodeId); return `fase "${n?.label || '?'}" del flusso "${f?.name || '?'}"`; };
   let budget = 180000;
-  const sources = docs.map((d, i) => { const t = (d.body || '').slice(0, Math.max(0, Math.min(12000, budget))); budget -= t.length; return `[${i + 1}] ${d.title} (${d.type}) — ${label(d)}\n${t}`; });
+  const sources = found.items.map(({ doc: d, excerpts }, i) => {
+    let t = excerpts ? excerpts.map(x => (x.heading ? `## ${x.heading}\n` : '') + x.text).join('\n[…]\n') : (d.body || '');
+    t = t.slice(0, Math.max(0, Math.min(excerpts ? 20000 : 12000, budget))); budget -= t.length;
+    return `[${i + 1}] ${d.title} (${d.type}) — ${label(d)}${excerpts ? ' — estratti pertinenti' : ''}\n${t}`;
+  });
   const system = `Sei l'assistente interno di uno studio odontoiatrico. Rispondi a ${req.user.name || req.user.username}${req.user.title ? ` (${req.user.title})` : ''}, in italiano, in modo chiaro e pratico.
 Regole:
 - Usa SOLO le informazioni contenute nelle FONTI qui sotto. Non aggiungere conoscenze esterne né inventare procedure.
@@ -306,14 +327,11 @@ Regole:
 - Formattazione ammessa: paragrafi, elenchi con "-" o "1.", **grassetto**. Niente tabelle.
 
 FONTI:
-${sources.join('\n\n---\n\n')}`;
-  const msgs = (Array.isArray(req.body.messages) ? req.body.messages : []).slice(-10)
-    .map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '').slice(0, 4000) })).filter(m => m.content);
-  while (msgs.length && msgs[0].role !== 'user') msgs.shift();
-  if (!msgs.length || msgs[msgs.length - 1].role !== 'user') return bad(res, 400, 'Domanda mancante.');
+${sources.length ? sources.join('\n\n---\n\n') : '(nessun passaggio pertinente trovato nei documenti)'}`;
   try {
     const text = await ai.complete(system, msgs);
-    res.json({ text: text || 'Non è arrivata una risposta. Prova a riformulare la domanda.', sourceIds: docs.map(d => d.id) });
+    const chunks = found.items.reduce((s, x) => s + (x.excerpts ? x.excerpts.length : 0), 0);
+    res.json({ text: text || 'Non è arrivata una risposta. Prova a riformulare la domanda.', sourceIds: found.items.map(x => x.doc.id), mode: found.mode, chunks });
   } catch (e) {
     console.error('Errore AI:', e.message);
     bad(res, 502, 'L\'assistente non ha risposto. Riprova tra poco; se l\'errore continua controlla chiave e modello su Render.');
@@ -343,7 +361,9 @@ app.use((err, req, res, next) => {
 
 (async () => {
   await db.migrate();
+  await rag.migrate();
   await db.ensureEnvAdmin();
   await db.seedIfEmpty();
   app.listen(PORT, () => console.log(`Mappa dei Protocolli attiva sulla porta ${PORT}`));
+  rag.indexAll().then(() => console.log('Documenti indicizzati per la ricerca.')).catch(e => console.warn('Indicizzazione:', e.message));
 })().catch(e => { console.error('Avvio non riuscito:', e); process.exit(1); });
