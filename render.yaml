@@ -1,4 +1,4 @@
-# Blueprint di Render: crea il sito e il database in un colpo solo.
+# Blueprint di Render: crea il sito e lo collega al database PostgreSQL che hai già.
 # Su Render: New > Blueprint > scegli questo repository.
 services:
   - type: web
@@ -13,10 +13,12 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # Database già esistente: incolla la "Internal Database URL" (stessa regione) o la "External Database URL"
       - key: DATABASE_URL
-        fromDatabase:
-          name: mappa-protocolli-db
-          property: connectionString
+        sync: false
+      # Le tabelle di questa app stanno nello schema "mappa", separate da quelle dell'altra app
+      - key: DB_SCHEMA
+        value: mappa
       - key: SESSION_SECRET
         generateValue: true
       # Amministratore principale: li inserisci tu nella dashboard di Render
@@ -34,9 +36,3 @@ services:
       - key: GEMINI_API_KEY
         sync: false
 
-databases:
-  - name: mappa-protocolli-db
-    databaseName: mappa_protocolli
-    # Database più piccolo a pagamento (non scade), con disco da 1 GB: circa 6,30 $/mese.
-    # Il disco si può aumentare dalla dashboard di Render, non diminuire.
-    diskSizeGB: 1

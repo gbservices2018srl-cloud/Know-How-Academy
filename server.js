@@ -24,7 +24,7 @@ app.use((req, res, next) => {
 });
 app.use(express.json({ limit: '2mb' }));
 app.use(session({
-  store: new PgStore({ pool: db.pool, createTableIfMissing: true }),
+  store: new PgStore({ pool: db.pool, schemaName: db.SCHEMA, createTableIfMissing: true }),
   name: 'mp.sid',
   secret: process.env.SESSION_SECRET || 'cambia-questa-chiave',
   resave: false,
