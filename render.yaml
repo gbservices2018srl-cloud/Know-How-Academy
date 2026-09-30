@@ -4,6 +4,9 @@ services:
   - type: web
     name: mappa-protocolli
     runtime: node
+    # Prova gratuita: il sito si spegne dopo 15 minuti senza visite (riavvio in circa 1 minuto).
+    # Per l'uso quotidiano cambia in 0.5c-512mb (7 $/mese) dalla dashboard di Render.
+    plan: free
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /healthz
@@ -34,3 +37,6 @@ services:
 databases:
   - name: mappa-protocolli-db
     databaseName: mappa_protocolli
+    # ATTENZIONE: il database gratuito scade dopo 30 giorni e dopo altri 14 viene cancellato con tutti i dati.
+    # Prima della scadenza passalo a un piano a pagamento dalla dashboard di Render (nessun dato si perde).
+    plan: free
