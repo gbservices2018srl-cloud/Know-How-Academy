@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>To Smile · App del gruppo</title>
-<meta name="description" content="Le applicazioni del gruppo To Smile: gestione finanziaria, Nuovalab, ticket assistenza e protocolli.">
+<meta name="description" content="Le applicazioni del gruppo To Smile: gestione finanziaria, Nuovalab, ticket assistenza, protocolli e calendario eventi.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600;700&display=swap">
@@ -14,14 +14,14 @@
 :root{
   --bg:#EEF3F2; --dot:#CDD8D6; --surface:#FFFFFF; --fg:#13201F; --muted:#586866; --line:#D6E0DE;
   --accent:#0B6B63; --accent-soft:#D6ECE9;
-  --a-fin:#0B6B63; --a-lab:#B4652A; --a-tic:#2F5FA8; --a-pro:#7A4FA0;
+  --a-fin:#0B6B63; --a-lab:#B4652A; --a-tic:#2F5FA8; --a-pro:#7A4FA0; --a-cal:#B03A5B;
   --f-display:"Bricolage Grotesque","Figtree",system-ui,sans-serif;
   --f-body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
 }
 @media (prefers-color-scheme: dark){:root{
   --bg:#0E1615; --dot:#1F2C2A; --surface:#162120; --fg:#E3EDEB; --muted:#94A6A3; --line:#2A3A38;
   --accent:#4DBDB0; --accent-soft:#16312E;
-  --a-fin:#4DBDB0; --a-lab:#E39A5F; --a-tic:#7FA6E6; --a-pro:#B99AD8; color-scheme:dark}}
+  --a-fin:#4DBDB0; --a-lab:#E39A5F; --a-tic:#7FA6E6; --a-pro:#B99AD8; --a-cal:#E47C98; color-scheme:dark}}
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%}
 body{background:var(--bg);background-image:radial-gradient(var(--dot) 1.2px,transparent 1.3px);background-size:22px 22px;
@@ -46,7 +46,8 @@ header p{margin:0;color:var(--muted);font-size:17px;max-width:56ch}
 .app p{margin:0;color:var(--muted);font-size:15px}
 .app .go{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:6px;font-size:13.5px;color:var(--muted)}
 .app .go span:last-child{font-weight:700;color:var(--c);white-space:nowrap}
-.fin{--c:var(--a-fin)}.lab{--c:var(--a-lab)}.tic{--c:var(--a-tic)}.pro{--c:var(--a-pro)}
+.fin{--c:var(--a-fin)}.lab{--c:var(--a-lab)}.tic{--c:var(--a-tic)}.pro{--c:var(--a-pro)}.cal{--c:var(--a-cal)}
+.grid .app:last-child:nth-child(odd){grid-column:1/-1}
 footer{color:var(--muted);font-size:13.5px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;border-top:1px solid var(--line);padding-top:18px}
 @media (max-width:640px){.grid{grid-template-columns:1fr}header{padding-top:4px}}
 @media (prefers-reduced-motion:reduce){.app{transition:none}.app:hover{transform:none}}
@@ -87,6 +88,12 @@ footer{color:var(--muted);font-size:13.5px;display:flex;justify-content:space-be
       <h2>Protocolli</h2>
       <p>Il flusso di lavoro dello studio con protocolli, procedure e assistente.</p>
       <div class="go"><span>protocolli.appgestione.it</span><span>Apri →</span></div>
+    </a>
+    <a class="app cal" href="https://calendario.appgestione.it">
+      <span class="icon"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M8 14.5h3M8 17.5h6"/></svg></span>
+      <h2>Calendario eventi</h2>
+      <p>Formazione, riunioni ed eventi aziendali per lo staff.</p>
+      <div class="go"><span>calendario.appgestione.it</span><span>Apri →</span></div>
     </a>
   </main>
 
