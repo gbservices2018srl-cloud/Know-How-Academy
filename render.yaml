@@ -1,4 +1,5 @@
-# Blueprint di Render: crea il sito e lo collega al database PostgreSQL che hai già.
+# Blueprint di Render: un solo servizio per Protocolli e Calendario eventi (vedi index.js),
+# collegato al database PostgreSQL del gruppo (schemi "mappa" e "calendario").
 # Su Render: New > Blueprint > scegli questo repository.
 services:
   - type: web

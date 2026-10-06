@@ -2,10 +2,10 @@
   "name": "mappa-protocolli",
   "version": "1.0.0",
   "private": true,
-  "description": "Flusso di lavoro dello studio con protocolli per fase, permessi per collaboratore e assistente AI sui documenti.",
-  "main": "server.js",
+  "description": "Protocolli e Calendario eventi del gruppo To Smile, in un solo servizio.",
+  "main": "index.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node index.js",
     "dev": "node --watch server.js"
   },
   "engines": {
@@ -19,6 +19,7 @@
     "mammoth": "^1.8.0",
     "multer": "^2.0.2",
     "pdf-parse": "1.1.1",
-    "pg": "^8.13.1"
+    "pg": "^8.13.1",
+    "web-push": "^3.6.7"
   }
 }

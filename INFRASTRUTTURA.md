@@ -11,8 +11,8 @@ Tutte le app sono su **Render** (workspace "Giancarlo's workspace"), il codice �
 | Gestione finanziaria | finanza.appgestione.it (si apre su `/finanziario`) | `/admin` → "Pannello Master" | `APP-Gestione-Finanziaria` (Python, piano Starter, disco 1 GB) | `APP-Gestione-Finanziaria` (codice in `server/`) |
 | Nuovalab (laboratorio) | laboratorio.appgestione.it | `/admin` → accesso, l'area admin si apre col ruolo ADMIN | `App-Nuova-lab` (sito statico, dati su Supabase) | `App-Nuova-lab` |
 | Ticket assistenza | ticket.appgestione.it (si apre su `/ticketassistenza`) | `/admin` → accesso, poi pannello in base al ruolo (super_admin / admin_azienda) | `app-ticket-assistenza` (Next.js, Frankfurt, dati su Supabase) | `app-ticket-assistenza` |
-| Protocolli | protocolli.appgestione.it | `/admin` | `mappa-protocolli` (Node, piano gratuito) | `Know-How-Academy` |
-| Calendario eventi | calendario.appgestione.it (**da collegare**: manca il CNAME su Aruba e il dominio su Render) | `/admin` → accesso | `calendario-eventi` (Node, piano gratuito) | `app-calendario-eventi` |
+| Protocolli | protocolli.appgestione.it | `/admin` | `mappa-protocolli` (Node, piano gratuito) — **lo stesso servizio fa girare anche il Calendario** | `Know-How-Academy` |
+| Calendario eventi | calendario.appgestione.it (**da collegare**: CNAME su Aruba verso `mappa-protocolli.onrender.com` e dominio aggiunto al servizio `mappa-protocolli`) | `/admin` → accesso | `mappa-protocolli` (lo stesso dei Protocolli); il vecchio servizio `calendario-eventi` va eliminato dopo il collegamento | `Know-How-Academy`, cartella `calendario/` (il repository `app-calendario-eventi` non si usa più) |
 | Radiografia studio | radiografia-studio.onrender.com | — | `radiografia-studio` (Python) | `app-radiografia-studi-dentalia` |
 
 I vecchi indirizzi `www.appgestione.it/finanziario`, `/ticketassistenza` e `/laboratorio` portano da soli ai nuovi sottodomini.
@@ -27,7 +27,7 @@ I vecchi indirizzi `www.appgestione.it/finanziario`, `/ticketassistenza` e `/lab
 | `laboratorio` | CNAME | `app-nuova-lab.onrender.com` |
 | `ticket` | CNAME | `app-ticket-assistenza.onrender.com` |
 | `protocolli` | CNAME | `mappa-protocolli.onrender.com` |
-| `calendario` | CNAME | `calendario-eventi.onrender.com` (da aggiungere) |
+| `calendario` | CNAME | `mappa-protocolli.onrender.com` (da aggiungere) |
 
 Per ogni nuovo sottodominio: record CNAME su Aruba **e** "Custom Domains" nel servizio su Render. Il piano Hobby di Render include 2 domini personalizzati; ogni dominio in più costa 0,25 $ al mese.
 
@@ -44,7 +44,11 @@ Protocolli e Calendario: `ADMIN_USERNAME` / `ADMIN_PASSWORD` nelle impostazioni 
 
 ## Da fare
 
-- Collegare `calendario.appgestione.it` (CNAME su Aruba + dominio su Render).
+- Collegare `calendario.appgestione.it`: CNAME su Aruba verso `mappa-protocolli.onrender.com` e dominio nel servizio `mappa-protocolli`; poi eliminare il servizio `calendario-eventi`.
 - Chiave AI per la chat dei Protocolli (`AI_PROVIDER` + chiave Gemini o OpenAI su Render) e nome del modello in `AI_MODEL`.
 - Decidere su `radiografia-db` prima del 29 ottobre.
 - Lavorare sulle app da **una sola conversazione con Claude**, per evitare modifiche in conflitto.
+
+## Protocolli + Calendario in un solo servizio
+`index.js` avvia le due app e smista ogni richiesta in base all'indirizzo: `calendario.appgestione.it` va al Calendario, tutto il resto ai Protocolli.
+Le impostazioni del Calendario possono avere il prefisso `CAL_` (`CAL_ADMIN_USERNAME`, `CAL_ADMIN_PASSWORD`, `CAL_SESSION_SECRET`); se mancano usa quelle dei Protocolli, quindi l'amministratore è lo stesso.

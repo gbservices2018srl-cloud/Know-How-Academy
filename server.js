@@ -359,11 +359,17 @@ app.use((err, req, res, next) => {
   bad(res, 500, 'Errore del server. Riprova.');
 });
 
-(async () => {
+async function start() {
   await db.migrate();
   await rag.migrate();
   await db.ensureEnvAdmin();
   await db.seedIfEmpty();
-  app.listen(PORT, () => console.log(`Mappa dei Protocolli attiva sulla porta ${PORT}`));
   rag.indexAll().then(() => console.log('Documenti indicizzati per la ricerca.')).catch(e => console.warn('Indicizzazione:', e.message));
-})().catch(e => { console.error('Avvio non riuscito:', e); process.exit(1); });
+}
+module.exports = { app, start };
+
+// Avvio da solo (node server.js): solo i Protocolli. Avvio normale: index.js, che serve anche il Calendario.
+if (require.main === module) {
+  start().then(() => app.listen(PORT, () => console.log(`Mappa dei Protocolli attiva sulla porta ${PORT}`)))
+    .catch(e => { console.error('Avvio non riuscito:', e); process.exit(1); });
+}
