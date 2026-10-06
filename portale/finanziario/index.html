@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>To Smile · App del gruppo</title>
+<script>
+// Vecchi indirizzi del tipo www.appgestione.it/finanziario/... → nuovi sottodomini
+(function(){
+  var map = {
+    'finanziario': 'https://finanza.appgestione.it/finanziario',
+    'ticketassistenza': 'https://ticket.appgestione.it/ticketassistenza',
+    'laboratorio': 'https://laboratorio.appgestione.it',
+    'protocolli': 'https://protocolli.appgestione.it',
+    'calendario': 'https://calendario.appgestione.it'
+  };
+  var parts = location.pathname.replace(/^\/+/, '').split('/');
+  var dest = map[parts[0]];
+  if (dest) location.replace(dest + (parts.length > 1 ? '/' + parts.slice(1).join('/') : '') + location.search + location.hash);
+  else location.replace('/');
+})();
+</script>
+</head>
+<body style="font-family:system-ui,sans-serif;padding:24px"><p>Ti porto alla pagina giusta… <a href="/">Torna alle app del gruppo</a></p></body>
+</html>
