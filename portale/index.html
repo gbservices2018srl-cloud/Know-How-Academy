@@ -7,60 +7,66 @@
 <meta name="description" content="Le applicazioni del gruppo To Smile: gestione finanziaria, Nuovalab, ticket assistenza, protocolli e calendario eventi.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600;700&display=swap">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230B6B63'/%3E%3Cpath d='M9 17c2 4 12 4 14 0' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@600;700;800&family=Figtree:wght@400;500;600;700&display=swap">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23ffffff'/%3E%3Cpath d='M6 12a10 10 0 0 0 20 0' stroke='%23E8E560' stroke-width='4' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='12' cy='11' r='2.4' fill='%238C6898'/%3E%3Ccircle cx='20' cy='11' r='2.4' fill='%234CAAAA'/%3E%3C/svg%3E">
+<meta name="theme-color" content="#4CAAAA">
 <style>
-/* Layout: intestazione con il marchio, poi una griglia di quattro riquadri (uno per app) */
+/* Layout: logo To Smile con l'arco del sorriso, poi una griglia di riquadri (uno per app) nei colori del marchio */
 :root{
-  --bg:#EEF3F2; --dot:#CDD8D6; --surface:#FFFFFF; --fg:#13201F; --muted:#586866; --line:#D6E0DE;
-  --accent:#0B6B63; --accent-soft:#D6ECE9;
-  --a-fin:#0B6B63; --a-lab:#B4652A; --a-tic:#2F5FA8; --a-pro:#7A4FA0; --a-cal:#B03A5B;
-  --f-display:"Bricolage Grotesque","Figtree",system-ui,sans-serif;
+  /* colori del marchio To Smile */
+  --teal:#4CAAAA; --purple:#8C6898; --yellow:#E8E560; --grey:#6E6E6E;
+  /* versioni scure per il testo (leggibili su bianco) */
+  --teal-ink:#2A7C7D; --purple-ink:#6E4C7B; --olive-ink:#77731A;
+  --bg:#FBFBF8; --surface:#FFFFFF; --fg:#2B3033; --muted:#6B7276; --line:#E6E6DF; --logo-bg:transparent;
+  --f-display:"Fira Sans","Figtree",system-ui,sans-serif;
   --f-body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
 }
 @media (prefers-color-scheme: dark){:root{
-  --bg:#0E1615; --dot:#1F2C2A; --surface:#162120; --fg:#E3EDEB; --muted:#94A6A3; --line:#2A3A38;
-  --accent:#4DBDB0; --accent-soft:#16312E;
-  --a-fin:#4DBDB0; --a-lab:#E39A5F; --a-tic:#7FA6E6; --a-pro:#B99AD8; --a-cal:#E47C98; color-scheme:dark}}
+  --teal-ink:#6CC7C7; --purple-ink:#C3A6D0; --olive-ink:#E8E560;
+  --bg:#15191B; --surface:#1D2326; --fg:#ECEFF0; --muted:#A3AAAE; --line:#2C3438; --logo-bg:#FFFFFF; color-scheme:dark}}
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%}
-body{background:var(--bg);background-image:radial-gradient(var(--dot) 1.2px,transparent 1.3px);background-size:22px 22px;
-  color:var(--fg);font:16px/1.55 var(--f-body);padding:max(32px,env(safe-area-inset-top)) 16px max(32px,env(safe-area-inset-bottom))}
-.wrap{max-width:980px;margin:0 auto;display:flex;flex-direction:column;gap:36px}
-header{display:flex;flex-direction:column;gap:14px;padding-top:24px}
-.brand{display:flex;align-items:center;gap:12px}
-.mark{width:44px;height:44px;border-radius:12px;background:var(--accent);display:grid;place-items:center;flex:none}
-.mark svg{width:26px;height:26px}
-.brand b{font:700 22px/1 var(--f-display);letter-spacing:-.01em}
-h1{font:700 clamp(30px,5vw,44px)/1.1 var(--f-display);letter-spacing:-.02em;margin:6px 0 0;text-wrap:balance}
+body{background:var(--bg);color:var(--fg);font:16px/1.55 var(--f-body);padding:max(28px,env(safe-area-inset-top)) 16px max(32px,env(safe-area-inset-bottom))}
+.wrap{max-width:1000px;margin:0 auto;display:flex;flex-direction:column;gap:40px;position:relative}
+header{position:relative;z-index:1;display:flex;flex-direction:column;gap:18px;padding-top:12px}
+.logo{display:inline-flex;align-self:flex-start;background:var(--logo-bg);border-radius:16px;padding:0}
+.logo img{display:block;width:min(300px,70vw);height:auto}
+@media (prefers-color-scheme: dark){.logo{padding:14px 18px}}
+h1{font:800 clamp(30px,5vw,46px)/1.08 var(--f-display);letter-spacing:-.015em;margin:8px 0 0;text-wrap:balance}
+h1 span{color:var(--teal-ink)}
+.rule{width:72px;height:14px;border:6px solid var(--yellow);border-top:0;border-radius:0 0 60px 60px;margin-top:-4px}
 header p{margin:0;color:var(--muted);font-size:17px;max-width:56ch}
-.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
-.app{--c:var(--accent);position:relative;display:flex;flex-direction:column;gap:12px;text-decoration:none;color:inherit;
-  background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:22px 22px 20px;
+.grid{position:relative;z-index:1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.app{--c:var(--teal);--ink:var(--teal-ink);position:relative;display:flex;flex-direction:column;gap:12px;text-decoration:none;color:inherit;overflow:hidden;
+  background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:24px 24px 20px;
   transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease}
-.app:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--c) 55%,var(--line));box-shadow:0 10px 28px rgba(16,32,30,.10)}
+.app::before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:var(--c)}
+.app:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--c) 60%,var(--line));box-shadow:0 12px 30px rgba(43,48,51,.10)}
 .app:focus-visible{outline:3px solid var(--c);outline-offset:3px}
-.icon{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;background:color-mix(in srgb,var(--c) 14%,transparent);color:var(--c)}
-.icon svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.app h2{font:700 21px/1.2 var(--f-display);margin:0}
+.icon{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;background:color-mix(in srgb,var(--c) 18%,transparent);color:var(--ink)}
+.icon svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.app h2{font:700 22px/1.2 var(--f-display);margin:0}
 .app p{margin:0;color:var(--muted);font-size:15px}
 .app .go{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:6px;font-size:13.5px;color:var(--muted)}
-.app .go span:last-child{font-weight:700;color:var(--c);white-space:nowrap}
-.fin{--c:var(--a-fin)}.lab{--c:var(--a-lab)}.tic{--c:var(--a-tic)}.pro{--c:var(--a-pro)}.cal{--c:var(--a-cal)}
+.app .go span:last-child{font-weight:700;color:var(--ink);white-space:nowrap}
+.fin{--c:var(--teal);--ink:var(--teal-ink)}
+.lab{--c:var(--purple);--ink:var(--purple-ink)}
+.tic{--c:var(--yellow);--ink:var(--olive-ink)}
+.pro{--c:var(--teal);--ink:var(--teal-ink)}
+.cal{--c:var(--purple);--ink:var(--purple-ink)}
 .grid .app:last-child:nth-child(odd){grid-column:1/-1}
-footer{color:var(--muted);font-size:13.5px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;border-top:1px solid var(--line);padding-top:18px}
-@media (max-width:640px){.grid{grid-template-columns:1fr}header{padding-top:4px}}
+footer{position:relative;z-index:1;color:var(--muted);font-size:13.5px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;border-top:1px solid var(--line);padding-top:18px}
+footer b{color:var(--fg);font-weight:600}
+@media (max-width:640px){.grid{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:reduce){.app{transition:none}.app:hover{transform:none}}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <div class="brand">
-      <div class="mark"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M8 15c2.2 5.5 13.8 5.5 16 0" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round"/></svg></div>
-      <b>To Smile</b>
-    </div>
-    <h1>Le app del gruppo</h1>
+    <a class="logo" href="/" aria-label="To Smile"><img src="logo-tosmile.png" alt="To Smile · Persone, salute, sorrisi" width="548" height="165"></a>
+    <h1>Le app del <span>gruppo</span></h1>
+    <div class="rule" aria-hidden="true"></div>
     <p>Scegli l'applicazione con cui vuoi lavorare. Ognuna ha il suo accesso con nome utente e password.</p>
   </header>
 
@@ -97,7 +103,7 @@ footer{color:var(--muted);font-size:13.5px;display:flex;justify-content:space-be
     </a>
   </main>
 
-  <footer><span>To Smile · App del gruppo</span><span>Problemi di accesso? Apri un ticket di assistenza.</span></footer>
+  <footer><span><b>To Smile</b> · Persone, salute, sorrisi</span><span>Problemi di accesso? Apri un ticket di assistenza.</span></footer>
 </div>
 </body>
 </html>
