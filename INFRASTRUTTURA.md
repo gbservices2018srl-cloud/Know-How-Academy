@@ -44,7 +44,6 @@ Protocolli e Calendario: `ADMIN_USERNAME` / `ADMIN_PASSWORD` nelle impostazioni 
 
 ## Da fare
 - Accesso unico acceso il 7 ottobre 2026 (`SSO_ATTIVO=true`; Finanza con `SSO_API_KEY` e `SSO_URL`). Il sito statico `portale-appgestione` non ha più domini e si può eliminare.
-- Collegare all'accesso unico Gestione finanziaria (utenti del gruppo), Ticket e Nuovalab (Supabase).
 - Resend: dominio appgestione.it verificato e `RESEND_API_KEY` su Render.
 
 - Eliminare il vecchio servizio `calendario-eventi` su Render.
@@ -58,6 +57,7 @@ Protocolli e Calendario: `ADMIN_USERNAME` / `ADMIN_PASSWORD` nelle impostazioni 
 - Dati nello schema `accessi` del database. Il cookie `ag_sso` vale per tutti i sottodomini di appgestione.it.
 - Protocolli e Calendario (stesso servizio) lo usano direttamente quando `SSO_ATTIVO=true`. Le app su altri servizi chiedono `POST https://appgestione.it/api/sso/verify` con `Authorization: Bearer <SSO_API_KEY>` e `{ token: <cookie ag_sso>, app: "finanza" }`.
 - Email (notifiche registrazioni a `NOTIFY_EMAIL`, recupero password) con Resend: `RESEND_API_KEY`. Senza chiave il pannello mostra i link da copiare.
+- Nuovalab e Ticket (Supabase): il riquadro passa da `appgestione.it/sso/<app>`, che crea un biglietto monouso (2 minuti) e manda il browser alla funzione Supabase `sso` dell'app. La funzione lo fa verificare (`POST /api/sso/ticket`), poi rimanda all'app con `#sso=<codice>` che l'app scambia con la sessione (`verifyOtp`). Gli utenti si collegano per email: chi è "Amministratore" nell'accesso unico riceve da solo il profilo ADMIN (Nuovalab) o super_admin (Ticket) se non ne ha uno; gli altri devono avere un profilo creato dentro l'app. Disattivare, eliminare o togliere l'app a qualcuno blocca il suo utente Supabase. Sorgenti: `sso.ts` (Nuovalab) e `supabase/functions/sso` (Ticket). L'accesso con email e password delle due app resta.
 - Gestione finanziaria: i clienti esterni che pagano con Stripe continuano a registrarsi ed entrare direttamente su finanza.appgestione.it, senza passare dall'accesso unico.
 
 ## Protocolli + Calendario in un solo servizio
