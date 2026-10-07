@@ -105,7 +105,22 @@ function limited(key, max, minutes) {
 }
 setInterval(() => { const now = Date.now(); for (const [k, a] of hits) if (!a.some(t => now - t < 3600e3)) hits.delete(k); }, 600e3).unref();
 
-const appsForUser = apps => APPS.filter(a => apps[a.key]).map(a => ({ key: a.key, name: a.name, url: a.url, color: a.color, desc: a.desc, role: apps[a.key] }));
+const appsForUser = apps => APPS.filter(a => apps[a.key]).map(a => ({ key: a.key, name: a.name, url: a.url, link: a.sso ? `/sso/${a.key}` : a.url,
+  color: a.color, desc: a.desc, role: apps[a.key] }));
+
+// App su Supabase (Nuovalab, Ticket): quando qualcuno viene disattivato, eliminato o perde l'accesso,
+// la funzione "sso" di quell'app blocca il suo accesso anche lì.
+async function revokeIn(u, keys) {
+  for (const a of APPS.filter(x => x.sso && keys.includes(x.key))) {
+    try {
+      const ticket = await store.createTicket(u, a.key, 'revoke');
+      const r = await fetch(a.sso, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticket }), signal: AbortSignal.timeout(15000) });
+      if (!r.ok) console.warn(`Blocco accesso in ${a.key} non riuscito:`, r.status);
+    } catch (e) { console.warn(`Blocco accesso in ${a.key} non riuscito:`, e.message); }
+  }
+}
+const SSO_KEYS = APPS.filter(a => a.sso).map(a => a.key);
 const fullName = u => `${u.first_name} ${u.last_name}`.trim() || u.email;
 
 /* ---------- accesso ---------- */
@@ -290,7 +305,7 @@ app.patch('/api/admin/users/:id', needAdmin, wrap(async (req, res) => {
     if (u.owner || u.id === req.user.id) return bad(res, 400, 'Non puoi disattivare questo account.');
     const wasPending = u.status === 'pending';
     await store.q(`update users set status = $2, approved_at = coalesce(approved_at, case when $2 = 'active' then now() end) where id = $1`, [u.id, b.status]);
-    if (b.status === 'disabled') await store.logoutEverywhere(u.id);
+    if (b.status === 'disabled') { await store.logoutEverywhere(u.id); revokeIn(u, SSO_KEYS); }
     if (b.status === 'active' && wasPending) sent = await sendActivation(await store.getUser(u.id), null);
   }
   const fresh = await store.getUser(u.id);
@@ -304,6 +319,7 @@ app.put('/api/admin/users/:id/apps/:app', needAdmin, wrap(async (req, res) => {
   if (!store.APP_KEYS.includes(req.params.app)) return bad(res, 400, 'App sconosciuta');
   if (u.id === req.user.id && req.params.app === 'accessi') return bad(res, 400, 'Non puoi togliere a te stesso la gestione accessi.');
   await store.setAppRole(u.id, req.params.app, req.body.role);
+  if (req.body.role !== 'user' && req.body.role !== 'admin') revokeIn(u, [req.params.app]);
   res.json({ apps: await store.appsOf(u) });
 }));
 
@@ -337,6 +353,7 @@ app.delete('/api/admin/users/:id', needAdmin, wrap(async (req, res) => {
   if (!u) return bad(res, 404, 'Utente non trovato');
   if (u.owner || u.id === req.user.id) return bad(res, 400, 'Questo account non si può eliminare.');
   await store.deleteUser(u.id);
+  revokeIn(u, SSO_KEYS);
   res.json({ ok: true });
 }));
 
@@ -360,6 +377,25 @@ app.post('/api/sso/users', needApiKey, wrap(async (req, res) => {
   const a = String(req.body.app || '');
   if (!store.APP_KEYS.includes(a)) return bad(res, 400, 'App sconosciuta');
   res.json({ users: await store.usersWithApp(a) });
+}));
+
+/* ---------- app su Supabase: ingresso con biglietto monouso ---------- */
+app.get('/sso/:app', wrap(async (req, res) => {
+  const a = APPS.find(x => x.key === req.params.app && x.sso);
+  if (!a) return res.redirect('/');
+  if (!req.user) return res.redirect('/accedi?next=' + encodeURIComponent(req.originalUrl));
+  const role = req.apps[a.key];
+  if (!role) return res.redirect('/?noaccess=' + a.key);
+  const ticket = await store.createTicket(req.user, a.key, 'login', role);
+  res.set('Cache-Control', 'no-store');
+  res.redirect(`${a.sso}?ticket=${encodeURIComponent(ticket)}`);
+}));
+// La funzione "sso" dell'app riscatta il biglietto: chi è, che ruolo ha (oppure: va bloccato).
+app.post('/api/sso/ticket', wrap(async (req, res) => {
+  if (limited('ticket|' + req.ip, 120, 15)) return bad(res, 429, 'Troppe richieste');
+  const t = await store.redeemTicket(String(req.body.ticket || ''), String(req.body.app || ''));
+  if (!t) return bad(res, 404, 'Biglietto non valido o scaduto');
+  res.json(t);
 }));
 
 /* ---------- pagine ---------- */

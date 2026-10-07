@@ -109,7 +109,7 @@ function toast(t) { const d = document.createElement('div'); d.className = 'toas
     $('#grid').before(m);
     history.replaceState(null, '', '/');
   }
-  $('#grid').innerHTML = apps.length ? apps.map(a => `<a class="app ${esc(a.color)}" href="${esc(a.url)}">
+  $('#grid').innerHTML = apps.length ? apps.map(a => `<a class="app ${esc(a.color)}" href="${esc(a.link || a.url)}">
       <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[a.key] || ''}</svg></span>
       <h2>${esc(a.name)}</h2>
       <p>${esc(a.desc)}</p>

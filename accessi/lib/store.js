@@ -57,6 +57,16 @@ async function migrate() {
       agent text not null default ''
     );
     create index if not exists sessions_user_idx on sessions(user_id);
+    create table if not exists sso_tickets (
+      token_hash text primary key,
+      user_id text,
+      email text not null,
+      app text not null,
+      purpose text not null check (purpose in ('login','revoke')),
+      data jsonb not null default '{}',
+      expires_at timestamptz not null,
+      used_at timestamptz
+    );
     create table if not exists password_links (
       token_hash text primary key,
       user_id text not null references users(id) on delete cascade,
@@ -67,6 +77,7 @@ async function migrate() {
   `);
   await q(`delete from sessions where expires_at < now()`);
   await q(`delete from password_links where expires_at < now() - interval '7 days'`);
+  await q(`delete from sso_tickets where expires_at < now() - interval '1 day'`);
 }
 
 // Il proprietario (ADMIN_USERNAME / ADMIN_PASSWORD su Render) è sempre attivo e amministratore di tutto.
@@ -210,6 +221,33 @@ async function usersWithApp(app) {
   return rows.map(r => ({ ...publicUser(r), role: r.app_role }));
 }
 
+/* ---------- biglietti monouso per le app su Supabase (Nuovalab, Ticket) ---------- */
+// Il biglietto vale 2 minuti e una sola volta; lo riscatta la funzione "sso" dell'app.
+async function createTicket(u, app, purpose, role) {
+  const token = randomToken();
+  await q(`insert into sso_tickets (token_hash, user_id, email, app, purpose, data, expires_at)
+           values ($1,$2,$3,$4,$5,$6, now() + interval '2 minutes')`,
+    [sha(token), u.id || null, u.email, app, purpose,
+     JSON.stringify({ firstName: u.first_name ?? u.firstName ?? '', lastName: u.last_name ?? u.lastName ?? '',
+       birthDate: u.birth_date ?? u.birthDate ?? null, role: role || null })]);
+  return token;
+}
+async function redeemTicket(token, app) {
+  if (!token || typeof token !== 'string' || token.length > 100) return null;
+  const { rows } = await q(`update sso_tickets set used_at = now()
+    where token_hash = $1 and app = $2 and used_at is null and expires_at > now() returning *`, [sha(token), app]);
+  const t = rows[0];
+  if (!t) return null;
+  if (t.purpose === 'login') { // ancora attivo e abilitato a quell'app?
+    const u = await getUser(t.user_id);
+    if (!u || u.status !== 'active') return null;
+    const role = (await appsOf(u))[app];
+    if (!role) return null;
+    return { purpose: 'login', email: u.email, firstName: u.first_name, lastName: u.last_name, birthDate: u.birth_date, role };
+  }
+  return { purpose: t.purpose, email: t.email };
+}
+
 /* ---------- link per impostare o reimpostare la password ---------- */
 async function createPasswordLink(userId, purpose = 'reset', hours = 2) {
   const token = randomToken();
@@ -237,5 +275,5 @@ module.exports = {
   pool, q, SCHEMA, APPS, APP_KEYS, events, migrate, ensureOwner,
   cleanEmail, validEmail, cleanName, cleanDate, appsOf, publicUser, getUser, findByEmail, createUser, setPassword,
   setAppRole, deleteUser, usersWithApp, logoutEverywhere, createSession, endSession, check, verify,
-  createPasswordLink, usePasswordLink, peekPasswordLink, SESSION_DAYS, sha,
+  createPasswordLink, usePasswordLink, peekPasswordLink, SESSION_DAYS, sha, createTicket, redeemTicket,
 };
