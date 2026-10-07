@@ -47,8 +47,13 @@ Protocolli e Calendario: `ADMIN_USERNAME` / `ADMIN_PASSWORD` nelle impostazioni 
 - Collegare `calendario.appgestione.it`: CNAME su Aruba verso `mappa-protocolli.onrender.com` e dominio nel servizio `mappa-protocolli`; poi eliminare il servizio `calendario-eventi`.
 - Chiave AI per la chat dei Protocolli (`AI_PROVIDER` + chiave Gemini o OpenAI su Render) e nome del modello in `AI_MODEL`.
 - Decidere su `radiografia-db` prima del 29 ottobre.
-- Lavorare sulle app da **una sola conversazione con Claude**, per evitare modifiche in conflitto.
 
 ## Protocolli + Calendario in un solo servizio
 `index.js` avvia le due app e smista ogni richiesta in base all'indirizzo: `calendario.appgestione.it` va al Calendario, tutto il resto ai Protocolli.
 Le impostazioni del Calendario possono avere il prefisso `CAL_` (`CAL_ADMIN_USERNAME`, `CAL_ADMIN_PASSWORD`, `CAL_SESSION_SECRET`); se mancano usa quelle dei Protocolli, quindi l'amministratore è lo stesso.
+
+## Come lavoriamo con Claude
+- Una conversazione per app, ognuna solo sul proprio repository: Gestione finanziaria, Nuovalab, Ticket.
+- La conversazione "principale" gestisce **Protocolli, Calendario eventi**, la pagina con i riquadri, i DNS su Aruba, le impostazioni Render condivise e il database.
+- Gli indirizzi restano sottodomini (non percorsi tipo `appgestione.it/nomeapp`); l'area amministratori di ogni app resta su `/admin`.
+- Prima di ogni modifica: `git pull`.
