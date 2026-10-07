@@ -407,7 +407,7 @@ const colorOf = e => typeOf(e.typeId)?.color || 'slate';
 
 async function loadState() {
   const s = await api('/api/state');
-  Object.assign(S, { me: s.me, categories: s.categories, types: s.types, locations: s.locations, users: s.users || [] });
+  Object.assign(S, { me: s.me, sso: s.sso || null, categories: s.categories, types: s.types, locations: s.locations, users: s.users || [] });
   for (const id of [...S.typeFilter]) if (!typeOf(id)) S.typeFilter.delete(id);
 }
 
@@ -430,10 +430,10 @@ $('#who').addEventListener('click', e => {
   m.innerHTML = `${pushItem}<button data-a="pw" role="menuitem">${ic('key')}Cambia password</button><button data-a="out" role="menuitem">${ic('out')}Esci</button>`;
   m.addEventListener('click', ev => {
     ev.stopPropagation(); const a = ev.target.closest('[data-a]')?.dataset.a; m.remove();
-    if (a === 'pw') passwordDialog();
+    if (a === 'pw') { if (S.sso) location.href = S.sso.home; else passwordDialog(); }
     if (a === 'push-on') pushEnable();
     if (a === 'push-off') pushDisable();
-    if (a === 'out') api('/api/logout', { method: 'POST', body: {} }).finally(() => location.href = '/login');
+    if (a === 'out') api('/api/logout', { method: 'POST', body: {} }).finally(() => location.href = S.sso ? S.sso.home : '/login');
   });
   $('#who').appendChild(m); $('#who').setAttribute('aria-expanded', 'true');
 });
@@ -1000,7 +1000,7 @@ $('#main').addEventListener('change', e => {
 function renderPeople() {
   const staff = S.users.filter(u => u.role === 'staff' && u.active).length;
   $('#main').innerHTML = `
-    <div class="head"><div><h2 class="view">Persone</h2><p>Accessi dello staff e categorie di appartenenza. ${staff} ${staff === 1 ? 'accesso attivo' : 'accessi attivi'}.</p></div><span class="spacer"></span><button class="btn primary" data-newuser>${ic('plus')}Nuovo accesso</button></div>
+    <div class="head"><div><h2 class="view">Persone</h2><p>Accessi dello staff e categorie di appartenenza. ${staff} ${staff === 1 ? 'accesso attivo' : 'accessi attivi'}.</p></div><span class="spacer"></span>${S.sso ? `<a class="btn primary" href="${esc(S.sso.admin)}">${ic('plus')}Aggiungi da Gestione accessi</a>` : `<button class="btn primary" data-newuser>${ic('plus')}Nuovo accesso</button>`}</div>
     <div class="toolbar">
       <label class="search">${ic('search')}<input id="uq" placeholder="Cerca per nome o nome utente" value="${esc(S.userFilter.q)}"></label>
       <select class="sm" id="ucat"><option value="">Tutte le categorie</option>${S.categories.map(c => `<option value="${c.id}" ${S.userFilter.cat === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}<option value="_none" ${S.userFilter.cat === '_none' ? 'selected' : ''}>Senza categoria</option></select>
@@ -1032,30 +1032,31 @@ function userForm(u) {
   const isNew = !u;
   const v = u || { name: '', username: '', role: 'staff', active: true, categories: [] };
   const cats = new Set(v.categories);
+  const lock = v.fromEnv || !!S.sso;
   const sheet = openDialog(`
     ${head(isNew ? 'Nuovo accesso' : esc(v.name))}
     <div class="sh-body">
       <div class="err" id="uerr" hidden></div>
-      ${v.fromEnv ? '<div class="note"><b>Amministratore principale.</b> Nome utente e password si cambiano dalle impostazioni di Render (ADMIN_USERNAME, ADMIN_PASSWORD).</div>' : ''}
+      ${S.sso ? `<div class="note">Nome, email, password e ruolo si gestiscono da <a href="${esc(S.sso.admin)}">Gestione accessi</a>. Qui scegli le categorie.</div>` : v.fromEnv ? '<div class="note"><b>Amministratore principale.</b> Nome utente e password si cambiano dalle impostazioni di Render (ADMIN_USERNAME, ADMIN_PASSWORD).</div>' : ''}
       <div class="two">
-        <label class="field"><span>Nome e cognome</span><input id="u-name" value="${esc(v.name)}" maxlength="120" placeholder="Es. Maria Rossi"></label>
-        <label class="field"><span>Nome utente</span><input id="u-user" value="${esc(v.username)}" maxlength="60" autocapitalize="none" spellcheck="false" placeholder="maria.rossi" ${v.fromEnv ? 'disabled' : ''}></label>
+        <label class="field"><span>Nome e cognome</span><input id="u-name" value="${esc(v.name)}" maxlength="120" placeholder="Es. Maria Rossi" ${S.sso ? 'disabled' : ''}></label>
+        <label class="field"><span>Nome utente</span><input id="u-user" value="${esc(v.username)}" maxlength="60" autocapitalize="none" spellcheck="false" placeholder="maria.rossi" ${lock ? 'disabled' : ''}></label>
       </div>
-      ${v.fromEnv ? '' : `<label class="field"><span>${isNew ? 'Password' : 'Nuova password'} ${isNew ? '' : '<small class="muted" style="font-weight:500">(lascia vuoto per non cambiarla)</small>'}</span>
+      ${lock ? '' : `<label class="field"><span>${isNew ? 'Password' : 'Nuova password'} ${isNew ? '' : '<small class="muted" style="font-weight:500">(lascia vuoto per non cambiarla)</small>'}</span>
         <div style="display:flex;gap:6px"><input id="u-pass" value="${isNew ? genPassword() : ''}" autocomplete="new-password" spellcheck="false" style="flex:1">
         <button type="button" class="btn" id="u-gen">Genera</button></div><span class="hint">Almeno 8 caratteri. Comunicala tu alla persona: potrà cambiarla dal suo menu.</span></label>`}
       <div class="field"><span>Ruolo</span>
-        <div class="seg" style="align-self:flex-start" id="u-role"><button type="button" data-role="staff" class="${v.role === 'staff' ? 'on' : ''}" ${v.fromEnv ? 'disabled' : ''}>Staff</button><button type="button" data-role="admin" class="${v.role === 'admin' ? 'on' : ''}" ${v.fromEnv ? 'disabled' : ''}>Amministratore</button></div>
+        <div class="seg" style="align-self:flex-start" id="u-role"><button type="button" data-role="staff" class="${v.role === 'staff' ? 'on' : ''}" ${lock ? 'disabled' : ''}>Staff</button><button type="button" data-role="admin" class="${v.role === 'admin' ? 'on' : ''}" ${lock ? 'disabled' : ''}>Amministratore</button></div>
         <span class="hint" id="u-rolehint"></span>
       </div>
       <div class="field" id="u-catsf"><span>Categorie</span>
         <div class="chips" id="u-cats">${S.categories.map(c => `<button type="button" class="chip ${cats.has(c.id) ? 'on' : ''}" data-cat="${c.id}">${esc(c.name)}</button>`).join('')}</div>
         <span class="hint">Vedrà gli eventi per tutto lo staff e quelli delle categorie scelte.</span>
       </div>
-      ${isNew || v.fromEnv ? '' : `<label class="check"><input type="checkbox" id="u-active" ${v.active ? 'checked' : ''}>Accesso attivo</label>`}
+      ${isNew || lock ? '' : `<label class="check"><input type="checkbox" id="u-active" ${v.active ? 'checked' : ''}>Accesso attivo</label>`}
     </div>
     <div class="sh-foot">
-      ${isNew || v.fromEnv ? '' : `<button class="btn danger" id="u-del">${ic('trash')}Elimina</button>`}
+      ${isNew || lock ? '' : `<button class="btn danger" id="u-del">${ic('trash')}Elimina</button>`}
       <span class="spacer"></span>
       <button class="btn ghost" data-close>Annulla</button>
       <button class="btn primary" id="u-save">${isNew ? 'Crea accesso' : 'Salva'}</button>
@@ -1072,9 +1073,9 @@ function userForm(u) {
   });
   const err = m => { const el = $('#uerr', sheet); el.textContent = m; el.hidden = false; sheet.scrollTop = 0; };
   $('#u-save', sheet).onclick = async () => {
-    const body = { name: $('#u-name', sheet).value, role, categories: [...cats] };
-    if (!v.fromEnv) { body.username = $('#u-user', sheet).value; const p = $('#u-pass', sheet).value; if (p) body.password = p; }
-    if (!isNew && !v.fromEnv) body.active = $('#u-active', sheet).checked;
+    const body = S.sso ? { categories: [...cats] } : { name: $('#u-name', sheet).value, role, categories: [...cats] };
+    if (!lock) { body.username = $('#u-user', sheet).value; const p = $('#u-pass', sheet).value; if (p) body.password = p; }
+    if (!isNew && !lock) body.active = $('#u-active', sheet).checked;
     try {
       if (isNew) await api('/api/users', { method: 'POST', body }); else await api('/api/users/' + u.id, { method: 'PUT', body });
       await loadState(); renderTop(); render();

@@ -1,13 +1,13 @@
 # App del gruppo To Smile — come sono collegate
 
-Promemoria unico per chi lavora sulle app del gruppo (aggiornato il 6 ottobre 2026).
+Promemoria unico per chi lavora sulle app del gruppo (aggiornato il 7 ottobre 2026).
 Tutte le app sono su **Render** (workspace "Giancarlo's workspace"), il codice è su **GitHub** nell'organizzazione `gbservices2018srl-cloud`, il dominio `appgestione.it` è su **Aruba**.
 
 ## Indirizzi
 
 | App | Indirizzo | Area admin | Servizio Render | Repository |
 |---|---|---|---|---|
-| Pagina con i riquadri | appgestione.it · www.appgestione.it | — | `portale-appgestione` (sito statico) | `Know-How-Academy`, cartella `portale/` |
+| Accesso unico (login, registrazione, riquadri delle app) | appgestione.it (www → appgestione.it) — **da spostare** dal sito statico `portale-appgestione` al servizio `mappa-protocolli` | `/admin` → "Gestione accessi" | `mappa-protocolli` (lo stesso di Protocolli e Calendario) | `Know-How-Academy`, cartella `accessi/` (la cartella `portale/` è la vecchia pagina statica) |
 | Gestione finanziaria | finanza.appgestione.it (si apre su `/finanziario`) | `/admin` → "Pannello Master" | `APP-Gestione-Finanziaria` (Python, piano Starter, disco 1 GB) | `APP-Gestione-Finanziaria` (codice in `server/`) |
 | Nuovalab (laboratorio) | laboratorio.appgestione.it | `/admin` → accesso, l'area admin si apre col ruolo ADMIN | `App-Nuova-lab` (sito statico, dati su Supabase) | `App-Nuova-lab` |
 | Ticket assistenza | ticket.appgestione.it (si apre su `/ticketassistenza`) | `/admin` → accesso, poi pannello in base al ruolo (super_admin / admin_azienda) | `app-ticket-assistenza` (Next.js, Frankfurt, dati su Supabase) | `app-ticket-assistenza` |
@@ -22,7 +22,7 @@ I vecchi indirizzi `www.appgestione.it/finanziario`, `/ticketassistenza` e `/lab
 | Nome | Tipo | Valore |
 |---|---|---|
 | `@` | A | `216.24.57.1` (Render) |
-| `www` | CNAME | `portale-appgestione.onrender.com` |
+| `www` | CNAME | `portale-appgestione.onrender.com` (da cambiare in `mappa-protocolli.onrender.com`) |
 | `finanza` | CNAME | `app-gestione-finanziaria.onrender.com` |
 | `laboratorio` | CNAME | `app-nuova-lab.onrender.com` |
 | `ticket` | CNAME | `app-ticket-assistenza.onrender.com` |
@@ -43,10 +43,22 @@ Per ogni nuovo sottodominio: record CNAME su Aruba **e** "Custom Domains" nel se
 Protocolli e Calendario: `ADMIN_USERNAME` / `ADMIN_PASSWORD` nelle impostazioni **Environment** del servizio su Render (mai nel codice).
 
 ## Da fare
+- Accesso unico: spostare `appgestione.it` e `www.appgestione.it` dal sito statico `portale-appgestione` al servizio `mappa-protocolli` (Custom Domains + CNAME `www` su Aruba), poi `SSO_ATTIVO=true`.
+- Collegare all'accesso unico Gestione finanziaria (utenti del gruppo), Ticket e Nuovalab (Supabase).
+- Resend: dominio appgestione.it verificato e `RESEND_API_KEY` su Render.
 
 - Collegare `calendario.appgestione.it`: CNAME su Aruba verso `mappa-protocolli.onrender.com` e dominio nel servizio `mappa-protocolli`; poi eliminare il servizio `calendario-eventi`.
 - Chiave AI per la chat dei Protocolli (`AI_PROVIDER` + chiave Gemini o OpenAI su Render) e nome del modello in `AI_MODEL`.
 - Decidere su `radiografia-db` prima del 29 ottobre.
+
+## Accesso unico (appgestione.it)
+- Una sola email e password per tutte le app. Chi si registra resta "in attesa"; l'amministratore lo approva da `appgestione.it/admin` e sceglie per ogni app: nessun accesso, Utente o Amministratore.
+- L'amministratore può anche creare utenti (con password o con link per sceglierla), disattivarli (escono subito da tutte le app) ed eliminarli.
+- Il proprietario è `ADMIN_USERNAME` / `ADMIN_PASSWORD` del servizio `mappa-protocolli`: è sempre amministratore di tutto.
+- Dati nello schema `accessi` del database. Il cookie `ag_sso` vale per tutti i sottodomini di appgestione.it.
+- Protocolli e Calendario (stesso servizio) lo usano direttamente quando `SSO_ATTIVO=true`. Le app su altri servizi chiedono `POST https://appgestione.it/api/sso/verify` con `Authorization: Bearer <SSO_API_KEY>` e `{ token: <cookie ag_sso>, app: "finanza" }`.
+- Email (notifiche registrazioni a `NOTIFY_EMAIL`, recupero password) con Resend: `RESEND_API_KEY`. Senza chiave il pannello mostra i link da copiare.
+- Gestione finanziaria: i clienti esterni che pagano con Stripe continuano a registrarsi ed entrare direttamente su finanza.appgestione.it, senza passare dall'accesso unico.
 
 ## Protocolli + Calendario in un solo servizio
 `index.js` avvia le due app e smista ogni richiesta in base all'indirizzo: `calendario.appgestione.it` va al Calendario, tutto il resto ai Protocolli.

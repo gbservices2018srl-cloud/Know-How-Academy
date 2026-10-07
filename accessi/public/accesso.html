@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Accedi · To Smile</title>
+<meta name="description" content="Accesso unico alle app del gruppo To Smile.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@600;700;800&family=Figtree:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/static/accessi.css">
+<link rel="icon" href="/static/icon.svg">
+<meta name="theme-color" content="#4CAAAA">
+<style>
+/* Layout: logo e titolo, poi un riquadro con il modulo (accedi, registrati, password) */
+.wrap{max-width:460px;margin:0 auto;display:flex;flex-direction:column;gap:26px}
+.wrap.wide{max-width:560px}
+header{display:flex;flex-direction:column;gap:14px;padding-top:6px}
+header p{margin:0;color:var(--muted)}
+.card{padding:24px;display:flex;flex-direction:column;gap:16px}
+form{display:flex;flex-direction:column;gap:14px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:480px){.two{grid-template-columns:1fr}}
+.links{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;font-size:14.5px}
+.pw{position:relative}
+.pw input{padding-right:84px}
+.pw button{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:none;color:var(--teal-ink);font:600 13.5px var(--f-body);padding:8px;cursor:pointer;min-height:36px}
+.done{display:flex;flex-direction:column;gap:12px}
+.done h2{color:var(--teal-ink)}
+footer{color:var(--muted);font-size:13px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap" id="wrap">
+  <header>
+    <a class="logo" href="/" aria-label="To Smile"><img src="/static/logo-tosmile.png" alt="To Smile · Persone, salute, sorrisi" width="548" height="165"></a>
+    <h1 id="title">Le app del <span>gruppo</span></h1>
+    <div class="rule" aria-hidden="true"></div>
+    <p id="lead"></p>
+  </header>
+  <main class="card" id="card"></main>
+  <footer>Un solo accesso per tutte le app To Smile · <a href="/privacy">Privacy</a></footer>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const params = new URLSearchParams(location.search);
+const next = params.get('next') || '';
+const withNext = p => p + (next ? '?next=' + encodeURIComponent(next) : '');
+
+async function post(url, body) {
+  const r = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body), credentials: 'same-origin'});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || 'Qualcosa non ha funzionato. Riprova.');
+  return j;
+}
+function busy(form, on) { form.querySelectorAll('button,input').forEach(el => el.disabled = on); }
+function pwField(id, label, auto, hint) {
+  return `<label class="field" for="${id}">${label}<span class="pw"><input id="${id}" type="password" autocomplete="${auto}" ${auto === 'new-password' ? 'minlength="8"' : ''} required><button type="button" data-show="${id}">Mostra</button></span>${hint ? `<small class="muted" style="font-weight:500">${hint}</small>` : ''}</label>`;
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-show]'); if (!b) return;
+  const i = document.getElementById(b.dataset.show); const show = i.type === 'password';
+  i.type = show ? 'text' : 'password'; b.textContent = show ? 'Nascondi' : 'Mostra';
+});
+function setHead(title, lead) { $('#title').innerHTML = title; $('#lead').textContent = lead || ''; $('#lead').hidden = !lead; }
+
+const views = {
+  '/accedi'() {
+    document.title = 'Accedi · To Smile';
+    setHead('Le app del <span>gruppo</span>', 'Entra con la tua email e la tua password: valgono per tutte le app To Smile che ti sono state assegnate.');
+    $('#card').innerHTML = `<form id="f" novalidate>
+      <label class="field" for="email">Email<input id="email" type="email" autocomplete="username" inputmode="email" required></label>
+      ${pwField('password', 'Password', 'current-password')}
+      <div class="msg err" id="err" role="alert"></div>
+      <button class="btn primary" type="submit">Accedi</button>
+      <div class="links"><a href="${withNext('/password-dimenticata')}">Password dimenticata?</a><a href="${withNext('/registrati')}">Non hai un account? <b>Registrati</b></a></div>
+    </form>`;
+    $('#email').focus();
+    $('#f').addEventListener('submit', async e => {
+      e.preventDefault(); const f = e.target; $('#err').textContent = '';
+      busy(f, true);
+      try { const r = await post('/api/login', {email: $('#email').value, password: $('#password').value, next}); location.href = r.next || '/'; }
+      catch (err) { $('#err').textContent = err.message; busy(f, false); $('#password').focus(); }
+    });
+  },
+  '/registrati'() {
+    document.title = 'Registrati · To Smile';
+    $('#wrap').classList.add('wide');
+    setHead('Crea il tuo <span>accesso</span>', "Compila i dati: l'amministratore riceve la richiesta e ti abilita alle app di cui hai bisogno. Ti avvisiamo via email.");
+    $('#card').innerHTML = `<form id="f" novalidate>
+      <div class="two">
+        <label class="field" for="fn">Nome<input id="fn" autocomplete="given-name" required maxlength="80"></label>
+        <label class="field" for="ln">Cognome<input id="ln" autocomplete="family-name" required maxlength="80"></label>
+      </div>
+      <label class="field" for="bd">Data di nascita<input id="bd" type="date" autocomplete="bday" required max="${new Date().toISOString().slice(0, 10)}" min="1900-01-01"></label>
+      <label class="field" for="email">Email<input id="email" type="email" autocomplete="email" inputmode="email" required maxlength="160"></label>
+      ${pwField('password', 'Password', 'new-password', 'Almeno 8 caratteri. Sarà la stessa per tutte le app.')}
+      <label class="check"><input type="checkbox" id="privacy" required><span>Ho letto l'<a href="/privacy" target="_blank" rel="noopener">informativa privacy</a> e acconsento al trattamento dei miei dati per la gestione degli accessi.</span></label>
+      <div class="msg err" id="err" role="alert"></div>
+      <button class="btn primary" type="submit">Invia la richiesta</button>
+      <div class="links"><a href="${withNext('/accedi')}">Hai già un account? <b>Accedi</b></a></div>
+    </form>`;
+    $('#fn').focus();
+    $('#f').addEventListener('submit', async e => {
+      e.preventDefault(); const f = e.target; $('#err').textContent = '';
+      const body = {firstName: $('#fn').value, lastName: $('#ln').value, birthDate: $('#bd').value, email: $('#email').value, password: $('#password').value, privacy: $('#privacy').checked};
+      if (!body.firstName.trim() || !body.lastName.trim()) return $('#err').textContent = 'Inserisci nome e cognome.';
+      if (!body.birthDate) return $('#err').textContent = 'Inserisci la data di nascita.';
+      if (body.password.length < 8) return $('#err').textContent = 'La password deve avere almeno 8 caratteri.';
+      if (!body.privacy) return $('#err').textContent = "Per registrarti devi accettare l'informativa privacy.";
+      busy(f, true);
+      try {
+        await post('/api/register', body);
+        setHead('Richiesta <span>inviata</span>', '');
+        $('#card').innerHTML = `<div class="done"><h2>Grazie ${esc(body.firstName.trim())}!</h2>
+          <p style="margin:0">La tua richiesta è arrivata all'amministratore. Quando l'avrà approvata riceverai un'email a <b>${esc(body.email.trim())}</b> e potrai entrare con quella email e la password che hai scelto.</p>
+          <a class="btn" href="/accedi">Torna all'accesso</a></div>`;
+      } catch (err) { $('#err').textContent = err.message; busy(f, false); }
+    });
+  },
+  '/password-dimenticata'() {
+    document.title = 'Password dimenticata · To Smile';
+    setHead('Password <span>dimenticata</span>', "Scrivi la tua email: ti mandiamo un link per sceglierne una nuova.");
+    $('#card').innerHTML = `<form id="f" novalidate>
+      <label class="field" for="email">Email<input id="email" type="email" autocomplete="username" inputmode="email" required></label>
+      <div class="msg err" id="err" role="alert"></div>
+      <button class="btn primary" type="submit">Mandami il link</button>
+      <div class="links"><a href="${withNext('/accedi')}">← Torna all'accesso</a></div>
+    </form>`;
+    $('#email').focus();
+    $('#f').addEventListener('submit', async e => {
+      e.preventDefault(); const f = e.target; $('#err').textContent = '';
+      busy(f, true);
+      try {
+        const r = await post('/api/password/forgot', {email: $('#email').value});
+        $('#card').innerHTML = `<div class="done"><h2>Controlla la posta</h2>
+          <p style="margin:0">${r.mail ? "Se l'email è registrata, tra poco ricevi un link valido 2 ore. Guarda anche nella posta indesiderata." : "L'invio delle email non è ancora attivo: chiedi all'amministratore di mandarti il link per la nuova password."}</p>
+          <a class="btn" href="/accedi">Torna all'accesso</a></div>`;
+      } catch (err) { $('#err').textContent = err.message; busy(f, false); }
+    });
+  },
+  async '/reimposta'() {
+    document.title = 'Scegli la password · To Smile';
+    const t = params.get('t') || '';
+    setHead('Scegli la <span>password</span>', '');
+    $('#card').innerHTML = '<p class="muted" style="margin:0">Un attimo…</p>';
+    let info;
+    try { const r = await fetch('/api/password/link?t=' + encodeURIComponent(t)); info = await r.json(); if (!r.ok) throw new Error(info.error); }
+    catch (err) {
+      $('#card').innerHTML = `<div class="done"><p class="msg err" style="margin:0">${esc(err.message || 'Il link non è più valido.')}</p><a class="btn" href="/password-dimenticata">Chiedi un nuovo link</a></div>`;
+      return;
+    }
+    $('#lead').hidden = false;
+    $('#lead').textContent = `Ciao ${info.firstName}, scegli la password per ${info.email}. Varrà per tutte le app To Smile.`;
+    $('#card').innerHTML = `<form id="f" novalidate>
+      <input type="email" autocomplete="username" value="${esc(info.email)}" hidden>
+      ${pwField('p1', 'Nuova password', 'new-password', 'Almeno 8 caratteri.')}
+      ${pwField('p2', 'Ripeti la password', 'new-password')}
+      <div class="msg err" id="err" role="alert"></div>
+      <button class="btn primary" type="submit">Salva la password</button>
+    </form>`;
+    $('#p1').focus();
+    $('#f').addEventListener('submit', async e => {
+      e.preventDefault(); const f = e.target; $('#err').textContent = '';
+      if ($('#p1').value.length < 8) return $('#err').textContent = 'La password deve avere almeno 8 caratteri.';
+      if ($('#p1').value !== $('#p2').value) return $('#err').textContent = 'Le due password non coincidono.';
+      busy(f, true);
+      try {
+        await post('/api/password/reset', {token: t, password: $('#p1').value});
+        $('#card').innerHTML = `<div class="done"><h2>Password salvata</h2><p style="margin:0">Ora entra con ${esc(info.email)} e la nuova password.</p><a class="btn primary" href="/accedi">Accedi</a></div>`;
+      } catch (err) { $('#err').textContent = err.message; busy(f, false); }
+    });
+  },
+};
+(views[location.pathname] || views['/accedi'])();
+</script>
+</body>
+</html>

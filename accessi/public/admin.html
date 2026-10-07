@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Gestione accessi · To Smile</title>
+<meta name="description" content="Approva le registrazioni e decidi chi accede a quali app del gruppo To Smile.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@600;700;800&family=Figtree:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/static/accessi.css">
+<link rel="icon" href="/static/icon.svg">
+<meta name="theme-color" content="#4CAAAA">
+<style>
+/* Layout: barra in alto, filtri e ricerca, poi una scheda per utente con i permessi per ogni app */
+.wrap{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.top .logo img{width:min(170px,44vw)}
+.top nav{display:flex;gap:8px;flex-wrap:wrap}
+header{display:flex;flex-direction:column;gap:12px}
+header p{margin:0;color:var(--muted);max-width:70ch}
+.tools{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--fg);font:600 14px var(--f-body);padding:9px 13px;border-radius:999px;cursor:pointer;display:inline-flex;gap:7px;align-items:center;min-height:40px}
+.chip[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.chip .n{font-size:12px;opacity:.75}
+.chip.attn .n{opacity:1;background:var(--yellow);color:#3A3816;border-radius:9px;padding:1px 7px}
+.tools .search{flex:1 1 220px;max-width:340px}
+.tools .grow{flex:1}
+.list{display:flex;flex-direction:column;gap:12px}
+.user{padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+.user.pending{border-color:color-mix(in srgb,var(--yellow) 70%,var(--line));box-shadow:inset 4px 0 0 var(--yellow)}
+.user.disabled{opacity:.72}
+.uh{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start}
+.uh h2{font-size:18px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.meta{color:var(--muted);font-size:14px;display:flex;gap:4px 14px;flex-wrap:wrap;margin-top:3px}
+.pill{font:700 12px var(--f-body);padding:3px 8px;border-radius:7px;background:var(--surface-2);color:var(--muted)}
+.pill.pending{background:var(--warn-bg);color:var(--olive-ink)}
+.pill.active{background:var(--ok-bg);color:var(--ok)}
+.pill.disabled{background:var(--danger-bg);color:var(--danger)}
+.pill.owner{background:color-mix(in srgb,var(--purple) 18%,transparent);color:var(--purple-ink)}
+.actions{display:flex;gap:6px;flex-wrap:wrap}
+.apps{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
+.ap{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;color:var(--muted)}
+.ap select{min-height:40px;padding:8px 10px;font-size:14.5px;border-radius:10px}
+.ap select.user{border-color:var(--teal);color:var(--teal-ink)}
+.ap select.admin{border-color:var(--purple);color:var(--purple-ink);font-weight:700}
+.hint{font-size:13.5px;color:var(--muted);margin:0}
+.empty{padding:26px;color:var(--muted)}
+dialog{border:1px solid var(--line);border-radius:20px;background:var(--surface);color:var(--fg);padding:0;width:min(560px,calc(100vw - 32px))}
+dialog::backdrop{background:rgba(20,24,26,.45)}
+dialog form{padding:22px;display:flex;flex-direction:column;gap:14px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:520px){.two{grid-template-columns:1fr}}
+.row{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.linkbox{display:flex;gap:8px}
+.linkbox input{font-size:13.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <a class="logo" href="/" aria-label="To Smile"><img src="/static/logo-tosmile.png" alt="To Smile" width="548" height="165"></a>
+    <nav><a class="btn small" href="/">← Le mie app</a><a class="btn small" href="/esci">Esci</a></nav>
+  </div>
+  <header>
+    <h1>Gestione <span>accessi</span></h1>
+    <div class="rule" aria-hidden="true"></div>
+    <p>Approva le registrazioni e scegli per ogni persona a quali app può entrare e con quale ruolo. Le modifiche valgono subito e si salvano da sole.</p>
+  </header>
+  <div class="msg warn" id="mailwarn" hidden>L'invio delle email non è ancora attivo (manca <b>RESEND_API_KEY</b> su Render): le notifiche non partono e i link per la password te li mostro qui da copiare.</div>
+  <div class="tools">
+    <div class="chips" role="group" aria-label="Filtro">
+      <button class="chip" data-f="pending">In attesa <span class="n" id="n-pending"></span></button>
+      <button class="chip" data-f="active">Attivi <span class="n" id="n-active"></span></button>
+      <button class="chip" data-f="disabled">Disattivati <span class="n" id="n-disabled"></span></button>
+      <button class="chip" data-f="all">Tutti <span class="n" id="n-all"></span></button>
+    </div>
+    <input class="search" id="q" type="search" placeholder="Cerca nome o email" aria-label="Cerca">
+    <span class="grow"></span>
+    <button class="btn primary" id="add">+ Nuovo utente</button>
+  </div>
+  <main class="list" id="list" aria-live="polite"></main>
+</div>
+
+<dialog id="dlg"><form id="dlgf" novalidate></form></dialog>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtDate = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—';
+const fmtTime = d => d ? new Date(d).toLocaleString('it-IT', {day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'}) : 'mai';
+let S = {users: [], apps: [], me: null, mail: false};
+let filter = 'pending';
+
+function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.append(d); setTimeout(() => d.remove(), 3200); }
+async function api(method, url, body) {
+  const r = await fetch(url, {method, headers: body ? {'Content-Type': 'application/json'} : {}, body: body ? JSON.stringify(body) : undefined});
+  if (r.status === 401) { location.href = '/accedi?next=/admin'; throw new Error('Accesso richiesto'); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || 'Operazione non riuscita');
+  return j;
+}
+async function load() {
+  S = await api('GET', '/api/admin/users');
+  $('#mailwarn').hidden = S.mail;
+  if (filter === 'pending' && !S.users.some(u => u.status === 'pending') && !load.done) filter = 'active';
+  load.done = true;
+  render();
+}
+const fullName = u => `${u.firstName} ${u.lastName}`.trim() || u.email;
+function counts() {
+  const c = {pending: 0, active: 0, disabled: 0, all: S.users.length};
+  S.users.forEach(u => c[u.status]++);
+  for (const k in c) $('#n-' + k).textContent = c[k];
+  document.querySelector('[data-f="pending"]').classList.toggle('attn', c.pending > 0);
+}
+function render() {
+  counts();
+  document.querySelectorAll('.chip').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === filter));
+  const q = $('#q').value.trim().toLowerCase();
+  const rows = S.users.filter(u => (filter === 'all' || u.status === filter) &&
+    (!q || `${u.firstName} ${u.lastName} ${u.email}`.toLowerCase().includes(q)));
+  if (!rows.length) {
+    $('#list').innerHTML = `<div class="card empty">${filter === 'pending' && !q ? 'Nessuna richiesta in attesa.' : 'Nessun utente trovato.'}</div>`;
+    return;
+  }
+  // omonimi: stesso nome e cognome → la data di nascita aiuta a distinguerli
+  const names = {}; S.users.forEach(u => { const k = fullName(u).toLowerCase(); names[k] = (names[k] || 0) + 1; });
+  $('#list').innerHTML = rows.map(u => card(u, names[fullName(u).toLowerCase()] > 1)).join('');
+}
+function card(u, homonym) {
+  const st = {pending: 'In attesa', active: 'Attivo', disabled: 'Disattivato'}[u.status];
+  const selfOrOwner = u.owner || u.id === S.me;
+  const apps = S.apps.map(a => {
+    const role = u.apps[a.key] || '';
+    const dis = u.owner || (u.id === S.me && a.key === 'accessi');
+    const opts = a.adminOnly
+      ? `<option value="">Nessun accesso</option><option value="admin" ${role ? 'selected' : ''}>Amministratore</option>`
+      : `<option value="">Nessun accesso</option><option value="user" ${role === 'user' ? 'selected' : ''}>Utente</option><option value="admin" ${role === 'admin' ? 'selected' : ''}>Amministratore</option>`;
+    return `<label class="ap">${esc(a.name)}<select data-app="${a.key}" data-u="${u.id}" class="${role}" ${dis ? 'disabled' : ''}>${opts}</select></label>`;
+  }).join('');
+  let actions = '';
+  if (u.status === 'pending') actions = `<button class="btn small primary" data-act="approve" data-u="${u.id}">Approva</button><button class="btn small danger" data-act="reject" data-u="${u.id}">Rifiuta</button>`;
+  else if (!selfOrOwner) actions = (u.status === 'active'
+      ? `<button class="btn small" data-act="disable" data-u="${u.id}">Disattiva</button>`
+      : `<button class="btn small" data-act="enable" data-u="${u.id}">Riattiva</button>`) +
+    `<button class="btn small" data-act="pw" data-u="${u.id}">Password</button><button class="btn small danger" data-act="delete" data-u="${u.id}">Elimina</button>`;
+  actions = `<button class="btn small" data-act="edit" data-u="${u.id}">Modifica</button>` + actions;
+  return `<article class="card user ${u.status}">
+    <div class="uh">
+      <div><h2>${esc(fullName(u))} <span class="pill ${u.status}">${st}</span>${u.owner ? '<span class="pill owner">Proprietario</span>' : ''}</h2>
+        <div class="meta"><span>${esc(u.email)}</span><span ${homonym ? 'style="color:var(--fg);font-weight:600"' : ''}>Nato/a il ${fmtDate(u.birthDate)}</span>
+        <span>${u.status === 'pending' ? 'Richiesta del ' + fmtTime(u.createdAt) : 'Ultimo accesso: ' + fmtTime(u.lastLogin)}</span>
+        ${!u.hasPassword ? '<span style="color:var(--olive-ink)">Password non ancora scelta</span>' : ''}</div></div>
+      <div class="actions">${actions}</div>
+    </div>
+    ${u.status === 'pending' ? '<p class="hint">Scegli le app qui sotto, poi premi «Approva»: la persona riceve un\'email e può entrare.</p>' : ''}
+    ${u.owner ? '<p class="hint">Il proprietario (impostato su Render) è amministratore di tutte le app.</p>' : ''}
+    <div class="apps">${apps}</div>
+  </article>`;
+}
+
+/* ---------- permessi per app ---------- */
+document.addEventListener('change', async e => {
+  const s = e.target.closest('select[data-app]'); if (!s) return;
+  const u = S.users.find(x => x.id === s.dataset.u);
+  const prev = u.apps[s.dataset.app] || '';
+  s.className = s.value;
+  try {
+    const r = await api('PUT', `/api/admin/users/${u.id}/apps/${s.dataset.app}`, {role: s.value || 'none'});
+    u.apps = r.apps; toast('Salvato');
+  } catch (err) { s.value = prev; s.className = prev; toast(err.message); }
+});
+
+/* ---------- azioni ---------- */
+document.addEventListener('click', async e => {
+  const chip = e.target.closest('.chip'); if (chip) { filter = chip.dataset.f; render(); return; }
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const u = S.users.find(x => x.id === b.dataset.u);
+  const act = b.dataset.act;
+  try {
+    if (act === 'approve') {
+      if (!Object.keys(u.apps).length && !confirm(`${fullName(u)} non ha ancora nessuna app. Vuoi approvare lo stesso?`)) return;
+      b.disabled = true;
+      const r = await api('PATCH', '/api/admin/users/' + u.id, {status: 'active'});
+      Object.assign(u, r.user); render();
+      toast(r.sent ? `Approvato: ${u.firstName} riceve un'email` : `Approvato. Avvisa tu ${u.firstName}: le email non sono attive.`);
+    } else if (act === 'reject') {
+      if (!confirm(`Rifiutare ed eliminare la richiesta di ${fullName(u)}?`)) return;
+      await api('DELETE', '/api/admin/users/' + u.id);
+      S.users = S.users.filter(x => x.id !== u.id); render(); toast('Richiesta eliminata');
+    } else if (act === 'disable') {
+      if (!confirm(`Disattivare ${fullName(u)}? Verrà disconnesso da tutte le app. I suoi dati restano e potrai riattivarlo.`)) return;
+      const r = await api('PATCH', '/api/admin/users/' + u.id, {status: 'disabled'}); Object.assign(u, r.user); render(); toast('Utente disattivato');
+    } else if (act === 'enable') {
+      const r = await api('PATCH', '/api/admin/users/' + u.id, {status: 'active'}); Object.assign(u, r.user); render(); toast('Utente riattivato');
+    } else if (act === 'delete') {
+      if (!confirm(`Eliminare definitivamente ${fullName(u)}? Non potrà più entrare in nessuna app. L'operazione non si può annullare.`)) return;
+      await api('DELETE', '/api/admin/users/' + u.id);
+      S.users = S.users.filter(x => x.id !== u.id); render(); toast('Utente eliminato');
+    } else if (act === 'edit') openEdit(u);
+    else if (act === 'pw') openPassword(u);
+  } catch (err) { b.disabled = false; toast(err.message); }
+});
+$('#q').addEventListener('input', render);
+
+/* ---------- finestre ---------- */
+const dlg = $('#dlg'), dlgf = $('#dlgf');
+let onSave = null;
+function open(html, save) { dlgf.innerHTML = html; onSave = save; dlg.showModal(); dlgf.querySelector('input:not([type=hidden]):not([disabled])')?.focus(); }
+dlgf.addEventListener('submit', async e => {
+  e.preventDefault();
+  if (e.submitter?.value === 'cancel') return dlg.close();
+  const err = dlgf.querySelector('.msg.err'); if (err) err.textContent = '';
+  const btns = dlgf.querySelectorAll('button'); btns.forEach(x => x.disabled = true);
+  try { await onSave(e.submitter?.value); } catch (x) { if (err) err.textContent = x.message; else toast(x.message); }
+  btns.forEach(x => x.disabled = false);
+});
+const val = id => dlgf.querySelector('#' + id).value;
+const footer = (label = 'Salva') => `<div class="msg err" role="alert"></div><div class="row"><button class="btn" value="cancel" formnovalidate>Annulla</button><button class="btn primary" value="save">${label}</button></div>`;
+function personFields(u = {}) {
+  return `<div class="two"><label class="field">Nome<input id="d-fn" value="${esc(u.firstName)}" maxlength="80" required></label>
+    <label class="field">Cognome<input id="d-ln" value="${esc(u.lastName)}" maxlength="80" required></label></div>
+    <div class="two"><label class="field">Data di nascita<input id="d-bd" type="date" value="${esc(u.birthDate || '')}" min="1900-01-01" max="${new Date().toISOString().slice(0, 10)}"></label>
+    <label class="field">Email<input id="d-em" type="email" value="${esc(u.email)}" maxlength="160" ${u.owner ? 'disabled' : ''} required></label></div>`;
+}
+function linkResult(link, who) {
+  open(`<h2>Link per la password</h2><p class="muted" style="margin:0">Le email non sono attive: copia questo link e mandalo tu a ${esc(who)} (WhatsApp, email…). Serve per scegliere la password.</p>
+    <div class="linkbox"><input id="d-link" readonly value="${esc(link)}"><button class="btn" type="button" id="d-copy">Copia</button></div>
+    <div class="row"><button class="btn primary" value="cancel">Fatto</button></div>`, null);
+  $('#d-copy').onclick = () => { navigator.clipboard.writeText(link).then(() => toast('Link copiato'), () => { $('#d-link').select(); }); };
+}
+$('#add').addEventListener('click', () => {
+  const appSel = S.apps.map(a => `<label class="ap">${esc(a.name)}<select data-new="${a.key}"><option value="">Nessun accesso</option>${a.adminOnly ? '' : '<option value="user">Utente</option>'}<option value="admin">Amministratore</option></select></label>`).join('');
+  open(`<h2>Nuovo utente</h2>${personFields()}
+    <label class="field">Password <small class="muted" style="font-weight:500">Facoltativa: se la lasci vuota la persona riceve un link per sceglierla da sola.</small><input id="d-pw" type="text" autocomplete="off" minlength="8" placeholder="Almeno 8 caratteri"></label>
+    <div class="field" style="gap:8px">App a cui può accedere<div class="apps">${appSel}</div></div>${footer('Crea utente')}`, async () => {
+    const apps = {}; dlgf.querySelectorAll('select[data-new]').forEach(s => { if (s.value) apps[s.dataset.new] = s.value; });
+    const r = await api('POST', '/api/admin/users', {firstName: val('d-fn'), lastName: val('d-ln'), birthDate: val('d-bd'), email: val('d-em'), password: val('d-pw'), apps});
+    S.users.push(r.user); filter = 'active'; render(); dlg.close();
+    if (r.link) linkResult(r.link, r.user.firstName);
+    else toast(r.sent ? `Utente creato: ${r.user.firstName} riceve un'email` : 'Utente creato');
+  });
+});
+function openEdit(u) {
+  open(`<h2>Modifica dati</h2>${personFields(u)}${footer()}`, async () => {
+    const body = {firstName: val('d-fn'), lastName: val('d-ln'), birthDate: val('d-bd')};
+    if (!u.owner) body.email = val('d-em');
+    const r = await api('PATCH', '/api/admin/users/' + u.id, body);
+    Object.assign(u, r.user); render(); dlg.close(); toast('Dati salvati');
+  });
+}
+function openPassword(u) {
+  open(`<h2>Password di ${esc(fullName(u))}</h2>
+    <p class="muted" style="margin:0">Il modo più sicuro è mandare un link: la persona sceglie da sola la nuova password.</p>
+    <div class="row" style="justify-content:flex-start"><button class="btn primary" value="link">Manda il link</button></div>
+    <label class="field">Oppure imposta tu una password<input id="d-pw" type="text" autocomplete="off" placeholder="Almeno 8 caratteri"></label>
+    <div class="msg err" role="alert"></div><div class="row"><button class="btn" value="cancel" formnovalidate>Annulla</button><button class="btn" value="set">Imposta questa password</button></div>`, async v => {
+    if (v === 'link') {
+      const r = await api('POST', `/api/admin/users/${u.id}/password-link`, {});
+      dlg.close();
+      if (r.link) linkResult(r.link, u.firstName); else toast(`Link inviato a ${u.email}`);
+    } else if (v === 'set') {
+      await api('POST', `/api/admin/users/${u.id}/password`, {password: val('d-pw')});
+      u.hasPassword = true; render(); dlg.close(); toast(`Password impostata. Comunicala a ${u.firstName}.`);
+    }
+  });
+}
+load().catch(err => { $('#list').innerHTML = `<div class="card empty">${esc(err.message)}</div>`; });
+</script>
+</body>
+</html>

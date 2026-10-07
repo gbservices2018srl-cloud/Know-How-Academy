@@ -112,6 +112,7 @@ async function migrate() {
       category_id text not null references categories(id) on delete cascade,
       primary key (event_id, category_id)
     );
+    alter table users add column if not exists sso_id text unique;
   `);
 }
 

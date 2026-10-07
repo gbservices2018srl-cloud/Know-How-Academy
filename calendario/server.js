@@ -35,7 +35,30 @@ const str = (v, max = 200) => String(v ?? '').trim().slice(0, max);
 const ids = v => (Array.isArray(v) ? v : []).map(x => String(x).slice(0, 64));
 
 /* ---------- autenticazione ---------- */
+// Accesso unico (appgestione.it): attivo con SSO_ATTIVO=true. Il ruolo arriva dal pannello accessi.
+const sso = require('../accessi/collega')({ app: 'calendario', toLocal: localProfile });
+async function localProfile(c, role, touch = true) {
+  const r = role === 'admin' ? 'admin' : 'staff';
+  const name = `${c.firstName} ${c.lastName}`.trim() || c.email;
+  const cols = 'id, username, name, role, from_env, last_login';
+  let { rows } = await db.q(`select ${cols} from users where sso_id = $1`, [c.id]);
+  if (!rows[0]) ({ rows } = await db.q(`update users set sso_id = $1 where username = $2 and sso_id is null returning ${cols}`, [c.id, c.email]));
+  if (!rows[0]) ({ rows } = await db.q(`insert into users (id, username, name, role, password_hash, sso_id) values ($1,$2,$3,$4,'!sso',$5)
+    on conflict (username) do update set sso_id = excluded.sso_id returning ${cols}`, [db.newId(), c.email, name, r, c.id]));
+  const u = rows[0];
+  if (u.name !== name || u.role !== r) await db.q('update users set name = $2, role = $3, active = true where id = $1', [u.id, name, r]);
+  if (u.username !== c.email) await db.q('update users set username = $2 where id = $1', [u.id, c.email]).catch(() => {});
+  if (touch && (!u.last_login || Date.now() - new Date(u.last_login) > 3600e3)) await db.q('update users set last_login = now() where id = $1', [u.id]);
+  return { id: u.id, username: c.email, name, role: r, from_env: u.from_env };
+}
+sso.onDeleted(id => db.q('delete from users where sso_id = $1 and not from_env', [id]));
+
 async function loadUser(req, res, next) {
+  if (sso.enabled()) {
+    const r = await sso.identify(req);
+    if (r?.user) req.user = r.user; else if (r?.denied) req.ssoDenied = true;
+    return next();
+  }
   if (!req.session.uid) return next();
   const { rows } = await db.q('select id, username, name, role, from_env from users where id = $1 and active', [req.session.uid]);
   if (rows[0]) req.user = rows[0]; else req.session.destroy(() => {});
@@ -53,6 +76,7 @@ function tooMany(key) {
 }
 
 app.post('/api/login', wrap(async (req, res) => {
+  if (sso.enabled()) return bad(res, 400, 'Entra da appgestione.it con la tua email e password.');
   const username = str(req.body.username, 80).toLowerCase(), password = String(req.body.password || '');
   const key = req.ip + '|' + username;
   if (tooMany(key)) return bad(res, 429, 'Troppi tentativi. Riprova tra 15 minuti.');
@@ -71,8 +95,12 @@ app.post('/api/login', wrap(async (req, res) => {
     res.json({ ok: true, role: u.role });
   });
 }));
-app.post('/api/logout', (req, res) => req.session.destroy(() => { res.clearCookie('cal.sid'); res.json({ ok: true }); }));
+app.post('/api/logout', wrap(async (req, res) => {
+  if (sso.enabled()) await sso.logout(req, res);
+  req.session.destroy(() => { res.clearCookie('cal.sid'); res.json({ ok: true }); });
+}));
 app.post('/api/me/password', needUser, wrap(async (req, res) => {
+  if (sso.enabled()) return bad(res, 400, 'La password si cambia da appgestione.it.');
   const { current, next: nw } = req.body;
   if (!nw || String(nw).length < 8) return bad(res, 400, 'La nuova password deve avere almeno 8 caratteri.');
   if (req.user.from_env) return bad(res, 400, 'La password dell\'amministratore principale si cambia dalle impostazioni di Render (ADMIN_PASSWORD).');
@@ -98,13 +126,19 @@ async function myCategories(userId) {
 
 app.get('/api/state', needUser, wrap(async (req, res) => {
   const out = { me: { id: req.user.id, username: req.user.username, name: req.user.name, role: req.user.role, fromEnv: req.user.from_env },
-    ...(await lists()) };
+    ...(await lists()), sso: sso.enabled() ? sso.links() : null };
   out.me.categories = await myCategories(req.user.id);
   if (req.user.role === 'admin') {
-    const { rows: users } = await db.q(`select u.id, u.username, u.name, u.role, u.active, u.from_env,
+    let only = null;
+    if (sso.enabled()) { // prepara i profili di chi è abilitato al Calendario nel pannello accessi
+      only = new Set();
+      for (const c of await sso.usersWithApp()) only.add((await localProfile(c, c.role, false)).id);
+    }
+    let { rows: users } = await db.q(`select u.id, u.username, u.name, u.role, u.active, u.from_env,
       to_char(u.last_login at time zone 'Europe/Rome', 'YYYY-MM-DD HH24:MI') as last_login,
       coalesce(array_agg(uc.category_id) filter (where uc.category_id is not null), '{}') as categories
       from users u left join user_categories uc on uc.user_id = u.id group by u.id order by u.role, u.name`);
+    if (only) users = users.filter(u => only.has(u.id));
     out.users = users.map(u => ({ id: u.id, username: u.username, name: u.name, role: u.role, active: u.active,
       fromEnv: u.from_env, lastLogin: u.last_login, categories: u.categories }));
   }
@@ -334,6 +368,7 @@ async function setUserCategories(userId, cats) {
     select $1, id from categories where id = any($2) on conflict do nothing`, [userId, cats]);
 }
 app.post('/api/users', needAdmin, wrap(async (req, res) => {
+  if (sso.enabled()) return bad(res, 400, 'Gli accessi si creano da appgestione.it/admin.');
   const username = str(req.body.username, 60).toLowerCase(), name = str(req.body.name, 120), password = String(req.body.password || '');
   const role = req.body.role === 'admin' ? 'admin' : 'staff';
   if (!/^[a-z0-9._-]{3,}$/.test(username)) return bad(res, 400, 'Nome utente: almeno 3 caratteri tra lettere minuscole, numeri, punto, trattino.');
@@ -351,6 +386,10 @@ app.put('/api/users/:id', needAdmin, wrap(async (req, res) => {
   const { rows } = await db.q('select * from users where id = $1', [req.params.id]);
   const u = rows[0];
   if (!u) return bad(res, 404, 'Persona non trovata.');
+  if (sso.enabled()) { // con l'accesso unico qui si scelgono solo le categorie
+    if (req.body.categories !== undefined) await setUserCategories(u.id, ids(req.body.categories));
+    return res.json({ ok: true });
+  }
   const name = str(req.body.name, 120) || u.name;
   let username = u.username, role = u.role, active = u.active;
   if (!u.from_env) {
@@ -376,6 +415,7 @@ app.put('/api/users/:id', needAdmin, wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 app.delete('/api/users/:id', needAdmin, wrap(async (req, res) => {
+  if (sso.enabled()) return bad(res, 400, 'Gli accessi si eliminano da appgestione.it/admin.');
   const { rows } = await db.q('select from_env from users where id = $1', [req.params.id]);
   if (!rows[0]) return res.json({ ok: true });
   if (rows[0].from_env) return bad(res, 400, 'L\'amministratore principale non si può eliminare.');
@@ -438,11 +478,14 @@ app.get('/api/usage', needAdmin, wrap(async (req, res) => {
 /* ---------- pagine ---------- */
 const page = file => (req, res) => {
   res.set('Cache-Control', 'no-store');
-  if (file !== 'login.html' && !req.user) return res.redirect('/login');
+  if (file !== 'login.html' && !req.user) {
+    if (sso.enabled()) return req.ssoDenied ? sso.toDenied(res) : sso.toLogin(req, res);
+    return res.redirect('/login');
+  }
   if (file === 'login.html' && req.user) return res.redirect('/');
   res.sendFile(path.join(__dirname, 'public', file));
 };
-app.get('/login', page('login.html'));
+app.get('/login', (req, res, next) => sso.enabled() ? sso.toLogin(req, res, '/') : next(), page('login.html'));
 app.get('/admin', (req, res) => res.redirect('/'));
 app.get('/', page('app.html'));
 app.get('/healthz', (req, res) => res.send('ok'));

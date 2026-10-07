@@ -424,7 +424,7 @@ async function api(method, url, body){
 }
 async function loadState(){
   const j = await api('GET', '/api/state');
-  me = j.me; aiReady = j.ai; S.flows = j.flows; S.docs = j.docs; S.users = j.users || [];
+  me = j.me; aiReady = j.ai; S.sso = j.sso || null; S.flows = j.flows; S.docs = j.docs; S.users = j.users || [];
   markSynced();
 }
 // salvataggio dei flussi sul server (solo area admin)
@@ -1076,18 +1076,18 @@ function openAccount(){
   const l = layer(`<div class="modal-h"><h2>${esc(me.name || me.username)}</h2><p>Nome utente: <b>${esc(me.username)}</b> · ${me.role === 'admin' ? 'Amministratore' : esc(me.title || 'Collaboratore')}</p><button class="x" data-x aria-label="Chiudi">${I.x}</button></div>
     <div class="modal-b">
       ${me.role === 'admin' ? `<div class="row">${MODE === 'admin' ? `<a class="btn" href="/">Apri la vista di lettura</a>` : `<a class="btn primary" href="/admin">Apri l'area admin</a>`}</div>` : ''}
-      <form id="pw-form" class="u-edit"><div class="sec-t">Cambia password</div>
+      ${S.sso ? `<p class="note">Entri con l'accesso unico To Smile: password e app si gestiscono da <a href="${esc(S.sso.home)}">appgestione.it</a>.</p>` : `<form id="pw-form" class="u-edit"><div class="sec-t">Cambia password</div>
         <label class="field">Password attuale<input id="pw-cur" type="password" autocomplete="current-password" required></label>
         <label class="field">Nuova password (almeno 8 caratteri)<input id="pw-new" type="password" autocomplete="new-password" minlength="8" required></label>
-        <button class="btn" type="submit" style="align-self:flex-start">Aggiorna password</button></form>
+        <button class="btn" type="submit" style="align-self:flex-start">Aggiorna password</button></form>`}
     </div>
     <div class="modal-f"><button class="btn danger" id="logout">Esci</button></div>`);
-  l.querySelector('#pw-form').addEventListener('submit', async e => {
+  l.querySelector('#pw-form')?.addEventListener('submit', async e => {
     e.preventDefault();
     try { await api('POST', '/api/me/password', {current: $('#pw-cur').value, next: $('#pw-new').value}); toast('Password aggiornata'); closeLayer(l); }
     catch (err) { toast(err.message); }
   });
-  l.querySelector('#logout').addEventListener('click', async () => { await syncFlows(); await api('POST', '/api/logout').catch(() => {}); location.href = '/login'; });
+  l.querySelector('#logout').addEventListener('click', async () => { await syncFlows(); await api('POST', '/api/logout').catch(() => {}); location.href = S.sso ? S.sso.home : '/login'; });
 }
 async function boot(){
   try { await loadState(); }
@@ -1126,8 +1126,8 @@ let selUser = null;
 const genPassword = () => { const c = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'; const a = new Uint32Array(12); crypto.getRandomValues(a); return [...a].map(x => c[x % c.length]).join(''); };
 function openUsers(){
   selUser = selUser && S.users.some(u => u.id === selUser) ? selUser : S.users.find(u => u.role !== 'admin')?.id || S.users[0]?.id;
-  const l = layer(`<div class="modal-h"><h2>Collaboratori e permessi</h2><p>Crea gli accessi con nome utente e password e decidi chi vede quali flussi. Le modifiche si salvano da sole.</p><button class="x" data-x aria-label="Chiudi">${I.x}</button></div>
-    <div class="modal-b"><div class="users"><div><div class="u-list" id="u-list"></div><button class="btn" id="u-add" style="margin-top:8px">${I.plus}Nuovo collaboratore</button></div><div class="u-edit" id="u-edit"></div></div></div>`, 'wide');
+  const l = layer(`<div class="modal-h"><h2>Collaboratori e permessi</h2><p>${S.sso ? 'Le persone si abilitano ai Protocolli da Gestione accessi; qui decidi quali flussi vede ciascuno.' : 'Crea gli accessi con nome utente e password e decidi chi vede quali flussi.'} Le modifiche si salvano da sole.</p><button class="x" data-x aria-label="Chiudi">${I.x}</button></div>
+    <div class="modal-b"><div class="users"><div><div class="u-list" id="u-list"></div>${S.sso ? `<a class="btn" href="${esc(S.sso.admin)}" style="margin-top:8px">${I.plus}Aggiungi da Gestione accessi</a>` : `<button class="btn" id="u-add" style="margin-top:8px">${I.plus}Nuovo collaboratore</button>`}</div><div class="u-edit" id="u-edit"></div></div></div>`, 'wide');
   renderUserList(); renderUserEdit();
   l.addEventListener('click', usersClick); l.addEventListener('change', usersChange);
 }
@@ -1158,13 +1158,13 @@ function renderNewUser(){
 }
 function renderUserEdit(){
   const u = S.users.find(x => x.id === selUser); if (!u) { $('#u-edit').innerHTML = '<p class="note">Nessun collaboratore. Premi “Nuovo collaboratore”.</p>'; return; }
-  const self = u.id === me.id, locked = self || u.fromEnv;
+  const self = u.id === me.id, sso = !!S.sso, locked = self || u.fromEnv || sso;
   $('#u-edit').innerHTML = `
-    <div class="row"><label class="field" style="flex:1 1 180px">Nome<input id="uf-name" value="${esc(u.name)}"></label><label class="field" style="flex:1 1 180px">Mansione<input id="uf-title" value="${esc(u.title)}" placeholder="Es. Assistente alla poltrona"></label></div>
-    <div class="row"><label class="field" style="flex:1 1 180px">Nome utente<input id="uf-user" value="${esc(u.username)}" ${u.fromEnv ? 'disabled' : ''}></label>
-      <div class="field" style="flex:1 1 180px">Nuova password${u.fromEnv ? '<small class="muted" style="font-weight:500">Si cambia da Render (ADMIN_PASSWORD).</small>' : `<div class="row" style="flex-wrap:nowrap"><input id="uf-pass" autocomplete="off" placeholder="Almeno 8 caratteri" style="flex:1;min-width:0;border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:9px 11px"><button class="btn" id="uf-gen" title="Genera">${I.wand}</button><button class="btn" id="uf-setpass">Imposta</button></div>`}</div></div>
+    <div class="row"><label class="field" style="flex:1 1 180px">Nome<input id="uf-name" value="${esc(u.name)}" ${sso ? 'disabled' : ''}></label><label class="field" style="flex:1 1 180px">Mansione<input id="uf-title" value="${esc(u.title)}" placeholder="Es. Assistente alla poltrona"></label></div>
+    ${sso ? `<p class="note">Email: <b>${esc(u.username)}</b>. Nome, password e ruolo si cambiano da <a href="${esc(S.sso.admin)}">Gestione accessi</a>.</p>` : `<div class="row"><label class="field" style="flex:1 1 180px">Nome utente<input id="uf-user" value="${esc(u.username)}" ${u.fromEnv ? 'disabled' : ''}></label>
+      <div class="field" style="flex:1 1 180px">Nuova password${u.fromEnv ? '<small class="muted" style="font-weight:500">Si cambia da Render (ADMIN_PASSWORD).</small>' : `<div class="row" style="flex-wrap:nowrap"><input id="uf-pass" autocomplete="off" placeholder="Almeno 8 caratteri" style="flex:1;min-width:0;border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:9px 11px"><button class="btn" id="uf-gen" title="Genera">${I.wand}</button><button class="btn" id="uf-setpass">Imposta</button></div>`}</div></div>`}
     <div class="field">Tipo di account<div class="seg"><button data-role="collab" class="${u.role !== 'admin' ? 'on' : ''}" ${locked ? 'disabled' : ''}>Collaboratore · sola lettura</button><button data-role="admin" class="${u.role === 'admin' ? 'on' : ''}" ${locked ? 'disabled' : ''}>Amministratore</button></div>
-      ${u.fromEnv ? '<small class="muted" style="font-weight:500">Amministratore principale, definito nelle impostazioni di Render.</small>' : self ? '<small class="muted" style="font-weight:500">Non puoi cambiare il tuo stesso ruolo.</small>' : ''}</div>
+      ${sso ? '' : u.fromEnv ? '<small class="muted" style="font-weight:500">Amministratore principale, definito nelle impostazioni di Render.</small>' : self ? '<small class="muted" style="font-weight:500">Non puoi cambiare il tuo stesso ruolo.</small>' : ''}</div>
     ${u.role === 'admin' ? '<p class="note">Gli amministratori vedono tutti i flussi e da /admin possono modificare flussi, documenti e permessi.</p>' : S.flows.map(f => {
       const a = access(u, f.id);
       return `<section class="acc"><h4>${esc(f.name)}</h4>

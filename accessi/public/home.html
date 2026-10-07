@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>To Smile · Le tue app</title>
+<meta name="description" content="Le applicazioni del gruppo To Smile a cui hai accesso.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@600;700;800&family=Figtree:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/static/accessi.css">
+<link rel="icon" href="/static/icon.svg">
+<meta name="theme-color" content="#4CAAAA">
+<style>
+/* Layout: barra con logo e account, titolo, poi i riquadri delle app a cui l'utente ha accesso */
+.wrap{max-width:1000px;margin:0 auto;display:flex;flex-direction:column;gap:34px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.who{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.who .name{font-weight:600;font-size:14.5px;color:var(--muted);margin-right:4px}
+.badge{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 7px;border-radius:11px;background:var(--yellow);color:#3A3816;font-size:12.5px;font-weight:800}
+header{display:flex;flex-direction:column;gap:14px}
+header p{margin:0;color:var(--muted);font-size:17px;max-width:58ch}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.app{--c:var(--teal);--ink:var(--teal-ink);position:relative;display:flex;flex-direction:column;gap:12px;text-decoration:none;color:inherit;overflow:hidden;
+  background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:24px 24px 20px;transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease}
+.app::before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:var(--c)}
+.app:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--c) 60%,var(--line));box-shadow:0 12px 30px rgba(43,48,51,.10)}
+.app:focus-visible{outline:3px solid var(--c);outline-offset:3px}
+.icon{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;background:color-mix(in srgb,var(--c) 18%,transparent);color:var(--ink)}
+.icon svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.app h2{font-size:22px}
+.app p{margin:0;color:var(--muted);font-size:15px}
+.app .go{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:6px;font-size:13.5px;color:var(--muted)}
+.app .go span:last-child{font-weight:700;color:var(--ink);white-space:nowrap}
+.role{display:inline-block;font-size:12px;font-weight:700;padding:3px 8px;border-radius:7px;background:color-mix(in srgb,var(--c) 16%,transparent);color:var(--ink)}
+.teal{--c:var(--teal);--ink:var(--teal-ink)} .purple{--c:var(--purple);--ink:var(--purple-ink)}
+.yellow{--c:var(--yellow);--ink:var(--olive-ink)} .grey{--c:var(--grey);--ink:var(--grey-ink)}
+.grid .app:last-child:nth-child(odd){grid-column:1/-1}
+.empty{padding:28px;display:flex;flex-direction:column;gap:8px}
+dialog{border:1px solid var(--line);border-radius:20px;background:var(--surface);color:var(--fg);padding:0;width:min(440px,calc(100vw - 32px))}
+dialog::backdrop{background:rgba(20,24,26,.45)}
+dialog form{padding:22px;display:flex;flex-direction:column;gap:14px}
+.row{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+footer{color:var(--muted);font-size:13.5px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;border-top:1px solid var(--line);padding-top:18px}
+footer b{color:var(--fg);font-weight:600}
+@media (max-width:640px){.grid{grid-template-columns:1fr}.who .name{width:100%;text-align:right;margin:0}}
+@media (prefers-reduced-motion:reduce){.app{transition:none}.app:hover{transform:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <a class="logo" href="/" aria-label="To Smile"><img src="/static/logo-tosmile.png" alt="To Smile · Persone, salute, sorrisi" width="548" height="165"></a>
+    <div class="who" id="who"></div>
+  </div>
+  <header>
+    <h1 id="hello">Le tue <span>app</span></h1>
+    <div class="rule" aria-hidden="true"></div>
+    <p>Scegli l'applicazione: entri direttamente, senza un'altra password.</p>
+  </header>
+  <main class="grid" id="grid" aria-live="polite"></main>
+  <footer><span><b>To Smile</b> · Persone, salute, sorrisi</span><span>Problemi di accesso? Apri un ticket di assistenza.</span></footer>
+</div>
+
+<dialog id="pwd"><form method="dialog" id="pwf">
+  <h2>Cambia password</h2>
+  <p class="muted" style="margin:0;font-size:14.5px">La nuova password vale per tutte le app To Smile.</p>
+  <input type="email" autocomplete="username" id="pw-user" hidden>
+  <label class="field">Password attuale<input id="pw-cur" type="password" autocomplete="current-password" required></label>
+  <label class="field">Nuova password<input id="pw-new" type="password" autocomplete="new-password" minlength="8" required><small class="muted" style="font-weight:500">Almeno 8 caratteri.</small></label>
+  <div class="msg err" id="pw-err" role="alert"></div>
+  <div class="row"><button class="btn" value="cancel" formnovalidate>Annulla</button><button class="btn primary" id="pw-save" value="save">Salva</button></div>
+</form></dialog>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ICONS = {
+  finanza: '<path d="M4 19V5M4 19h16"/><path d="M8 15l3.5-4 3 2.5L20 7"/>',
+  laboratorio: '<path d="M9 3h6M10 3v6L5 18a2 2 0 0 0 1.8 3h10.4A2 2 0 0 0 19 18l-5-9V3"/><path d="M7.5 14h9"/>',
+  ticket: '<path d="M4 8a2 2 0 0 0 2-2h12a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H6a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4z"/><path d="M10 6v12" stroke-dasharray="2 2.5"/>',
+  protocolli: '<rect x="3" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="10" width="7" height="5" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/><path d="M6.5 8v8M10 5.5h3.5a2 2 0 0 1 2 2V10"/>',
+  calendario: '<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M8 14.5h3M8 17.5h6"/>',
+  accessi: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><path d="M16 11l2 2 4-4"/>',
+};
+function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.append(d); setTimeout(() => d.remove(), 3000); }
+
+(async () => {
+  const r = await fetch('/api/me', {credentials: 'same-origin'});
+  if (r.status === 401) return location.href = '/accedi';
+  const me = await r.json();
+  const u = me.user;
+  $('#hello').innerHTML = `Ciao <span>${esc(u.firstName || '')}</span>`;
+  $('#pw-user').value = u.email;
+  let pending = 0;
+  if (me.admin) {
+    try { const a = await (await fetch('/api/admin/users')).json(); pending = a.users.filter(x => x.status === 'pending').length; } catch {}
+  }
+  $('#who').innerHTML = `<span class="name">${esc(u.email)}</span>
+    ${me.admin ? `<a class="btn small" href="/admin">Gestione accessi${pending ? ` <span class="badge" title="Richieste in attesa">${pending}</span>` : ''}</a>` : ''}
+    ${u.owner ? '' : '<button class="btn small" id="pw-open">Cambia password</button>'}
+    <a class="btn small" href="/esci">Esci</a>`;
+  const apps = me.apps.filter(a => a.key !== 'accessi');
+  const noaccess = new URLSearchParams(location.search).get('noaccess');
+  if (noaccess) {
+    const names = {finanza: 'Gestione finanziaria', laboratorio: 'Nuovalab', ticket: 'Ticket assistenza', protocolli: 'Protocolli', calendario: 'Calendario eventi'};
+    const m = document.createElement('div'); m.className = 'msg warn'; m.setAttribute('role', 'status');
+    m.textContent = `Non sei abilitato all'app «${names[noaccess] || noaccess}». Se ti serve, chiedi all'amministratore di attivartela.`;
+    $('#grid').before(m);
+    history.replaceState(null, '', '/');
+  }
+  $('#grid').innerHTML = apps.length ? apps.map(a => `<a class="app ${esc(a.color)}" href="${esc(a.url)}">
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[a.key] || ''}</svg></span>
+      <h2>${esc(a.name)}</h2>
+      <p>${esc(a.desc)}</p>
+      <div class="go"><span>${a.role === 'admin' ? '<span class="role">Amministratore</span>' : esc(a.url.replace('https://', ''))}</span><span>Apri →</span></div>
+    </a>`).join('')
+    : `<div class="card empty" style="grid-column:1/-1"><h2>Nessuna app assegnata, per ora</h2><p class="muted" style="margin:0">Il tuo accesso è attivo, ma l'amministratore non ti ha ancora abilitato ad alcuna app. Appena lo farà, le troverai qui.</p></div>`;
+  $('#pw-open')?.addEventListener('click', () => { $('#pw-err').textContent = ''; $('#pwf').reset(); $('#pw-user').value = u.email; $('#pwd').showModal(); });
+})();
+
+$('#pwf').addEventListener('submit', async e => {
+  if (e.submitter?.value !== 'save') return;
+  e.preventDefault();
+  $('#pw-err').textContent = '';
+  if ($('#pw-new').value.length < 8) return $('#pw-err').textContent = 'La nuova password deve avere almeno 8 caratteri.';
+  const r = await fetch('/api/me/password', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({current: $('#pw-cur').value, next: $('#pw-new').value})});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) return $('#pw-err').textContent = j.error || 'Non riuscito.';
+  $('#pwd').close(); toast('Password aggiornata');
+});
+</script>
+</body>
+</html>

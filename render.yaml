@@ -1,4 +1,4 @@
-# Blueprint di Render: un solo servizio per Protocolli e Calendario eventi (vedi index.js),
+# Blueprint di Render: un solo servizio per Accesso unico, Protocolli e Calendario eventi (vedi index.js),
 # collegato al database PostgreSQL del gruppo (schemi "mappa" e "calendario").
 # Su Render: New > Blueprint > scegli questo repository.
 services:
@@ -35,5 +35,17 @@ services:
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: GEMINI_API_KEY
+        sync: false
+      # Accesso unico (appgestione.it): "true" solo dopo che appgestione.it punta a questo servizio
+      - key: SSO_ATTIVO
+        value: "false"
+      # Chiave che le app su altri servizi (es. Gestione finanziaria) usano per verificare gli accessi
+      - key: SSO_API_KEY
+        generateValue: true
+      # Chi riceve l'avviso di una nuova registrazione (più indirizzi separati da virgola)
+      - key: NOTIFY_EMAIL
+        value: consultingsardegna@gmail.com
+      # Email con Resend (resend.com): la chiave la incolli tu nella dashboard
+      - key: RESEND_API_KEY
         sync: false
 
