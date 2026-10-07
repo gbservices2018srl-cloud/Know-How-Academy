@@ -7,12 +7,12 @@ Tutte le app sono su **Render** (workspace "Giancarlo's workspace"), il codice �
 
 | App | Indirizzo | Area admin | Servizio Render | Repository |
 |---|---|---|---|---|
-| Accesso unico (login, registrazione, riquadri delle app) | appgestione.it (www → appgestione.it) — **da spostare** dal sito statico `portale-appgestione` al servizio `mappa-protocolli` | `/admin` → "Gestione accessi" | `mappa-protocolli` (lo stesso di Protocolli e Calendario) | `Know-How-Academy`, cartella `accessi/` (la cartella `portale/` è la vecchia pagina statica) |
+| Accesso unico (login, registrazione, riquadri delle app) | appgestione.it (www → appgestione.it) | `/admin` → "Gestione accessi" | `mappa-protocolli` (lo stesso di Protocolli e Calendario) | `Know-How-Academy`, cartella `accessi/` (la cartella `portale/` è la vecchia pagina statica) |
 | Gestione finanziaria | finanza.appgestione.it (si apre su `/finanziario`) | `/admin` → "Pannello Master" | `APP-Gestione-Finanziaria` (Python, piano Starter, disco 1 GB) | `APP-Gestione-Finanziaria` (codice in `server/`) |
 | Nuovalab (laboratorio) | laboratorio.appgestione.it | `/admin` → accesso, l'area admin si apre col ruolo ADMIN | `App-Nuova-lab` (sito statico, dati su Supabase) | `App-Nuova-lab` |
 | Ticket assistenza | ticket.appgestione.it (si apre su `/ticketassistenza`) | `/admin` → accesso, poi pannello in base al ruolo (super_admin / admin_azienda) | `app-ticket-assistenza` (Next.js, Frankfurt, dati su Supabase) | `app-ticket-assistenza` |
 | Protocolli | protocolli.appgestione.it | `/admin` | `mappa-protocolli` (Node, piano gratuito) — **lo stesso servizio fa girare anche il Calendario** | `Know-How-Academy` |
-| Calendario eventi | calendario.appgestione.it (**da collegare**: CNAME su Aruba verso `mappa-protocolli.onrender.com` e dominio aggiunto al servizio `mappa-protocolli`) | `/admin` → accesso | `mappa-protocolli` (lo stesso dei Protocolli); il vecchio servizio `calendario-eventi` va eliminato dopo il collegamento | `Know-How-Academy`, cartella `calendario/` (il repository `app-calendario-eventi` non si usa più) |
+| Calendario eventi | calendario.appgestione.it | `/admin` → accesso | `mappa-protocolli` (lo stesso dei Protocolli); il vecchio servizio `calendario-eventi` va eliminato dopo il collegamento | `Know-How-Academy`, cartella `calendario/` (il repository `app-calendario-eventi` non si usa più) |
 | Radiografia studio | radiografia-studio.onrender.com | — | `radiografia-studio` (Python) | `app-radiografia-studi-dentalia` |
 
 I vecchi indirizzi `www.appgestione.it/finanziario`, `/ticketassistenza` e `/laboratorio` portano da soli ai nuovi sottodomini.
@@ -22,12 +22,12 @@ I vecchi indirizzi `www.appgestione.it/finanziario`, `/ticketassistenza` e `/lab
 | Nome | Tipo | Valore |
 |---|---|---|
 | `@` | A | `216.24.57.1` (Render) |
-| `www` | CNAME | `portale-appgestione.onrender.com` (da cambiare in `mappa-protocolli.onrender.com`) |
+| `www` | CNAME | `mappa-protocolli.onrender.com` |
 | `finanza` | CNAME | `app-gestione-finanziaria.onrender.com` |
 | `laboratorio` | CNAME | `app-nuova-lab.onrender.com` |
 | `ticket` | CNAME | `app-ticket-assistenza.onrender.com` |
 | `protocolli` | CNAME | `mappa-protocolli.onrender.com` |
-| `calendario` | CNAME | `mappa-protocolli.onrender.com` (da aggiungere) |
+| `calendario` | CNAME | `mappa-protocolli.onrender.com` |
 
 Per ogni nuovo sottodominio: record CNAME su Aruba **e** "Custom Domains" nel servizio su Render. Il piano Hobby di Render include 2 domini personalizzati; ogni dominio in più costa 0,25 $ al mese.
 
@@ -43,11 +43,11 @@ Per ogni nuovo sottodominio: record CNAME su Aruba **e** "Custom Domains" nel se
 Protocolli e Calendario: `ADMIN_USERNAME` / `ADMIN_PASSWORD` nelle impostazioni **Environment** del servizio su Render (mai nel codice).
 
 ## Da fare
-- Accesso unico: spostare `appgestione.it` e `www.appgestione.it` dal sito statico `portale-appgestione` al servizio `mappa-protocolli` (Custom Domains + CNAME `www` su Aruba), poi `SSO_ATTIVO=true`.
+- Accesso unico acceso il 7 ottobre 2026 (`SSO_ATTIVO=true`; Finanza con `SSO_API_KEY` e `SSO_URL`). Il sito statico `portale-appgestione` non ha più domini e si può eliminare.
 - Collegare all'accesso unico Gestione finanziaria (utenti del gruppo), Ticket e Nuovalab (Supabase).
 - Resend: dominio appgestione.it verificato e `RESEND_API_KEY` su Render.
 
-- Collegare `calendario.appgestione.it`: CNAME su Aruba verso `mappa-protocolli.onrender.com` e dominio nel servizio `mappa-protocolli`; poi eliminare il servizio `calendario-eventi`.
+- Eliminare il vecchio servizio `calendario-eventi` su Render.
 - Chiave AI per la chat dei Protocolli (`AI_PROVIDER` + chiave Gemini o OpenAI su Render) e nome del modello in `AI_MODEL`.
 - Decidere su `radiografia-db` prima del 29 ottobre.
 
