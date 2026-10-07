@@ -13,6 +13,7 @@ Tutte le app sono su **Render** (workspace "Giancarlo's workspace"), il codice �
 | Ticket assistenza | ticket.appgestione.it (si apre su `/ticketassistenza`) | `/admin` → accesso, poi pannello in base al ruolo (super_admin / admin_azienda) | `app-ticket-assistenza` (Next.js, Frankfurt, dati su Supabase) | `app-ticket-assistenza` |
 | Protocolli | protocolli.appgestione.it | `/admin` | `mappa-protocolli` (Node, piano gratuito) — **lo stesso servizio fa girare anche il Calendario** | `Know-How-Academy` |
 | Calendario eventi | calendario.appgestione.it | `/admin` → accesso | `mappa-protocolli` (lo stesso dei Protocolli); il vecchio servizio `calendario-eventi` va eliminato dopo il collegamento | `Know-How-Academy`, cartella `calendario/` (il repository `app-calendario-eventi` non si usa più) |
+| Magazzino centrale | magazzino.appgestione.it (**da collegare**: CNAME su Aruba e dominio nel servizio `mappa-protocolli`) | stessa app: chi è Amministratore nel pannello accessi vede Richieste, Articoli, Riordino, Fornitori | `mappa-protocolli` (lo stesso di Protocolli e Calendario) | `Know-How-Academy`, cartella `magazzino/` |
 | Radiografia studio | radiografia-studio.onrender.com | — | `radiografia-studio` (Python) | `app-radiografia-studi-dentalia` |
 
 I vecchi indirizzi `www.appgestione.it/finanziario`, `/ticketassistenza` e `/laboratorio` portano da soli ai nuovi sottodomini.
@@ -28,6 +29,7 @@ I vecchi indirizzi `www.appgestione.it/finanziario`, `/ticketassistenza` e `/lab
 | `ticket` | CNAME | `app-ticket-assistenza.onrender.com` |
 | `protocolli` | CNAME | `mappa-protocolli.onrender.com` |
 | `calendario` | CNAME | `mappa-protocolli.onrender.com` |
+| `magazzino` | CNAME | `mappa-protocolli.onrender.com` (da aggiungere) |
 
 Per ogni nuovo sottodominio: record CNAME su Aruba **e** "Custom Domains" nel servizio su Render. Il piano Hobby di Render include 2 domini personalizzati; ogni dominio in più costa 0,25 $ al mese.
 
@@ -59,6 +61,12 @@ Protocolli e Calendario: `ADMIN_USERNAME` / `ADMIN_PASSWORD` nelle impostazioni 
 - Email (notifiche registrazioni a `NOTIFY_EMAIL`, recupero password) con Resend: `RESEND_API_KEY`. Senza chiave il pannello mostra i link da copiare.
 - Nuovalab e Ticket (Supabase): il riquadro passa da `appgestione.it/sso/<app>`, che crea un biglietto monouso (2 minuti) e manda il browser alla funzione Supabase `sso` dell'app. La funzione lo fa verificare (`POST /api/sso/ticket`), poi rimanda all'app con `#sso=<codice>` che l'app scambia con la sessione (`verifyOtp`). Gli utenti si collegano per email: chi è "Amministratore" nell'accesso unico riceve da solo il profilo ADMIN (Nuovalab) o super_admin (Ticket) se non ne ha uno; gli altri devono avere un profilo creato dentro l'app. Disattivare, eliminare o togliere l'app a qualcuno blocca il suo utente Supabase. Sorgenti: `sso.ts` (Nuovalab) e `supabase/functions/sso` (Ticket). L'accesso con email e password delle due app resta.
 - Gestione finanziaria: i clienti esterni che pagano con Stripe continuano a registrarsi ed entrare direttamente su finanza.appgestione.it, senza passare dall'accesso unico.
+
+## Magazzino centrale
+- Solo con l'accesso unico (nessuna password propria). Utente = vede le disponibilità e prenota; Amministratore = conferma/rifiuta, gestisce articoli, fornitori e riordino.
+- Disponibile = giacenza − prenotazioni in attesa: nessuno può prenotare più di quello che c'è. Confermare scala la giacenza, rifiutare la libera.
+- Riordino: quando (giacenza + merce già ordinata) scende alla scorta minima, l'articolo entra nel carrello con la quantità per tornare al livello di carico. Dal carrello nasce un ordine per fornitore, inviato via email (Resend) o stampato. "Merce ricevuta" ricarica la giacenza. Ogni variazione resta nei Movimenti.
+- Notifiche sul telefono (Web Push) agli amministratori per ogni nuova prenotazione e al cliente per l'esito. Dati nello schema `magazzino`.
 
 ## Protocolli + Calendario in un solo servizio
 `index.js` avvia le due app e smista ogni richiesta in base all'indirizzo: `calendario.appgestione.it` va al Calendario, tutto il resto ai Protocolli.

@@ -16,6 +16,8 @@ module.exports = [
     desc: 'Il flusso di lavoro dello studio con protocolli, procedure e assistente.' },
   { key: 'calendario', name: 'Calendario eventi', url: 'https://calendario.appgestione.it', color: 'purple',
     desc: 'Formazione, riunioni ed eventi aziendali per lo staff.' },
+  { key: 'magazzino', name: 'Magazzino centrale', url: 'https://magazzino.appgestione.it', color: 'yellow',
+    desc: 'Disponibilità degli articoli, prenotazioni e riordino ai fornitori.' },
   { key: 'accessi', name: 'Gestione accessi', url: '/admin', color: 'grey', adminOnly: true,
     desc: 'Approva le registrazioni e decide chi entra in quali app.' },
 ];

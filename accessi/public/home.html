@@ -81,6 +81,7 @@ const ICONS = {
   ticket: '<path d="M4 8a2 2 0 0 0 2-2h12a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H6a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4z"/><path d="M10 6v12" stroke-dasharray="2 2.5"/>',
   protocolli: '<rect x="3" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="10" width="7" height="5" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/><path d="M6.5 8v8M10 5.5h3.5a2 2 0 0 1 2 2V10"/>',
   calendario: '<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M8 14.5h3M8 17.5h6"/>',
+  magazzino: '<path d="M3 9.5 12 4l9 5.5V20H3z"/><path d="M7 20v-6h10v6"/><path d="M7 17h10"/>',
   accessi: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><path d="M16 11l2 2 4-4"/>',
 };
 function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.append(d); setTimeout(() => d.remove(), 3000); }
@@ -103,7 +104,7 @@ function toast(t) { const d = document.createElement('div'); d.className = 'toas
   const apps = me.apps.filter(a => a.key !== 'accessi');
   const noaccess = new URLSearchParams(location.search).get('noaccess');
   if (noaccess) {
-    const names = {finanza: 'Gestione finanziaria', laboratorio: 'Nuovalab', ticket: 'Ticket assistenza', protocolli: 'Protocolli', calendario: 'Calendario eventi'};
+    const names = {magazzino: 'Magazzino centrale', finanza: 'Gestione finanziaria', laboratorio: 'Nuovalab', ticket: 'Ticket assistenza', protocolli: 'Protocolli', calendario: 'Calendario eventi'};
     const m = document.createElement('div'); m.className = 'msg warn'; m.setAttribute('role', 'status');
     m.textContent = `Non sei abilitato all'app «${names[noaccess] || noaccess}». Se ti serve, chiedi all'amministratore di attivartela.`;
     $('#grid').before(m);
