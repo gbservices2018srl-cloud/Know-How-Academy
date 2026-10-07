@@ -342,16 +342,24 @@ app.delete('/api/admin/users/:id', needAdmin, wrap(async (req, res) => {
 
 /* ---------- verifica per le app su altri servizi (es. Gestione finanziaria) ---------- */
 // POST /api/sso/verify  Authorization: Bearer <SSO_API_KEY>  { token, app }
-app.post('/api/sso/verify', wrap(async (req, res) => {
+function needApiKey(req, res, next) {
   const key = process.env.SSO_API_KEY || '';
   const given = String(req.get('authorization') || '').replace(/^Bearer\s+/i, '');
   const crypto = require('crypto');
-  const okKey = key.length >= 24 && given.length === key.length && crypto.timingSafeEqual(Buffer.from(given), Buffer.from(key));
-  if (!okKey) return bad(res, 401, 'Chiave non valida');
+  const ok = key.length >= 24 && given.length === key.length && crypto.timingSafeEqual(Buffer.from(given), Buffer.from(key));
+  return ok ? next() : bad(res, 401, 'Chiave non valida');
+}
+app.post('/api/sso/verify', needApiKey, wrap(async (req, res) => {
   const r = await store.verify(String(req.body.token || ''), String(req.body.app || ''));
   if (!r) return bad(res, 401, 'Sessione non valida');
   if (r.denied) return res.status(403).json({ error: 'Nessun accesso a questa app', user: r.user });
   res.json(r);
+}));
+// POST /api/sso/users { app }: chi è abilitato a un'app (per assegnare aziende, sedi… dentro l'app)
+app.post('/api/sso/users', needApiKey, wrap(async (req, res) => {
+  const a = String(req.body.app || '');
+  if (!store.APP_KEYS.includes(a)) return bad(res, 400, 'App sconosciuta');
+  res.json({ users: await store.usersWithApp(a) });
 }));
 
 /* ---------- pagine ---------- */
