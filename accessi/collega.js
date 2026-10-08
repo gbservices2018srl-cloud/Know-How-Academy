@@ -24,6 +24,8 @@ function collega({ app, toLocal }) {
     toDenied(res) { res.redirect(`${accessi.publicUrl()}/?noaccess=${app}`); },
     logout: accessi.logoutFromApp,
     usersWithApp: () => accessi.store.usersWithApp(app),
+    // Persona approvata o con permessi/dati cambiati: fn({ user, role, livello, oldEmail }) crea o aggiorna il profilo nell'app
+    onProvision: fn => accessi.store.events.on('provision:' + app, fn),
     onDeleted: fn => accessi.store.events.on('deleted', id => Promise.resolve(fn(id)).catch(e => console.warn('Pulizia profilo:', e.message))),
     links: () => ({ home: accessi.publicUrl(), admin: accessi.publicUrl() + '/admin', logout: accessi.publicUrl() + '/esci' }),
   };

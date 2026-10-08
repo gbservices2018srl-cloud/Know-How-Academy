@@ -79,7 +79,10 @@ async function migrate() {
   await q(`delete from password_links where expires_at < now() - interval '7 days'`);
   await q(`delete from sso_tickets where expires_at < now() - interval '1 day'`);
   // livello dentro l'app (Nuovalab, Ticket): ruolo e laboratorio/studio/medico/azienda scelti dal pannello accessi
-  await q(`alter table user_apps add column if not exists livello text;
+  await q(`alter table users add column if not exists cf text;
+    alter table users add column if not exists albo_provincia text;
+    alter table users add column if not exists albo_numero text;
+    alter table user_apps add column if not exists livello text;
     alter table user_apps add column if not exists ente text;
     alter table user_apps add column if not exists ente_nome text;
     alter table sso_tickets drop constraint if exists sso_tickets_purpose_check;
@@ -126,6 +129,23 @@ function cleanDate(s) {
   return y >= 1900 && y <= now ? v : null;
 }
 
+// Codice fiscale: formato e carattere di controllo (anche con omocodia)
+const cleanCf = s => String(s || '').toUpperCase().replace(/\s+/g, '').slice(0, 16);
+const CF_DISPARI = { 0: 1, 1: 0, 2: 5, 3: 7, 4: 9, 5: 13, 6: 15, 7: 17, 8: 19, 9: 21, A: 1, B: 0, C: 5, D: 7, E: 9, F: 13, G: 15, H: 17, I: 19, J: 21,
+  K: 2, L: 4, M: 18, N: 20, O: 11, P: 3, Q: 6, R: 8, S: 12, T: 14, U: 16, V: 10, W: 22, X: 25, Y: 24, Z: 23 };
+function validCf(cf) {
+  if (!/^[A-Z]{6}[0-9LMNPQRSTUV]{2}[ABCDEHLMPRST][0-9LMNPQRSTUV]{2}[A-Z][0-9LMNPQRSTUV]{3}[A-Z]$/.test(cf)) return false;
+  let sum = 0;
+  for (let i = 0; i < 15; i++) {
+    const c = cf[i];
+    sum += i % 2 === 0 ? CF_DISPARI[c] : (/\d/.test(c) ? +c : c.charCodeAt(0) - 65);
+  }
+  return String.fromCharCode(65 + sum % 26) === cf[15];
+}
+// Iscrizione all'albo (solo medici): provincia di 2 lettere e numero
+const cleanProv = s => String(s || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2);
+const cleanAlbo = s => String(s || '').trim().replace(/\s+/g, '').slice(0, 20);
+
 async function livelliOf(userId) {
   const { rows } = await q('select app, livello, ente, ente_nome from user_apps where user_id = $1 and livello is not null', [userId]);
   return Object.fromEntries(rows.map(r => [r.app, { livello: r.livello, ente: r.ente, enteNome: r.ente_nome }]));
@@ -140,7 +160,8 @@ function publicUser(u, apps) {
   return {
     id: u.id, firstName: u.first_name, lastName: u.last_name, birthDate: u.birth_date, email: u.email,
     status: u.status, owner: u.owner, createdAt: u.created_at, approvedAt: u.approved_at, lastLogin: u.last_login,
-    hasPassword: !!u.password_hash, ...(apps ? { apps } : {}),
+    hasPassword: !!u.password_hash, cf: u.cf || '', alboProvincia: u.albo_provincia || '', alboNumero: u.albo_numero || '',
+    ...(apps ? { apps } : {}),
   };
 }
 
@@ -153,12 +174,13 @@ async function findByEmail(email) {
   return rows[0] || null;
 }
 
-async function createUser({ firstName, lastName, birthDate, email, password, status = 'pending', createdBy = null }) {
+async function createUser({ firstName, lastName, birthDate, email, password, status = 'pending', createdBy = null, cf = null, alboProvincia = null, alboNumero = null }) {
   const id = crypto.randomUUID();
-  await q(`insert into users (id, first_name, last_name, birth_date, email, password_hash, status, created_by, approved_at)
-           values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+  await q(`insert into users (id, first_name, last_name, birth_date, email, password_hash, status, created_by, approved_at, cf, albo_provincia, albo_numero)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
     [id, cleanName(firstName), cleanName(lastName), birthDate || null, cleanEmail(email),
-     password ? await bcrypt.hash(password, 12) : null, status, createdBy, status === 'active' ? new Date() : null]);
+     password ? await bcrypt.hash(password, 12) : null, status, createdBy, status === 'active' ? new Date() : null,
+     cf || null, alboProvincia || null, alboNumero || null]);
   return getUser(id);
 }
 
@@ -235,13 +257,13 @@ async function usersWithApp(app) {
 
 /* ---------- biglietti monouso per le app su Supabase (Nuovalab, Ticket) ---------- */
 // Il biglietto vale 2 minuti e una sola volta; lo riscatta la funzione "sso" dell'app.
-async function createTicket(u, app, purpose, role) {
+async function createTicket(u, app, purpose, role, extra = {}) {
   const token = randomToken();
   await q(`insert into sso_tickets (token_hash, user_id, email, app, purpose, data, expires_at)
            values ($1,$2,$3,$4,$5,$6, now() + interval '2 minutes')`,
     [sha(token), u.id || null, u.email, app, purpose,
      JSON.stringify({ firstName: u.first_name ?? u.firstName ?? '', lastName: u.last_name ?? u.lastName ?? '',
-       birthDate: u.birth_date ?? u.birthDate ?? null, role: role || null })]);
+       birthDate: u.birth_date ?? u.birthDate ?? null, role: role || null, ...extra })]);
   return token;
 }
 async function redeemTicket(token, app) {
@@ -257,7 +279,9 @@ async function redeemTicket(token, app) {
     if (!role) return null;
     const lv = u.owner ? null : (await livelliOf(u.id))[app] || null;
     return { purpose: t.purpose, email: u.email, firstName: u.first_name, lastName: u.last_name, birthDate: u.birth_date, role,
-      livello: lv?.livello || null, ente: lv?.ente || null };
+      livello: lv?.livello || null, ente: lv?.ente || null,
+      cf: u.cf || null, alboProvincia: u.albo_provincia || null, alboNumero: u.albo_numero || null,
+      oldEmail: t.data?.oldEmail && t.data.oldEmail !== u.email ? t.data.oldEmail : null };
   }
   return { purpose: t.purpose, email: t.email };
 }
@@ -287,7 +311,7 @@ async function peekPasswordLink(token) {
 
 module.exports = {
   pool, q, SCHEMA, APPS, APP_KEYS, events, migrate, ensureOwner,
-  cleanEmail, validEmail, cleanName, cleanDate, appsOf, publicUser, getUser, findByEmail, createUser, setPassword,
+  cleanEmail, validEmail, cleanName, cleanDate, cleanCf, validCf, cleanProv, cleanAlbo, appsOf, publicUser, getUser, findByEmail, createUser, setPassword,
   setAppRole, livelliOf, deleteUser, usersWithApp, logoutEverywhere, createSession, endSession, check, verify,
   createPasswordLink, usePasswordLink, peekPasswordLink, SESSION_DAYS, sha, createTicket, redeemTicket,
 };

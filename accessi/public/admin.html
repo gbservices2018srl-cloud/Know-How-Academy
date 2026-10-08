@@ -12,7 +12,8 @@
 <link rel="icon" href="/static/icon.svg">
 <meta name="theme-color" content="#4CAAAA">
 <style>
-/* Layout: barra in alto, filtri e ricerca, poi una scheda per utente con i permessi per ogni app */
+/* Layout: barra in alto, filtri e ricerca, poi l'elenco delle persone (solo nome e cognome);
+   toccando una riga si apre la sua scheda con dati, azioni e permessi per ogni app */
 .wrap{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
 .top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 .top .logo img{width:min(170px,44vw)}
@@ -27,10 +28,22 @@ header p{margin:0;color:var(--muted);max-width:70ch}
 .chip.attn .n{opacity:1;background:var(--yellow);color:#3A3816;border-radius:9px;padding:1px 7px}
 .tools .search{flex:1 1 220px;max-width:340px}
 .tools .grow{flex:1}
-.list{display:flex;flex-direction:column;gap:12px}
-.user{padding:18px 20px;display:flex;flex-direction:column;gap:14px}
-.user.pending{border-color:color-mix(in srgb,var(--yellow) 70%,var(--line));box-shadow:inset 4px 0 0 var(--yellow)}
-.user.disabled{opacity:.72}
+.list{display:flex;flex-direction:column;padding:0;overflow:hidden}
+.user{border-top:1px solid var(--line)}
+.user:first-child{border-top:0}
+.urow{appearance:none;width:100%;background:none;border:0;font:inherit;color:inherit;text-align:left;cursor:pointer;display:flex;gap:12px;align-items:center;padding:14px 18px;min-height:56px}
+.urow:hover{background:var(--surface-2)}
+.urow:focus-visible{outline:3px solid color-mix(in srgb,var(--teal) 55%,transparent);outline-offset:-3px}
+.urow .nm{font:700 16.5px var(--f-display);flex:1;min-width:0;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.urow .nm small{font:500 13px var(--f-body);color:var(--muted)}
+.urow .chev{width:20px;height:20px;flex:none;color:var(--muted);transition:transform .15s}
+.user.open .urow .chev{transform:rotate(90deg)}
+.user.open{background:color-mix(in srgb,var(--teal) 4%,var(--surface))}
+.user.pending .urow{box-shadow:inset 4px 0 0 var(--yellow)}
+.user.disabled .urow .nm{opacity:.6}
+.ubody{padding:4px 18px 20px;display:flex;flex-direction:column;gap:14px}
+.ad{font-size:13px;color:var(--muted);font-weight:600}
+@media (prefers-reduced-motion:reduce){.urow .chev{transition:none}}
 .uh{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start}
 .uh h2{font-size:18px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .meta{color:var(--muted);font-size:14px;display:flex;gap:4px 14px;flex-wrap:wrap;margin-top:3px}
@@ -100,16 +113,23 @@ function enti(app) {
   return ENTI[app];
 }
 const lvOf = (u, a) => (S.livelli[u.id] || {})[a.key] || null;
-function enteSelect(a, L, sel, attrs) {
+const rinfrescaEnti = () => { for (const k in ENTI) delete ENTI[k]; for (const k in ENTI_V) delete ENTI_V[k]; };
+function enteSelect(a, L, sel, attrs, selNome) {
   const v = ENTI_V[a.key];
   if (!v) { enti(a.key); return `<select ${attrs} disabled><option>Caricamento elenco…</option></select>`; }
   if (v.errore) return `<span class="hint" style="color:var(--danger)">${esc(v.errore)}</span>`;
-  const list = v[L.ente] || [];
-  if (!list.length) return `<span class="hint">Nessun elemento: crealo prima dentro ${esc(a.name)}.</span>`;
-  return `<select ${attrs} aria-label="${esc(L.enteLabel)}"><option value="">${esc(L.enteLabel)}…</option>${list.map(x =>
-    `<option value="${esc(x.id)}" ${x.id === sel ? 'selected' : ''}>${esc(x.nome)}${x.info ? ' · ' + esc(x.info) : ''}</option>`).join('')}</select>`;
+  const list = v[L.ente] || [], nuovi = L.nuovo ? (v[L.nuovo] || []) : [];
+  if (!list.length && !nuovi.length) return `<span class="hint">Nessun elemento: crealo prima dentro ${esc(a.name)}.</span>`;
+  const opt = (id, txt) => `<option value="${esc(id)}" ${id === sel ? 'selected' : ''}>${txt}</option>`;
+  const noto = !sel || list.some(x => x.id === sel) || nuovi.some(x => 'nuovo:' + x.id === sel);
+  return `<select ${attrs} aria-label="${esc(L.enteLabel)}"><option value="">${esc(L.enteLabel)}…</option>` + (noto ? '' : opt(sel, esc(selNome || 'Scelta attuale'))) +
+    (nuovi.length && list.length ? `<optgroup label="Già presenti">` : '') + list.map(x => opt(x.id, esc(x.nome) + (x.info ? ' · ' + esc(x.info) : ''))).join('') + (nuovi.length && list.length ? '</optgroup>' : '') +
+    (nuovi.length ? `<optgroup label="Crea con i dati della registrazione">${nuovi.map(x => opt('nuovo:' + x.id, '+ Nuovo medico in ' + esc(x.nome))).join('')}</optgroup>` : '') +
+    `</select>`;
 }
 let filter = 'pending';
+const aperti = new Set(); // schede aperte
+const avvisa = (r, ok) => r?.avvisi?.length ? toast(r.avvisi.join(' · ')) : toast(ok);
 
 function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.append(d); setTimeout(() => d.remove(), 3200); }
 async function api(method, url, body) {
@@ -141,11 +161,13 @@ function render() {
   const rows = S.users.filter(u => (filter === 'all' || u.status === filter) &&
     (!q || `${u.firstName} ${u.lastName} ${u.email}`.toLowerCase().includes(q)));
   if (!rows.length) {
+    $('#list').className = 'list';
     $('#list').innerHTML = `<div class="card empty">${filter === 'pending' && !q ? 'Nessuna richiesta in attesa.' : 'Nessun utente trovato.'}</div>`;
     return;
   }
   // omonimi: stesso nome e cognome → la data di nascita aiuta a distinguerli
   const names = {}; S.users.forEach(u => { const k = fullName(u).toLowerCase(); names[k] = (names[k] || 0) + 1; });
+  $('#list').className = 'list card';
   $('#list').innerHTML = rows.map(u => card(u, names[fullName(u).toLowerCase()] > 1)).join('');
 }
 function card(u, homonym) {
@@ -160,7 +182,7 @@ function card(u, homonym) {
       const L = a.livelli.find(l => l.key === sel);
       const opts = `<option value="">Nessun accesso</option>${sel === '_old' ? '<option value="_old" selected>Utente (scegli il livello)</option>' : ''}` +
         a.livelli.map(l => `<option value="${l.key}" ${l.key === sel ? 'selected' : ''}>${esc(l.label)}</option>`).join('');
-      const ente = L?.ente ? enteSelect(a, L, cur?.livello === sel ? cur.ente : '', `data-ente="${a.key}" data-u="${u.id}" data-lv="${L.key}"`) : '';
+      const ente = L?.ente ? enteSelect(a, L, cur?.livello === sel ? cur.ente : '', `data-ente="${a.key}" data-u="${u.id}" data-lv="${L.key}"`, cur?.enteNome) : '';
       return `<label class="ap">${esc(a.name)}<select data-app="${a.key}" data-u="${u.id}" class="${role}">${opts}</select>${ente}</label>`;
     }
     const dis = u.owner || (u.id === S.me && a.key === 'accessi');
@@ -176,18 +198,26 @@ function card(u, homonym) {
       : `<button class="btn small" data-act="enable" data-u="${u.id}">Riattiva</button>`) +
     `<button class="btn small" data-act="pw" data-u="${u.id}">Password</button><button class="btn small danger" data-act="delete" data-u="${u.id}">Elimina</button>`;
   actions = `<button class="btn small" data-act="edit" data-u="${u.id}">Modifica</button>` + actions;
-  return `<article class="card user ${u.status}">
+  const open = aperti.has(u.id), nApp = Object.keys(u.apps).filter(k => k !== 'accessi').length;
+  const row = `<button class="urow" data-toggle="${u.id}" aria-expanded="${open}" aria-controls="ub-${u.id}">
+      <span class="nm">${esc(fullName(u))}${homonym ? ` <small>nato/a il ${fmtDate(u.birthDate)}</small>` : ''}</span>
+      ${u.status !== 'active' ? `<span class="pill ${u.status}">${st}</span>` : ''}${u.owner ? '<span class="pill owner">Proprietario</span>' : ''}
+      <span class="ad">${u.owner ? 'tutte le app' : nApp ? nApp + (nApp === 1 ? ' app' : ' app') : 'nessuna app'}</span>
+      <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>`;
+  if (!open) return `<article class="user ${u.status}">${row}</article>`;
+  return `<article class="user ${u.status} open">${row}<div class="ubody" id="ub-${u.id}">
     <div class="uh">
-      <div><h2>${esc(fullName(u))} <span class="pill ${u.status}">${st}</span>${u.owner ? '<span class="pill owner">Proprietario</span>' : ''}</h2>
-        <div class="meta"><span>${esc(u.email)}</span><span ${homonym ? 'style="color:var(--fg);font-weight:600"' : ''}>Nato/a il ${fmtDate(u.birthDate)}</span>
+      <div class="meta" style="margin:0"><span>${esc(u.email)}</span><span ${homonym ? 'style="color:var(--fg);font-weight:600"' : ''}>Nato/a il ${fmtDate(u.birthDate)}</span>
+        <span>${u.cf ? 'CF ' + esc(u.cf) : '<span style="color:var(--olive-ink)">Codice fiscale mancante</span>'}</span>
+        ${u.alboNumero ? `<span>Medico, albo ${esc(u.alboProvincia)} n. ${esc(u.alboNumero)}</span>` : ''}
         <span>${u.status === 'pending' ? 'Richiesta del ' + fmtTime(u.createdAt) : 'Ultimo accesso: ' + fmtTime(u.lastLogin)}</span>
-        ${!u.hasPassword ? '<span style="color:var(--olive-ink)">Password non ancora scelta</span>' : ''}</div></div>
+        ${!u.hasPassword ? '<span style="color:var(--olive-ink)">Password non ancora scelta</span>' : ''}</div>
       <div class="actions">${actions}</div>
     </div>
-    ${u.status === 'pending' ? '<p class="hint">Scegli le app qui sotto, poi premi «Approva»: la persona riceve un\'email e può entrare.</p>' : ''}
+    ${u.status === 'pending' ? '<p class="hint">Scegli le app e i livelli qui sotto, poi premi «Approva»: il profilo viene creato da solo in ogni app e la persona riceve un\'email.</p>' : ''}
     ${u.owner ? '<p class="hint">Il proprietario (impostato su Render) è amministratore di tutte le app.</p>' : ''}
     <div class="apps">${apps}</div>
-  </article>`;
+  </div></article>`;
 }
 
 /* ---------- permessi per app ---------- */
@@ -198,7 +228,7 @@ document.addEventListener('change', async e => {
     if (!se.value) return;
     try {
       const r = await api('PUT', `/api/admin/users/${u.id}/apps/${se.dataset.ente}`, {livello: se.dataset.lv, ente: se.value});
-      u.apps = r.apps; S.livelli[u.id] = r.livelli; delete pend[k]; render(); toast('Salvato');
+      u.apps = r.apps; S.livelli[u.id] = r.livelli; delete pend[k]; if (se.value.startsWith('nuovo:')) rinfrescaEnti(); render(); avvisa(r, 'Salvato');
     } catch (err) { toast(err.message); }
     return;
   }
@@ -212,7 +242,7 @@ document.addEventListener('change', async e => {
     delete pend[k];
     try {
       const r = await api('PUT', `/api/admin/users/${u.id}/apps/${a.key}`, L ? {livello: L.key} : {role: 'none'});
-      u.apps = r.apps; S.livelli[u.id] = r.livelli; render(); toast('Salvato');
+      u.apps = r.apps; S.livelli[u.id] = r.livelli; render(); avvisa(r, 'Salvato');
     } catch (err) { render(); toast(err.message); }
     return;
   }
@@ -227,6 +257,8 @@ document.addEventListener('change', async e => {
 /* ---------- azioni ---------- */
 document.addEventListener('click', async e => {
   const chip = e.target.closest('.chip'); if (chip) { filter = chip.dataset.f; render(); return; }
+  const tg = e.target.closest('[data-toggle]');
+  if (tg) { const id = tg.dataset.toggle; aperti.has(id) ? aperti.delete(id) : aperti.add(id); render(); document.querySelector(`[data-toggle="${id}"]`)?.focus(); return; }
   const b = e.target.closest('[data-act]'); if (!b) return;
   const u = S.users.find(x => x.id === b.dataset.u);
   const act = b.dataset.act;
@@ -235,8 +267,9 @@ document.addEventListener('click', async e => {
       if (!Object.keys(u.apps).length && !confirm(`${fullName(u)} non ha ancora nessuna app. Vuoi approvare lo stesso?`)) return;
       b.disabled = true;
       const r = await api('PATCH', '/api/admin/users/' + u.id, {status: 'active'});
-      Object.assign(u, r.user); render();
-      toast(r.sent ? `Approvato: ${u.firstName} riceve un'email` : `Approvato. Avvisa tu ${u.firstName}: le email non sono attive.`);
+      Object.assign(u, r.user); S.livelli[u.id] = r.livelli; rinfrescaEnti(); render();
+      if (r.avvisi?.length) toast(r.avvisi.join(' · '));
+      else toast((r.sent ? `Approvato: ${u.firstName} riceve un'email` : `Approvato. Avvisa tu ${u.firstName}: le email non sono attive.`) + ' Profili creati nelle app.');
     } else if (act === 'reject') {
       if (!confirm(`Rifiutare ed eliminare la richiesta di ${fullName(u)}?`)) return;
       await api('DELETE', '/api/admin/users/' + u.id);
@@ -274,7 +307,10 @@ function personFields(u = {}) {
   return `<div class="two"><label class="field">Nome<input id="d-fn" value="${esc(u.firstName)}" maxlength="80" required></label>
     <label class="field">Cognome<input id="d-ln" value="${esc(u.lastName)}" maxlength="80" required></label></div>
     <div class="two"><label class="field">Data di nascita<input id="d-bd" type="date" value="${esc(u.birthDate || '')}" min="1900-01-01" max="${new Date().toISOString().slice(0, 10)}"></label>
-    <label class="field">Email<input id="d-em" type="email" value="${esc(u.email)}" maxlength="160" ${u.owner ? 'disabled' : ''} required></label></div>`;
+    <label class="field">Email<input id="d-em" type="email" value="${esc(u.email)}" maxlength="160" ${u.owner ? 'disabled' : ''} required></label></div>
+    <label class="field">Codice fiscale<input id="d-cf" value="${esc(u.cf || '')}" maxlength="16" style="text-transform:uppercase" autocomplete="off"></label>
+    <div class="two"><label class="field">Provincia albo <small class="muted" style="font-weight:500">solo medici</small><input id="d-ap" value="${esc(u.alboProvincia || '')}" maxlength="2" style="text-transform:uppercase" autocomplete="off"></label>
+    <label class="field">Numero iscrizione albo<input id="d-an" value="${esc(u.alboNumero || '')}" maxlength="20" autocomplete="off"></label></div>`;
 }
 function linkResult(link, who) {
   open(`<h2>Link per la password</h2><p class="muted" style="margin:0">Le email non sono attive: copia questo link e mandalo tu a ${esc(who)} (WhatsApp, email…). Serve per scegliere la password.</p>
@@ -299,8 +335,10 @@ $('#add').addEventListener('click', () => {
         apps[a.key] = {livello: L.key, ente: en || null};
       } else apps[s.dataset.new] = s.value;
     }
-    const r = await api('POST', '/api/admin/users', {firstName: val('d-fn'), lastName: val('d-ln'), birthDate: val('d-bd'), email: val('d-em'), password: val('d-pw'), apps});
-    S.users.push(r.user); filter = 'active'; render(); dlg.close();
+    const r = await api('POST', '/api/admin/users', {firstName: val('d-fn'), lastName: val('d-ln'), birthDate: val('d-bd'), email: val('d-em'), password: val('d-pw'),
+      cf: val('d-cf'), alboProvincia: val('d-ap'), alboNumero: val('d-an'), apps});
+    S.users.push(r.user); S.livelli[r.user.id] = r.livelli || {}; aperti.add(r.user.id); filter = 'active'; render(); dlg.close();
+    if (r.avvisi?.length) toast(r.avvisi.join(' · '));
     if (r.link) linkResult(r.link, r.user.firstName);
     else toast(r.sent ? `Utente creato: ${r.user.firstName} riceve un'email` : 'Utente creato');
   });
@@ -314,10 +352,10 @@ dlgf.addEventListener('change', e => {
 });
 function openEdit(u) {
   open(`<h2>Modifica dati</h2>${personFields(u)}${footer()}`, async () => {
-    const body = {firstName: val('d-fn'), lastName: val('d-ln'), birthDate: val('d-bd')};
+    const body = {firstName: val('d-fn'), lastName: val('d-ln'), birthDate: val('d-bd'), cf: val('d-cf'), alboProvincia: val('d-ap'), alboNumero: val('d-an')};
     if (!u.owner) body.email = val('d-em');
     const r = await api('PATCH', '/api/admin/users/' + u.id, body);
-    Object.assign(u, r.user); render(); dlg.close(); toast('Dati salvati');
+    Object.assign(u, r.user); render(); dlg.close(); avvisa(r, 'Dati salvati e aggiornati nelle app');
   });
 }
 function openPassword(u) {

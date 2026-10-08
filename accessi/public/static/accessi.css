@@ -50,3 +50,4 @@ input:focus,select:focus{border-color:var(--teal)}
 .toast{position:fixed;left:50%;bottom:max(20px,env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--fg);color:var(--bg);
   padding:11px 16px;border-radius:12px;font-weight:600;font-size:14.5px;box-shadow:0 10px 30px rgba(0,0,0,.18);z-index:50;max-width:calc(100vw - 32px)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+[hidden]{display:none!important}

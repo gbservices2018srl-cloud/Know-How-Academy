@@ -126,6 +126,7 @@ const SSO_KEYS = APPS.filter(a => a.sso).map(a => a.key);
 // Lo fornisce la funzione "sso" dell'app, dopo aver verificato un biglietto monouso "catalog".
 const catalogCache = new Map();
 async function catalogo(a, u, fresh) {
+  if (!a.sso) return a.enti || {}; // elenchi fissi (es. le figure dei Turni)
   const c = catalogCache.get(a.key);
   if (!fresh && c && Date.now() - c.at < 60000) return c.enti;
   const ticket = await store.createTicket(u, a.key, 'catalog');
@@ -136,17 +137,51 @@ async function catalogo(a, u, fresh) {
   catalogCache.set(a.key, { at: Date.now(), enti: j.enti });
   return j.enti;
 }
-// Dopo un cambio di livello aggiorna subito il profilo nell'app (se la persona c'è già entrata almeno una volta).
-async function syncIn(u, key) {
+// Profilo nelle app: appena la persona è approvata (o cambiano permessi o dati) l'app riceve nome, email,
+// codice fiscale… e crea o aggiorna il suo profilo, così l'amministratore non deve ricrearlo in ogni app.
+//  - Nuovalab e Ticket (Supabase): la funzione "sso" con un biglietto "sync" crea utente e profilo;
+//    per "Nuovo medico" crea anche il medico in Nuovalab con i dati dell'albo e ne restituisce l'id.
+//  - App in questo servizio (Turni): evento "provision" (il collaboratore compare nel Personale).
+//  - Protocolli, Calendario, Magazzino: il profilo nasce al primo ingresso, non serve altro.
+// Restituisce gli avvisi da mostrare all'amministratore (vuoto se tutto bene).
+async function syncIn(u, key, oldEmail) {
   const a = APPS.find(x => x.key === key && x.sso);
-  if (!a) return;
+  if (!a) return null;
   try {
-    const ticket = await store.createTicket(u, a.key, 'sync');
-    await fetch(a.sso, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ticket }), signal: AbortSignal.timeout(15000) });
-  } catch (e) { console.warn(`Aggiornamento profilo in ${a.key} non riuscito:`, e.message); }
+    const ticket = await store.createTicket(u, a.key, 'sync', null, oldEmail ? { oldEmail } : {});
+    const r = await fetch(a.sso, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ticket }), signal: AbortSignal.timeout(20000) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.ok === false) return `${a.name}: profilo non creato${j.motivo ? ' (' + j.motivo + ')' : ''}. Riprova o controlla i dati.`;
+    if (j.ente) { // ente appena creato (es. il nuovo medico): da ora il permesso punta a quello
+      await store.q(`update user_apps set ente = $3, ente_nome = coalesce($4, ente_nome) where user_id = $1 and app = $2 and ente like 'nuovo:%'`,
+        [u.id, a.key, String(j.ente), j.enteNome ? String(j.enteNome) : null]);
+      catalogCache.delete(a.key);
+    }
+    return null;
+  } catch (e) {
+    console.warn(`Profilo in ${a.key} non aggiornato:`, e.message);
+    return `${a.name}: non risponde, il profilo verrà creato al primo ingresso della persona.`;
+  }
+}
+async function provisiona(u, keys, opts = {}) {
+  if (!u || u.status !== 'active' || u.owner) return [];
+  const apps = await store.appsOf(u), lv = await store.livelliOf(u.id);
+  const avvisi = [];
+  for (const k of keys || Object.keys(apps)) {
+    if (!apps[k]) continue;
+    const a = APPS.find(x => x.key === k);
+    if (a.sso) { const w = await syncIn(u, k, opts.oldEmail); if (w) avvisi.push(w); }
+    else {
+      for (const fn of store.events.listeners('provision:' + k)) {
+        try { const w = await fn({ user: store.publicUser(u), role: apps[k], livello: lv[k] || null, oldEmail: opts.oldEmail || null }); if (w) avvisi.push(w); }
+        catch (e) { console.warn(`Profilo in ${k}:`, e.message); avvisi.push(`${a.name}: profilo non aggiornato (${e.message}).`); }
+      }
+    }
+  }
+  return avvisi;
 }
 // Dal pannello: { role } per le app semplici, { livello, ente } per quelle con livelli. Restituisce [role, livello|null].
-async function leggiPermesso(a, v, u) {
+async function leggiPermesso(a, v, u, persona) {
   if (v == null || v === '' || v === 'none') return [null, null];
   if (typeof v === 'string') v = { role: v };
   if (!a.livelli) return [v.role === 'user' || v.role === 'admin' ? v.role : null, null];
@@ -159,10 +194,18 @@ async function leggiPermesso(a, v, u) {
   if (!L) throw Object.assign(new Error('Livello non valido'), { status: 400 });
   let lv = { livello: L.key, ente: null, enteNome: null };
   if (L.ente) {
-    const lista = (await catalogo(a, u))[L.ente] || [];
-    let e = lista.find(x => x.id === v.ente);
-    if (!e) e = ((await catalogo(a, u, true))[L.ente] || []).find(x => x.id === v.ente);
+    const cerca = async fresh => {
+      const cat = await catalogo(a, u, fresh);
+      if (L.nuovo && String(v.ente || '').startsWith('nuovo:')) { // nuovo medico in uno studio, con i dati dell'albo della persona
+        const st = (cat[L.nuovo] || []).find(x => 'nuovo:' + x.id === v.ente);
+        return st && { id: v.ente, nome: `Nuovo medico · ${st.nome}` };
+      }
+      return (cat[L.ente] || []).find(x => x.id === v.ente);
+    };
+    const e = await cerca(false) || await cerca(true);
     if (!e) throw Object.assign(new Error(`${L.enteLabel}: scegli dall'elenco.`), { status: 400 });
+    if (e.id.startsWith('nuovo:') && persona && !(persona.albo_provincia && persona.albo_numero))
+      throw Object.assign(new Error("Per creare il medico servono provincia e numero d'albo: aggiungili con «Modifica»."), { status: 400 });
     lv = { ...lv, ente: e.id, enteNome: e.nome };
   }
   return [L.role || 'user', lv];
@@ -202,6 +245,18 @@ app.get('/esci', wrap(async (req, res) => {
 }));
 
 /* ---------- registrazione ---------- */
+// Medico: provincia e numero di iscrizione all'albo (servono a Nuovalab). Vuoti = non è medico.
+function leggiAlbo(b) {
+  const alboProvincia = store.cleanProv(b.alboProvincia), alboNumero = store.cleanAlbo(b.alboNumero);
+  if (!alboProvincia && !alboNumero) return { dati: { alboProvincia: null, alboNumero: null } };
+  if (alboProvincia.length !== 2) return { errore: "Scrivi la provincia dell'albo con 2 lettere (es. MI)." };
+  if (!alboNumero) return { errore: "Scrivi il numero di iscrizione all'albo." };
+  return { dati: { alboProvincia, alboNumero } };
+}
+async function cfUsato(cf, tranneId) {
+  const { rows } = await store.q('select id from users where cf = $1 and id <> coalesce($2, \'\')', [cf, tranneId || null]);
+  return rows.length > 0;
+}
 app.post('/api/register', wrap(async (req, res) => {
   if (limited('reg|' + req.ip, 5, 60)) return bad(res, 429, 'Troppe registrazioni da questa connessione. Riprova più tardi.');
   const b = req.body;
@@ -209,11 +264,16 @@ app.post('/api/register', wrap(async (req, res) => {
   const email = store.cleanEmail(b.email), birthDate = store.cleanDate(b.birthDate), password = String(b.password || '');
   if (!firstName || !lastName) return bad(res, 400, 'Inserisci nome e cognome.');
   if (!birthDate) return bad(res, 400, 'Inserisci una data di nascita valida.');
+  const cf = store.cleanCf(b.cf);
+  if (!store.validCf(cf)) return bad(res, 400, 'Il codice fiscale non è corretto: controlla le 16 lettere e cifre.');
+  const albo = leggiAlbo(b);
+  if (albo.errore) return bad(res, 400, albo.errore);
   if (!store.validEmail(email)) return bad(res, 400, "Inserisci un'email valida.");
   if (password.length < 8) return bad(res, 400, 'La password deve avere almeno 8 caratteri.');
   if (!b.privacy) return bad(res, 400, "Per registrarti devi accettare l'informativa privacy.");
   if (await store.findByEmail(email)) return bad(res, 400, 'Esiste già un account con questa email. Se non ricordi la password usa «Password dimenticata».');
-  const u = await store.createUser({ firstName, lastName, birthDate, email, password, status: 'pending' });
+  if (await cfUsato(cf)) return bad(res, 400, 'Esiste già un account con questo codice fiscale. Se non ricordi la password usa «Password dimenticata».');
+  const u = await store.createUser({ firstName, lastName, birthDate, email, password, status: 'pending', cf, ...albo.dati });
   const adminUrl = PUBLIC_URL() + '/admin';
   mail.send({
     to: NOTIFY(), replyTo: email,
@@ -221,7 +281,8 @@ app.post('/api/register', wrap(async (req, res) => {
     text: `${fullName(u)} (nato/a il ${birthDate}, ${email}) chiede l'accesso alle app del gruppo.\nApprova e scegli le app da: ${adminUrl}`,
     html: mail.layout('Nuova richiesta di accesso', [
       `<b>${mail.esc(fullName(u))}</b> chiede l'accesso alle app del gruppo.`,
-      `Data di nascita: ${mail.esc(birthDate.split('-').reverse().join('/'))}<br>Email: ${mail.esc(email)}`,
+      `Data di nascita: ${mail.esc(birthDate.split('-').reverse().join('/'))}<br>Codice fiscale: ${mail.esc(cf)}<br>Email: ${mail.esc(email)}` +
+        (albo.dati.alboNumero ? `<br>Medico, iscritto all'albo di ${mail.esc(albo.dati.alboProvincia)} n. ${mail.esc(albo.dati.alboNumero)}` : ''),
       'Apri il pannello per approvarla e scegliere a quali app può accedere.',
     ], { url: adminUrl, label: 'Apri il pannello accessi' }),
   });
@@ -322,16 +383,22 @@ app.post('/api/admin/users', needAdmin, wrap(async (req, res) => {
   if (!store.validEmail(email)) return bad(res, 400, "Inserisci un'email valida.");
   if (password && password.length < 8) return bad(res, 400, 'La password deve avere almeno 8 caratteri.');
   if (await store.findByEmail(email)) return bad(res, 400, 'Esiste già un utente con questa email.');
-  const u = await store.createUser({ firstName, lastName, birthDate, email, password: password || null, status: 'active', createdBy: req.user.id });
+  const cf = b.cf ? store.cleanCf(b.cf) : null;
+  if (cf && !store.validCf(cf)) return bad(res, 400, 'Il codice fiscale non è corretto.');
+  if (cf && await cfUsato(cf)) return bad(res, 400, 'Esiste già un utente con questo codice fiscale.');
+  const albo = leggiAlbo(b);
+  if (albo.errore) return bad(res, 400, albo.errore);
+  const u = await store.createUser({ firstName, lastName, birthDate, email, password: password || null, status: 'active', createdBy: req.user.id, cf, ...albo.dati });
   for (const [k, v] of Object.entries(b.apps || {})) {
     const a = APPS.find(x => x.key === k); if (!a) continue;
-    const [role, lv] = await leggiPermesso(a, v, req.user).catch(() => [null, null]);
+    const [role, lv] = await leggiPermesso(a, v, req.user, u).catch(() => [null, null]);
     if (role) await store.setAppRole(u.id, k, role, lv);
   }
+  const avvisi = await provisiona(u);
   let link = null;
   if (!password) link = `${PUBLIC_URL()}/reimposta?t=${await store.createPasswordLink(u.id, 'invite', 24 * 7)}`;
   const sent = b.notify !== false ? await sendActivation(u, link) : false;
-  res.json({ user: store.publicUser(u, await store.appsOf(u)), sent, link: sent ? null : link });
+  res.json({ user: store.publicUser(u, await store.appsOf(u)), livelli: await store.livelliOf(u.id), sent, link: sent ? null : link, avvisi });
 }));
 
 app.patch('/api/admin/users/:id', needAdmin, wrap(async (req, res) => {
@@ -353,7 +420,18 @@ app.patch('/api/admin/users/:id', needAdmin, wrap(async (req, res) => {
     if (ex && ex.id !== u.id) return bad(res, 400, 'Esiste già un utente con questa email.');
     await store.q('update users set email = $2 where id = $1', [u.id, v]);
   }
-  let sent;
+  if (b.cf !== undefined) {
+    const v = b.cf ? store.cleanCf(b.cf) : null;
+    if (v && !store.validCf(v)) return bad(res, 400, 'Il codice fiscale non è corretto.');
+    if (v && await cfUsato(v, u.id)) return bad(res, 400, 'Esiste già un utente con questo codice fiscale.');
+    await store.q('update users set cf = $2 where id = $1', [u.id, v]);
+  }
+  if (b.alboProvincia !== undefined || b.alboNumero !== undefined) {
+    const albo = leggiAlbo(b);
+    if (albo.errore) return bad(res, 400, albo.errore);
+    await store.q('update users set albo_provincia = $2, albo_numero = $3 where id = $1', [u.id, albo.dati.alboProvincia, albo.dati.alboNumero]);
+  }
+  let sent, avvisi = [];
   if (b.status !== undefined) {
     if (!['active', 'disabled'].includes(b.status)) return bad(res, 400, 'Stato non valido');
     if (u.owner || u.id === req.user.id) return bad(res, 400, 'Non puoi disattivare questo account.');
@@ -363,7 +441,9 @@ app.patch('/api/admin/users/:id', needAdmin, wrap(async (req, res) => {
     if (b.status === 'active' && wasPending) sent = await sendActivation(await store.getUser(u.id), null);
   }
   const fresh = await store.getUser(u.id);
-  res.json({ user: store.publicUser(fresh, await store.appsOf(fresh)), sent });
+  // persona attiva: le app ricevono subito i dati aggiornati (o il nuovo profilo, appena approvata)
+  if (fresh.status === 'active' && b.status !== 'disabled') avvisi = await provisiona(fresh, null, { oldEmail: u.email });
+  res.json({ user: store.publicUser(fresh, await store.appsOf(fresh)), livelli: await store.livelliOf(u.id), sent, avvisi });
 }));
 
 app.put('/api/admin/users/:id/apps/:app', needAdmin, wrap(async (req, res) => {
@@ -373,13 +453,14 @@ app.put('/api/admin/users/:id/apps/:app', needAdmin, wrap(async (req, res) => {
   if (!store.APP_KEYS.includes(req.params.app)) return bad(res, 400, 'App sconosciuta');
   if (u.id === req.user.id && req.params.app === 'accessi') return bad(res, 400, 'Non puoi togliere a te stesso la gestione accessi.');
   const a = APPS.find(x => x.key === req.params.app);
-  const [role, lv] = await leggiPermesso(a, req.body.livello ? req.body : req.body.role, req.user);
+  const [role, lv] = await leggiPermesso(a, req.body.livello ? req.body : req.body.role, req.user, u);
   await store.setAppRole(u.id, a.key, role || 'none', lv);
-  if (!role) revokeIn(u, [a.key]); else if (a.sso) syncIn(u, a.key);
-  res.json({ apps: await store.appsOf(u), livelli: await store.livelliOf(u.id) });
+  let avvisi = [];
+  if (!role) revokeIn(u, [a.key]); else if (u.status === 'active') avvisi = await provisiona(u, [a.key]);
+  res.json({ apps: await store.appsOf(u), livelli: await store.livelliOf(u.id), avvisi });
 }));
 app.get('/api/admin/apps/:app/enti', needAdmin, wrap(async (req, res) => {
-  const a = APPS.find(x => x.key === req.params.app && x.sso && x.livelli);
+  const a = APPS.find(x => x.key === req.params.app && x.livelli);
   if (!a) return bad(res, 404, 'App sconosciuta');
   res.json({ enti: await catalogo(a, req.user, req.query.fresh === '1') });
 }));

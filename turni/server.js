@@ -52,6 +52,31 @@ const needUser = (req, res, next) => req.user ? next() : bad(res, 401, 'Accesso 
 const needAdmin = (req, res, next) => req.user?.role === 'admin' ? next() : bad(res, 403, 'Solo amministratori');
 app.use('/api', (req, res, next) => (['GET', 'HEAD', 'DELETE'].includes(req.method) || req.is('application/json') || req.is('multipart/form-data')) ? next() : bad(res, 415, 'Formato non valido'));
 
+/* ---------- profilo creato dal pannello accessi ---------- */
+// Quando l'amministratore approva qualcuno (o gli dà Turni, o ne cambia i dati) il collaboratore compare nel Personale
+// con nome, cognome, email, codice fiscale e figura: restano da impostare solo sedi e orario.
+sso.onProvision(async ({ user, livello, oldEmail }) => {
+  const figura = livello?.ente && livello.ente !== 'nessuna' ? livello.ente : null;
+  const emails = [user.email, oldEmail].filter(Boolean).map(x => x.toLowerCase());
+  await caricaConfig(); // crea la configurazione vuota se non c'è ancora
+  return db.tx(async qq => {
+    const { rows } = await qq('select data from config where id = 1 for update');
+    const c = rows[0].data; c.staff ||= [];
+    let e = c.staff.find(x => emails.includes(String(x.email || '').toLowerCase()));
+    if (!e && user.cf) e = c.staff.find(x => x.tipo !== 'Medico' && String(x.cf || '').toUpperCase() === user.cf);
+    if (!e && !figura) return null; // nessuna figura: non è in turno
+    if (!e) {
+      e = { id: 'u' + crypto.randomBytes(6).toString('hex'), ore: {}, cfg: {}, ferie: 22, rol: 72 };
+      c.staff.push(e);
+    }
+    Object.assign(e, { nome: user.firstName, cognome: user.lastName, email: user.email.toLowerCase(), accesso: true });
+    if (user.cf) e.cf = user.cf;
+    if (figura) e.tipo = figura;
+    await qq(`update config set data = $1, version = version + 1, aggiornata_il = now(), aggiornata_da = 'accesso unico' where id = 1`, [JSON.stringify(c)]);
+    return null;
+  });
+});
+
 /* ---------- caricamento dello stato ---------- */
 async function caricaConfig() {
   const { rows } = await db.q('select data, version, aggiornata_il from config where id = 1');
