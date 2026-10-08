@@ -3,14 +3,27 @@
 // "accessi" è il pannello per gestire gli utenti (solo il ruolo amministratore ha senso).
 // sso: indirizzo della funzione "sso" su Supabase, per le app che usano Supabase per l'accesso (Nuovalab, Ticket):
 // il riquadro passa da /sso/<app>, che crea un biglietto monouso e lo consegna a quella funzione.
+// livelli: i ruoli interni dell'app; il pannello accessi li assegna (con laboratorio/studio/medico/azienda)
+// e la funzione "sso" crea o aggiorna il profilo nell'app, così la persona non deve avere un'altra password.
 module.exports = [
   { key: 'finanza', name: 'Gestione finanziaria', url: 'https://finanza.appgestione.it', color: 'teal',
     desc: 'Andamento economico e dati finanziari del gruppo.' },
   { key: 'laboratorio', name: 'Nuovalab', url: 'https://laboratorio.appgestione.it', color: 'purple',
     sso: 'https://ncfsugpmqimukynuvzba.supabase.co/functions/v1/sso',
+    livelli: [
+      { key: 'ADMIN', label: 'Amministratore', role: 'admin' },
+      { key: 'LABORATORIO', label: 'Laboratorio', ente: 'laboratori', enteLabel: 'Quale laboratorio' },
+      { key: 'STUDIO', label: 'Studio', ente: 'studi', enteLabel: 'Quale studio' },
+      { key: 'MEDICO', label: 'Medico', ente: 'medici', enteLabel: 'Quale medico' },
+    ],
     desc: "L'app del laboratorio." },
   { key: 'ticket', name: 'Ticket assistenza', url: 'https://ticket.appgestione.it', color: 'yellow',
     sso: 'https://pswocuqnwltwjembncnq.supabase.co/functions/v1/sso',
+    livelli: [
+      { key: 'super_admin', label: 'Amministratore', role: 'admin' },
+      { key: 'admin_azienda', label: 'Responsabile azienda', ente: 'aziende', enteLabel: 'Quale azienda' },
+      { key: 'utente_studio', label: 'Utente studio', ente: 'studi', enteLabel: 'Quale studio' },
+    ],
     desc: "Richieste di supporto tra gli studi e l'amministrazione." },
   { key: 'protocolli', name: 'Protocolli', url: 'https://protocolli.appgestione.it', color: 'teal',
     desc: 'Il flusso di lavoro dello studio con protocolli, procedure e assistente.' },

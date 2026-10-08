@@ -90,7 +90,25 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmtDate = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—';
 const fmtTime = d => d ? new Date(d).toLocaleString('it-IT', {day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'}) : 'mai';
-let S = {users: [], apps: [], me: null, mail: false};
+let S = {users: [], apps: [], me: null, mail: false, livelli: {}};
+// Nuovalab e Ticket: elenchi di laboratori, studi, medici, aziende letti dall'app (per il livello di accesso)
+const ENTI = {}, ENTI_V = {}, pend = {};
+function enti(app) {
+  if (!ENTI[app]) ENTI[app] = api('GET', `/api/admin/apps/${app}/enti`)
+    .then(r => { ENTI_V[app] = r.enti; render(); return r.enti; })
+    .catch(e => { delete ENTI[app]; ENTI_V[app] = {errore: e.message}; render(); });
+  return ENTI[app];
+}
+const lvOf = (u, a) => (S.livelli[u.id] || {})[a.key] || null;
+function enteSelect(a, L, sel, attrs) {
+  const v = ENTI_V[a.key];
+  if (!v) { enti(a.key); return `<select ${attrs} disabled><option>Caricamento elenco…</option></select>`; }
+  if (v.errore) return `<span class="hint" style="color:var(--danger)">${esc(v.errore)}</span>`;
+  const list = v[L.ente] || [];
+  if (!list.length) return `<span class="hint">Nessun elemento: crealo prima dentro ${esc(a.name)}.</span>`;
+  return `<select ${attrs} aria-label="${esc(L.enteLabel)}"><option value="">${esc(L.enteLabel)}…</option>${list.map(x =>
+    `<option value="${esc(x.id)}" ${x.id === sel ? 'selected' : ''}>${esc(x.nome)}${x.info ? ' · ' + esc(x.info) : ''}</option>`).join('')}</select>`;
+}
 let filter = 'pending';
 
 function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.append(d); setTimeout(() => d.remove(), 3200); }
@@ -103,6 +121,7 @@ async function api(method, url, body) {
 }
 async function load() {
   S = await api('GET', '/api/admin/users');
+  S.livelli ||= {};
   $('#mailwarn').hidden = S.mail;
   if (filter === 'pending' && !S.users.some(u => u.status === 'pending') && !load.done) filter = 'active';
   load.done = true;
@@ -134,6 +153,16 @@ function card(u, homonym) {
   const selfOrOwner = u.owner || u.id === S.me;
   const apps = S.apps.map(a => {
     const role = u.apps[a.key] || '';
+    if (a.livelli && !u.owner) {
+      const cur = lvOf(u, a), k = u.id + '|' + a.key;
+      const adminKey = a.livelli.find(l => l.role === 'admin').key;
+      const sel = pend[k] || cur?.livello || (role === 'admin' ? adminKey : role === 'user' ? '_old' : '');
+      const L = a.livelli.find(l => l.key === sel);
+      const opts = `<option value="">Nessun accesso</option>${sel === '_old' ? '<option value="_old" selected>Utente (scegli il livello)</option>' : ''}` +
+        a.livelli.map(l => `<option value="${l.key}" ${l.key === sel ? 'selected' : ''}>${esc(l.label)}</option>`).join('');
+      const ente = L?.ente ? enteSelect(a, L, cur?.livello === sel ? cur.ente : '', `data-ente="${a.key}" data-u="${u.id}" data-lv="${L.key}"`) : '';
+      return `<label class="ap">${esc(a.name)}<select data-app="${a.key}" data-u="${u.id}" class="${role}">${opts}</select>${ente}</label>`;
+    }
     const dis = u.owner || (u.id === S.me && a.key === 'accessi');
     const opts = a.adminOnly
       ? `<option value="">Nessun accesso</option><option value="admin" ${role ? 'selected' : ''}>Amministratore</option>`
@@ -163,8 +192,30 @@ function card(u, homonym) {
 
 /* ---------- permessi per app ---------- */
 document.addEventListener('change', async e => {
+  const se = e.target.closest('select[data-ente]');
+  if (se) {
+    const u = S.users.find(x => x.id === se.dataset.u), k = u.id + '|' + se.dataset.ente;
+    if (!se.value) return;
+    try {
+      const r = await api('PUT', `/api/admin/users/${u.id}/apps/${se.dataset.ente}`, {livello: se.dataset.lv, ente: se.value});
+      u.apps = r.apps; S.livelli[u.id] = r.livelli; delete pend[k]; render(); toast('Salvato');
+    } catch (err) { toast(err.message); }
+    return;
+  }
   const s = e.target.closest('select[data-app]'); if (!s) return;
   const u = S.users.find(x => x.id === s.dataset.u);
+  const a = S.apps.find(x => x.key === s.dataset.app);
+  if (a.livelli) {
+    const k = u.id + '|' + a.key, L = a.livelli.find(l => l.key === s.value);
+    if (L?.ente) { pend[k] = L.key; render(); toast(`Ora scegli: ${L.enteLabel.toLowerCase()}`); return; }
+    if (s.value === '_old') return;
+    delete pend[k];
+    try {
+      const r = await api('PUT', `/api/admin/users/${u.id}/apps/${a.key}`, L ? {livello: L.key} : {role: 'none'});
+      u.apps = r.apps; S.livelli[u.id] = r.livelli; render(); toast('Salvato');
+    } catch (err) { render(); toast(err.message); }
+    return;
+  }
   const prev = u.apps[s.dataset.app] || '';
   s.className = s.value;
   try {
@@ -232,16 +283,34 @@ function linkResult(link, who) {
   $('#d-copy').onclick = () => { navigator.clipboard.writeText(link).then(() => toast('Link copiato'), () => { $('#d-link').select(); }); };
 }
 $('#add').addEventListener('click', () => {
-  const appSel = S.apps.map(a => `<label class="ap">${esc(a.name)}<select data-new="${a.key}"><option value="">Nessun accesso</option>${a.adminOnly ? '' : '<option value="user">Utente</option>'}<option value="admin">Amministratore</option></select></label>`).join('');
+  const appSel = S.apps.map(a => a.livelli
+    ? `<label class="ap">${esc(a.name)}<select data-new="${a.key}"><option value="">Nessun accesso</option>${a.livelli.map(l => `<option value="lv:${l.key}">${esc(l.label)}</option>`).join('')}</select><span data-newente="${a.key}"></span></label>`
+    : `<label class="ap">${esc(a.name)}<select data-new="${a.key}"><option value="">Nessun accesso</option>${a.adminOnly ? '' : '<option value="user">Utente</option>'}<option value="admin">Amministratore</option></select></label>`).join('');
   open(`<h2>Nuovo utente</h2>${personFields()}
     <label class="field">Password <small class="muted" style="font-weight:500">Facoltativa: se la lasci vuota la persona riceve un link per sceglierla da sola.</small><input id="d-pw" type="text" autocomplete="off" minlength="8" placeholder="Almeno 8 caratteri"></label>
     <div class="field" style="gap:8px">App a cui può accedere<div class="apps">${appSel}</div></div>${footer('Crea utente')}`, async () => {
-    const apps = {}; dlgf.querySelectorAll('select[data-new]').forEach(s => { if (s.value) apps[s.dataset.new] = s.value; });
+    const apps = {};
+    for (const s of dlgf.querySelectorAll('select[data-new]')) {
+      if (!s.value) continue;
+      if (s.value.startsWith('lv:')) {
+        const a = S.apps.find(x => x.key === s.dataset.new), L = a.livelli.find(l => 'lv:' + l.key === s.value);
+        const en = dlgf.querySelector(`[data-newente="${a.key}"] select`)?.value || '';
+        if (L.ente && !en) throw new Error(`${a.name}: ${L.enteLabel.toLowerCase()}?`);
+        apps[a.key] = {livello: L.key, ente: en || null};
+      } else apps[s.dataset.new] = s.value;
+    }
     const r = await api('POST', '/api/admin/users', {firstName: val('d-fn'), lastName: val('d-ln'), birthDate: val('d-bd'), email: val('d-em'), password: val('d-pw'), apps});
     S.users.push(r.user); filter = 'active'; render(); dlg.close();
     if (r.link) linkResult(r.link, r.user.firstName);
     else toast(r.sent ? `Utente creato: ${r.user.firstName} riceve un'email` : 'Utente creato');
   });
+});
+dlgf.addEventListener('change', e => {
+  const s = e.target.closest('select[data-new]'); if (!s) return;
+  const a = S.apps.find(x => x.key === s.dataset.new); if (!a.livelli) return;
+  const box = dlgf.querySelector(`[data-newente="${a.key}"]`), L = a.livelli.find(l => 'lv:' + l.key === s.value);
+  const draw = () => { box.innerHTML = L?.ente ? enteSelect(a, L, '', '') : ''; };
+  draw(); if (L?.ente && !ENTI_V[a.key]) enti(a.key)?.then(draw);
 });
 function openEdit(u) {
   open(`<h2>Modifica dati</h2>${personFields(u)}${footer()}`, async () => {

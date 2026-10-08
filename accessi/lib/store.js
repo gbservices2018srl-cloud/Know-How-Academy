@@ -78,6 +78,12 @@ async function migrate() {
   await q(`delete from sessions where expires_at < now()`);
   await q(`delete from password_links where expires_at < now() - interval '7 days'`);
   await q(`delete from sso_tickets where expires_at < now() - interval '1 day'`);
+  // livello dentro l'app (Nuovalab, Ticket): ruolo e laboratorio/studio/medico/azienda scelti dal pannello accessi
+  await q(`alter table user_apps add column if not exists livello text;
+    alter table user_apps add column if not exists ente text;
+    alter table user_apps add column if not exists ente_nome text;
+    alter table sso_tickets drop constraint if exists sso_tickets_purpose_check;
+    alter table sso_tickets add constraint sso_tickets_purpose_check check (purpose in ('login','revoke','catalog','sync'));`);
 }
 
 // Il proprietario (ADMIN_USERNAME / ADMIN_PASSWORD su Render) è sempre attivo e amministratore di tutto.
@@ -120,6 +126,10 @@ function cleanDate(s) {
   return y >= 1900 && y <= now ? v : null;
 }
 
+async function livelliOf(userId) {
+  const { rows } = await q('select app, livello, ente, ente_nome from user_apps where user_id = $1 and livello is not null', [userId]);
+  return Object.fromEntries(rows.map(r => [r.app, { livello: r.livello, ente: r.ente, enteNome: r.ente_nome }]));
+}
 async function appsOf(user) {
   if (user.owner) return Object.fromEntries(APP_KEYS.map(k => [k, 'admin']));
   const { rows } = await q('select app, role from user_apps where user_id = $1', [user.id]);
@@ -156,12 +166,14 @@ async function setPassword(userId, password) {
   await q('update users set password_hash = $2 where id = $1', [userId, await bcrypt.hash(String(password), 12)]);
 }
 
-async function setAppRole(userId, app, role) {
+// livello: per le app con "livelli" (Nuovalab, Ticket) → { livello, ente, enteNome }; il ruolo Utente/Amministratore ne deriva.
+async function setAppRole(userId, app, role, livello = null) {
   if (!APP_KEYS.includes(app)) throw new Error('App sconosciuta');
   if (role === 'user' || role === 'admin') {
     if (app === 'accessi' && role === 'user') role = 'admin';
-    await q(`insert into user_apps (user_id, app, role) values ($1,$2,$3)
-             on conflict (user_id, app) do update set role = excluded.role`, [userId, app, role]);
+    await q(`insert into user_apps (user_id, app, role, livello, ente, ente_nome) values ($1,$2,$3,$4,$5,$6)
+             on conflict (user_id, app) do update set role = excluded.role, livello = excluded.livello, ente = excluded.ente, ente_nome = excluded.ente_nome`,
+      [userId, app, role, livello?.livello || null, livello?.ente || null, livello?.enteNome || null]);
   } else {
     await q('delete from user_apps where user_id = $1 and app = $2', [userId, app]);
   }
@@ -238,12 +250,14 @@ async function redeemTicket(token, app) {
     where token_hash = $1 and app = $2 and used_at is null and expires_at > now() returning *`, [sha(token), app]);
   const t = rows[0];
   if (!t) return null;
-  if (t.purpose === 'login') { // ancora attivo e abilitato a quell'app?
+  if (t.purpose === 'login' || t.purpose === 'sync') { // ancora attivo e abilitato a quell'app?
     const u = await getUser(t.user_id);
     if (!u || u.status !== 'active') return null;
     const role = (await appsOf(u))[app];
     if (!role) return null;
-    return { purpose: 'login', email: u.email, firstName: u.first_name, lastName: u.last_name, birthDate: u.birth_date, role };
+    const lv = u.owner ? null : (await livelliOf(u.id))[app] || null;
+    return { purpose: t.purpose, email: u.email, firstName: u.first_name, lastName: u.last_name, birthDate: u.birth_date, role,
+      livello: lv?.livello || null, ente: lv?.ente || null };
   }
   return { purpose: t.purpose, email: t.email };
 }
@@ -274,6 +288,6 @@ async function peekPasswordLink(token) {
 module.exports = {
   pool, q, SCHEMA, APPS, APP_KEYS, events, migrate, ensureOwner,
   cleanEmail, validEmail, cleanName, cleanDate, appsOf, publicUser, getUser, findByEmail, createUser, setPassword,
-  setAppRole, deleteUser, usersWithApp, logoutEverywhere, createSession, endSession, check, verify,
+  setAppRole, livelliOf, deleteUser, usersWithApp, logoutEverywhere, createSession, endSession, check, verify,
   createPasswordLink, usePasswordLink, peekPasswordLink, SESSION_DAYS, sha, createTicket, redeemTicket,
 };

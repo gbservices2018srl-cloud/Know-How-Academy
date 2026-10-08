@@ -121,6 +121,52 @@ async function revokeIn(u, keys) {
   }
 }
 const SSO_KEYS = APPS.filter(a => a.sso).map(a => a.key);
+
+// Elenco di laboratori, studi, medici, aziende… di un'app su Supabase (per scegliere il livello nel pannello).
+// Lo fornisce la funzione "sso" dell'app, dopo aver verificato un biglietto monouso "catalog".
+const catalogCache = new Map();
+async function catalogo(a, u, fresh) {
+  const c = catalogCache.get(a.key);
+  if (!fresh && c && Date.now() - c.at < 60000) return c.enti;
+  const ticket = await store.createTicket(u, a.key, 'catalog');
+  const r = await fetch(a.sso, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ticket }), signal: AbortSignal.timeout(15000) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.enti) throw Object.assign(new Error(`Non riesco a leggere gli elenchi da ${a.name}. Riprova tra poco.`), { status: 502 });
+  catalogCache.set(a.key, { at: Date.now(), enti: j.enti });
+  return j.enti;
+}
+// Dopo un cambio di livello aggiorna subito il profilo nell'app (se la persona c'è già entrata almeno una volta).
+async function syncIn(u, key) {
+  const a = APPS.find(x => x.key === key && x.sso);
+  if (!a) return;
+  try {
+    const ticket = await store.createTicket(u, a.key, 'sync');
+    await fetch(a.sso, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ticket }), signal: AbortSignal.timeout(15000) });
+  } catch (e) { console.warn(`Aggiornamento profilo in ${a.key} non riuscito:`, e.message); }
+}
+// Dal pannello: { role } per le app semplici, { livello, ente } per quelle con livelli. Restituisce [role, livello|null].
+async function leggiPermesso(a, v, u) {
+  if (v == null || v === '' || v === 'none') return [null, null];
+  if (typeof v === 'string') v = { role: v };
+  if (!a.livelli) return [v.role === 'user' || v.role === 'admin' ? v.role : null, null];
+  if (!v.livello) { // vecchio modo (Utente/Amministratore) ancora accettato
+    if (v.role === 'admin') v = { livello: a.livelli.find(l => l.role === 'admin').key };
+    else if (v.role === 'user') return ['user', null];
+    else return [null, null];
+  }
+  const L = a.livelli.find(l => l.key === v.livello);
+  if (!L) throw Object.assign(new Error('Livello non valido'), { status: 400 });
+  let lv = { livello: L.key, ente: null, enteNome: null };
+  if (L.ente) {
+    const lista = (await catalogo(a, u))[L.ente] || [];
+    let e = lista.find(x => x.id === v.ente);
+    if (!e) e = ((await catalogo(a, u, true))[L.ente] || []).find(x => x.id === v.ente);
+    if (!e) throw Object.assign(new Error(`${L.enteLabel}: scegli dall'elenco.`), { status: 400 });
+    lv = { ...lv, ente: e.id, enteNome: e.nome };
+  }
+  return [L.role || 'user', lv];
+}
 const fullName = u => `${u.first_name} ${u.last_name}`.trim() || u.email;
 
 /* ---------- accesso ---------- */
@@ -235,12 +281,16 @@ app.post('/api/me/password', needUser, wrap(async (req, res) => {
 /* ---------- pannello amministratore ---------- */
 app.get('/api/admin/users', needAdmin, wrap(async (req, res) => {
   const { rows: users } = await store.q('select * from users order by (status = \'pending\') desc, owner desc, last_name, first_name');
-  const { rows: ua } = await store.q('select user_id, app, role from user_apps');
-  const by = {};
-  for (const r of ua) (by[r.user_id] ||= {})[r.app] = r.role;
+  const { rows: ua } = await store.q('select user_id, app, role, livello, ente, ente_nome from user_apps');
+  const by = {}, lv = {};
+  for (const r of ua) {
+    (by[r.user_id] ||= {})[r.app] = r.role;
+    if (r.livello) (lv[r.user_id] ||= {})[r.app] = { livello: r.livello, ente: r.ente, enteNome: r.ente_nome };
+  }
   res.json({
     me: req.user.id,
-    apps: APPS.map(a => ({ key: a.key, name: a.name, adminOnly: !!a.adminOnly })),
+    apps: APPS.map(a => ({ key: a.key, name: a.name, adminOnly: !!a.adminOnly, livelli: a.livelli || null })),
+    livelli: lv,
     mail: mail.enabled(),
     users: users.map(u => store.publicUser(u, u.owner ? Object.fromEntries(store.APP_KEYS.map(k => [k, 'admin'])) : (by[u.id] || {}))),
   });
@@ -273,7 +323,11 @@ app.post('/api/admin/users', needAdmin, wrap(async (req, res) => {
   if (password && password.length < 8) return bad(res, 400, 'La password deve avere almeno 8 caratteri.');
   if (await store.findByEmail(email)) return bad(res, 400, 'Esiste già un utente con questa email.');
   const u = await store.createUser({ firstName, lastName, birthDate, email, password: password || null, status: 'active', createdBy: req.user.id });
-  for (const [k, r] of Object.entries(b.apps || {})) if (store.APP_KEYS.includes(k)) await store.setAppRole(u.id, k, r);
+  for (const [k, v] of Object.entries(b.apps || {})) {
+    const a = APPS.find(x => x.key === k); if (!a) continue;
+    const [role, lv] = await leggiPermesso(a, v, req.user).catch(() => [null, null]);
+    if (role) await store.setAppRole(u.id, k, role, lv);
+  }
   let link = null;
   if (!password) link = `${PUBLIC_URL()}/reimposta?t=${await store.createPasswordLink(u.id, 'invite', 24 * 7)}`;
   const sent = b.notify !== false ? await sendActivation(u, link) : false;
@@ -318,9 +372,16 @@ app.put('/api/admin/users/:id/apps/:app', needAdmin, wrap(async (req, res) => {
   if (u.owner) return bad(res, 400, 'Il proprietario è amministratore di tutte le app.');
   if (!store.APP_KEYS.includes(req.params.app)) return bad(res, 400, 'App sconosciuta');
   if (u.id === req.user.id && req.params.app === 'accessi') return bad(res, 400, 'Non puoi togliere a te stesso la gestione accessi.');
-  await store.setAppRole(u.id, req.params.app, req.body.role);
-  if (req.body.role !== 'user' && req.body.role !== 'admin') revokeIn(u, [req.params.app]);
-  res.json({ apps: await store.appsOf(u) });
+  const a = APPS.find(x => x.key === req.params.app);
+  const [role, lv] = await leggiPermesso(a, req.body.livello ? req.body : req.body.role, req.user);
+  await store.setAppRole(u.id, a.key, role || 'none', lv);
+  if (!role) revokeIn(u, [a.key]); else if (a.sso) syncIn(u, a.key);
+  res.json({ apps: await store.appsOf(u), livelli: await store.livelliOf(u.id) });
+}));
+app.get('/api/admin/apps/:app/enti', needAdmin, wrap(async (req, res) => {
+  const a = APPS.find(x => x.key === req.params.app && x.sso && x.livelli);
+  if (!a) return bad(res, 404, 'App sconosciuta');
+  res.json({ enti: await catalogo(a, req.user, req.query.fresh === '1') });
 }));
 
 app.post('/api/admin/users/:id/password-link', needAdmin, wrap(async (req, res) => {
@@ -423,6 +484,7 @@ app.use((req, res) => res.status(404).sendFile(path.join(PUB, '404.html')));
 
 app.use((err, req, res, next) => {
   if (err.type === 'entity.parse.failed') return bad(res, 400, 'Richiesta non valida');
+  if (err.status && err.status < 600 && err.status !== 500) return bad(res, err.status, err.message);
   console.error('Accesso unico:', err);
   bad(res, 500, 'Errore del server. Riprova.');
 });
