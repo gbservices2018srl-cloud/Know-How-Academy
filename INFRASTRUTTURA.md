@@ -14,6 +14,7 @@ Tutte le app sono su **Render** (workspace "Giancarlo's workspace"), il codice �
 | Protocolli | protocolli.appgestione.it | `/admin` | `mappa-protocolli` (Node, piano gratuito) — **lo stesso servizio fa girare anche il Calendario** | `Know-How-Academy` |
 | Calendario eventi | calendario.appgestione.it | `/admin` → accesso | `mappa-protocolli` (lo stesso dei Protocolli); il vecchio servizio `calendario-eventi` va eliminato dopo il collegamento | `Know-How-Academy`, cartella `calendario/` (il repository `app-calendario-eventi` non si usa più) |
 | Magazzino centrale | magazzino.appgestione.it (**da collegare**: CNAME su Aruba e dominio nel servizio `mappa-protocolli`) | stessa app: chi è Amministratore nel pannello accessi vede Richieste, Articoli, Riordino, Fornitori | `mappa-protocolli` (lo stesso di Protocolli e Calendario) | `Know-How-Academy`, cartella `magazzino/` |
+| Turni | turni.appgestione.it (**da collegare**: CNAME su Aruba e dominio nel servizio `mappa-protocolli`) | stessa app: Amministratore = planning, richieste, personale, regole, sedi, buste paga; Utente = il dipendente (riconosciuto dall'email scritta nella sua scheda) | `mappa-protocolli` | `Know-How-Academy`, cartella `turni/` |
 | Radiografia studio | radiografia-studio.onrender.com | — | `radiografia-studio` (Python) | `app-radiografia-studi-dentalia` |
 
 I vecchi indirizzi `www.appgestione.it/finanziario`, `/ticketassistenza` e `/laboratorio` portano da soli ai nuovi sottodomini.
@@ -30,12 +31,13 @@ I vecchi indirizzi `www.appgestione.it/finanziario`, `/ticketassistenza` e `/lab
 | `protocolli` | CNAME | `mappa-protocolli.onrender.com` |
 | `calendario` | CNAME | `mappa-protocolli.onrender.com` |
 | `magazzino` | CNAME | `mappa-protocolli.onrender.com` (da aggiungere) |
+| `turni` | CNAME | `mappa-protocolli.onrender.com` (da aggiungere) |
 
 Per ogni nuovo sottodominio: record CNAME su Aruba **e** "Custom Domains" nel servizio su Render. Il piano Hobby di Render include 2 domini personalizzati; ogni dominio in più costa 0,25 $ al mese.
 
 ## Database
 
-- **`mappa-protocolli-db`** (PostgreSQL a pagamento, 1 GB, circa 6,30 $/mese, nessuna scadenza): usato da Protocolli (schema `mappa`) e Calendario eventi (schema `calendario`).
+- **`mappa-protocolli-db`** (PostgreSQL a pagamento, 1 GB, circa 6,30 $/mese, nessuna scadenza): usato da Protocolli (schema `mappa`), Calendario eventi (`calendario`), Accesso unico (`accessi`), Magazzino (`magazzino`) e Turni (`turni`).
 - **`radiografia-db`** (PostgreSQL gratuito): **scade il 29 ottobre 2026** e viene cancellato con i dati circa 14 giorni dopo, se non si passa a un piano a pagamento.
 - Ticket assistenza e Nuovalab usano **Supabase**.
 - Gestione finanziaria salva i dati sul disco del suo servizio (`/var/data`).
@@ -67,6 +69,14 @@ Protocolli e Calendario: `ADMIN_USERNAME` / `ADMIN_PASSWORD` nelle impostazioni 
 - Disponibile = giacenza − prenotazioni in attesa: nessuno può prenotare più di quello che c'è. Confermare scala la giacenza, rifiutare la libera.
 - Riordino: quando (giacenza + merce già ordinata) scende alla scorta minima, l'articolo entra nel carrello con la quantità per tornare al livello di carico. Dal carrello nasce un ordine per fornitore, inviato via email (Resend) o stampato. "Merce ricevuta" ricarica la giacenza. Ogni variazione resta nei Movimenti.
 - Notifiche sul telefono (Web Push) agli amministratori per ogni nuova prenotazione e al cliente per l'esito. Dati nello schema `magazzino`.
+
+## Turni
+- Solo con l'accesso unico. Il dipendente è riconosciuto dall'email della sua scheda in Personale; al primo accesso accetta l'informativa privacy (registrata con data e dispositivo).
+- Il motore che calcola i turni è `turni/public/motore.js`, lo stesso file usato dalla pagina e dal server (`turni/lib/motore.js`). "Genera turni" ricalcola da oggi in avanti; i giorni passati restano.
+- Il dipendente riceve dal server solo i suoi turni, con chi lavora, le sue richieste e le sue buste: non vede la configurazione né i dati degli altri.
+- Ferie e ROL: serve il sostituto, che conferma; poi approva l'amministratore e i turni passano al sostituto. La malattia (con protocollo del certificato) vale subito.
+- Regole scritte a parole: interpretate con l'API di Claude (`ANTHROPIC_API_KEY`, modello in `TURNI_AI_MODEL`, predefinito `claude-sonnet-5-5`), applicate solo dopo conferma.
+- Buste paga: il PDF della consulente si divide per codice fiscale (le pagine senza codice restano da assegnare). I file sono salvati cifrati (AES-256-GCM) con la chiave `BUSTE_KEY` su Render: **se si perde la chiave, le buste salvate non si possono più aprire**. Il dipendente le apre con la password di appgestione.it; apertura e presa visione sono registrate con data, ora, dispositivo e impronta SHA-256 del file. Visibili al dipendente 18 mesi, poi solo nell'archivio dell'amministrazione.
 
 ## Protocolli + Calendario in un solo servizio
 `index.js` avvia le due app e smista ogni richiesta in base all'indirizzo: `calendario.appgestione.it` va al Calendario, tutto il resto ai Protocolli.

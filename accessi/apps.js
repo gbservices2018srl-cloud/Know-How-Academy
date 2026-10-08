@@ -18,6 +18,8 @@ module.exports = [
     desc: 'Formazione, riunioni ed eventi aziendali per lo staff.' },
   { key: 'magazzino', name: 'Magazzino centrale', url: 'https://magazzino.appgestione.it', color: 'yellow',
     desc: 'Disponibilità degli articoli, prenotazioni e riordino ai fornitori.' },
+  { key: 'turni', name: 'Turni', url: 'https://turni.appgestione.it', color: 'teal',
+    desc: 'Planning delle sedi, ferie e permessi, sostituzioni e buste paga.' },
   { key: 'accessi', name: 'Gestione accessi', url: '/admin', color: 'grey', adminOnly: true,
     desc: 'Approva le registrazioni e decide chi entra in quali app.' },
 ];

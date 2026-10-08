@@ -1,0 +1,1208 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Turni · To Smile</title>
+<meta name="description" content="Turni delle sedi To Smile, richieste di assenza, sostituzioni e buste paga.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@600;700;800&family=Figtree:wght@400;500;600;700;800&display=swap">
+<link rel="icon" href="/icon.svg">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#4CAAAA">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Turni">
+<style>
+/* Layout: barra in alto con logo To Smile, nome dell'app e account; schede sotto (in basso sul telefono);
+   contenuto su schede bianche arrotondate. Turni come tessere colorate: mattina verde acqua, pomeriggio viola. */
+:root{
+  --teal:#4CAAAA; --teal-ink:#2A7C7D; --purple:#8C6898; --purple-ink:#6E4C7B; --yellow:#E8E560; --olive-ink:#77731A;
+  --bg:#FBFBF8; --surface:#FFFFFF; --sunken:#F4F4EF; --fg:#2B3033; --muted:#6B7276; --line:#E6E6DF; --edge:#D9D9D0;
+  --accent:var(--yellow); --accent-soft:#FBF9DA; --on-accent:#3A3816; --primary:var(--teal-ink); --on-primary:#FFFFFF;
+  --ok:#2E7D4F; --ok-soft:#E3F2E8; --warn:#9A6200; --warn-soft:#FCEFD6; --bad:#B3261E; --bad-soft:#FBEAEA;
+  --m:var(--teal); --m-fg:#FFFFFF; --p:var(--purple); --p-fg:#FFFFFF; --r-fg:#A9AEB0;
+  --shadow:0 1px 2px rgba(43,48,51,.05),0 6px 20px rgba(43,48,51,.06);
+  --f-display:"Fira Sans","Figtree",system-ui,sans-serif; --f-body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif; --f-mono:var(--f-body);
+  --logo-bg:transparent; --rad:16px;
+}
+@media (prefers-color-scheme:dark){:root{
+  --teal-ink:#6CC7C7; --purple-ink:#C3A6D0; --olive-ink:#E8E560;
+  --bg:#15191B; --surface:#1D2326; --sunken:#252C30; --fg:#ECEFF0; --muted:#A3AAAE; --line:#2F383C; --edge:#3A4448;
+  --accent-soft:#35341C; --on-accent:#2B2A10; --primary:#6CC7C7; --on-primary:#0F1A1B;
+  --ok:#7FD3A0; --ok-soft:#1B3326; --warn:#F2C26B; --warn-soft:#3A2E16; --bad:#F2B8B5; --bad-soft:#3A2222;
+  --m:#3E9696; --p:#7E5C8A; --r-fg:#59636A; --shadow:none; --logo-bg:#FFFFFF; color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:15.5px/1.5 var(--f-body);min-height:100vh;-webkit-font-smoothing:antialiased}
+a{color:var(--teal-ink)}
+button{font:inherit;color:inherit}
+/* barra in alto */
+header.top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:max(10px,env(safe-area-inset-top)) 16px 10px}
+.hin{max-width:1180px;margin:0 auto;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--fg)}
+.brand .logo{display:inline-flex;background:var(--logo-bg);border-radius:10px}
+.brand img{display:block;height:38px;width:auto}
+@media (prefers-color-scheme:dark){.brand .logo{padding:4px 8px}}
+.brand .app{font:800 20px var(--f-display);padding-left:12px;border-left:2px solid var(--line);line-height:1.1}
+.brand .app small{display:block;font:600 12px var(--f-body);color:var(--muted)}
+.who{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.userpill{display:inline-flex;gap:8px;align-items:center;font-size:13.5px;color:var(--muted);font-weight:600;margin-right:2px}
+.userpill b{color:var(--fg)}
+.rolepill{font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:7px;background:color-mix(in srgb,var(--teal) 16%,transparent);color:var(--teal-ink)}
+.wrap{max-width:1180px;margin:0 auto;padding:0 16px 64px}
+/* schede */
+nav.tabs{display:flex;gap:2px;margin:6px 0 24px;overflow-x:auto;border-bottom:1px solid var(--line);scrollbar-width:none}
+nav.tabs::-webkit-scrollbar{display:none}
+nav.tabs:empty{display:none}
+nav.tabs button{position:relative;display:flex;align-items:center;gap:8px;border:0;background:none;font-family:var(--f-body);font-size:15px;font-weight:700;color:var(--muted);padding:14px 12px 12px;cursor:pointer;white-space:nowrap;border-bottom:3px solid transparent;margin-bottom:-1px}
+nav.tabs button svg{width:18px;height:18px;flex:none}
+nav.tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--teal)}
+nav.tabs button[aria-selected="true"] svg{color:var(--teal-ink)}
+.count{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--yellow);color:#3A3816;font-size:12px;font-weight:800;line-height:1}
+.ls{display:none}
+@media (max-width:640px){
+  .wrap{padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+  .brand img{height:30px}
+  .brand .app small{display:none}
+  nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:15;margin:0;justify-content:space-around;gap:0;background:var(--surface);border:0;border-top:1px solid var(--line);box-shadow:0 -6px 20px rgba(43,48,51,.08);padding:4px 4px calc(4px + env(safe-area-inset-bottom,0px))}
+  nav.tabs button{flex-direction:column;gap:3px;font-size:12px;padding:7px 2px;flex:1 1 0;min-width:0;border:0;margin:0}
+  nav.tabs button[aria-selected="true"]{color:var(--teal-ink);border:0}
+  nav.tabs button svg{width:22px;height:22px}
+  nav.tabs .count{position:absolute;top:2px;left:calc(50% + 6px)}
+  nav.tabs .lbl{overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  .lf{display:none} .ls{display:inline}
+  main{padding-top:18px}
+}
+/* testi */
+h2{font-family:var(--f-display);font-weight:800;font-size:clamp(24px,3.6vw,32px);line-height:1.15;letter-spacing:-.01em;margin:0 0 6px;text-wrap:balance}
+h3{font-family:var(--f-display);font-weight:700;font-size:18px;margin:0 0 12px;line-height:1.25}
+h4{font-family:var(--f-display)}
+.lede{color:var(--muted);margin:0 0 20px;max-width:64ch;font-size:15.5px}
+.mono{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.hint{font-size:13px;color:var(--muted)}
+.err{font-size:14px;color:var(--bad);font-weight:600}
+.err:empty{display:none}
+.neg{color:var(--bad)}
+.num{font-size:13.5px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:18px}
+ul.plain{margin:0;padding-left:18px}
+ul.plain li{margin-bottom:6px}
+.overflow{overflow-x:auto}
+/* campi e bottoni */
+select,input,textarea{font:15px var(--f-body);color:var(--fg);background:var(--surface);border:1px solid var(--edge);border-radius:10px;padding:8px 11px;min-height:40px;max-width:100%}
+textarea{width:100%;resize:vertical}
+input[type=checkbox]{width:19px;height:19px;min-height:0;accent-color:var(--teal-ink);padding:0}
+input[type=file]{padding:7px}
+select:focus-visible,input:focus-visible,button:focus-visible,textarea:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid color-mix(in srgb,var(--teal) 55%,transparent);outline-offset:2px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;font-family:var(--f-body);font-size:14.5px;font-weight:700;border:1px solid var(--primary);background:var(--primary);color:var(--on-primary);padding:8px 16px;min-height:40px;border-radius:11px;cursor:pointer;text-decoration:none;transition:filter .12s,border-color .12s,background .12s}
+.btn:hover{filter:brightness(1.07)}
+.btn.ghost{background:var(--surface);color:var(--fg);border-color:var(--line)}
+.btn.ghost:hover{border-color:var(--teal);filter:none}
+.btn.sm{min-height:32px;padding:4px 11px;font-size:13px;border-radius:9px}
+.btn.bad{background:var(--surface);color:var(--bad);border-color:var(--line)}
+.btn.bad:hover{border-color:var(--bad);filter:none}
+.btn.ghost.bad{color:var(--bad)}
+.btn:disabled{opacity:.45;cursor:not-allowed;filter:none}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:11px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:transparent;color:var(--fg);font-size:14px;font-weight:700;padding:7px 14px;cursor:pointer;min-height:38px}
+.seg button + button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+form .f,.f{display:flex;flex-direction:column;gap:6px;margin-bottom:18px;min-width:0}
+.f > label,form label,.drop label{font-size:13.5px;font-weight:700;color:var(--fg)}
+.row{display:flex;gap:14px;flex-wrap:wrap}.row>.f{flex:1 1 140px}
+.check,form label.check{display:flex;gap:12px;align-items:flex-start;font-size:14.5px;font-weight:500;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--yellow) 60%,var(--line));padding:12px 14px;border-radius:12px;cursor:pointer}
+.check input{margin-top:1px;flex:none}
+.tick{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:5px 12px;cursor:pointer;font-weight:700;font-size:14px;user-select:none;background:var(--surface)}
+.tick.sm{padding:3px 9px;font-size:13px}
+.tick input{width:15px;height:15px;margin:0}
+.tick:has(input:checked){background:color-mix(in srgb,var(--teal) 16%,var(--surface));border-color:var(--teal);color:var(--teal-ink)}
+.ticks{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+/* contenitori */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--rad);padding:20px;box-shadow:var(--shadow)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:18px}
+.banner{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;background:var(--accent-soft);color:var(--fg);border:1px solid color-mix(in srgb,var(--yellow) 70%,var(--line));border-radius:14px;padding:10px 14px;margin-bottom:20px;font-weight:600}
+.banner .grow{flex:1 1 240px;font-weight:500}
+.banner .grow b{display:block}
+.alert{background:var(--bad-soft);color:var(--fg);padding:14px 16px;border:1px solid color-mix(in srgb,var(--bad) 35%,transparent);border-left:5px solid var(--bad);border-radius:12px;font-size:14.5px;margin-bottom:22px}
+.alert b{color:var(--bad);font-family:var(--f-display);font-size:16px}
+.toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;font-size:14.5px;z-index:60;max-width:calc(100vw - 32px);box-shadow:0 10px 30px rgba(0,0,0,.18)}
+@media (min-width:641px){.toast{bottom:28px}}
+.stat{display:flex;gap:28px;flex-wrap:wrap}
+.stat div{min-width:96px}
+.stat b{display:block;font-family:var(--f-display);font-size:40px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;color:var(--teal-ink)}
+.stat span{font-size:12.5px;color:var(--muted);font-weight:600}
+/* timbri e stati */
+.chip{display:inline-block;font-size:12px;font-weight:700;padding:3px 9px;border-radius:7px;margin:2px 6px 2px 0;background:var(--sunken);color:var(--muted);white-space:nowrap}
+.chip.ok{background:var(--ok-soft);color:var(--ok)} .chip.warn{background:var(--warn-soft);color:var(--warn)} .chip.bad{background:var(--bad-soft);color:var(--bad)} .chip.n{background:var(--sunken);color:var(--muted)}
+.sigla{display:inline-grid;place-items:center;min-width:44px;height:34px;padding:0 8px;background:color-mix(in srgb,var(--teal) 16%,var(--surface));color:var(--teal-ink);font-family:var(--f-display);font-weight:800;font-size:16px;letter-spacing:.04em;border-radius:10px;flex:none}
+.sigla.xs{min-width:34px;height:24px;font-size:12.5px;border-radius:7px}
+/* planning */
+.sumrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:12px;margin-bottom:26px}
+.sumcard{display:flex;gap:12px;align-items:center;text-align:left;font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;cursor:pointer;transition:border-color .12s,box-shadow .12s}
+.sumcard:hover{border-color:var(--teal)}
+.sumcard.on{border-color:var(--teal);box-shadow:inset 0 0 0 1px var(--teal);background:color-mix(in srgb,var(--teal) 7%,var(--surface))}
+.sumcard .sn{font-family:var(--f-display);font-weight:700;font-size:16.5px;line-height:1.2}
+.sumcard .mono{overflow-wrap:normal}
+.sumcard .mono b{font-weight:700}
+.sedekey{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;margin:-10px 0 22px;font-size:14px;font-weight:600}
+.sedekey > span{display:inline-flex;align-items:center;gap:8px}
+.sedeblock{margin-bottom:34px}
+.sedehead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.sedehead h3{margin:0;font-size:22px}
+.sheet{overflow-x:auto;border:1px solid var(--line);border-radius:var(--rad);background:var(--surface);box-shadow:var(--shadow)}
+table.g{border-collapse:separate;border-spacing:0;font-size:11px;font-variant-numeric:tabular-nums}
+table.g th,table.g td{border-bottom:1px solid var(--line);padding:0;text-align:center;min-width:36px;height:38px}
+table.g thead th{position:sticky;top:0;background:var(--surface);font-weight:600;font-size:10px;color:var(--muted);padding:8px 2px 6px;line-height:1.1;border-bottom:1px solid var(--edge)}
+table.g thead th b{display:block;font-family:var(--f-display);font-weight:700;font-size:16px;color:var(--fg)}
+table.g thead th i{display:block;font-style:normal;font-size:8.5px;color:var(--muted)}
+table.g thead th.closed{background:repeating-linear-gradient(-45deg,var(--sunken) 0 4px,var(--surface) 4px 8px)}
+table.g thead th.closed b{color:var(--r-fg)}
+table.g thead th.past b{color:var(--muted)}
+table.g thead th.today{box-shadow:inset 0 -4px 0 var(--yellow)}
+table.g thead th.short{background:var(--bad-soft);color:var(--bad)}
+table.g thead th.short b,table.g thead th.short i{color:var(--bad)}
+table.g .name{position:sticky;left:0;z-index:1;background:var(--surface);text-align:left;padding:6px 14px;min-width:170px;font-size:14px;font-weight:700;white-space:nowrap;border-right:1px solid var(--edge)}
+table.g thead .name{font-family:var(--f-display);font-size:14px;color:var(--fg);vertical-align:bottom;z-index:2}
+table.g .name small{display:block;color:var(--muted);font-size:11.5px;font-weight:500}
+table.g tr.grp td{background:var(--sunken);color:var(--teal-ink);font-family:var(--f-display);font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;text-align:left;padding:6px 14px;height:auto}
+table.g tr.grp td.name{background:var(--sunken);border-right:0}
+table.g tr.grp td .mono{text-transform:none;letter-spacing:0}
+table.g tbody tr:last-child td{border-bottom:0}
+[class*="k-"]{background:var(--kb);color:var(--kf)}
+table.g td.c{background:transparent;cursor:pointer;padding:3px 2px}
+td.c span{display:flex;align-items:center;justify-content:center;height:30px;border-radius:8px;background:var(--kb);color:var(--kf);font-weight:700;transition:transform .1s}
+td.c:hover span{transform:translateY(-1px);box-shadow:0 3px 8px rgba(43,48,51,.15)}
+.k-M{--kb:var(--m);--kf:var(--m-fg)} .k-P{--kb:var(--p);--kf:var(--p-fg)} .k-R{--kb:transparent;--kf:var(--r-fg)}
+.k-G{--kb:linear-gradient(135deg,var(--m) 0 50%,var(--p) 50% 100%);--kf:#FFFFFF}
+.k-FE{--kb:var(--ok);--kf:#FFFFFF} .k-ROL{--kb:var(--ok-soft);--kf:var(--ok)}
+.k-MAL{--kb:var(--warn);--kf:#FFFFFF}
+.k-AI{--kb:repeating-linear-gradient(-45deg,var(--bad) 0 5px,#8f1b14 5px 10px);--kf:#FFFFFF}
+.k-PEND{--kb:repeating-linear-gradient(45deg,var(--yellow) 0 4px,var(--surface) 4px 8px);--kf:#3A3816}
+.k-X{--kb:transparent;--kf:var(--muted)}
+td.c.k-ROL span{font-size:8.5px;box-shadow:inset 0 0 0 2px var(--ok)}
+td.c.k-PEND span{box-shadow:inset 0 0 0 2px #77731A}
+td.c.k-X span{font-size:9px;border:1px dashed var(--edge)}
+td.c.k-G span,.agt.k-G{text-shadow:0 1px 1px rgba(0,0,0,.3)}
+td.c span sub,.legend i sub{font-size:8px;vertical-align:baseline;position:relative;top:3px;margin-left:1px;opacity:.85}
+table.g td.c.closed{background:repeating-linear-gradient(-45deg,var(--sunken) 0 4px,transparent 4px 8px)}
+table.g td.c.past span{opacity:.5}
+td.c.fix span,.legend i.pin{position:relative}
+td.c.fix span::after,.legend i.pin::after{content:"";position:absolute;top:0;right:0;border-left:8px solid transparent;border-top:8px solid var(--yellow);border-top-right-radius:6px}
+td.tot{font-size:12px;padding:0 12px;color:var(--muted);white-space:nowrap;border-left:1px solid var(--edge);font-weight:600}
+table.g tr.rr td{background:var(--sunken);font-size:10.5px;color:var(--muted);height:28px}
+table.g tr.rr td.name{font-family:var(--f-display);font-weight:700;font-size:12.5px;color:var(--fg);background:var(--sunken)}
+table.g tr.rr td.rf{color:var(--ok);font-weight:700}
+table.g tr.rr td.rz{color:var(--bad);font-weight:700}
+table.g tr.rr td.closed{background:repeating-linear-gradient(-45deg,var(--sunken) 0 4px,var(--surface) 4px 8px)}
+table.g tbody tr.rr:first-of-type td{border-top:1px solid var(--edge)}
+.shl{margin-top:12px;font-size:14px}
+.shl summary{cursor:pointer;color:var(--bad);margin-bottom:8px;font-weight:700}
+.legend{display:flex;flex-wrap:wrap;gap:10px 18px;margin-top:20px;font-size:13px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.legend i{display:inline-block;width:28px;height:20px;border-radius:6px;font-style:normal;font-size:9px;font-weight:700;text-align:center;line-height:20px}
+.legend i.k-R{box-shadow:inset 0 0 0 1px var(--line)}
+.avz{margin-bottom:30px;border-color:color-mix(in srgb,var(--bad) 40%,var(--line));border-left:5px solid var(--bad)}
+.avz.ok{border-color:var(--line);border-left-color:var(--ok)}
+.avzhead{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.avzhead h3{margin:0}
+.avzbig{font-family:var(--f-display);font-weight:800;font-size:34px;line-height:1;color:var(--bad)}
+.avz.ok .avzbig{color:var(--ok)}
+ul.sug{list-style:none;margin:0 0 16px;padding:0;display:flex;flex-direction:column;gap:8px}
+ul.sug li{background:var(--accent-soft);border-left:4px solid var(--yellow);padding:10px 12px;font-size:14px;border-radius:0 10px 10px 0}
+ul.sug li::before{content:"Suggerimento · ";font-weight:800}
+.fmbox{border:1px solid color-mix(in srgb,var(--bad) 35%,transparent);background:var(--bad-soft);border-radius:12px;padding:12px 14px;margin-bottom:16px}
+.fmbox h4{font-weight:700;font-size:15px;margin:0 0 8px;color:var(--bad)}
+.fmbox li{font-size:14px}
+table.rules{width:100%;border-collapse:collapse;font-size:14.5px}
+table.rules th,table.rules td{border-bottom:1px solid var(--line);padding:10px 8px;text-align:left;vertical-align:middle}
+table.rules tbody tr:last-child td{border-bottom:0}
+table.rules th{font-size:12px;color:var(--muted);font-weight:700;border-bottom:1px solid var(--edge)}
+table.rules input[type=number]{width:70px;padding:5px 8px}
+/* richieste */
+.req{display:grid;grid-template-columns:1fr auto;gap:6px 14px;padding:16px 0;border-top:1px solid var(--line)}
+.req:first-child{border-top:0;padding-top:0}
+.req:last-child{padding-bottom:0}
+.req .t{font-family:var(--f-display);font-weight:700;font-size:17px;line-height:1.25}
+.req .meta{color:var(--muted);font-size:14px;margin-top:2px}
+.req .acts{display:flex;gap:8px;flex-wrap:wrap;align-items:start;justify-content:flex-end}
+@media (max-width:520px){.req{grid-template-columns:1fr}.req .acts{justify-content:flex-start}}
+.steps{display:flex;align-items:center;margin-top:10px;flex-wrap:wrap;gap:6px 0;font-size:12px;font-weight:600}
+.steps b{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--r-fg)}
+.steps b::before{content:"";width:11px;height:11px;border:2px solid currentColor;border-radius:50%}
+.steps b:not(:last-child){margin-right:8px}
+.steps b:not(:last-child)::after{content:"";display:inline-block;width:20px;border-top:2px dotted var(--line);margin-left:8px}
+.steps b.done{color:var(--ok)} .steps b.done::before{background:currentColor}
+.steps b.now{color:var(--fg)} .steps b.now::before{background:var(--yellow);border-color:var(--olive-ink)}
+.steps b.no{color:var(--bad)} .steps b.no::before{background:currentColor}
+/* regole */
+table.wk{border-collapse:separate;border-spacing:5px}
+table.wk th{font-family:var(--f-display);font-size:14px;font-weight:700;color:var(--muted);text-align:center;padding:0}
+table.wk th.rowh{text-align:left;padding-right:8px;color:var(--fg)}
+table.wk button{width:50px;height:36px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--muted);font-size:10.5px;font-weight:600;cursor:pointer}
+table.wk button.M[aria-pressed="true"]{background:var(--m);color:var(--m-fg);border-color:transparent}
+table.wk button.P[aria-pressed="true"]{background:var(--p);color:var(--p-fg);border-color:transparent}
+.rbox{background:var(--sunken);border:1px solid var(--line);border-radius:14px;padding:14px 16px;min-width:0}
+.rbox h4{font-weight:700;font-size:16px;margin:0 0 6px}
+.rbox p{margin:0 0 12px;font-size:14px;color:var(--muted)}
+.rbox table.rules input{width:64px}
+.der{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px;align-items:center;padding:14px 0;border-top:1px solid var(--line)}
+.der:first-child{border-top:0;padding-top:0}
+.der .what{font-family:var(--f-display);font-size:16.5px;font-weight:700;line-height:1.25}
+.der .meta{color:var(--muted);font-size:14px}
+@media (max-width:560px){.der{grid-template-columns:auto minmax(0,1fr)}.der > :last-child{grid-column:2}}
+/* AI */
+.aihead{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.aihead h3{margin:0}
+.aitag{font-size:11px;font-weight:800;background:color-mix(in srgb,var(--purple) 18%,transparent);color:var(--purple-ink);padding:3px 8px;border-radius:7px;letter-spacing:.06em}
+button.ex{font:inherit;font-size:13px;background:var(--sunken);color:var(--fg);border:1px dashed var(--edge);border-radius:9px;padding:5px 10px;cursor:pointer;text-align:left}
+button.ex:hover{background:var(--accent-soft)}
+.aibox textarea{font-size:16px;line-height:1.45;min-height:84px}
+.aires{margin-top:16px;border:1px solid color-mix(in srgb,var(--purple) 35%,var(--line));border-radius:14px;background:color-mix(in srgb,var(--purple) 6%,var(--surface));padding:14px 16px}
+.aisum{font-size:16px;font-weight:600;margin:4px 0 10px}
+ul.azl{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+ul.azl li{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:14px}
+ul.azl li::before{content:"✓ ";color:var(--ok);font-weight:700}
+ul.azl li.no{border-style:dashed;color:var(--muted)}
+ul.azl li.no::before{content:"✕ ";color:var(--bad)}
+.dubbi{margin-top:10px;font-size:14px}
+.dubbi ul{margin:4px 0 0;padding-left:18px}
+.rrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 0;border-top:1px dashed var(--line)}
+.rq{font-weight:600}
+.rrow .meta{font-size:13px;color:var(--muted)}
+/* personale */
+.plist{padding-block:8px}
+.pgrp{font-family:var(--f-display);font-weight:800;font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--teal-ink);padding:14px 4px 6px;border-bottom:1px solid var(--edge)}
+.prow{display:grid;grid-template-columns:minmax(150px,240px) minmax(0,1fr) auto 20px;gap:12px;align-items:center;width:100%;text-align:left;font:inherit;color:var(--fg);background:transparent;border:0;border-bottom:1px solid var(--line);padding:12px 6px;cursor:pointer;border-radius:8px}
+.prow:hover{background:var(--sunken)}
+.pn{display:flex;flex-direction:column;min-width:0}
+.ps{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
+.pchip{display:inline-flex;align-items:center;gap:6px;font-size:13px;background:var(--sunken);border:1px solid var(--line);border-radius:9px;padding:2px 8px 2px 2px}
+.pchip.rule{padding:2px 8px;border-style:dashed;color:var(--muted)}
+.pa{font-size:12.5px;white-space:nowrap}
+.pgo{font-size:24px;color:var(--muted);line-height:1}
+@media (max-width:640px){.prow{grid-template-columns:minmax(0,1fr) 20px}.prow .ps,.prow .pa{grid-column:1}.prow .pgo{grid-row:1;grid-column:2}}
+.editor{display:flex;flex-direction:column;gap:18px}
+.esec{display:grid;grid-template-columns:40px minmax(0,1fr);gap:16px}
+.enum{display:grid;place-items:center;width:40px;height:40px;background:color-mix(in srgb,var(--teal) 16%,var(--surface));color:var(--teal-ink);font-family:var(--f-display);font-weight:800;font-size:19px;border-radius:12px}
+.ebody h3{margin-top:8px}
+@media (max-width:520px){.esec{grid-template-columns:minmax(0,1fr)}.enum{width:34px;height:34px;font-size:17px}}
+.sbox{border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:14px;background:var(--surface)}
+.sprev{margin-top:14px;padding:10px 12px;background:var(--accent-soft);border-left:4px solid var(--yellow);border-radius:0 10px 10px 0;font-size:14px}
+.savebar{position:sticky;bottom:calc(8px + env(safe-area-inset-bottom,0px));background:var(--bg);padding:10px 0;margin-top:8px;z-index:5}
+@media (max-width:640px){.savebar{bottom:calc(72px + env(safe-area-inset-bottom,0px))}}
+/* dipendente */
+.agenda{display:flex;flex-direction:column}
+.ag{display:grid;grid-template-columns:48px 52px minmax(0,1fr);gap:14px;align-items:start;padding:12px 0;border-top:1px solid var(--line)}
+.ag:first-child{border-top:0;padding-top:0}
+.ag.past{opacity:.45}
+.ag.today .agd b{color:var(--teal-ink)}
+.agd b{display:block;font-family:var(--f-display);font-size:28px;font-weight:800;line-height:1}
+.agd span{font-size:12px;font-weight:600;color:var(--muted)}
+.agt{display:grid;place-items:center;height:46px;border-radius:12px;font-family:var(--f-display);font-size:19px;font-weight:800;background:var(--kb);color:var(--kf)}
+.agt.k-ROL,.agt.k-FE,.agt.k-MAL,.agt.k-AI,.agt.k-PEND{font-size:14px}
+.agt.k-ROL{box-shadow:inset 0 0 0 2px var(--ok)}
+.agi .t{font-weight:700}
+.agi .t + .meta{margin-bottom:4px}
+.agi .meta{color:var(--muted);font-size:14px}
+.agi .meta b{color:var(--fg);font-weight:600}
+.nextwhen{font-family:var(--f-display);font-size:clamp(24px,4.5vw,32px);font-weight:800;line-height:1.1;margin-bottom:12px;color:var(--teal-ink)}
+.nextrow{display:flex;gap:14px;align-items:flex-start}
+@media (max-width:520px){.ag{grid-template-columns:36px 42px minmax(0,1fr);gap:10px}.agt{height:40px;font-size:16px}.agd b{font-size:22px}.nextrow .agt{width:48px;height:48px;font-size:21px}.stat{gap:18px}.stat div{min-width:80px}.stat b{font-size:32px}}
+.nextrow .agt{width:60px;height:60px;font-size:26px;flex:none}
+.privacy-text{max-height:340px;overflow:auto;border:1px solid var(--line);border-radius:12px;padding:14px 16px;font-size:14px;background:var(--sunken)}
+.privacy-text h4{font-weight:700;font-size:15px;margin:14px 0 4px}
+.privacy-text h4:first-of-type{margin-top:2px}
+.privacy-text p{margin:0 0 8px;color:var(--muted)}
+.modal{position:fixed;inset:0;background:rgba(20,24,26,.5);display:flex;align-items:flex-start;justify-content:center;padding:calc(24px + env(safe-area-inset-top,0px)) 16px 24px;overflow:auto;z-index:40}
+.modal .box{background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:20px;max-width:480px;width:100%;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+.modal .box.wide{max-width:900px}
+iframe.pdf{display:block;width:100%;height:min(70vh,900px);border:1px solid var(--line);border-radius:12px;background:#fff}
+.drop{border:1px dashed var(--edge);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px;background:var(--sunken)}
+details summary{cursor:pointer;font-weight:700}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}td.c:hover span{transform:none}}
+
+</style>
+</head>
+<body>
+<header class="top"><div class="hin">
+  <a class="brand" href="/" aria-label="Turni, To Smile"><span class="logo"><img src="/logo-tosmile.png" alt="To Smile" width="548" height="165"></span><span class="app">Turni<small>planning, assenze e buste paga</small></span></a>
+  <div class="who" id="whoBox"></div>
+</div></header>
+<div class="wrap">
+  <nav class="tabs" id="tabs" role="tablist" aria-label="Sezioni"></nav>
+  <main id="view"><p class="lede" style="margin-top:24px">Caricamento…</p></main>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+<script>
+// Stato condiviso con il motore dei turni (/motore.js): lo riempie la pagina con i dati del server.
+let SEDI=[], STAFF=[], REMOVED=[], REG=null, FESTIVI={}, DEROGHE=[], CAD=[], UNAV=[], RULES_TXT=[], reqs=[], AI=new Set(), plan={}, short={}, fixMiss={}, genAt="", dirty=false, TODAY="", MONTHS=[];
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+</script>
+<script src="/motore.js"></script>
+<script>
+/* Turnario — interfaccia (amministratore e dipendente). I calcoli dei turni sono in /motore.js, lo stesso file usato dal server. */
+let STATE = {}, role = "admin", tab = "", month = "", sedeFilter = "all", empMonth = "", modal = null, version = 0;
+let vista = "", bustaMese = "", BUSTE = null, delPending = null, rmSede = null, privacy = {}, upMsg = "";
+const $ = s=>document.querySelector(s);
+const $$ = s=>document.querySelectorAll(s);
+const store = { get(k, d){ try { const v = localStorage.getItem("turni_"+k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v){ try { localStorage.setItem("turni_"+k, JSON.stringify(v)); } catch {} } };
+function toast(t){ const el=$("#toast"); el.textContent=t; el.hidden=false; clearTimeout(toast.t); toast.t=setTimeout(()=>el.hidden=true,3200); }
+async function api(method, path, body, signal){
+  const isForm = body instanceof FormData;
+  const r = await fetch(path, { method, credentials:"same-origin", signal,
+    headers: body && !isForm ? {"Content-Type":"application/json"} : {}, body: body ? (isForm ? body : JSON.stringify(body)) : undefined });
+  if (r.status === 401) { location.reload(); throw new Error("Sessione scaduta"); }
+  const j = await r.json().catch(()=>({}));
+  if (!r.ok) throw Object.assign(new Error(j.error || "Operazione non riuscita"), { status: r.status });
+  return j;
+}
+function setPlan(pd){ pd = pd || {}; plan = pd.plan || {}; short = pd.short || {}; fixMiss = pd.fixMiss || {}; genAt = pd.genAt || ""; }
+function applyConfig(c){ SEDI=c.sedi||[]; STAFF=c.staff||[]; REMOVED=c.removed||[]; REG=c.reg; DEROGHE=c.deroghe||[]; CAD=c.cad||[]; UNAV=c.unav||[]; RULES_TXT=c.rules||[]; }
+const configNow = () => ({sedi:SEDI, staff:STAFF, removed:REMOVED, reg:REG, deroghe:DEROGHE, cad:CAD, unav:UNAV, rules:RULES_TXT});
+
+// ogni modifica dell'amministratore si salva da sola (dopo mezzo secondo di pausa)
+let saveTimer = null, savePending = false;
+function saveConfig(){ savePending = true; clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 500); }
+async function doSave(){
+  clearTimeout(saveTimer); if (!savePending) return; savePending = false;
+  try { const r = await api("PUT", "/api/config", {config: configNow(), version}); version = r.version; }
+  catch (e){ if (e.status === 409){ toast(e.message); await load(); render(); } else { savePending = true; toast("Modifica non salvata: " + e.message); } }
+}
+window.addEventListener("beforeunload", e => { if (savePending){ doSave(); e.preventDefault(); } });
+const changedG = msg => { dirty = true; saveConfig(); render(); if (msg) toast(msg); };
+
+async function genera(btn){
+  if (btn) btn.disabled = true;
+  try {
+    await doSave();
+    const r = await api("POST", "/api/genera", {});
+    setPlan(r.planDoc); dirty = false; render();
+    const sc = Object.entries(short).filter(([d])=>d>=TODAY).reduce((n,[,l])=>n+l.reduce((a,x)=>a+x.n,0),0), av = avanzi(month).reduce((a,x)=>a+x.avz,0);
+    toast(`Turni generati fino al ${fmt(MONTHS[MONTHS.length-1]+"-"+pad(daysIn(MONTHS[MONTHS.length-1])))} · ${av?fmtH(av)+" in avanzo a "+meseShort(month):"nessuna ora in avanzo"}${sc?` · ${sc} scoperture`:""}`);
+  } catch (e){ toast(e.message); if (btn) btn.disabled = false; }
+}
+
+async function load(vista){
+  STATE = await api("GET", "/api/state" + (vista === "dipendente" ? "?vista=dipendente" : ""));
+  TODAY = STATE.today; MONTHS = calcMonths(TODAY); FESTIVI = calcFestivi(MONTHS);
+  role = STATE.role;
+  if (role === "admin"){
+    applyConfig(STATE.config); setPlan(STATE.planDoc); reqs = STATE.reqs || []; AI = new Set(STATE.ai || []);
+    privacy = STATE.privacy || {}; version = STATE.version; dirty = STATE.dirty;
+    if (!MONTHS.includes(month)) month = MONTHS[1];
+  } else if (!MONTHS.includes(empMonth)) empMonth = MONTHS[1];
+}
+
+const SHORT = {bpAdmin:"Buste", bpEmp:"Buste", stato:"Turni", conferme:"Cambi"};
+const ICON = {
+  planning:'<path d="M3 5h18M3 12h18M3 19h18M9 3v18M15 3v18"/>',
+  richieste:'<path d="M4 13l2-8h12l2 8M4 13v6h16v-6M4 13h5l1 2h4l1-2h5"/>',
+  personale:'<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 4.5a3 3 0 010 7M18 14.5c1.8.9 3 2.9 3 5.5"/>',
+  regole:'<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+  sedi:'<path d="M12 21s-7-6.2-7-11.5a7 7 0 0114 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
+  bpAdmin:'<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/>',
+  bpEmp:'<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/>',
+  stato:'<rect x="3" y="5" width="18" height="16" rx="1"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  nuova:'<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
+  conferme:'<path d="M7 7h11l-3-3M17 17H6l3 3"/>'
+};
+
+const stepsHtml = r => {
+  const nm = id => esc(emp(id)?.nome||"—");
+  const s2 = r.sostOk===true ? `<b class='done'>${nm(r.sost)} conferma</b>` : r.sostOk===false ? `<b class='no'>Sostituto rifiuta</b>` : r.sost ? `<b class='now'>Attesa ${nm(r.sost)}</b>` : "<b class='done'>Nessun sostituto</b>";
+  const s3 = r.stato==="approvata" ? "<b class='done'>Approvata</b>" : r.stato==="rifiutata" ? "<b class='no'>Rifiutata</b>" : r.stato==="attesa_admin" ? "<b class='now'>Attesa admin</b>" : "<b>Admin</b>";
+  return `<div class="steps"><b class='done'>Inviata</b>${s2}${s3}</div>`;
+};
+const lateness = r => {
+  if (r.tipo==="MAL") return "";
+  const gg = diffDays(r.inviata, r.dal), min = r.tipo==="FE"?7:2;
+  return gg<min ? `<span class="chip bad">Fuori termine · ${gg} gg</span>` : `<span class="chip n">Preavviso ${gg} gg</span>`;
+};
+const periodo = r => (r.dal===r.al? fmt(r.dal) : `${fmt(r.dal)} → ${fmt(r.al)}`) + (r.tipo==="ROL" && r.ore ? ` · ${r.ore} h` : "");
+
+let ai = {scope:"", text:"", busy:false, res:null, err:"", ctl:null};
+async function aiRun(scope){
+  ai = {...ai, scope, busy:true, res:null, err:""}; render();
+  ai.ctl = new AbortController();
+  try {
+    const r = await api("POST", "/api/ai/regola", {testo: ai.text, scope}, ai.ctl.signal);
+    ai = {...ai, busy:false, res:{riassunto:r.riassunto, dubbi:r.dubbi||[], azioni:r.azioni||[]}};
+  } catch (e){ ai = {...ai, busy:false, err: e.name==="AbortError" ? "" : e.message}; }
+  render();
+}
+
+const AI_ESEMPI = {
+  generale: ["Il 24 dicembre tutte le sedi chiudono all'ora di pranzo", "Il dott. Riva non lavora il venerdì pomeriggio", "Dal 16 novembre Monza ha 3 riuniti", "La dott.ssa Esposito va a Lodi il 2° e 4° lunedì del mese, tutto il giorno"],
+  persona: ["Non lavora mai il venerdì pomeriggio", "Dal 16 al 20 novembre non è disponibile", "Va a Monza ogni 2 settimane il mercoledì mattina"]
+};
+function aiBox(scope){
+  const mine = ai.scope===(scope||"");
+  const rules = RULES_TXT.filter(r=>scope ? (r.persona===scope || r.azioni.some(a=>a.persona===scope)) : true);
+  const res = mine && ai.res;
+  const okAz = res ? res.azioni.filter(x=>x.ok) : [];
+  return `<div class="aibox">
+    <div class="aihead"><h3>Scrivi una regola</h3><span class="aitag">AI</span></div>
+    <p class="hint" style="margin:0 0 12px">Scrivila come la diresti a un collega. L'AI la traduce in impostazioni e te le mostra prima di applicarle.</p>
+    <div class="ticks" style="margin-bottom:10px">${AI_ESEMPI[scope?"persona":"generale"].map((t,i)=>`<button type="button" class="ex" data-aiex="${i}">${esc(t)}</button>`).join("")}</div>
+    <textarea id="aiTxt" rows="3" placeholder="${scope?"es. Non lavora mai il venerdì pomeriggio":"es. Il sabato Lodi apre solo la mattina"}">${esc(mine?ai.text:"")}</textarea>
+    <div class="bar" style="margin:12px 0 0">
+      <button type="button" class="btn" id="aiGo" data-scope="${scope||""}" ${mine&&ai.busy?"disabled":""}>${mine&&ai.busy?"Sto leggendo la regola…":"Interpreta con AI"}</button>
+      ${mine&&ai.busy?`<button type="button" class="btn ghost sm" id="aiStop">Ferma</button>`:""}
+      ${!STATE.aiEnabled?`<span class="mono">L'AI non è ancora attiva: va aggiunta la chiave ANTHROPIC_API_KEY su Render.</span>`:""}
+    </div>
+    ${mine&&ai.err?`<p class="err" style="margin-top:10px">${esc(ai.err)}</p>`:""}
+    ${res?`<div class="aires">
+      <div class="mono">Ho capito così</div>
+      <p class="aisum">${esc(res.riassunto||"")}</p>
+      <ul class="azl">${res.azioni.map(x=>`<li class="${x.ok?"":"no"}">${esc(x.ok?azioneTxt(x.a):x.a?.azione==="non_supportata"?azioneTxt(x.a):"Non applicabile: "+azioneTxt(x.a))}</li>`).join("")||`<li class="no">Nessuna impostazione da applicare.</li>`}</ul>
+      ${res.dubbi.length?`<div class="dubbi"><b>Da chiarire</b><ul>${res.dubbi.map(d=>`<li>${esc(d)}</li>`).join("")}</ul></div>`:""}
+      <div class="bar" style="margin:12px 0 0"><button type="button" class="btn" id="aiApply" ${okAz.length?"":"disabled"}>Applica ${okAz.length} ${okAz.length===1?"impostazione":"impostazioni"}</button><button type="button" class="btn ghost" id="aiDiscard">Annulla</button></div>
+    </div>`:""}
+    ${rules.length?`<div class="rlist"><div class="mono" style="margin:18px 0 6px">Regole scritte in vigore</div>${rules.map(r=>`<div class="rrow"><div style="min-width:0"><div class="rq">“${esc(r.testo)}”</div><div class="meta">${r.azioni.map(a=>esc(azioneTxt(a))).join(" · ")} · ${esc(r.quando)}</div></div><button type="button" class="btn sm bad" data-rrm="${r.id}">Elimina</button></div>`).join("")}</div>`:""}
+  </div>`;
+}
+// ---------- personale: elenco e scheda ----------
+let editing = null, draft = null, rmConfirm = false;
+function startEdit(id){
+  const e = id==="new" ? null : emp(id);
+  draft = e ? {id:e.id, nome:e.nome, cognome:e.cognome, cf:e.cf||"", email:e.email||"", ferie:e.ferie??22, rol:e.rol??72, tipo:e.tipo, cfg:JSON.parse(JSON.stringify(e.cfg||{}))}
+            : {id:null, nome:"", cognome:"", cf:"", email:"", ferie:22, rol:72, tipo:"ASO", cfg:{}};
+  editing = id; rmConfirm = false; ai = {scope:"", text:"", busy:false, res:null, err:""};
+  tab = "personale"; render(); window.scrollTo?.(0,0);
+}
+function vPersonale(){
+  if (editing) return vEditor();
+  const avz = avanzi(month);
+  const rows = TIPI_PROF.map(t=>{ const ppl = STAFF.filter(e=>e.tipo===t); if (!ppl.length) return "";
+    return `<div class="pgrp">${t}</div>` + ppl.map(e=>{ const a = avz.filter(x=>x.e===e).reduce((s,x)=>s+x.avz,0);
+      const sedi = Object.entries(e.cfg).filter(([s])=>sede(s));
+      const extra = UNAV.filter(u=>u.emp===e.id).length + CAD.filter(c=>c.emp===e.id && c.src!=="cfg").length;
+      return `<button type="button" class="prow" data-edit="${e.id}">
+        <span class="pn"><b>${esc(full(e))}</b><span class="mono">${esc(e.email||"email mancante: non potrà entrare")}${e.tipo==="Medico"?"":" · "+esc(e.cf||"codice fiscale mancante")}</span></span>
+        <span class="ps">${sedi.map(([s,x])=>`<span class="pchip"><span class="sigla xs">${esc(sede(s).sigla)}</span>${esc(cfgTxt(x))}</span>`).join("")||`<span class="mono neg">nessuna sede</span>`}${extra?`<span class="pchip rule">${extra} ${extra===1?"regola scritta":"regole scritte"}</span>`:""}</span>
+        <span class="pa">${a?`<b class="neg">${fmtH(a)} in avanzo</b>`:""}</span><span class="pgo" aria-hidden="true">›</span></button>`; }).join(""); }).join("");
+  return `<h2>Personale</h2>
+  <p class="lede">Tocca un collaboratore per aprire la sua scheda: sedi, orario, ripetizione e regole personali.</p>
+  <div class="bar"><button type="button" class="btn" data-edit="new">+ Nuovo collaboratore</button><span class="mono">${STAFF.length} collaboratori · avanzo di ${meseShort(month)}</span></div>
+  <div class="panel plist">${rows}</div>`;
+}
+function vEditor(){
+  const d = draft, isNew = !d.id, med = d.tipo==="Medico";
+  const sedeBlock = s => { const x = d.cfg[s.id]; if (!x) return "";
+    const seg = (field, opts) => `<div class="seg alt" role="radiogroup">${opts.map(([v,l])=>`<button type="button" data-dcv="${s.id}|${field}|${v}" aria-pressed="${x[field]===v}">${l}</button>`).join("")}</div>`;
+    const days = `<div class="ticks">${[1,2,3,4,5,6].map(w=>`<label class="tick sm"><input type="checkbox" data-dday="${s.id}|${w}" ${x.giorni.includes(w)?"checked":""}> ${DOWL[w].slice(0,3)}</label>`).join("")}</div>`;
+    const turno = `<select data-dc="${s.id}|turno" aria-label="Turno">${["G","M","P"].map(t=>`<option value="${t}" ${x.turno===t?"selected":""}>${t==="G"?"Giornata intera":t==="M"?"Mattina":"Pomeriggio"}</option>`).join("")}</select>`;
+    let body = "";
+    if (x.rep==="settimana") body = `<div class="row" style="align-items:flex-end">
+        <div class="f" style="margin:0;flex:0 0 auto"><label>Conto in</label>${seg("unit",[["ore","Ore"],["giorni","Giorni"]])}</div>
+        <div class="f" style="margin:0;flex:0 0 auto"><label for="dv-${s.id}">${x.unit==="ore"?"Ore":"Giorni"} a settimana</label><input type="number" id="dv-${s.id}" data-dc="${s.id}|val" min="1" max="${x.unit==="ore"?REG.maxGiorno*6:6}" value="${x.val}" style="width:96px"></div></div>
+      <p class="hint" style="margin:8px 0 0">${x.unit==="giorni"?`1 giorno = giornata intera (${fmtH(DAYH())}). `:""}L'app sceglie i giorni in base ai riuniti e ai colleghi liberi.</p>`;
+    else if (x.rep==="fissi") body = `<div class="f" style="margin:0 0 10px"><label>Quali giorni</label>${days}</div><div class="f" style="margin:0"><label>Turno</label>${turno}</div>`;
+    else body = `<div class="f" style="margin:0 0 10px"><label>Frequenza</label>${seg("freq",[["mensile","Ogni mese"],["2sett","Ogni 2 settimane"]])}</div>
+      ${x.freq==="mensile"?`<div class="f" style="margin:0 0 10px"><label>Quali settimane del mese</label><div class="ticks">${[1,2,3,4,5].map(n=>`<label class="tick sm"><input type="checkbox" data-dwk="${s.id}|${n}" ${x.settimane.includes(n)?"checked":""}> ${n===5?"ultima":NTH[n]}</label>`).join("")}</div></div>`
+        :`<div class="f" style="margin:0 0 10px"><label for="dd-${s.id}">A partire dal</label><input type="date" id="dd-${s.id}" data-dc="${s.id}|dal" value="${x.dal||TODAY}" min="${TODAY}" max="${MONTHS[MONTHS.length-1]}-${pad(daysIn(MONTHS[MONTHS.length-1]))}" style="width:180px"></div>`}
+      <div class="f" style="margin:0 0 10px"><label>Quali giorni</label>${days}</div><div class="f" style="margin:0"><label>Turno</label>${turno}</div>`;
+    const nd = x.rep==="settimana" ? [] : nextDates({id:d.id||"_"}, s.id, x);
+    return `<div class="sbox"><div class="sedehead" style="margin-bottom:12px"><span class="sigla">${esc(s.sigla)}</span><h3 style="font-size:22px">${esc(s.nome)}</h3></div>
+      <div class="f" style="margin:0 0 14px"><label>Si ripete</label>${seg("rep",[["settimana","Ogni settimana"],["fissi","Giorni fissi"],["personalizzata","Personalizzata"]])}</div>
+      ${body}
+      <div class="sprev"><b>Lavorerà:</b> ${esc(cfgTxt(x))}${nd.length?`<br><span class="mono">Prossime date: ${nd.map(fmt).join(", ")}</span>`:""}</div></div>`; };
+  return `<div class="bar"><button type="button" class="btn ghost sm" id="dBack">‹ Torna all'elenco</button></div>
+  <h2>${isNew?"Nuovo collaboratore":esc(full(d))}</h2>
+  <p class="lede">${isNew?"Compila le sezioni e salva.":"Modifica le sezioni e salva: per vederlo nel planning premi poi Genera turni."}</p>
+  <div class="editor">
+    <section class="panel esec"><div class="enum">1</div><div class="ebody"><h3>Anagrafica</h3>
+      <div class="row"><div class="f"><label for="dNome">Nome</label><input id="dNome" data-dr="nome" value="${esc(d.nome)}" autocomplete="off"></div>
+        <div class="f"><label for="dCogn">Cognome</label><input id="dCogn" data-dr="cognome" value="${esc(d.cognome)}" autocomplete="off"></div></div>
+      <div class="row"><div class="f"><label for="dTipo">Figura</label><select id="dTipo" data-drt="1">${TIPI_PROF.map(t=>`<option ${t===d.tipo?"selected":""}>${t}</option>`).join("")}</select></div>
+        ${med?`<div class="f"><label>Codice fiscale</label><p class="hint" style="margin:8px 0 0">Non richiesto per i medici.</p></div>`:`<div class="f"><label for="dCf">Codice fiscale</label><input id="dCf" data-dr="cf" value="${esc(d.cf)}" maxlength="16" autocomplete="off" style="text-transform:uppercase;font-family:var(--f-mono)"><span class="hint">Serve per abbinare le buste paga.</span></div>`}</div>
+      <div class="row"><div class="f" style="flex:2 1 240px"><label for="dEmail">Email</label><input id="dEmail" type="email" data-dr="email" value="${esc(d.email)}" autocomplete="off"><span class="hint">La stessa con cui entra in appgestione.it: così vede i suoi turni e le sue buste.</span></div>
+        <div class="f"><label for="dFerie">Ferie all'anno (giorni)</label><input id="dFerie" type="number" min="0" max="60" data-dr="ferie" value="${esc(d.ferie)}"></div>
+        <div class="f"><label for="dRol">ROL all'anno (ore)</label><input id="dRol" type="number" min="0" max="300" data-dr="rol" value="${esc(d.rol)}"></div></div>
+    </div></section>
+    <section class="panel esec"><div class="enum">2</div><div class="ebody"><h3>Sedi</h3>
+      <p class="hint" style="margin:0 0 10px">Spunta le sedi dove lavora: per ognuna si apre la sezione con orario e ripetizione.</p>
+      <div class="ticks">${SEDI.map(s=>`<label class="tick"><input type="checkbox" data-dsede="${s.id}" ${d.cfg[s.id]?"checked":""}> ${esc(s.nome)}</label>`).join("")}</div>
+    </div></section>
+    <section class="panel esec"><div class="enum">3</div><div class="ebody"><h3>Orario e ripetizione</h3>
+      <p class="hint" style="margin:0 0 14px"><b>Ogni settimana</b>: ore o giorni, l'app sceglie quando. <b>Giorni fissi</b>: sempre negli stessi giorni. <b>Personalizzata</b>: come nel calendario, per esempio il 1° e 3° martedì del mese o ogni 2 settimane.</p>
+      ${SEDI.filter(s=>d.cfg[s.id]).map(sedeBlock).join("") || `<p style="color:var(--muted);margin:0">Spunta almeno una sede nella sezione 2.</p>`}
+    </div></section>
+    <section class="panel esec"><div class="enum">4</div><div class="ebody"><h3>Deroghe e regole personali</h3>
+      ${isNew?`<p style="color:var(--muted);margin:0">Salva il collaboratore, poi potrai scrivere qui le sue regole personali.</p>`:aiBox(d.id)}
+      ${!isNew && UNAV.filter(u=>u.emp===d.id).length?`<div class="mono" style="margin-top:14px">Non disponibile: ${UNAV.filter(u=>u.emp===d.id).map(u=>esc(unavTxt(u))).join(" · ")}</div>`:""}
+    </div></section>
+  </div>
+  <div class="err" id="dErr" aria-live="polite" style="margin-top:16px"></div>
+  <div class="bar savebar"><button type="button" class="btn" id="dSave">${isNew?"Crea collaboratore":"Salva modifiche"}</button><button type="button" class="btn ghost" id="dBack2">Annulla</button>
+    ${isNew?"":rmConfirm?`<button type="button" class="btn bad" id="dRmOk">Conferma rimozione</button>`:`<button type="button" class="btn bad" id="dRm">Rimuovi collaboratore</button>`}</div>`;
+}
+function saveDraft(){
+  const d = draft, err = [];
+  d.nome = d.nome.trim(); d.cognome = d.cognome.trim(); d.cf = (d.cf||"").trim().toUpperCase();
+  if (!d.nome || !d.cognome) err.push("Scrivi nome e cognome.");
+  if (d.tipo!=="Medico" && !/^[A-Z0-9]{16}$/.test(d.cf)) err.push("Il codice fiscale deve avere 16 caratteri.");
+  d.email = (d.email||"").trim().toLowerCase();
+  if (d.email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(d.email)) err.push("L'email non è valida.");
+  if (d.email && STAFF.some(x=>x.id!==d.id && (x.email||"").toLowerCase()===d.email)) err.push("Questa email è già di un altro collaboratore.");
+  if (d.tipo!=="Medico" && d.cf && STAFF.some(x=>x.id!==d.id && x.tipo!=="Medico" && (x.cf||"").toUpperCase()===d.cf)) err.push("Questo codice fiscale è già di un altro collaboratore.");
+  const sedi = Object.keys(d.cfg).filter(s=>sede(s));
+  if (!sedi.length) err.push("Spunta almeno una sede.");
+  for (const s of sedi){ const x=d.cfg[s];
+    if (x.rep!=="settimana" && !x.giorni.length) err.push(`${sede(s).nome}: scegli almeno un giorno.`);
+    if (x.rep==="personalizzata" && x.freq==="mensile" && !x.settimane.length) err.push(`${sede(s).nome}: scegli almeno una settimana del mese.`);
+    if (x.rep==="settimana" && !(x.val>0)) err.push(`${sede(s).nome}: indica ore o giorni a settimana.`);
+    if (x.rep!=="settimana" && x.turno==="G" && H("M")+H("P")>REG.maxGiorno) err.push(`${sede(s).nome}: la giornata intera supera le ${REG.maxGiorno} ore.`); }
+  const sett = sedi.reduce((a,s)=>a+cfgHours(d.cfg[s]),0) + sedi.reduce((a,s)=>{ const x=d.cfg[s]; return a + (x.rep==="fissi" ? x.giorni.length*(x.turno==="G"?H("M")+H("P"):H(x.turno)) : 0); },0);
+  if (sett > REG.maxGiorno*6) err.push(`In tutto fa ${fmtH(sett)} a settimana: il massimo è ${REG.maxGiorno*6} h (${REG.maxGiorno} h × 6 giorni).`);
+  if (err.length){ const el=$("#dErr"); if (el) el.innerHTML = err.map(esc).join("<br>"); return; }
+  let e = d.id && emp(d.id);
+  if (!e){ e = {id:uid(), ore:{}, cfg:{}}; STAFF.push(e); plan[e.id]={}; }
+  Object.assign(e, {nome:d.nome, cognome:d.cognome, tipo:d.tipo, email:d.email, ferie:Math.max(0,+d.ferie||0), rol:Math.max(0,+d.rol||0)});
+  e.cf = d.tipo!=="Medico" ? d.cf : "";
+  e.cfg = JSON.parse(JSON.stringify(d.cfg)); e.ore = {};
+  for (const s of sedi){ const h=cfgHours(e.cfg[s]); if (h>0) e.ore[s]=h; }
+  CAD = CAD.filter(c=>!(c.emp===e.id && c.src==="cfg"));
+  for (const s of sedi) for (const c of cfgToCad(e,s,e.cfg[s])) CAD.push({id:uid(), ...c});
+  const nuovo = !d.id; editing = null; draft = null;
+  changedG(`${full(e)} ${nuovo?"creato":"salvato"} · premi Genera turni per aggiornare il planning`);
+}
+function bindPersonale(){
+  const q = (s,fn)=>{ const el=$(s); if(el) fn(el); };
+  const on = (s,ev,fn)=>$$(s).forEach(el=>el.addEventListener(ev,()=>fn(el)));
+  on("[data-edit]","click",b=>startEdit(b.dataset.edit));
+  const back = ()=>{ editing=null; draft=null; render(); };
+  q("#dBack",el=>el.onclick=back); q("#dBack2",el=>el.onclick=back);
+  on("[data-dr]","input",el=>{ draft[el.dataset.dr]=el.value; });
+  on("[data-drt]","change",el=>{ draft.tipo=el.value; render(); });
+  on("[data-dsede]","change",el=>{ const s=el.dataset.dsede; if (el.checked) draft.cfg[s]=cfgDefault(); else delete draft.cfg[s]; render(); });
+  on("[data-dcv]","click",b=>{ const [s,f,v]=b.dataset.dcv.split("|"); draft.cfg[s][f]=v;
+    if (f==="unit") draft.cfg[s].val = v==="giorni" ? Math.max(1,Math.round(draft.cfg[s].val/DAYH())) : draft.cfg[s].val*DAYH();
+    render(); });
+  on("[data-dc]","change",el=>{ const [s,f]=el.dataset.dc.split("|"); draft.cfg[s][f] = f==="val" ? Math.max(0,+el.value||0) : el.value; render(); });
+  on("[data-dday]","change",el=>{ const [s,w]=el.dataset.dday.split("|"), x=draft.cfg[s]; x.giorni = el.checked ? [...new Set([...x.giorni,+w])] : x.giorni.filter(g=>g!==+w); render(); });
+  on("[data-dwk]","change",el=>{ const [s,n]=el.dataset.dwk.split("|"), x=draft.cfg[s]; x.settimane = el.checked ? [...new Set([...x.settimane,+n])] : x.settimane.filter(g=>g!==+n); render(); });
+  q("#dSave",el=>el.onclick=saveDraft);
+  q("#dRm",el=>el.onclick=()=>{ rmConfirm=true; render(); });
+  q("#dRmOk",el=>el.onclick=()=>{ const e=emp(draft.id); STAFF=STAFF.filter(x=>x!==e); REMOVED.push(e);
+    for (const d in plan[e.id]) if (d>=TODAY) delete plan[e.id][d]; editing=null; draft=null; changedG(`${full(e)} rimosso`); });
+  // AI
+  q("#aiTxt",el=>el.addEventListener("input",()=>{ ai.text=el.value; ai.scope=$("#aiGo")?.dataset.scope||""; }));
+  on("[data-aiex]","click",b=>{ const scope=$("#aiGo").dataset.scope; ai = {scope, text:b.textContent, busy:false, res:null, err:""}; render(); });
+  q("#aiGo",el=>el.onclick=()=>{ const scope=el.dataset.scope; const t=$("#aiTxt").value.trim(); if (!t){ toast("Scrivi prima la regola"); return; } ai.text=t; aiRun(scope); });
+  q("#aiStop",el=>el.onclick=()=>{ ai.ctl?.abort(); });
+  q("#aiDiscard",el=>el.onclick=()=>{ ai={...ai, res:null}; render(); });
+  q("#aiApply",el=>el.onclick=()=>{ const ok=ai.res.azioni.filter(x=>x.ok).map(x=>x.a); const rid=uid();
+    applyAzioni(ok, rid); RULES_TXT.push({id:rid, testo:ai.text, persona:ai.scope||null, azioni:ok, quando:nowStr()});
+    if (draft && draft.id){ const e=emp(draft.id); draft.cfg = JSON.parse(JSON.stringify(e.cfg)); }
+    ai = {scope:ai.scope, text:"", busy:false, res:null, err:""};
+    changedG(`Regola applicata${ok.some(permanente)?"":""} · premi Genera turni per aggiornare il planning`); });
+  on("[data-rrm]","click",b=>{ const r=RULES_TXT.find(x=>x.id==b.dataset.rrm); removeRule(r.id);
+    changedG(r.azioni.some(permanente) ? "Regola eliminata · ore, riuniti e limiti cambiati restano come sono" : "Regola eliminata"); });
+}
+
+// ================= render =================
+const TAB_ICON = Object.assign({}, typeof ICON !== "undefined" ? ICON : {});
+function render(){
+  const me = STATE.me || {};
+  const vistaBtn = role === "admin" && me.staffId ? `<button class="btn sm ghost" id="vistaDip">I miei turni</button>`
+    : role === "emp" && STATE.isAdmin ? `<button class="btn sm ghost" id="vistaAdm">Amministrazione</button>` : "";
+  const bell = PUSH.state === "on" ? `<button class="btn sm ghost" id="pushOff" title="Notifiche attive su questo dispositivo">🔔 Attive</button>`
+    : PUSH.state === "off" ? `<button class="btn sm ghost" id="pushOn">🔔 Notifiche</button>` : "";
+  $("#whoBox").innerHTML = `<span class="userpill"><b>${esc(me.name || "")}</b>${role === "admin" ? `<span class="rolepill">Amministratore</span>` : ""}</span>
+    ${vistaBtn}${bell}<a class="btn sm ghost" href="${esc(STATE.links?.home || "https://appgestione.it")}">Le mie app</a><button class="btn sm ghost" id="logout">Esci</button>`;
+  if (role === "emp" && (STATE.sconosciuto || !STATE.privacy)){
+    $("#tabs").innerHTML = "";
+    $("#view").innerHTML = STATE.sconosciuto ? vSconosciuto() : vPrivacy();
+    bind(); return;
+  }
+  const badge = n => n ? ` <span class="count">${n}</span>` : "";
+  let tabs;
+  if (role === "admin"){
+    const pendAdmin = reqs.filter(r=>r.stato==="attesa_admin").length;
+    tabs = [["planning","Planning"],["richieste","Richieste"+badge(pendAdmin)],["personale","Personale"],["regole","Regole"],["sedi","Sedi"],["bpAdmin","Buste paga"]];
+  } else {
+    const daConf = STATE.sostituzioni.filter(r=>r.stato==="attesa_sost").length;
+    const daLeggere = STATE.buste.filter(b=>!b.confermata).length;
+    tabs = [["stato","I miei turni"],["nuova","Richiedi"],["conferme","Sostituzioni"+badge(daConf)],...(STATE.staff.medico && !STATE.buste.length ? [] : [["bpEmp","Buste paga"+badge(daLeggere)]])];
+  }
+  if (!tabs.some(t=>t[0]===tab)) tab = tabs[0][0];
+  $("#tabs").innerHTML = tabs.map(([k,l])=>{ const [txt,b=""]=l.split(" <span"); return `<button role="tab" aria-selected="${k===tab}" data-tab="${k}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg><span class="lbl">${SHORT[k]?`<span class="lf">${txt}</span><span class="ls">${SHORT[k]}</span>`:txt}</span>${b?"<span"+b:""}</button>`; }).join("");
+  const V = {planning:vPlanning, richieste:vRichieste, personale:vPersonale, regole:vRegole, sedi:vSedi, bpAdmin:vBusteAdmin,
+    stato:vStato, nuova:vNuova, conferme:vConferme, bpEmp:vBusteEmp}[tab];
+  $("#view").innerHTML = (role === "admin" || tab === "stato" ? pushBanner() : "") + V() + (modal ? vModal() : "");
+  bind();
+}
+
+// ================= dipendente =================
+function vSconosciuto(){
+  return `<div class="panel" style="max-width:620px;margin:24px auto"><h2>Non sei ancora nell'elenco del personale</h2>
+    <p class="lede">Sei entrato come <b>${esc(STATE.me.email)}</b>, ma nessun collaboratore in Turni ha questa email. Chiedi all'amministrazione di scriverla nella tua scheda (Personale → Anagrafica → Email).</p>
+    ${STATE.isAdmin ? `<button class="btn" id="vistaAdm">Torna all'amministrazione</button>` : ""}</div>`;
+}
+function vPrivacy(){
+  return `<div class="panel" style="max-width:680px;margin:24px auto">
+    <h2>Informativa privacy</h2>
+    <p class="lede">Ciao ${esc(STATE.staff?.nome || "")}, è il tuo primo accesso ai Turni. Per continuare leggi e accetta l'informativa.</p>
+    <div class="privacy-text">
+      <h4>Titolare del trattamento</h4><p>La società del gruppo To Smile con cui hai il rapporto di lavoro, che gestisce turni, sedi, assenze e buste paga.</p>
+      <h4>Quali dati trattiamo</h4><p>Nome, cognome, email, codice fiscale, figura professionale, sedi e turni, richieste di ferie, permessi e malattia (solo il numero di protocollo del certificato, mai la diagnosi), buste paga, data e ora di apertura e di presa visione dei documenti, tipo di dispositivo usato.</p>
+      <h4>Perché</h4><p>Gestire il rapporto di lavoro, organizzare i turni e consegnarti le buste paga in formato elettronico, conservando la prova della consegna.</p>
+      <h4>Chi li vede</h4><p>Tu vedi i tuoi dati e i nomi dei colleghi nei tuoi stessi turni. L'amministrazione e il consulente del lavoro vedono quelli necessari al loro compito.</p>
+      <h4>Dove e per quanto tempo</h4><p>I dati sono conservati sui server del fornitore Render (negli Stati Uniti); le buste paga sono salvate cifrate. Restano consultabili nell'app per 18 mesi, poi le conserva solo l'amministrazione, che può fornirtele su richiesta.</p>
+      <h4>I tuoi diritti</h4><p>Puoi chiedere accesso, rettifica e limitazione dei tuoi dati all'amministrazione e presentare reclamo al Garante per la protezione dei dati personali.</p>
+    </div>
+    <label class="check" style="margin-top:16px"><input type="checkbox" id="pchk"> <span>Ho letto l'informativa sul trattamento dei miei dati personali.</span></label>
+    <div class="bar" style="margin-top:16px"><button class="btn" id="paccept" disabled>Accetta e continua</button></div>
+  </div>`;
+}
+const pianoMese = ym => STATE.giorni.filter(g=>g.d.startsWith(ym));
+function agRow(g){
+  const cls=[g.d<TODAY&&"past", g.d===TODAY&&"today"].filter(Boolean).join(" ");
+  let tile, body;
+  if (g.abs){ tile=`<div class="agt k-${g.abs.code}">${g.abs.code}</div>`; body=`<div class="t">${esc(g.abs.tipo)}</div><div class="meta">${g.abs.sost?`Ti sostituisce <b>${esc(g.abs.sost)}</b>`:g.abs.code==="AI"?"Segnalata all'ufficio personale":""}</div>`; }
+  else { tile=`<div class="agt k-${g.attesa?"PEND":g.code}">${g.code}</div>`;
+    body = g.turni.map(x=>`<div class="t">${esc(x.label)} · ${esc(x.sede)}${x.fisso?` <span class="chip n">Presenza fissa</span>`:""}</div><div class="meta">${x.conChi}</div>`).join("") + (g.attesa?`<div class="meta"><b style="color:var(--warn)">${esc(g.attesa)} in attesa di approvazione</b></div>`:""); }
+  return `<div class="ag ${cls}"><div class="agd"><b>${+g.d.slice(8)}</b><span>${DOWL[dow(g.d)].slice(0,3)}</span></div>${tile}<div class="agi">${body}</div></div>`;
+}
+const STATI_R = {attesa_sost:"Attesa sostituto", attesa_admin:"Attesa amministrazione", approvata:"Approvata", rifiutata:"Rifiutata"};
+function stepsEmp(r){
+  const s2 = r.sostOk===true ? `<b class='done'>${esc((r.sostNome||"").split(" ")[0])} conferma</b>` : r.sostOk===false ? `<b class='no'>Sostituto rifiuta</b>` : r.sost ? `<b class='now'>Attesa ${esc((r.sostNome||"").split(" ")[0])}</b>` : "<b class='done'>Nessun sostituto</b>";
+  const s3 = r.stato==="approvata" ? "<b class='done'>Approvata</b>" : r.stato==="rifiutata" ? "<b class='no'>Rifiutata</b>" : r.stato==="attesa_admin" ? "<b class='now'>Attesa admin</b>" : "<b>Admin</b>";
+  return `<div class="steps"><b class='done'>Inviata</b>${s2}${s3}</div>`;
+}
+function empReqCard(r, actions){
+  return `<div class="req"><div style="min-width:0">
+    <div class="t">${esc(r.nome)} · ${TIPI[r.tipo]}</div>
+    <div class="meta">${periodo(r)} · ${esc(r.figura)} · ${esc(r.sedi)} · sostituto: <b>${r.sostNome?esc(r.sostNome):"—"}</b>${r.prot?` · prot. ${esc(r.prot)}`:""}${r.note?` · “${esc(r.note)}”`:""}</div>
+    ${stepsEmp(r)}</div><div class="acts">${actions||""}</div></div>`;
+}
+function vStato(){
+  const s = STATE.staff, np = STATE.next;
+  const ag = pianoMese(empMonth).map(agRow).join("");
+  return `<h2>Ciao ${esc(s.nome)}</h2>
+  <p class="lede">${esc(s.tipo)}${s.descr?` · ${esc(s.descr)}`:""}</p>
+  ${STATE.myAI.length?`<div class="alert"><b>${STATE.myAI.length} ${STATE.myAI.length===1?"assenza":"assenze"} senza richiesta</b><br>${STATE.myAI.map(fmt).join(", ")}: non coperte da ferie o permessi, risultano in giornaliera e sono segnalate all'ufficio personale.</div>`:""}
+  <div class="grid2">
+    <div class="panel"><h3>Prossimo turno</h3>${np?`<div class="nextwhen">${np.d===TODAY?"Oggi":DOWL[dow(np.d)]+" "+fmt(np.d)}</div>
+      <div class="nextrow"><div class="agt k-${np.code}">${np.code}</div><div class="agi">${np.turni.map(x=>`<div class="t">${esc(x.label)} · ${esc(x.sede)}</div><div class="meta">${x.conChi}</div>`).join("")}</div></div>`:`<p style="color:var(--muted);margin:0">Nessun turno in programma.</p>`}</div>
+    <div class="panel"><h3>Saldi ${TODAY.slice(0,4)}</h3><div class="stat">
+      <div><b>${s.ferie}</b><span>Giorni ferie</span></div>
+      <div><b>${s.rol}</b><span>Ore ROL</span></div>
+      <div><b>${STATE.mie.filter(r=>r.stato.startsWith("attesa")).length}</b><span>In attesa</span></div></div></div>
+  </div>
+  <div class="panel" style="margin-top:24px">
+    <div class="bar" style="justify-content:space-between"><h3 style="margin:0">I miei turni · ${fmtH(STATE.oreMese[empMonth]||0)} a ${meseShort(empMonth)}</h3>
+      <div class="seg alt" role="group" aria-label="Mese">${MONTHS.map(m=>`<button data-em="${m}" aria-pressed="${m===empMonth}">${meseShort(m).slice(0,3)}</button>`).join("")}</div></div>
+    <div class="agenda">${ag||`<p style="color:var(--muted);margin:0">Nessun turno in questo mese.</p>`}</div>
+  </div>
+  <div class="panel" style="margin-top:24px"><h3>Le mie richieste</h3>${STATE.mie.length?STATE.mie.map(r=>empReqCard(r, r.stato.startsWith("attesa")?`<button class="btn sm ghost bad" data-annulla="${r.id}">Annulla</button>`:"")).join(""):`<p style="color:var(--muted);margin:0">Nessuna richiesta. Usa “Richiedi” per ferie, ROL o malattia.</p>`}</div>`;
+}
+function vNuova(){
+  const s = STATE.staff, fine = `${MONTHS[MONTHS.length-1]}-${pad(daysIn(MONTHS[MONTHS.length-1]))}`;
+  return `<h2>Nuova richiesta</h2>
+  <p class="lede">Ferie e ROL partono solo se indichi il collega che ti sostituisce e confermi di esserti accordato. Lui deve confermare, e solo dopo la richiesta arriva all'amministrazione.</p>
+  <form id="f" class="panel" novalidate>
+    <div class="f"><label>Tipo</label>
+      <div class="seg alt" role="radiogroup">${Object.entries(TIPI).map(([k,v],i)=>`<button type="button" data-tipo="${k}" aria-pressed="${i===0}">${v}</button>`).join("")}</div>
+      <input type="hidden" id="tipo" value="FE"><span class="hint" id="tipoHint">Preavviso minimo 7 giorni.</span></div>
+    <div class="row">
+      <div class="f"><label for="dal">Dal</label><input type="date" id="dal" value="${addDays(TODAY,7)}" min="${TODAY}" max="${fine}"></div>
+      <div class="f"><label for="al">Al</label><input type="date" id="al" value="${addDays(TODAY,7)}" min="${TODAY}" max="${fine}"></div>
+      <div class="f" id="oreBox" hidden><label for="ore">Ore</label><input type="number" id="ore" min="1" max="8" value="4"></div>
+    </div>
+    <div class="f" id="protBox" hidden><label for="prot">Protocollo certificato medico</label><input id="prot" inputmode="numeric" placeholder="es. 8812047"><span class="hint">Lo trovi nel messaggio del tuo medico.</span></div>
+    <div class="f"><label for="sost">Chi ti sostituisce <span id="sostReq">*</span></label>
+      <select id="sost"><option value="">Scegli un collega</option>${STATE.colleghi.map(c=>`<option value="${c.id}">${esc(c.nome)} · ${esc(c.sedi)}</option>`).join("")}</select>
+      <span class="hint">Solo colleghi con la tua stessa figura (${esc(s.tipo)}) che lavorano in almeno una delle tue sedi.</span></div>
+    <div class="f"><label class="check"><input type="checkbox" id="accordo"> <span>Confermo di essermi accordato con il collega indicato. Senza la sua conferma la richiesta non viene valutata e l'assenza risulterà <b>non giustificata</b>.</span></label></div>
+    <div class="f"><label for="note">Note (facoltative)</label><textarea id="note" rows="2" maxlength="500"></textarea></div>
+    <div class="err" id="err" aria-live="polite"></div>
+    <button class="btn" type="submit">Invia richiesta</button>
+  </form>`;
+}
+function vConferme(){
+  const list = STATE.sostituzioni;
+  return `<h2>Sostituzioni</h2>
+  <p class="lede">Colleghi che ti hanno indicato come sostituto. Confermando ti impegni a coprire i loro turni in quei giorni.</p>
+  <div class="panel">${list.length?list.map(r=>empReqCard(r, r.stato==="attesa_sost"?`<button class="btn sm" data-sok="${r.id}">Confermo</button><button class="btn sm ghost bad" data-sno="${r.id}">Non posso</button>`:"")).join(""):`<p style="color:var(--muted);margin:0">Nessuno ti ha indicato come sostituto.</p>`}</div>`;
+}
+function vBusteEmp(){
+  const mie = STATE.buste;
+  return `<h2>Le mie buste paga</h2>
+  <p class="lede">Per aprire una busta ti chiediamo di nuovo la password di appgestione.it. Quando confermi la presa visione, l'amministrazione la riceve con data e ora.</p>
+  <div class="panel">${mie.length?mie.map(b=>`<div class="req"><div><div class="t">${meseLabel(b.mese)}</div><div style="margin-top:6px">${b.confermata?`<span class="chip ok">Presa visione ${esc(dt(b.confermata))}</span>`:b.aperta?`<span class="chip warn">Aperta, da confermare</span>`:`<span class="chip bad">Da aprire</span>`}</div></div>
+    <div class="acts"><button class="btn sm ${b.confermata?"ghost":""}" data-open="${b.id}">Apri</button></div></div>`).join(""):`<p style="color:var(--muted);margin:0">Nessuna busta paga disponibile.</p>`}</div>
+  <p class="lede" style="margin-top:14px;font-size:13px">Le buste più vecchie di 18 mesi sono conservate dall'amministrazione: chiedile all'ufficio personale.</p>`;
+}
+const dt = s => s ? new Date(s).toLocaleString("it-IT",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}) : "";
+function vModal(){
+  const b = STATE.buste.find(x=>x.id===modal.id); if (!b) return "";
+  if (modal.step==="pwd") return `<div class="modal" role="dialog" aria-modal="true" aria-label="Conferma password"><form class="box" id="mpwd" novalidate>
+    <h3>Busta paga di ${meseLabel(b.mese)}</h3><p class="lede" style="font-size:14px;margin-bottom:12px">Inserisci la password con cui entri in appgestione.it.</p>
+    <input type="email" autocomplete="username" value="${esc(STATE.me.email)}" hidden>
+    <input type="password" id="mp" autocomplete="current-password" style="width:100%" aria-label="Password">
+    <div class="err" style="min-height:20px;margin-top:6px" aria-live="polite">${esc(modal.err||"")}</div>
+    <div class="bar" style="margin:8px 0 0"><button class="btn" type="submit">Apri busta</button><button class="btn ghost" type="button" data-close="1">Annulla</button></div></form></div>`;
+  return `<div class="modal" role="dialog" aria-modal="true" aria-label="Busta paga"><div class="box wide">
+    <div class="bar" style="justify-content:space-between;margin:0 0 10px"><h3 style="margin:0">${meseLabel(b.mese)}</h3><div class="bar" style="margin:0"><a class="btn sm ghost" href="/api/buste/${b.id}/file?t=${encodeURIComponent(modal.token)}" target="_blank" rel="noopener">Apri a schermo intero</a><button class="btn sm ghost" data-close="1">Chiudi</button></div></div>
+    ${matchMedia("(pointer:fine) and (min-width:700px)").matches ? `<iframe class="pdf" src="/api/buste/${b.id}/file?t=${encodeURIComponent(modal.token)}" title="Busta paga di ${meseLabel(b.mese)}"></iframe>`
+      : `<a class="btn" style="width:100%;min-height:52px" href="/api/buste/${b.id}/file?t=${encodeURIComponent(modal.token)}" target="_blank" rel="noopener">Leggi la busta paga (PDF)</a><p class="hint" style="margin:8px 0 0">Si apre in una nuova pagina. Poi torna qui per confermare la presa visione.</p>`}
+    ${b.confermata?`<p><span class="chip ok">Presa visione registrata il ${esc(dt(b.confermata))}</span></p>`
+      :`<label class="check" style="margin-top:12px"><input type="checkbox" id="mchk"> <span>Dichiaro di aver ricevuto e preso visione della mia busta paga di ${meseLabel(b.mese)}.</span></label>
+        <button class="btn" id="mconf" style="margin-top:12px;width:100%" disabled>Confermo la presa visione</button>`}
+  </div></div>`;
+}
+
+// ================= amministratore: buste paga =================
+const mesiCarica = () => { const out=[]; const [y,m]=TODAY.split("-").map(Number); for (let k=-3;k<=0;k++){ const t=new Date(y,m-1+k,15); out.push(`${t.getFullYear()}-${pad(t.getMonth()+1)}`); } return out.reverse(); };
+function vBusteAdmin(){
+  if (!STATE.busteEnabled) return `<h2>Buste paga</h2><div class="panel"><p style="margin:0">Le buste paga non sono ancora attive: manca la chiave di cifratura <b>BUSTE_KEY</b> sulle impostazioni di Render.</p></div>`;
+  if (!BUSTE){ loadBuste(); return `<h2>Buste paga</h2><p class="lede">Caricamento…</p>`; }
+  const dip = STAFF.filter(e=>e.tipo!=="Medico");
+  const mesi = [...new Set(BUSTE.buste.map(b=>b.mese))].sort().reverse();
+  const attivi = mesi.filter(m=>m>=BUSTE.cutoff), arch = mesi.filter(m=>m<BUSTE.cutoff);
+  if (!bustaMese || !mesi.includes(bustaMese)) bustaMese = attivi[0] || mesiCarica()[1];
+  const del = BUSTE.buste.filter(b=>b.mese===bustaMese), byStaff = Object.fromEntries(del.map(b=>[b.staff_id,b]));
+  const pub = del.filter(b=>b.stato==="pubblicata"), bozze = del.filter(b=>b.stato==="bozza"), ok = pub.filter(b=>b.confermata_il).length;
+  const sosp = BUSTE.sospese.filter(s=>s.mese===bustaMese);
+  const nonAcc = STAFF.filter(e=>!privacy[e.id]);
+  const statoB = b => !b ? `<span class="chip bad">Nessuna busta</span>` : b.stato==="bozza" ? `<span class="chip n">Da pubblicare</span>`
+    : b.confermata_il ? `<span class="chip ok">Presa visione ${esc(dt(b.confermata_il))}</span>` : b.aperta_il ? `<span class="chip warn">Aperta ${esc(dt(b.aperta_il))}</span>` : `<span class="chip bad">Non aperta</span>`;
+  const righe = [...dip.map(e=>[e, byStaff[e.id]]), ...del.filter(b=>!dip.some(e=>e.id===b.staff_id)).map(b=>[emp(b.staff_id), b])];
+  return `<h2>Buste paga</h2>
+  <p class="lede">Carica il PDF della consulente: l'app lo divide per codice fiscale e mette ogni busta nell'area del dipendente, cifrata. Qui vedi chi ha preso visione e quando.</p>
+  <div class="grid2">
+    <form class="panel" id="upForm" novalidate><h3>Carica cedolini</h3>
+      <div class="drop">
+        <label for="upMese">Mese</label><select id="upMese">${mesiCarica().map(m=>`<option value="${m}" ${m===mesiCarica()[1]?"selected":""}>${meseLabel(m)}</option>`).join("")}</select>
+        <label for="upFile">PDF unico con tutte le buste</label><input type="file" id="upFile" accept="application/pdf">
+        <button class="btn" type="submit" id="upGo">Carica e dividi</button>
+      </div>
+      ${upMsg?`<p class="hint" style="margin:10px 0 0">${upMsg}</p>`:""}
+      <p class="hint" style="margin:10px 0 0">Il codice fiscale di ogni dipendente deve essere scritto nella sua scheda in Personale. Le buste restano in bozza finché non le pubblichi.</p></form>
+    <div class="panel"><h3>Informativa privacy</h3>
+      <div class="stat"><div><b>${STAFF.length-nonAcc.length}/${STAFF.length}</b><span>Accettata</span></div></div>
+      <p style="margin:12px 0 0;font-size:14px">${nonAcc.length?`Manca: ${nonAcc.map(e=>esc(full(e))).join(", ")}. La vedranno al primo accesso.`:"Tutti hanno accettato."}</p>
+      <details style="margin-top:12px;font-size:13px"><summary style="cursor:pointer">Registro accettazioni</summary>
+        <ul class="plain" style="margin-top:8px">${STAFF.filter(e=>privacy[e.id]).map(e=>`<li>${esc(full(e))} · <span class="mono">${esc(dt(privacy[e.id].il))} · ${esc(privacy[e.id].disp||"")}</span></li>`).join("")||"<li>Nessuna accettazione.</li>"}</ul></details></div>
+  </div>
+  ${sosp.length?`<div class="panel" style="margin-top:24px;background:var(--accent-soft)"><h3>Pagine da assegnare · ${meseLabel(bustaMese)}</h3>
+    <p style="margin:0 0 10px;font-size:14px">In queste pagine non ho trovato il codice fiscale di un dipendente. Guardale e assegnale (si aggiungono alla sua busta) oppure scartale.</p>
+    ${sosp.map(s=>`<div class="bar"><span class="mono">Pagina ${s.pagina} · ${esc(s.origine)}</span><a class="btn sm ghost" href="/api/buste/sospese/${s.id}/file" target="_blank" rel="noopener">Guarda</a>
+      <select id="assign-${s.id}" aria-label="Assegna pagina ${s.pagina}"><option value="">Assegna a…</option>${dip.map(e=>`<option value="${e.id}" ${s.suggerito===e.id?"selected":""}>${esc(full(e))}</option>`).join("")}</select>
+      <button class="btn sm" data-assign="${s.id}">Assegna</button><button class="btn sm ghost bad" data-scarta="${s.id}">Scarta</button></div>`).join("")}</div>`:""}
+  <div class="panel" style="margin-top:24px">
+    <div class="bar" style="justify-content:space-between"><h3 style="margin:0">Registro prese visione</h3>
+      <select id="bpMese" aria-label="Mese">${(attivi.length?attivi:[bustaMese]).map(m=>`<option value="${m}" ${m===bustaMese?"selected":""}>${meseLabel(m)}</option>`).join("")}</select></div>
+    <div class="stat" style="margin-bottom:12px"><div><b>${ok}/${pub.length}</b><span>Prese visione</span></div>${bozze.length?`<div><b>${bozze.length}</b><span>Da pubblicare</span></div>`:""}</div>
+    <div class="bar">${bozze.length?`<button class="btn" id="pubblica" ${sosp.length?"disabled":""}>Pubblica ${bozze.length} ${bozze.length===1?"busta":"buste"} ai dipendenti</button>`:""}
+      ${pub.length && ok<pub.length?`<button class="btn ghost" id="sollecito">Sollecita chi manca (${pub.length-ok})</button>`:""}
+      ${del.length?`<a class="btn ghost" href="/api/buste/mese/${bustaMese}/registro.csv">Registro (CSV)</a><a class="btn ghost" href="/api/buste/mese/${bustaMese}/pdf">Tutte le buste (PDF)</a>`:""}</div>
+    ${sosp.length && bozze.length?`<p class="hint" style="margin:-6px 0 12px">Prima assegna o scarta le pagine qui sopra.</p>`:""}
+    <div class="overflow"><table class="rules"><thead><tr><th>Dipendente</th><th>Stato</th><th>Dispositivo</th><th>Impronta file</th><th></th></tr></thead><tbody>
+      ${righe.map(([e,b])=>`<tr><td>${esc(full(e))}<div class="mono">${esc(e?.cf||"codice fiscale mancante")}</div></td><td>${statoB(b)}</td><td style="font-size:13px">${esc(b?.confermata_disp||b?.aperta_disp||"—")}</td>
+        <td class="mono">${b?esc(b.impronta.slice(0,12))+"…":"—"}</td><td style="white-space:nowrap">${b?`<a class="btn sm ghost" href="/api/buste/${b.id}/anteprima" target="_blank" rel="noopener">Vedi</a>${b.stato==="bozza"?` <button class="btn sm ghost bad" data-bdel="${b.id}">Togli</button>`:""}`:""}</td></tr>`).join("")||`<tr><td colspan="5">Nessun dipendente (i medici non ricevono la busta dall'app).</td></tr>`}
+    </tbody></table></div>
+  </div>
+  <div class="panel" style="margin-top:24px"><h3>Archivio amministrazione</h3>
+    <p class="lede" style="font-size:14px">Mesi precedenti a ${meseLabel(BUSTE.cutoff)}: oltre i 18 mesi non sono più visibili ai dipendenti. Restano qui finché non li elimini.</p>
+    ${arch.length?arch.map(m=>{ const n=BUSTE.buste.filter(b=>b.mese===m), c=n.filter(b=>b.confermata_il).length;
+      return `<div class="req"><div><div class="t">${meseLabel(m)}</div><div class="meta">${n.length} buste · ${c} prese visione registrate</div></div>
+      <div class="acts"><a class="btn sm ghost" href="/api/buste/mese/${m}/pdf">PDF</a><a class="btn sm ghost" href="/api/buste/mese/${m}/registro.csv">Registro</a>${delPending===m?`<button class="btn sm bad" data-delok="${m}">Conferma eliminazione</button><button class="btn sm ghost" data-delno="1">Annulla</button>`:`<button class="btn sm ghost bad" data-del="${m}">Elimina</button>`}</div></div>`;}).join("")
+      :`<p style="margin:0;color:var(--muted)">Nessun mese in archivio.</p>`}
+  </div>`;
+}
+async function loadBuste(){ try { BUSTE = await api("GET","/api/buste"); } catch(e){ BUSTE = {buste:[], sospese:[], cutoff:"0000-00"}; toast(e.message); } if (tab==="bpAdmin") render(); }
+
+// ---------- planning ----------
+function vPlanning(){
+  const days = Array.from({length:daysIn(month)},(_,i)=>dstr(month,i+1));
+  const sediV = sedeFilter==="all" ? SEDI : SEDI.filter(s=>s.id===sedeFilter);
+  const avz = avanzi(month);
+  const stat = sids => { let ore=0, sc=0; for (const e of STAFF) for (const d of days){ const p=plan[e.id]?.[d]; if (p && sids.includes(p.s) && !blocked(e.id,d)) ore+=hoursOn(e.id,d); }
+    for (const d of days) sc += (short[d]||[]).filter(x=>sids.includes(x.s)).reduce((a,x)=>a+x.n,0);
+    return {ore, sc, avz: avz.filter(x=>sids.includes(x.s)).reduce((a,x)=>a+x.avz,0)}; };
+  const card = (id,sig,nome,st,sub) => `<button class="sumcard ${sedeFilter===id?"on":""}" data-sf="${id}"><span class="sigla">${sig}</span><div><div class="sn">${esc(nome)}</div>
+    <div class="mono">${fmtH(st.ore)} in turno${sub?` · ${sub}`:""}</div>
+    <div class="mono">${st.avz?`<b class="neg">${fmtH(st.avz)} in avanzo</b>`:"nessuna ora in avanzo"}${st.sc?` · <b class="neg">${st.sc} ${st.sc===1?"turno scoperto":"turni scoperti"}</b>`:""}</div></div></button>`;
+  return `<h2>Planning turni</h2>
+  <p class="lede">${MONTHS.map(meseShort).join(", ").replace(/, ([^,]*)$/," e $1")}, una tabella per sede. “Genera turni” ricalcola da oggi in avanti; i giorni passati restano come sono. ${genAt?`Ultima generazione: ${esc(genAt)}.`:"I turni non sono ancora stati generati."}</p>
+  ${dirty?`<div class="banner"><span>Hai cambiato regole, sedi o personale dopo l'ultima generazione.</span><button class="btn sm" data-gen="1">Genera turni</button></div>`:""}
+  <div class="bar">
+    <div class="seg alt" role="group" aria-label="Mese">${MONTHS.map(m=>`<button data-month="${m}" aria-pressed="${m===month}">${meseShort(m)}</button>`).join("")}</div>
+    <button class="btn" data-gen="1">Genera turni</button>
+    <button class="btn ghost" id="copy">Copia per Excel</button>
+  </div>
+  <div class="sumrow">${card("all","∑","Tutte le sedi",stat(SEDI.map(s=>s.id)),`${SEDI.reduce((a,s)=>a+s.riuniti,0)} riuniti`)}${SEDI.map(s=>card(s.id,esc(s.sigla),s.nome,stat([s.id]),`${s.riuniti} riuniti`)).join("")}</div>
+  ${sedeKey()}
+  ${avanzoPanel(avz.filter(x=>sedeFilter==="all"||x.s===sedeFilter))}
+  ${sediV.map(s=>sedeTable(s,days)).join("")}
+  <div class="legend">
+    <span><i class="k-M">M<sub>1</sub></i>${turnoTxt("M")} · il numero è il riunito</span><span><i class="k-P">P</i>${turnoTxt("P")}</span>
+    <span><i class="k-G">G</i>Mattina e pomeriggio (${fmtH(H("M")+H("P"))})</span><span><i class="k-R">·</i>Riposo</span>
+    <span><i class="k-X" style="border:1px dashed var(--line)">${esc(SEDI[1]?.sigla||"")}</i>Quel giorno lavora in un'altra sede (sigla della sede)</span><span><i class="k-G pin">G</i>Presenza a cadenza fissa</span>
+    <span><i class="k-FE">FE</i>Ferie</span><span><i class="k-ROL">ROL</i>Permesso</span><span><i class="k-MAL">MAL</i>Malattia</span>
+    <span><i class="k-PEND">?</i>Richiesta in attesa</span><span><i class="k-AI">AI</i>Assenza senza richiesta</span>
+    <span><i style="background:repeating-linear-gradient(-45deg,var(--sunken) 0 4px,var(--surface) 4px 8px);box-shadow:inset 0 0 0 1px var(--line)"></i>Sede chiusa</span>
+  </div>`;
+}
+function fixMissList(){ return Object.entries(fixMiss).filter(([d])=>d.startsWith(month)).flatMap(([d,l])=>l.filter(x=>sedeFilter==="all"||x.s===sedeFilter).map(x=>({...x,d}))).sort((a,b)=>a.d.localeCompare(b.d)); }
+function fixMissHtml(){
+  const l = fixMissList(); if (!l.length) return "";
+  return `<div class="fmbox"><h4>Presenze fisse non rispettate · ${l.length}</h4><ul class="plain">${l.map(x=>`<li><b>${DOWL[dow(x.d)]} ${fmt(x.d)}</b> · ${esc(full(emp(x.emp)))} a ${esc(sede(x.s)?.nome)} · ${esc(x.why)}</li>`).join("")}</ul></div>`;
+}
+function avanzoPanel(list){
+  const tot = list.reduce((a,x)=>a+x.avz,0);
+  if (!list.length && fixMissList().length) return `<div class="panel avz"><div class="avzhead"><h3>Ore in avanzo · ${meseShort(month)}</h3><span class="avzbig">0 h</span></div>${fixMissHtml()}</div>`;
+  if (!list.length) return `<div class="panel avz ok"><div class="avzhead"><h3>Ore in avanzo · ${meseShort(month)}</h3><span class="avzbig">0 h</span></div><p style="margin:0">Tutte le ore di contratto trovano posto nei turni.</p></div>`;
+  const sug = suggerimenti(list);
+  return `<section class="panel avz">
+    <div class="avzhead"><h3>Ore in avanzo · ${meseShort(month)}</h3><span class="avzbig">${fmtH(tot)}</span></div>
+    <p class="lede" style="font-size:14.5px;margin-bottom:14px">${list.length} ${list.length===1?"professionista ha":"professionisti hanno"} ore di contratto che non trovano posto nei turni. Ferie, malattie e festivi sono già esclusi dal conto.</p>
+    ${fixMissHtml()}
+    ${sug.length?`<ul class="sug">${sug.map(t=>`<li>${esc(t)}</li>`).join("")}</ul>`:""}
+    <div class="overflow"><table class="rules"><thead><tr><th>Professionista</th><th>Sede</th><th>Previste</th><th>In turno</th><th>Avanzo</th><th>Perché</th></tr></thead><tbody>
+      ${list.map(x=>`<tr><td><b>${esc(full(x.e))}</b><div class="mono">${x.e.tipo}</div></td><td><span class="sigla xs">${esc(sede(x.s).sigla)}</span></td><td class="num">${fmtH(x.prev)}</td><td class="num">${fmtH(x.coll)}</td><td class="num"><b class="neg">${fmtH(x.avz)}</b></td><td style="font-size:13.5px">${esc(x.why)}</td></tr>`).join("")}
+    </tbody></table></div></section>`;
+}
+function sedeTable(s, days){
+  const head = days.map(d=>{ const o=isOpen(s.id,d), closed=!o.M&&!o.P, sh=(short[d]||[]).filter(x=>x.s===s.id), R=riuniti(s.id,d);
+    const tip = closed ? (REG.festivi && FESTIVI[d] ? FESTIVI[d] : "Sede chiusa") : [...sh.map(x=>x.tipo==="Riunito"?`Nessun riunito attivo al ${x.t==="M"?"mattino":"pomeriggio"}`:`Manca ${x.n} ${x.tipo} ${x.t==="M"?"mattina":"pomeriggio"}`), !o.P?"Solo mattina":!o.M?"Solo pomeriggio":"", R!==s.riuniti?`${R} riuniti disponibili`:""].filter(Boolean).join("\n");
+    const cls = [closed&&"closed", sh.length&&"short", d<TODAY&&"past", d===TODAY&&"today"].filter(Boolean).join(" ");
+    return `<th class="${cls}" title="${esc(tip)}">${DOW[dow(d)]}<b>${+d.slice(8)}</b>${!closed&&(!o.P||!o.M)?`<i>solo ${o.M?"M":"P"}</i>`:R!==s.riuniti&&!closed?`<i>${R} riun.</i>`:""}</th>`; }).join("");
+  let rows = "";
+  for (const tipo of TIPI_PROF){
+    const people = STAFF.filter(e=>e.tipo===tipo && ((e.ore[s.id]||0)>0 || CAD.some(c=>c.emp===e.id && c.sede===s.id)));
+    if (!people.length) continue;
+    rows += `<tr class="grp"><td class="name">${tipo}${tipo==="Medico"||tipo==="ASO"?` <span class="mono">· riuniti</span>`:""}</td><td colspan="${days.length+1}"></td></tr>`;
+    for (const e of people){
+      let cells="", h=0;
+      for (const d of days){
+        const a=absenceOn(e.id,d), p=plan[e.id]?.[d], o=isOpen(s.id,d), closed=!o.M&&!o.P;
+        let code, label, tip;
+        if (a && a.code!=="PEND"){ code=a.code; label=a.code; tip = a.r ? `${TIPI[a.r.tipo]} · sostituto: ${full(emp(a.r.sost))}` : "Assenza senza richiesta"; }
+        else if (p && p.s===s.id){ code=a?"PEND":cellCode(p); label=cellLabel(p)+(a?"?":""); h+=hoursOn(e.id,d); tip=shiftTip(e.id,d)+(a?`\nHa chiesto ${TIPI[a.r.tipo].toLowerCase()}, in attesa`:""); }
+        else if (p){ code="X"; label=sede(p.s)?.sigla||"?"; tip=`In turno a ${sede(p.s)?.nome}`; }
+        else if (a){ code="PEND"; label="?"; tip=`${TIPI[a.r.tipo]} richiesta, in attesa`; }
+        else { code="R"; label=closed?"":"·"; tip=closed?"Sede chiusa":"Riposo"; }
+        cells += `<td class="c k-${code}${closed?" closed":""}${d<TODAY?" past":""}${p && p.s===s.id && p.fx?" fix":""}" data-e="${e.id}" data-d="${d}" title="${esc(full(e)+" · "+fmt(d)+"\n"+tip)}"><span>${label}</span></td>`;
+      }
+      const altre = sediOf(e).filter(x=>x!==s.id).map(x=>sede(x)?.nome);
+      const fis = CAD.filter(c=>c.emp===e.id && c.sede===s.id);
+      rows += `<tr><td class="name">${esc(full(e))}<small>${[(e.ore[s.id]||0)>0?`${e.ore[s.id]} h/sett. qui`:"", ...fis.map(c=>"fisso "+cadTxt(c).split(" · ")[0])].filter(Boolean).join(" + ")}${altre.length?" · anche "+altre.join(", "):""}</small></td>${cells}<td class="tot">${fmtH(h)}</td></tr>`;
+    }
+  }
+  const rr = ["M","P"].map(t=>`<tr class="rr"><td class="name">Riuniti ${t==="M"?"mattina":"pomeriggio"}</td>${days.map(d=>{ if (!isOpen(s.id,d)[t]) return `<td class="closed"></td>`;
+    const n=inShift(s.id,d,t,"Medico").length, R=riuniti(s.id,d); return `<td class="${n===0?"rz":n>=R?"rf":""}" title="${n} riuniti occupati su ${R}">${n}/${R}</td>`; }).join("")}<td></td></tr>`).join("");
+  const shList = days.flatMap(d=>(short[d]||[]).filter(x=>x.s===s.id).map(x=>`<li><b>${DOWL[dow(d)]} ${fmt(d)}</b> · ${x.tipo==="Riunito"?`nessun riunito attivo al ${x.t==="M"?"mattino":"pomeriggio"}`:`manca ${x.n} ${x.tipo} al ${x.t==="M"?"mattino":"pomeriggio"}`}</li>`));
+  return `<section class="sedeblock"><div class="sedehead"><span class="sigla">${esc(s.sigla)}</span><h3>${esc(s.nome)}</h3><span class="chip n">${s.riuniti} riuniti</span>${shList.length?`<span class="chip bad">${shList.length} ${shList.length===1?"scopertura":"scoperture"}</span>`:`<span class="chip ok">Coperta</span>`}</div>
+    <div class="sheet"><table class="g"><thead><tr><th class="name">Professionista</th>${head}<th>Ore</th></tr></thead><tbody>${rows||`<tr><td class="name">Nessun professionista con ore in questa sede</td></tr>`}${rr}</tbody></table></div>
+    ${shList.length?`<details class="shl"><summary>Vedi le scoperture</summary><ul class="plain">${shList.join("")}</ul></details>`:""}</section>`;
+}
+
+// ---------- regole ----------
+function vRegole(){
+  const wk = ["M","P"].map(t=>`<tr><th class="rowh">${t==="M"?"Mattina":"Pomer."}</th>${WEEK.map(w=>`<td><button type="button" class="${t}" data-wk="${w}|${t}" aria-pressed="${REG.orario[w][t]}" aria-label="${DOWL[w]} ${t==="M"?"mattina":"pomeriggio"}">${REG.orario[w][t]?"aperto":"—"}</button></td>`).join("")}</tr>`).join("");
+  const alt = ALTRI.map(tipo=>`<tr><td><b>${tipo}</b> <span class="mono">${STAFF.filter(e=>e.tipo===tipo).length} pers.</span></td>${["min","max"].map(k=>`<td><input type="number" min="0" max="9" data-am="${tipo}|${k}" value="${REG.altri[tipo][k]}" aria-label="${tipo} ${k==="min"?"minimo":"massimo"}"></td>`).join("")}</tr>`).join("");
+  const ders = DEROGHE.map(x=>`<div class="der"><span class="sigla">${esc(sede(x.sede)?.sigla||"?")}</span><div style="min-width:0"><div class="what">${esc(derCosa(x))}</div><div class="meta">${esc(sede(x.sede)?.nome||"")} · ${derQuando(x)}${x.nota?` · ${esc(x.nota)}`:""}</div></div><button class="btn sm bad" data-drm="${x.id}">Elimina</button></div>`).join("");
+  const opt = (v,l)=>`<option value="${v}">${l}</option>`;
+  return `<h2>Regole turni</h2>
+  <p class="lede">Le regole generali valgono per tutte le sedi. Se una sede fa eccezione, aggiungi una deroga: vale solo per quella sede. Oppure scrivi la regola a parole.</p>
+  <div class="panel" style="margin-bottom:28px">${aiBox(null)}</div>
+  <div class="panel">
+    <h3>Regole generali</h3>
+    <div class="row">
+      <div class="f"><label>Mattina · ${fmtH(H("M"))}</label><div class="ticks"><input type="time" id="oM0" value="${REG.ore.M[0]}" aria-label="Inizio mattina"><span>–</span><input type="time" id="oM1" value="${REG.ore.M[1]}" aria-label="Fine mattina"></div></div>
+      <div class="f"><label>Pomeriggio · ${fmtH(H("P"))}</label><div class="ticks"><input type="time" id="oP0" value="${REG.ore.P[0]}" aria-label="Inizio pomeriggio"><span>–</span><input type="time" id="oP1" value="${REG.ore.P[1]}" aria-label="Fine pomeriggio"></div></div>
+      <div class="f"><label for="maxG">Ore massime al giorno</label><input type="number" id="maxG" min="1" max="12" value="${REG.maxGiorno}" style="width:90px"></div>
+    </div>
+    <p class="hint" style="margin:-6px 0 18px">${H("M")+H("P")<=REG.maxGiorno?`Mattina più pomeriggio fanno ${fmtH(H("M")+H("P"))}: chi ha abbastanza ore può fare la giornata intera (G).`:`Mattina più pomeriggio superano le ${REG.maxGiorno} ore: ognuno fa un solo turno al giorno.`}</p>
+    <div class="f"><label>Settimana tipo</label><div class="overflow"><table class="wk"><thead><tr><th></th>${WEEK.map(w=>`<th>${DOW[w]}</th>`).join("")}</tr></thead><tbody>${wk}</tbody></table></div><span class="hint">Tocca un riquadro per aprire o chiudere quel turno in tutte le sedi.</span></div>
+    <div class="grid2" style="margin-bottom:18px">
+      <div class="rbox"><h4>Riuniti</h4>
+        <p>In ogni riunito lavora al massimo un medico, e sempre insieme a un'ASO. Un medico senza ASO libera non viene messo in turno.</p>
+        <div class="f" style="margin:0"><label for="minR">Riuniti attivi almeno per turno aperto</label><input type="number" id="minR" min="0" max="9" value="${REG.minRiuniti}" style="width:90px"><span class="hint">Il numero di riuniti di ogni sede si imposta in Sedi.</span></div></div>
+      <div class="rbox"><h4>Altre figure per turno</h4>
+        <table class="rules"><thead><tr><th>Figura</th><th>Minimo</th><th>Massimo</th></tr></thead><tbody>${alt}</tbody></table></div>
+    </div>
+    <label class="check"><input type="checkbox" id="fest" ${REG.festivi?"checked":""}> <span>Chiuso nei festivi nazionali (${Object.entries(FESTIVI).filter(([d])=>MONTHS.includes(d.slice(0,7))).sort().map(([d,n])=>`${fmt(d)} ${n}`).join(", ")||"nessuno nei mesi in planning"})</span></label>
+    <ul class="plain" style="margin-top:16px;color:var(--muted);font-size:14px">
+      <li>Ogni professionista lavora in una sola sede al giorno.</li>
+      <li>Le presenze a cadenza fissa (in Personale) vengono messe per prime; il resto delle ore si distribuisce intorno.</li>
+      <li>Le ore a settimana di ciascuno si impostano in Personale. Quelle che non trovano posto compaiono come ore in avanzo nel Planning.</li>
+      <li>Chi ha ferie, ROL o malattia approvati non viene messo in turno e le sue ore di quei giorni non contano come avanzo.</li>
+    </ul>
+  </div>
+  <div class="panel" style="margin-top:28px">
+    <h3>Deroghe per sede</h3>
+    <p class="lede" style="font-size:14.5px">Se due deroghe si sovrappongono vince la più precisa: una data batte un giorno della settimana, che batte “sempre”.</p>
+    ${ders||`<p style="color:var(--muted)">Nessuna deroga: tutte le sedi seguono le regole generali.</p>`}
+    <form id="addD" novalidate style="margin-top:22px;padding-top:20px;border-top:2px solid var(--edge)">
+      <h3>Nuova deroga</h3>
+      <div class="row">
+        <div class="f"><label for="dSede">Sede</label><select id="dSede">${SEDI.map(s=>opt(s.id,esc(s.nome))).join("")}</select></div>
+        <div class="f"><label for="dQuando">Quando</label><select id="dQuando">${opt("sempre","Sempre")}${WEEK.map(w=>opt("dow-"+w,"Ogni "+DOWL[w])).join("")}${opt("data","In una data")}</select></div>
+        <div class="f" id="dDataBox" hidden><label for="dData">Data</label><input type="date" id="dData" value="${TODAY}" min="${MONTHS[0]}-01" max="${MONTHS[MONTHS.length-1]}-${pad(daysIn(MONTHS[MONTHS.length-1]))}"></div>
+      </div>
+      <div class="row">
+        <div class="f"><label for="dCosa">Cosa cambia</label><select id="dCosa">${opt("chiusa","Sede chiusa")}${opt("mattina","Aperta solo al mattino")}${opt("aperta","Aperta mattina e pomeriggio")}${opt("riuniti","Riuniti disponibili diversi")}${opt("fabb","Minimo diverso per una figura")}</select></div>
+        <div class="f" id="dTipoBox" hidden><label for="dTipo">Figura</label><select id="dTipo">${ALTRI.map(t=>opt(t,t)).join("")}</select></div>
+        <div class="f" id="dTurnoBox" hidden><label for="dTurno">Turno</label><select id="dTurno">${opt("M","Mattina")}${opt("P","Pomeriggio")}${opt("MP","Entrambi")}</select></div>
+        <div class="f" id="dNBox" hidden><label for="dN" id="dNLabel">Numero</label><input type="number" id="dN" min="0" max="9" value="1"></div>
+      </div>
+      <div class="f"><label for="dNota">Nota (facoltativa)</label><input id="dNota" placeholder="es. Riunito in manutenzione"></div>
+      <button class="btn" type="submit">Aggiungi deroga</button>
+    </form>
+  </div>
+  <div class="bar" style="margin-top:28px"><button class="btn" data-gen="1">Genera turni</button><span class="mono">${dirty?"Le modifiche non sono ancora nel planning":"Il planning è aggiornato"}</span></div>`;
+}
+
+// ---------- sedi ----------
+function vSedi(){
+  return `<h2>Sedi</h2>
+  <p class="lede">Le sedi dell'azienda e i riuniti di ognuna. Le regole generali valgono per tutte; le eccezioni di una sede si mettono nelle deroghe.</p>
+  <div class="grid2">
+    <div class="panel"><div class="stat"><div><b>${SEDI.length}</b><span>Sedi</span></div><div><b>${SEDI.reduce((a,s)=>a+s.riuniti,0)}</b><span>Riuniti</span></div><div><b>${STAFF.length}</b><span>Professionisti</span></div></div></div>
+    <form id="addS" class="panel" novalidate><h3>Nuova sede</h3>
+      <div class="row"><div class="f" style="flex:3 1 150px"><label for="sNome">Nome</label><input id="sNome" placeholder="es. Pavia" autocomplete="off"></div>
+        <div class="f" style="flex:1 1 70px"><label for="sSig">Sigla</label><input id="sSig" maxlength="3" placeholder="PV" autocomplete="off"></div>
+        <div class="f" style="flex:1 1 70px"><label for="sRiu">Riuniti</label><input type="number" id="sRiu" min="0" max="20" value="2"></div></div>
+      <div class="err" id="sErr" aria-live="polite"></div><button class="btn" type="submit">Aggiungi sede</button></form>
+  </div>
+  <div class="panel" style="margin-top:24px">${SEDI.map(s=>{ const np=STAFF.filter(e=>(e.ore[s.id]||0)>0).length, nd=DEROGHE.filter(x=>x.sede===s.id).length;
+    const med=STAFF.filter(e=>e.tipo==="Medico").reduce((a,e)=>a+(e.ore[s.id]||0),0), aso=STAFF.filter(e=>e.tipo==="ASO").reduce((a,e)=>a+(e.ore[s.id]||0),0);
+    return `<div class="der"><span class="sigla">${esc(s.sigla)}</span>
+      <div style="min-width:0"><div class="row" style="align-items:flex-end">
+        <div class="f" style="margin:0;flex:3 1 150px"><label for="sn-${s.id}">Nome</label><input id="sn-${s.id}" data-sn="${s.id}" value="${esc(s.nome)}"></div>
+        <div class="f" style="margin:0;flex:1 1 70px"><label for="sg-${s.id}">Sigla</label><input id="sg-${s.id}" data-sg="${s.id}" maxlength="3" value="${esc(s.sigla)}"></div>
+        <div class="f" style="margin:0;flex:1 1 70px"><label for="sr-${s.id}">Riuniti</label><input type="number" id="sr-${s.id}" data-sr="${s.id}" min="0" max="20" value="${s.riuniti}"></div>
+      </div>
+      <div class="mono" style="margin-top:8px">${np} professionisti · ${nd} deroghe · ore medico ${med} h/sett. · ore ASO ${aso} h/sett.</div></div>
+      <div style="white-space:nowrap">${rmSede===s.id?`<button class="btn sm bad" data-srmok="${s.id}">Conferma</button> <button class="btn sm ghost" data-srmno="1">Annulla</button>`:`<button class="btn sm bad" data-srm="${s.id}">Elimina</button>`}</div></div>`; }).join("")}</div>`;
+}
+// ---------- richieste ----------
+function reqCard(r, actions){
+  const e = emp(r.emp);
+  return `<div class="req"><div style="min-width:0">
+    <div class="t">${esc(full(e))} · ${TIPI[r.tipo]}</div>
+    <div class="meta">${periodo(r)} · ${esc(e.tipo)} · ${esc(sedeList(e))} · sostituto: <b>${r.sost?esc(full(emp(r.sost))):"—"}</b>${r.prot?` · prot. INPS ${esc(r.prot)}`:""}${r.note?` · “${esc(r.note)}”`:""}</div>
+    <div style="margin-top:8px">${lateness(r)}</div>${stepsHtml(r)}</div>
+    <div class="acts">${actions||""}</div></div>`;
+}
+function vRichieste(){
+  const order = {attesa_admin:0, attesa_sost:1, approvata:2, rifiutata:3};
+  const list = [...reqs].sort((a,b)=>order[a.stato]-order[b.stato] || a.dal.localeCompare(b.dal));
+  return `<h2>Richieste di assenza</h2>
+  <p class="lede">Arrivano qui solo dopo che il sostituto ha confermato. Quando approvi, il sostituto prende in automatico i turni del collega.</p>
+  <div class="panel">${list.map(r=>reqCard(r, r.stato==="attesa_admin" ? `<button class="btn sm" data-ok="${r.id}">Approva</button><button class="btn sm bad" data-no="${r.id}">Rifiuta</button>` : "")).join("")}</div>`;
+}
+function bind(){
+  const q = (s,fn)=>{ const el=$(s); if(el) fn(el); };
+  const on = (s,ev,fn)=>$$(s).forEach(el=>el.addEventListener(ev,()=>fn(el)));
+  const changed = changedG;
+
+  bindPersonale();
+  on("[data-tab]","click",b=>{ tab=b.dataset.tab; modal=null; editing=null; draft=null; store.set("tab_"+role, tab); render(); window.scrollTo?.(0,0); });
+  // planning
+  on("[data-month]","click",b=>{ month=b.dataset.month; render(); });
+  on("[data-sf]","click",b=>{ sedeFilter=b.dataset.sf; render(); });
+  on("[data-gen]","click",b=>genera(b));
+  q("#copy",el=>el.onclick=()=>{
+    const days=Array.from({length:daysIn(month)},(_,i)=>dstr(month,i+1)), sv=sedeFilter==="all"?SEDI:SEDI.filter(s=>s.id===sedeFilter);
+    const lines=[["Sede","Professionista","Figura","Ore/sett.",...days.map(d=>+d.slice(8))].join(";")];
+    for (const s of sv) for (const e of STAFF.filter(e=>(e.ore[s.id]||0)>0 || CAD.some(c=>c.emp===e.id && c.sede===s.id))) lines.push([s.nome,full(e),e.tipo,e.ore[s.id],...days.map(d=>{ const a=absenceOn(e.id,d), p=plan[e.id]?.[d], o=isOpen(s.id,d);
+      if (a && a.code!=="PEND") return a.code; if (p) return p.s===s.id ? shiftsOf(p).map(t=>t+(typeof p[t]==="number"?p[t]:"")).join("+") : sede(p.s)?.sigla; return (!o.M&&!o.P)?"CH":""; })].join(";"));
+    navigator.clipboard.writeText(lines.join("\n")).then(()=>toast("Planning copiato: incollalo in Excel")).catch(()=>toast("Copia non riuscita in questa anteprima"));
+  });
+  on("td.c","click",async td=>{
+    const id=td.dataset.e, d=td.dataset.d, a=absenceOn(id,d);
+    if (a && a.code!=="AI" && a.code!=="PEND"){ toast(`${emp(id).nome}: ${TIPI[a.r.tipo]} già registrata`); return; }
+    if (!a && !confirm(`Segnare ${full(emp(id))} assente senza richiesta il ${fmt(d)}?`)) return;
+    try { const r = await api("POST","/api/assenze-ai",{staffId:id, data:d}); AI = new Set(r.ai); render();
+      toast(r.attiva ? `${emp(id).nome}: assenza senza richiesta il ${fmt(d)}` : "Assenza senza richiesta tolta"); } catch(e){ toast(e.message); }
+  });
+  // richieste
+  on("[data-ok]","click",async b=>{ b.disabled=true;
+    try { const r = await api("POST",`/api/richieste/${b.dataset.ok}/approva`,{}); reqs=r.reqs; setPlan(r.planDoc); render(); const x=r.esito, rr=reqs.find(q=>q.id===b.dataset.ok);
+      toast(`Approvata · ${x.dalSost} turni a ${rr && emp(rr.sost)?.nome || "nessuno"}${x.altri?` · ${x.altri} ad altri colleghi`:""}${x.fermi?` · ${x.fermi} riuniti fermi`:""}${x.scoperti?` · ${x.scoperti} scoperti`:""}`); }
+    catch(e){ b.disabled=false; toast(e.message); } });
+  on("[data-no]","click",async b=>{ if (!confirm("Rifiutare la richiesta?")) return;
+    try { const r = await api("POST",`/api/richieste/${b.dataset.no}/rifiuta`,{}); reqs=r.reqs; render(); toast("Richiesta rifiutata"); } catch(e){ toast(e.message); } });
+
+  // regole
+  on("[data-wk]","click",b=>{ const [w,t]=b.dataset.wk.split("|"); REG.orario[w][t]=!REG.orario[w][t]; changed(); });
+  on("[data-am]","change",el=>{ const [tipo,k]=el.dataset.am.split("|"); REG.altri[tipo][k]=Math.max(0,+el.value||0);
+    if (REG.altri[tipo].max<REG.altri[tipo].min) REG.altri[tipo].max=REG.altri[tipo].min; changed(`${tipo}: ${k==="min"?"minimo":"massimo"} aggiornato`); });
+  ["M0","M1","P0","P1"].forEach(k=>q("#o"+k,el=>el.onchange=()=>{ REG.ore[k[0]][+k[1]]=el.value; changed("Orario aggiornato"); }));
+  q("#maxG",el=>el.onchange=()=>{ REG.maxGiorno=Math.min(12,Math.max(1,+el.value||8)); changed("Ore massime al giorno aggiornate"); });
+  q("#minR",el=>el.onchange=()=>{ REG.minRiuniti=Math.max(0,+el.value||0); changed(); });
+  q("#fest",el=>el.onchange=()=>{ REG.festivi=el.checked; changed(); });
+  on("[data-drm]","click",b=>{ DEROGHE=DEROGHE.filter(x=>x.id!=b.dataset.drm); changed("Deroga eliminata"); });
+  q("#addD",f=>{
+    const sync=()=>{ $("#dDataBox").hidden=$("#dQuando").value!=="data"; const c=$("#dCosa").value;
+      $("#dTipoBox").hidden=$("#dTurnoBox").hidden=c!=="fabb"; $("#dNBox").hidden=!(c==="fabb"||c==="riuniti");
+      $("#dNLabel").textContent = c==="riuniti" ? "Riuniti" : "Persone minime"; };
+    $("#dQuando").onchange=sync; $("#dCosa").onchange=sync;
+    f.onsubmit=ev=>{ ev.preventDefault();
+      const qv=$("#dQuando").value, x={id:uid(), sede:$("#dSede").value, cosa:$("#dCosa").value, nota:$("#dNota").value.trim()};
+      if (qv==="sempre") x.quando="sempre"; else if (qv==="data"){ x.quando="data"; x.data=$("#dData").value; if(!x.data){ toast("Scegli una data"); return; } } else { x.quando="dow"; x.dow=+qv.split("-")[1]; }
+      if (x.cosa==="fabb"){ x.tipo=$("#dTipo").value; x.turno=$("#dTurno").value; }
+      if (x.cosa==="fabb"||x.cosa==="riuniti") x.n=Math.max(0,+$("#dN").value||0);
+      DEROGHE.push(x); changed(`Deroga aggiunta per ${sede(x.sede).nome}`); };
+  });
+  // sedi
+  q("#addS",f=>f.onsubmit=ev=>{ ev.preventDefault();
+    const nome=$("#sNome").value.trim(), sig=$("#sSig").value.trim().toUpperCase(), riu=Math.max(0,+$("#sRiu").value||0);
+    if (!nome || !sig){ $("#sErr").textContent="Scrivi nome e sigla della sede."; return; }
+    if (SEDI.some(s=>s.sigla===sig)){ $("#sErr").textContent=`La sigla ${sig} è già usata.`; return; }
+    SEDI.push({id:uid(), nome, sigla:sig, riuniti:riu}); changed(`Sede ${nome} aggiunta · assegna le ore in Personale`);
+  });
+  on("[data-sn]","change",el=>{ const v=el.value.trim(); if(!v){ render(); return; } sede(el.dataset.sn).nome=v; changedG("Nome aggiornato"); });
+  on("[data-sg]","change",el=>{ const v=el.value.trim().toUpperCase(), s=sede(el.dataset.sg); if(!v || SEDI.some(x=>x!==s&&x.sigla===v)){ toast("Sigla vuota o già usata"); render(); return; } s.sigla=v; changedG(); });
+  on("[data-sr]","change",el=>{ const s=sede(el.dataset.sr); s.riuniti=Math.max(0,Math.min(20,+el.value||0)); changed(`${s.nome}: ${s.riuniti} riuniti`); });
+  on("[data-srm]","click",b=>{ rmSede=b.dataset.srm; render(); });
+  on("[data-srmno]","click",()=>{ rmSede=null; render(); });
+  on("[data-srmok]","click",b=>{ const id=b.dataset.srmok, s=sede(id);
+    if (SEDI.length===1){ toast("Serve almeno una sede"); rmSede=null; render(); return; }
+    SEDI=SEDI.filter(x=>x.id!==id); DEROGHE=DEROGHE.filter(x=>x.sede!==id);
+    const senza=[]; STAFF.forEach(e=>{ delete e.ore[id]; if (!oreTot(e)) senza.push(e.nome); for(const d in plan[e.id]) if(d>=TODAY && plan[e.id][d].s===id) delete plan[e.id][d]; });
+    if (sedeFilter===id) sedeFilter="all"; rmSede=null;
+    changed(`${s.nome} eliminata${senza.length?` · ${senza.join(", ")} senza ore: assegnale in Personale`:""}`); });
+  // ---------- dipendente ----------
+  q("#pchk",el=>el.onchange=()=>{ $("#paccept").disabled=!el.checked; });
+  q("#paccept",el=>el.onclick=async()=>{ el.disabled=true;
+    try { await api("POST","/api/privacy/accetta",{}); await load(vista); render(); toast("Grazie, informativa accettata"); } catch(e){ el.disabled=false; toast(e.message); } });
+  on("[data-em]","click",b=>{ empMonth=b.dataset.em; render(); });
+  on("[data-tipo]","click",b=>{ const t=b.dataset.tipo; $$("[data-tipo]").forEach(x=>x.setAttribute("aria-pressed", x===b)); $("#tipo").value=t;
+    $("#oreBox").hidden = t!=="ROL"; $("#protBox").hidden = t!=="MAL"; $("#sostReq").hidden = t==="MAL";
+    $("#accordo").closest(".f").hidden = t==="MAL";
+    $("#tipoHint").textContent = t==="FE" ? "Preavviso minimo 7 giorni." : t==="ROL" ? "Preavviso minimo 2 giorni." : "Il sostituto è facoltativo: se lo indichi prende subito i tuoi turni.";
+    if (t==="MAL"){ $("#dal").min=""; $("#dal").value=TODAY; $("#al").value=TODAY; } else $("#dal").min=TODAY; });
+  q("#dal",el=>el.onchange=()=>{ const al=$("#al"); if (al.value<el.value) al.value=el.value; al.min=el.value; });
+  q("#f",f=>f.onsubmit=async ev=>{ ev.preventDefault();
+    const t=$("#tipo").value, b={tipo:t, dal:$("#dal").value, al:$("#al").value, ore:+$("#ore").value, sost:$("#sost").value, prot:$("#prot").value.trim(), note:$("#note").value.trim(), accordo:$("#accordo").checked};
+    const err=$("#err"); err.textContent="";
+    if (!b.dal || !b.al || b.al<b.dal){ err.textContent="Controlla le date: la fine non può precedere l'inizio."; return; }
+    if (t!=="MAL" && !b.sost){ err.textContent="Indica il collega che ti sostituisce."; return; }
+    if (t!=="MAL" && !b.accordo){ err.textContent="Conferma di esserti accordato con il collega."; return; }
+    if (t==="MAL" && !b.prot){ err.textContent="Inserisci il numero di protocollo del certificato."; return; }
+    const btn=f.querySelector("button[type=submit]"); btn.disabled=true;
+    try { const r=await api("POST","/api/richieste",b); await load(vista); tab="stato"; render(); window.scrollTo?.(0,0);
+      toast(r.stato==="approvata" ? "Malattia registrata" : "Richiesta inviata: ora deve confermare il collega"); }
+    catch(e){ btn.disabled=false; err.textContent=e.message; } });
+  const sostituto = async (id, ok) => { if (!ok && !confirm("Non puoi sostituire il collega? La sua richiesta verrà respinta.")) return;
+    try { await api("POST",`/api/richieste/${id}/sostituto`,{ok}); await load(vista); render(); toast(ok ? "Confermato: la richiesta passa all'amministrazione" : "Risposta inviata al collega"); } catch(e){ toast(e.message); } };
+  on("[data-sok]","click",b=>sostituto(b.dataset.sok,true));
+  on("[data-sno]","click",b=>sostituto(b.dataset.sno,false));
+  on("[data-annulla]","click",async b=>{ if (!confirm("Annullare la richiesta?")) return;
+    try { await api("POST",`/api/richieste/${b.dataset.annulla}/annulla`,{}); await load(vista); render(); toast("Richiesta annullata"); } catch(e){ toast(e.message); } });
+  // busta paga del dipendente: password, lettura, presa visione
+  on("[data-open]","click",b=>{ modal={id:b.dataset.open, step:"pwd"}; render(); $("#mp")?.focus(); });
+  on("[data-close]","click",()=>{ modal=null; render(); });
+  q(".modal",el=>el.addEventListener("click",ev=>{ if (ev.target===el){ modal=null; render(); } }));
+  q("#mpwd",f=>f.onsubmit=async ev=>{ ev.preventDefault(); const btn=f.querySelector("button[type=submit]"); btn.disabled=true;
+    try { const r=await api("POST",`/api/buste/${modal.id}/apri`,{password:$("#mp").value}); const id=modal.id; await load(vista); modal={id, step:"view", token:r.token}; render(); }
+    catch(e){ modal.err=e.message; render(); $("#mp")?.focus(); } });
+  q("#mchk",el=>el.onchange=()=>{ $("#mconf").disabled=!el.checked; });
+  q("#mconf",el=>el.onclick=async()=>{ el.disabled=true;
+    try { await api("POST",`/api/buste/${modal.id}/conferma`,{}); await load(vista); render(); toast("Presa visione registrata"); } catch(e){ el.disabled=false; toast(e.message); } });
+  // ---------- amministratore: buste paga ----------
+  q("#upForm",f=>f.onsubmit=async ev=>{ ev.preventDefault();
+    const file=$("#upFile").files[0], mese=$("#upMese").value; if (!file){ toast("Scegli il PDF"); return; }
+    const fd=new FormData(); fd.append("mese",mese); fd.append("file",file);
+    const btn=$("#upGo"); btn.disabled=true; btn.textContent="Sto dividendo il PDF…";
+    try { const r=await api("POST","/api/buste/carica",fd);
+      upMsg = `${meseLabel(mese)}: ${r.pagine} pagine · ${r.abbinate} buste abbinate${r.sospese?` · <b class="neg">${r.sospese} pagine da assegnare</b>`:""}${r.doppi.length?` · già caricate prima: ${esc(r.doppi.join(", "))}`:""}.`;
+      bustaMese=mese; BUSTE=null; render(); toast("PDF diviso: controlla e pubblica"); }
+    catch(e){ btn.disabled=false; btn.textContent="Carica e dividi"; toast(e.message); } });
+  const ricaricaBuste = async msg => { BUSTE=null; await loadBuste(); if (msg) toast(msg); };
+  on("[data-assign]","click",async b=>{ const id=b.dataset.assign, sid=$("#assign-"+id).value; if (!sid){ toast("Scegli a chi assegnare la pagina"); return; }
+    try { await api("POST",`/api/buste/sospese/${id}/assegna`,{staffId:sid}); ricaricaBuste(`Pagina aggiunta alla busta di ${full(emp(sid))}`); } catch(e){ toast(e.message); } });
+  on("[data-scarta]","click",async b=>{ if (!confirm("Scartare questa pagina?")) return;
+    try { await api("DELETE",`/api/buste/sospese/${b.dataset.scarta}`); ricaricaBuste("Pagina scartata"); } catch(e){ toast(e.message); } });
+  q("#bpMese",el=>el.onchange=()=>{ bustaMese=el.value; render(); });
+  q("#pubblica",el=>el.onclick=async()=>{ if (!confirm(`Pubblicare le buste di ${meseLabel(bustaMese)}? I dipendenti riceveranno un avviso.`)) return; el.disabled=true;
+    try { const r=await api("POST","/api/buste/pubblica",{mese:bustaMese}); upMsg=""; ricaricaBuste(`${r.pubblicate} buste pubblicate`); } catch(e){ el.disabled=false; toast(e.message); } });
+  q("#sollecito",el=>el.onclick=async()=>{ el.disabled=true;
+    try { const r=await api("POST","/api/buste/sollecito",{mese:bustaMese}); toast(`Promemoria inviato a ${r.sollecitati} ${r.sollecitati===1?"persona":"persone"}`); } catch(e){ el.disabled=false; toast(e.message); } });
+  on("[data-bdel]","click",async b=>{ if (!confirm("Togliere questa busta? Potrai ricaricarla.")) return;
+    try { await api("DELETE",`/api/buste/${b.dataset.bdel}`); ricaricaBuste("Busta tolta"); } catch(e){ toast(e.message); } });
+  on("[data-del]","click",b=>{ delPending=b.dataset.del; render(); });
+  on("[data-delno]","click",()=>{ delPending=null; render(); });
+  on("[data-delok]","click",async b=>{ try { const r=await api("DELETE",`/api/buste/mese/${b.dataset.delok}`); delPending=null; ricaricaBuste(`${r.eliminate} buste eliminate dall'archivio`); } catch(e){ toast(e.message); } });
+  // ---------- barra in alto ----------
+  q("#vistaDip",el=>el.onclick=async()=>{ await doSave(); vista="dipendente"; tab=""; await load(vista); render(); window.scrollTo?.(0,0); });
+  on("#vistaAdm","click",async()=>{ vista=""; tab=""; await load(); render(); window.scrollTo?.(0,0); });
+  q("#logout",el=>el.onclick=async()=>{ await doSave(); try { const r=await api("POST","/api/logout",{}); location.href=r.home||"https://appgestione.it"; } catch { location.reload(); } });
+  q("#pushOn",el=>el.onclick=pushEnable);
+  q("#pushOff",el=>el.onclick=()=>{ if (confirm("Disattivare le notifiche su questo dispositivo?")) pushDisable(); });
+  on("[data-push-on]","click",pushEnable);
+  on("[data-push-later]","click",()=>{ store.set("pushLater", Date.now()+3*24*3600e3); render(); });
+}
+
+// ================= notifiche sul dispositivo =================
+const PUSH = { sw:null, sub:null, state:"checking" };
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+const b64 = s => { const p="=".repeat((4-s.length%4)%4); const r=atob((s+p).replace(/-/g,"+").replace(/_/g,"/")); return Uint8Array.from([...r].map(c=>c.charCodeAt(0))); };
+async function pushInit(){
+  if (!("serviceWorker" in navigator)){ PUSH.state="unsupported"; return; }
+  try { PUSH.sw = await navigator.serviceWorker.register("/sw.js"); await navigator.serviceWorker.ready; } catch { PUSH.state="unsupported"; return; }
+  if (!("PushManager" in window) || !("Notification" in window)){ PUSH.state = isIOS && !standalone ? "ios-install" : "unsupported"; return; }
+  PUSH.sub = await PUSH.sw.pushManager.getSubscription();
+  if (Notification.permission==="denied") PUSH.state="denied";
+  else if (PUSH.sub && Notification.permission==="granted"){ PUSH.state="on"; api("POST","/api/push/subscribe",{subscription:PUSH.sub.toJSON()}).catch(()=>{}); }
+  else PUSH.state="off";
+}
+async function pushEnable(){
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm!=="granted"){ PUSH.state = perm==="denied" ? "denied" : "off"; render(); return toast("Notifiche non attivate"); }
+    const { key } = await api("GET","/api/push/key");
+    PUSH.sub = await PUSH.sw.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:b64(key) });
+    await api("POST","/api/push/subscribe",{subscription:PUSH.sub.toJSON()});
+    PUSH.state="on"; render();
+    const t = await api("POST","/api/push/test",{});
+    toast(t.ok ? "Notifiche attive: ti è arrivata una prova" : "Notifiche attivate");
+  } catch { toast("Non è stato possibile attivare le notifiche"); }
+}
+async function pushDisable(){
+  try { if (PUSH.sub){ await api("POST","/api/push/unsubscribe",{endpoint:PUSH.sub.endpoint}); await PUSH.sub.unsubscribe(); } } catch {}
+  PUSH.sub=null; PUSH.state="off"; render(); toast("Notifiche disattivate su questo dispositivo");
+}
+function pushBanner(){
+  if (store.get("pushLater",0) > Date.now()) return "";
+  const later = `<button class="btn sm ghost" data-push-later>Più tardi</button>`;
+  const perChi = role==="admin" ? "Ricevi sul telefono le richieste di assenza da approvare." : "Ricevi sul telefono le richieste di sostituzione, l'esito delle tue richieste e le nuove buste paga.";
+  if (PUSH.state==="off") return `<div class="banner"><div class="grow"><b>Attiva le notifiche</b>${perChi}</div>${later}<button class="btn sm" data-push-on>Attiva</button></div>`;
+  if (PUSH.state==="ios-install") return `<div class="banner"><div class="grow"><b>Installa l'app per ricevere le notifiche</b>Su iPhone tocca Condividi in Safari, poi «Aggiungi alla schermata Home». Apri Turni dall'icona e attiva le notifiche.</div>${later}</div>`;
+  return "";
+}
+
+// ================= avvio e aggiornamento automatico =================
+document.addEventListener("keydown", ev => { if (ev.key==="Escape" && modal){ modal=null; render(); } });
+async function refresh(){
+  if (modal || editing || savePending || ai.busy || document.hidden || document.activeElement?.matches("input,textarea,select")) return; // non disturbare chi sta lavorando
+  try { const prima = role==="admin" ? reqs.filter(r=>r.stato==="attesa_admin").length : 0; await load(vista); render();
+    if (role==="admin" && reqs.filter(r=>r.stato==="attesa_admin").length > prima) toast("Nuova richiesta di assenza da approvare"); } catch {}
+}
+(async () => {
+  try { await load(); }
+  catch (e){ $("#view").innerHTML = `<div class="panel" style="max-width:560px;margin:24px auto"><h3>Non riesco a caricare i turni</h3><p class="lede" style="margin:0">${esc(e.message)}</p></div>`; return; }
+  const qt = new URLSearchParams(location.search).get("tab");
+  tab = qt || store.get("tab_"+role, "");
+  if (qt) history.replaceState(null, "", "/");
+  render();
+  pushInit().then(render);
+  setInterval(refresh, 60000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+})();
+
+</script>
+</body>
+</html>
