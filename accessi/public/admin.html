@@ -112,6 +112,7 @@ function enti(app) {
     .catch(e => { delete ENTI[app]; ENTI_V[app] = {errore: e.message}; render(); });
   return ENTI[app];
 }
+const figNome = id => (S.figure || []).find(f => f.id === id)?.nome || id;
 const lvOf = (u, a) => (S.livelli[u.id] || {})[a.key] || null;
 const rinfrescaEnti = () => { for (const k in ENTI) delete ENTI[k]; for (const k in ENTI_V) delete ENTI_V[k]; };
 function enteSelect(a, L, sel, attrs, selNome) {
@@ -207,7 +208,7 @@ function card(u, homonym) {
   if (!open) return `<article class="user ${u.status}">${row}</article>`;
   return `<article class="user ${u.status} open">${row}<div class="ubody" id="ub-${u.id}">
     <div class="uh">
-      <div class="meta" style="margin:0"><span>${esc(u.email)}</span><span ${homonym ? 'style="color:var(--fg);font-weight:600"' : ''}>Nato/a il ${fmtDate(u.birthDate)}</span>
+      <div class="meta" style="margin:0">${u.figura ? `<span style="color:var(--fg);font-weight:700">${esc(figNome(u.figura))}</span>` : '<span style="color:var(--olive-ink)">Figura da scegliere</span>'}<span>${esc(u.email)}</span><span ${homonym ? 'style="color:var(--fg);font-weight:600"' : ''}>Nato/a il ${fmtDate(u.birthDate)}</span>
         <span>${u.cf ? 'CF ' + esc(u.cf) : '<span style="color:var(--olive-ink)">Codice fiscale mancante</span>'}</span>
         ${u.alboNumero ? `<span>Medico, albo ${esc(u.alboProvincia)} n. ${esc(u.alboNumero)}</span>` : ''}
         <span>${u.status === 'pending' ? 'Richiesta del ' + fmtTime(u.createdAt) : 'Ultimo accesso: ' + fmtTime(u.lastLogin)}</span>
@@ -308,7 +309,8 @@ function personFields(u = {}) {
     <label class="field">Cognome<input id="d-ln" value="${esc(u.lastName)}" maxlength="80" required></label></div>
     <div class="two"><label class="field">Data di nascita<input id="d-bd" type="date" value="${esc(u.birthDate || '')}" min="1900-01-01" max="${new Date().toISOString().slice(0, 10)}"></label>
     <label class="field">Email<input id="d-em" type="email" value="${esc(u.email)}" maxlength="160" ${u.owner ? 'disabled' : ''} required></label></div>
-    <label class="field">Codice fiscale<input id="d-cf" value="${esc(u.cf || '')}" maxlength="16" style="text-transform:uppercase" autocomplete="off"></label>
+    <div class="two"><label class="field">Figura professionale<select id="d-fig"><option value="">Da scegliere</option>${(S.figure || []).map(f => `<option value="${esc(f.id)}" ${u.figura === f.id ? 'selected' : ''}>${esc(f.nome)}</option>`).join('')}</select></label>
+    <label class="field">Codice fiscale<input id="d-cf" value="${esc(u.cf || '')}" maxlength="16" style="text-transform:uppercase" autocomplete="off"></label></div>
     <div class="two"><label class="field">Provincia albo <small class="muted" style="font-weight:500">solo medici</small><input id="d-ap" value="${esc(u.alboProvincia || '')}" maxlength="2" style="text-transform:uppercase" autocomplete="off"></label>
     <label class="field">Numero iscrizione albo<input id="d-an" value="${esc(u.alboNumero || '')}" maxlength="20" autocomplete="off"></label></div>`;
 }
@@ -336,7 +338,7 @@ $('#add').addEventListener('click', () => {
       } else apps[s.dataset.new] = s.value;
     }
     const r = await api('POST', '/api/admin/users', {firstName: val('d-fn'), lastName: val('d-ln'), birthDate: val('d-bd'), email: val('d-em'), password: val('d-pw'),
-      cf: val('d-cf'), alboProvincia: val('d-ap'), alboNumero: val('d-an'), apps});
+      cf: val('d-cf'), figura: val('d-fig'), alboProvincia: val('d-ap'), alboNumero: val('d-an'), apps});
     S.users.push(r.user); S.livelli[r.user.id] = r.livelli || {}; aperti.add(r.user.id); filter = 'active'; render(); dlg.close();
     if (r.avvisi?.length) toast(r.avvisi.join(' · '));
     if (r.link) linkResult(r.link, r.user.firstName);
@@ -352,7 +354,7 @@ dlgf.addEventListener('change', e => {
 });
 function openEdit(u) {
   open(`<h2>Modifica dati</h2>${personFields(u)}${footer()}`, async () => {
-    const body = {firstName: val('d-fn'), lastName: val('d-ln'), birthDate: val('d-bd'), cf: val('d-cf'), alboProvincia: val('d-ap'), alboNumero: val('d-an')};
+    const body = {firstName: val('d-fn'), lastName: val('d-ln'), birthDate: val('d-bd'), cf: val('d-cf'), figura: val('d-fig'), alboProvincia: val('d-ap'), alboNumero: val('d-an')};
     if (!u.owner) body.email = val('d-em');
     const r = await api('PATCH', '/api/admin/users/' + u.id, body);
     Object.assign(u, r.user); render(); dlg.close(); avvisa(r, 'Dati salvati e aggiornati nelle app');

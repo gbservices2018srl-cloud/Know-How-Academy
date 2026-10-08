@@ -5,8 +5,6 @@
 // il riquadro passa da /sso/<app>, che crea un biglietto monouso e lo consegna a quella funzione.
 // livelli: i ruoli interni dell'app; il pannello accessi li assegna (con laboratorio/studio/medico/azienda)
 // e la funzione "sso" crea o aggiorna il profilo nell'app, così la persona non deve avere un'altra password.
-const FIGURE = [['Medico', 'Medico'], ['ASO', 'ASO (assistente alla poltrona)'], ['REC', 'REC (reception)'], ['RAP', 'RAP'], ['RUL', 'RUL'], ['Altro', 'Altro']]
-  .map(([id, nome]) => ({ id, nome }));
 module.exports = [
   { key: 'finanza', name: 'Gestione finanziaria', url: 'https://finanza.appgestione.it', color: 'teal',
     desc: 'Andamento economico e dati finanziari del gruppo.' },
@@ -34,15 +32,13 @@ module.exports = [
   { key: 'magazzino', name: 'Magazzino centrale', url: 'https://magazzino.appgestione.it', color: 'yellow',
     desc: 'Disponibilità degli articoli, prenotazioni e riordino ai fornitori.' },
   { key: 'turni', name: 'Turni', url: 'https://turni.appgestione.it', color: 'teal',
-    // Figura nei turni: con Dipendente (o Amministratore che è anche in turno) la persona compare da sola nel Personale
+    // La figura è quella della persona (Gestione accessi): con Dipendente o "Amministratore, anche in turno"
+    // compare da sola nel Personale dei Turni
     livelli: [
-      { key: 'dipendente', label: 'Dipendente', ente: 'figure', enteLabel: 'Figura' },
-      { key: 'admin', label: 'Amministratore', role: 'admin', ente: 'figureAdmin', enteLabel: 'Figura' },
+      { key: 'dipendente', label: 'Dipendente' },
+      { key: 'admin', label: 'Amministratore, anche in turno', role: 'admin' },
+      { key: 'admin_no', label: 'Amministratore, non in turno', role: 'admin' },
     ],
-    enti: {
-      figure: FIGURE,
-      figureAdmin: [{ id: 'nessuna', nome: 'Non è in turno' }, ...FIGURE],
-    },
     desc: 'Planning delle sedi, ferie e permessi, sostituzioni e buste paga.' },
   { key: 'accessi', name: 'Gestione accessi', url: '/admin', color: 'grey', adminOnly: true,
     desc: 'Approva le registrazioni e decide chi entra in quali app.' },

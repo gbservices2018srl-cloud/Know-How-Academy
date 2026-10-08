@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { EventEmitter } = require('events');
 const APPS = require('../apps');
+const FIGURE = require('../figure');
 
 types.setTypeParser(1082, v => v); // date come testo AAAA-MM-GG
 
@@ -79,7 +80,8 @@ async function migrate() {
   await q(`delete from password_links where expires_at < now() - interval '7 days'`);
   await q(`delete from sso_tickets where expires_at < now() - interval '1 day'`);
   // livello dentro l'app (Nuovalab, Ticket): ruolo e laboratorio/studio/medico/azienda scelti dal pannello accessi
-  await q(`alter table users add column if not exists cf text;
+  await q(`alter table users add column if not exists figura text;
+    alter table users add column if not exists cf text;
     alter table users add column if not exists albo_provincia text;
     alter table users add column if not exists albo_numero text;
     alter table user_apps add column if not exists livello text;
@@ -87,6 +89,11 @@ async function migrate() {
     alter table user_apps add column if not exists ente_nome text;
     alter table sso_tickets drop constraint if exists sso_tickets_purpose_check;
     alter table sso_tickets add constraint sso_tickets_purpose_check check (purpose in ('login','revoke','catalog','sync'));`);
+  // Turni: la figura scelta prima nel permesso diventa la figura della persona
+  await q(`update users u set figura = ua.ente from user_apps ua
+    where ua.user_id = u.id and ua.app = 'turni' and u.figura is null and ua.ente = any($1)`, [FIGURE.map(f => f.id)]);
+  await q(`update user_apps set livello = case when ente = 'nessuna' and livello = 'admin' then 'admin_no' else livello end,
+    ente = null, ente_nome = null where app = 'turni' and ente is not null`);
 }
 
 // Il proprietario (ADMIN_USERNAME / ADMIN_PASSWORD su Render) è sempre attivo e amministratore di tutto.
@@ -130,6 +137,7 @@ function cleanDate(s) {
 }
 
 // Codice fiscale: formato e carattere di controllo (anche con omocodia)
+const cleanFigura = s => FIGURE.some(f => f.id === s) ? s : null;
 const cleanCf = s => String(s || '').toUpperCase().replace(/\s+/g, '').slice(0, 16);
 const CF_DISPARI = { 0: 1, 1: 0, 2: 5, 3: 7, 4: 9, 5: 13, 6: 15, 7: 17, 8: 19, 9: 21, A: 1, B: 0, C: 5, D: 7, E: 9, F: 13, G: 15, H: 17, I: 19, J: 21,
   K: 2, L: 4, M: 18, N: 20, O: 11, P: 3, Q: 6, R: 8, S: 12, T: 14, U: 16, V: 10, W: 22, X: 25, Y: 24, Z: 23 };
@@ -160,7 +168,7 @@ function publicUser(u, apps) {
   return {
     id: u.id, firstName: u.first_name, lastName: u.last_name, birthDate: u.birth_date, email: u.email,
     status: u.status, owner: u.owner, createdAt: u.created_at, approvedAt: u.approved_at, lastLogin: u.last_login,
-    hasPassword: !!u.password_hash, cf: u.cf || '', alboProvincia: u.albo_provincia || '', alboNumero: u.albo_numero || '',
+    hasPassword: !!u.password_hash, figura: u.figura || '', cf: u.cf || '', alboProvincia: u.albo_provincia || '', alboNumero: u.albo_numero || '',
     ...(apps ? { apps } : {}),
   };
 }
@@ -174,13 +182,13 @@ async function findByEmail(email) {
   return rows[0] || null;
 }
 
-async function createUser({ firstName, lastName, birthDate, email, password, status = 'pending', createdBy = null, cf = null, alboProvincia = null, alboNumero = null }) {
+async function createUser({ firstName, lastName, birthDate, email, password, status = 'pending', createdBy = null, cf = null, alboProvincia = null, alboNumero = null, figura = null }) {
   const id = crypto.randomUUID();
-  await q(`insert into users (id, first_name, last_name, birth_date, email, password_hash, status, created_by, approved_at, cf, albo_provincia, albo_numero)
-           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+  await q(`insert into users (id, first_name, last_name, birth_date, email, password_hash, status, created_by, approved_at, cf, albo_provincia, albo_numero, figura)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
     [id, cleanName(firstName), cleanName(lastName), birthDate || null, cleanEmail(email),
      password ? await bcrypt.hash(password, 12) : null, status, createdBy, status === 'active' ? new Date() : null,
-     cf || null, alboProvincia || null, alboNumero || null]);
+     cf || null, alboProvincia || null, alboNumero || null, figura || null]);
   return getUser(id);
 }
 
@@ -280,7 +288,7 @@ async function redeemTicket(token, app) {
     const lv = u.owner ? null : (await livelliOf(u.id))[app] || null;
     return { purpose: t.purpose, email: u.email, firstName: u.first_name, lastName: u.last_name, birthDate: u.birth_date, role,
       livello: lv?.livello || null, ente: lv?.ente || null,
-      cf: u.cf || null, alboProvincia: u.albo_provincia || null, alboNumero: u.albo_numero || null,
+      cf: u.cf || null, alboProvincia: u.albo_provincia || null, alboNumero: u.albo_numero || null, figura: u.figura || null,
       oldEmail: t.data?.oldEmail && t.data.oldEmail !== u.email ? t.data.oldEmail : null };
   }
   return { purpose: t.purpose, email: t.email };
@@ -311,7 +319,7 @@ async function peekPasswordLink(token) {
 
 module.exports = {
   pool, q, SCHEMA, APPS, APP_KEYS, events, migrate, ensureOwner,
-  cleanEmail, validEmail, cleanName, cleanDate, cleanCf, validCf, cleanProv, cleanAlbo, appsOf, publicUser, getUser, findByEmail, createUser, setPassword,
+  cleanEmail, validEmail, cleanName, cleanDate, cleanFigura, FIGURE, cleanCf, validCf, cleanProv, cleanAlbo, appsOf, publicUser, getUser, findByEmail, createUser, setPassword,
   setAppRole, livelliOf, deleteUser, usersWithApp, logoutEverywhere, createSession, endSession, check, verify,
   createPasswordLink, usePasswordLink, peekPasswordLink, SESSION_DAYS, sha, createTicket, redeemTicket,
 };

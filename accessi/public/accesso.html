@@ -97,7 +97,7 @@ const views = {
         <label class="field" for="bd">Data di nascita<input id="bd" type="date" autocomplete="bday" required max="${new Date().toISOString().slice(0, 10)}" min="1900-01-01"></label>
         <label class="field" for="cf">Codice fiscale<input id="cf" required maxlength="16" autocomplete="off" autocapitalize="characters" spellcheck="false" style="text-transform:uppercase;letter-spacing:.04em" placeholder="16 lettere e cifre"></label>
       </div>
-      <label class="check"><input type="checkbox" id="med"><span>Sono un medico o un odontoiatra (serve per Nuovalab)</span></label>
+      <label class="field" for="fig">Figura professionale<select id="fig" required><option value="">Scegli…</option></select></label>
       <div class="two" id="alboBox" hidden>
         <label class="field" for="ap">Provincia dell'albo<input id="ap" maxlength="2" autocomplete="off" style="text-transform:uppercase" placeholder="es. MI"></label>
         <label class="field" for="an">Numero di iscrizione<input id="an" maxlength="20" autocomplete="off" inputmode="numeric"></label>
@@ -110,16 +110,18 @@ const views = {
       <div class="links"><a href="${withNext('/accedi')}">Hai già un account? <b>Accedi</b></a></div>
     </form>`;
     $('#fn').focus();
-    $('#med').addEventListener('change', () => { $('#alboBox').hidden = !$('#med').checked; if ($('#med').checked) $('#ap').focus(); });
+    fetch('/api/figure').then(r => r.json()).then(j => { $('#fig').insertAdjacentHTML('beforeend', j.figure.map(f => `<option value="${esc(f.id)}">${esc(f.nome)}</option>`).join('')); }).catch(() => {});
+    $('#fig').addEventListener('change', () => { const med = $('#fig').value === 'Medico'; $('#alboBox').hidden = !med; if (med) $('#ap').focus(); });
     $('#f').addEventListener('submit', async e => {
       e.preventDefault(); const f = e.target; $('#err').textContent = '';
-      const med = $('#med').checked;
-      const body = {firstName: $('#fn').value, lastName: $('#ln').value, birthDate: $('#bd').value, cf: $('#cf').value.replace(/\s+/g, '').toUpperCase(),
+      const med = $('#fig').value === 'Medico';
+      const body = {firstName: $('#fn').value, lastName: $('#ln').value, birthDate: $('#bd').value, figura: $('#fig').value, cf: $('#cf').value.replace(/\s+/g, '').toUpperCase(),
         alboProvincia: med ? $('#ap').value : '', alboNumero: med ? $('#an').value : '',
         email: $('#email').value, password: $('#password').value, privacy: $('#privacy').checked};
       if (!body.firstName.trim() || !body.lastName.trim()) return $('#err').textContent = 'Inserisci nome e cognome.';
       if (!body.birthDate) return $('#err').textContent = 'Inserisci la data di nascita.';
       if (!/^[A-Z0-9]{16}$/.test(body.cf)) return $('#err').textContent = 'Il codice fiscale ha 16 lettere e cifre.';
+      if (!body.figura) return $('#err').textContent = 'Scegli la tua figura professionale.';
       if (med && (!/^[A-Za-z]{2}$/.test(body.alboProvincia.trim()) || !body.alboNumero.trim())) return $('#err').textContent = "Scrivi provincia (2 lettere) e numero di iscrizione all'albo.";
       if (body.password.length < 8) return $('#err').textContent = 'La password deve avere almeno 8 caratteri.';
       if (!body.privacy) return $('#err').textContent = "Per registrarti devi accettare l'informativa privacy.";

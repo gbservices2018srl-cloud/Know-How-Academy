@@ -1050,8 +1050,8 @@ function userForm(u) {
         <span class="hint" id="u-rolehint"></span>
       </div>
       <div class="field" id="u-catsf"><span>Categorie</span>
-        <div class="chips" id="u-cats">${S.categories.map(c => `<button type="button" class="chip ${cats.has(c.id) ? 'on' : ''}" data-cat="${c.id}">${esc(c.name)}</button>`).join('')}</div>
-        <span class="hint">Vedrà gli eventi per tutto lo staff e quelli delle categorie scelte.</span>
+        <div class="chips" id="u-cats">${S.categories.map(c => S.sso && c.figura ? `<button type="button" class="chip ${cats.has(c.id) ? 'on' : ''}" disabled title="Dalla figura professionale (Gestione accessi)">${esc(c.name)}</button>` : `<button type="button" class="chip ${cats.has(c.id) ? 'on' : ''}" data-cat="${c.id}">${esc(c.name)}</button>`).join('')}</div>
+        <span class="hint">Vedrà gli eventi per tutto lo staff e quelli delle categorie scelte.${S.sso ? ' Le categorie delle figure (Medici, ASO, REC…) si assegnano da sole in base alla figura scelta in Gestione accessi.' : ''}</span>
       </div>
       ${isNew || lock ? '' : `<label class="check"><input type="checkbox" id="u-active" ${v.active ? 'checked' : ''}>Accesso attivo</label>`}
     </div>
@@ -1105,7 +1105,7 @@ async function renderSettings() {
     <div class="settings">
       <section class="card" data-kind="categories"><h3>Categorie dello staff</h3><p class="sub">Servono a decidere chi vede ogni evento.</p>
         ${S.categories.map((c, i) => `<div class="li" data-id="${c.id}"><input value="${esc(c.name)}" data-f="name" aria-label="Nome categoria">
-          <span class="n">${[n(usage.catUsers[c.id], 'persona', 'persone'), n(usage.catEvents[c.id], 'evento', 'eventi')].filter(Boolean).join(' · ')}</span>${orderBtns(i, S.categories.length)}<button class="btn icon ghost" data-del title="Elimina" aria-label="Elimina">${ic('trash')}</button></div>`).join('')}
+          <span class="n">${[c.figura ? 'figura ' + esc(c.figura) : '', n(usage.catUsers[c.id], 'persona', 'persone'), n(usage.catEvents[c.id], 'evento', 'eventi')].filter(Boolean).join(' · ')}</span>${orderBtns(i, S.categories.length)}${c.figura ? '' : `<button class="btn icon ghost" data-del title="Elimina" aria-label="Elimina">${ic('trash')}</button>`}</div>`).join('')}
         <div class="addrow"><input placeholder="Nuova categoria" data-add-name maxlength="80"><button class="btn primary sm" data-add>Aggiungi</button></div></section>
       <section class="card" data-kind="event_types"><h3>Tipi di evento</h3><p class="sub">Ognuno ha un colore nel calendario.</p>
         ${S.types.map((t, i) => `<div class="li" data-id="${t.id}"><button class="swatch c-${t.color}" data-color="${t.color}" title="Cambia colore" aria-label="Colore: ${COLOR_NAMES[t.color]}"></button><input value="${esc(t.name)}" data-f="name" aria-label="Nome tipo">

@@ -16,6 +16,7 @@ const factory = new Function('S', `
   const uid = () => S.uid();
   ${SRC}
   if (!FESTIVI) FESTIVI = calcFestivi(MONTHS);
+  normReg(REG);
   return { ${ESPORTA.join(', ')}, stato: () => ({ ${VARS.join(', ')} }) };
 `);
 
@@ -40,7 +41,7 @@ function defaultReg() {
     orario: [{ M: false, P: false }, { M: true, P: true }, { M: true, P: true }, { M: true, P: true }, { M: true, P: true }, { M: true, P: true }, { M: true, P: false }],
     ore: { M: ['09:00', '13:00'], P: ['15:00', '19:00'] },
     maxGiorno: 8, minRiuniti: 1,
-    altri: { REC: { min: 1, max: 2 }, RAP: { min: 0, max: 1 }, RUL: { min: 0, max: 1 }, Altro: { min: 0, max: 1 } },
+    altri: { Extrambulatoriale: { min: 0, max: 1 }, REC: { min: 1, max: 2 }, RAP: { min: 0, max: 1 }, RUL: { min: 0, max: 1 }, Altro: { min: 0, max: 1 } },
     festivi: true,
   };
 }

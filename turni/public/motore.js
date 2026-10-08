@@ -21,8 +21,10 @@ const esc = s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"
 const nowStr = ()=> new Date().toLocaleString("it-IT",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",timeZone:"Europe/Rome"});
 const oggiRoma = ()=> new Date().toLocaleDateString("sv-SE",{timeZone:"Europe/Rome"}); // AAAA-MM-GG
 const sede = id => SEDI.find(s=>s.id===id);
-const TIPI_PROF = ["Medico","ASO","REC","RAP","RUL","Altro"];
-const ALTRI = ["REC","RAP","RUL","Altro"];
+const TIPI_PROF = ["Medico","ASO","REC","RAP","RUL","Extrambulatoriale","Altro"];
+const ALTRI = ["REC","RAP","RUL","Extrambulatoriale","Altro"];
+// regole salvate prima che esistesse una figura: minimo 0, massimo 1 per turno
+const normReg = r => { if (r && r.altri) for (const t of ALTRI) if (!r.altri[t]) r.altri[t] = {min:0, max:1}; return r; };
 const TIPI = {FE:"Ferie", ROL:"ROL", MAL:"Malattia"};
 const emp = id => STAFF.find(e=>e.id===id) || REMOVED.find(e=>e.id===id);
 const full = e => e ? `${e.nome} ${e.cognome}` : "—";

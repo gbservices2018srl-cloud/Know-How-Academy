@@ -39,11 +39,12 @@ const bad = (res, code, msg) => res.status(code).json({ error: msg });
 
 /* ---------- autenticazione ---------- */
 // Accesso unico (appgestione.it): attivo con SSO_ATTIVO=true. Il ruolo arriva dal pannello accessi.
+const FIGURE = require('./accessi/figure');
 const sso = require('./accessi/collega')({ app: 'protocolli', toLocal: localProfile });
 async function localProfile(c, role) {
   const r = role === 'admin' ? 'admin' : 'collab';
   const name = `${c.firstName} ${c.lastName}`.trim() || c.email;
-  const cols = 'id, username, name, title, role, from_env';
+  const cols = 'id, username, name, title, role, from_env, figura';
   let { rows } = await db.q(`select ${cols} from users where sso_id = $1`, [c.id]);
   if (!rows[0]) ({ rows } = await db.q(`update users set sso_id = $1 where username = $2 and sso_id is null returning ${cols}`, [c.id, c.email]));
   if (!rows[0]) ({ rows } = await db.q(`insert into users (id, username, name, role, password_hash, sso_id) values ($1,$2,$3,$4,'!sso',$5)
@@ -51,8 +52,11 @@ async function localProfile(c, role) {
   const u = rows[0];
   if (u.name !== name || u.role !== r) await db.q('update users set name = $2, role = $3 where id = $1', [u.id, name, r]);
   if (u.username !== c.email) await db.q('update users set username = $2 where id = $1', [u.id, c.email]).catch(() => {});
-  return { ...u, name, role: r, username: c.email };
+  const figura = c.figura || null;
+  if ((u.figura || null) !== figura) await db.q('update users set figura = $2 where id = $1', [u.id, figura]);
+  return { ...u, name, role: r, username: c.email, figura };
 }
+sso.onProvision(({ user, role }) => localProfile(user, role).then(() => null));
 sso.onDeleted(id => db.q('delete from users where sso_id = $1 and not from_env', [id]));
 
 async function loadUser(req, res, next) {
@@ -111,15 +115,23 @@ app.post('/api/me/password', needUser, wrap(async (req, res) => {
 }));
 
 /* ---------- permessi ---------- */
-async function accessMap(userId) {
-  const { rows } = await db.q('select flow_id, mode, hide, nodes from access where user_id = $1', [userId]);
-  return Object.fromEntries(rows.map(r => [r.flow_id, { mode: r.mode, hide: r.hide, nodes: r.nodes || [] }]));
+// Permessi di un collaboratore: quelli della sua figura (es. tutte le ASO), salvo eccezioni impostate per lui
+async function accessMap(user) {
+  const shape = r => ({ mode: r.mode, hide: r.hide, nodes: r.nodes || [] });
+  const out = {};
+  if (user.figura) {
+    const { rows } = await db.q('select flow_id, mode, hide, nodes from access_figura where figura = $1', [user.figura]);
+    for (const r of rows) out[r.flow_id] = shape(r);
+  }
+  const { rows } = await db.q('select flow_id, mode, hide, nodes from access where user_id = $1', [user.id]);
+  for (const r of rows) out[r.flow_id] = shape(r);
+  return out;
 }
 // Restituisce i flussi come li vede l'utente: fasi bloccate o nascoste secondo i permessi.
 async function visibleState(user) {
   const { rows: flows } = await db.q('select id, name, data from flows order by sort, name');
   const isAdmin = user.role === 'admin';
-  const acc = isAdmin ? {} : await accessMap(user.id);
+  const acc = isAdmin ? {} : await accessMap(user);
   const out = [], allowed = {};
   for (const f of flows) {
     const nodes = f.data.nodes || [], edges = f.data.edges || [];
@@ -164,13 +176,15 @@ app.get('/api/state', needUser, wrap(async (req, res) => {
       only = new Set();
       for (const c of central) only.add((await localProfile(c, c.role)).id);
     }
-    let { rows: users } = await db.q('select id, username, name, title, role, from_env from users order by role, name');
+    let { rows: users } = await db.q('select id, username, name, title, role, from_env, figura from users order by role, name');
     if (only) users = users.filter(u => only.has(u.id));
     const { rows: acc } = await db.q('select * from access');
     out.users = users.map(u => ({
-      id: u.id, username: u.username, name: u.name, title: u.title, role: u.role, fromEnv: u.from_env,
+      id: u.id, username: u.username, name: u.name, title: u.title, role: u.role, fromEnv: u.from_env, figura: u.figura || '',
       access: Object.fromEntries(acc.filter(a => a.user_id === u.id).map(a => [a.flow_id, { mode: a.mode, hide: a.hide, nodes: a.nodes }])),
     }));
+    const { rows: af } = await db.q('select * from access_figura');
+    out.figure = FIGURE.map(f => ({ ...f, access: Object.fromEntries(af.filter(a => a.figura === f.id).map(a => [a.flow_id, { mode: a.mode, hide: a.hide, nodes: a.nodes }])) }));
   }
   res.json(out);
 }));
@@ -311,7 +325,21 @@ app.delete('/api/users/:id', needAdmin, wrap(async (req, res) => {
   await db.q(`delete from session where sess->>'uid' = $1`, [req.params.id]).catch(() => {});
   res.json({ ok: true });
 }));
+// Permessi per figura: valgono per tutte le persone di quella figura che non hanno un'eccezione
+app.put('/api/figure/:figura/access/:flowId', needAdmin, wrap(async (req, res) => {
+  if (!FIGURE.some(f => f.id === req.params.figura)) return bad(res, 400, 'Figura sconosciuta');
+  const mode = ['none', 'all', 'some'].includes(req.body.mode) ? req.body.mode : 'none';
+  const nodes = Array.isArray(req.body.nodes) ? req.body.nodes.map(String).slice(0, 2000) : [];
+  await db.q(`insert into access_figura (figura, flow_id, mode, hide, nodes) values ($1,$2,$3,$4,$5)
+              on conflict (figura, flow_id) do update set mode = excluded.mode, hide = excluded.hide, nodes = excluded.nodes`,
+    [req.params.figura, req.params.flowId, mode, !!req.body.hide, JSON.stringify(nodes)]);
+  res.json({ ok: true });
+}));
 app.put('/api/users/:id/access/:flowId', needAdmin, wrap(async (req, res) => {
+  if (req.body.mode === 'figura') { // torna a seguire i permessi della sua figura
+    await db.q('delete from access where user_id = $1 and flow_id = $2', [req.params.id, req.params.flowId]);
+    return res.json({ ok: true });
+  }
   const mode = ['none', 'all', 'some'].includes(req.body.mode) ? req.body.mode : 'none';
   const nodes = Array.isArray(req.body.nodes) ? req.body.nodes.map(String).slice(0, 2000) : [];
   await db.q(`insert into access (user_id, flow_id, mode, hide, nodes) values ($1,$2,$3,$4,$5)

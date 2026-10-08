@@ -164,4 +164,20 @@ async function seedIfEmpty() {
   }
 }
 
-module.exports = { pool, q, newId, SCHEMA, migrate, ensureEnvAdmin, seedIfEmpty };
+// Categorie per figura professionale (dall'accesso unico): una per figura, collegate per nome a quelle già presenti
+// (es. "Medici", "Extra-ambulatoriali"); le persone ci entrano da sole in base alla loro figura.
+const FIGURE = require('../../accessi/figure');
+const norm = s => String(s || '').toLowerCase().replace(/[^a-z]/g, '').replace(/aa/g, 'a').replace(/(i|e)$/, ''); // "Extra-ambulatoriali" = "Extrambulatoriale"
+async function categorieFigura() {
+  await q('alter table categories add column if not exists figura text unique');
+  const { rows } = await q('select id, name, figura from categories');
+  for (const f of FIGURE) {
+    if (rows.some(c => c.figura === f.id)) continue;
+    const c = rows.find(c => !c.figura && [norm(f.id), norm(f.gruppo)].includes(norm(c.name)));
+    if (c) { await q('update categories set figura = $2 where id = $1', [c.id, f.id]); c.figura = f.id; continue; }
+    const { rows: m } = await q('select coalesce(max(sort), -1) + 1 as s from categories');
+    await q('insert into categories (id, name, sort, figura) values ($1,$2,$3,$4)', [newId(), f.gruppo, m[0].s, f.id]);
+  }
+}
+
+module.exports = { pool, q, newId, SCHEMA, migrate, ensureEnvAdmin, seedIfEmpty, categorieFigura };

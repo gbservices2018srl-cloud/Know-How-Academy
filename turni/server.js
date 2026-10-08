@@ -56,7 +56,9 @@ app.use('/api', (req, res, next) => (['GET', 'HEAD', 'DELETE'].includes(req.meth
 // Quando l'amministratore approva qualcuno (o gli dà Turni, o ne cambia i dati) il collaboratore compare nel Personale
 // con nome, cognome, email, codice fiscale e figura: restano da impostare solo sedi e orario.
 sso.onProvision(async ({ user, livello, oldEmail }) => {
-  const figura = livello?.ente && livello.ente !== 'nessuna' ? livello.ente : null;
+  // la figura è quella della persona (pannello accessi); "Amministratore, non in turno" non entra nel Personale
+  const inTurno = !livello || livello.livello !== 'admin_no';
+  const figura = inTurno && user.figura ? user.figura : null;
   const emails = [user.email, oldEmail].filter(Boolean).map(x => x.toLowerCase());
   await caricaConfig(); // crea la configurazione vuota se non c'è ancora
   return db.tx(async qq => {
@@ -64,7 +66,7 @@ sso.onProvision(async ({ user, livello, oldEmail }) => {
     const c = rows[0].data; c.staff ||= [];
     let e = c.staff.find(x => emails.includes(String(x.email || '').toLowerCase()));
     if (!e && user.cf) e = c.staff.find(x => x.tipo !== 'Medico' && String(x.cf || '').toUpperCase() === user.cf);
-    if (!e && !figura) return null; // nessuna figura: non è in turno
+    if (!e && !figura) return inTurno && livello ? 'Turni: manca la figura della persona, scegline una con «Modifica».' : null;
     if (!e) {
       e = { id: 'u' + crypto.randomBytes(6).toString('hex'), ore: {}, cfg: {}, ferie: 22, rol: 72 };
       c.staff.push(e);
@@ -356,20 +358,20 @@ app.post('/api/ai/regola', needAdmin, wrap(async (req, res) => {
 DATI ATTUALI
 Sedi: ${JSON.stringify(st.SEDI.map(s => ({ id: s.id, nome: s.nome, riuniti: s.riuniti })))}
 Persone: ${JSON.stringify(st.STAFF.map(e => ({ id: e.id, nome: m.full(e), figura: e.tipo })))}
-Figure: Medico, ASO (assistente alla poltrona), REC (reception), RAP, RUL, Altro. Ogni riunito ha un medico e un'ASO.
+Figure: Medico, ASO (assistente alla poltrona), REC (reception), RAP, RUL, Extrambulatoriale, Altro. Ogni riunito ha un medico e un'ASO.
 Giorni: 1 lunedì, 2 martedì, 3 mercoledì, 4 giovedì, 5 venerdì, 6 sabato (la domenica è chiuso).
 Turni: "M" mattina ${st.REG.ore.M.join('-')}, "P" pomeriggio ${st.REG.ore.P.join('-')}, "G" giornata intera.
 Oggi è ${oggi()}. Il planning copre ${mesi}. Date nel formato AAAA-MM-GG.
 ${p ? `La regola riguarda ${m.full(p)} (id "${p.id}", ${p.tipo}): se non nomina altre persone, è lei.` : ''}
 
 AZIONI POSSIBILI (usa solo queste, con questi campi)
-1. {"azione":"deroga_sede","sede":id,"quando":"sempre"|"giorno"|"data","giorno":1-6,"data":"AAAA-MM-GG","cosa":"chiusa"|"solo_mattina"|"aperta"|"riuniti"|"minimo","numero":n,"figura":"REC"|"RAP"|"RUL"|"Altro","turno":"M"|"P"|"MP"}
+1. {"azione":"deroga_sede","sede":id,"quando":"sempre"|"giorno"|"data","giorno":1-6,"data":"AAAA-MM-GG","cosa":"chiusa"|"solo_mattina"|"aperta"|"riuniti"|"minimo","numero":n,"figura":"REC"|"RAP"|"RUL"|"Extrambulatoriale"|"Altro","turno":"M"|"P"|"MP"}
    ("riuniti" = quanti riuniti sono disponibili; "minimo" = persone minime di una figura non medica. Per "tutte le sedi" crea un'azione per ogni sede.)
 2. {"azione":"presenza_fissa","persona":id,"sede":id,"settimane":[1,2,3,4,5] dove 5 = ultima del mese, oppure [0] per ogni settimana,"giorno":1-6,"turno":"M"|"P"|"G","ogni_due_settimane":true|false}
 3. {"azione":"non_disponibile","persona":id,"giorno":1-6 oppure null,"dal":"AAAA-MM-GG" oppure null,"al":"AAAA-MM-GG" oppure null,"turno":"M"|"P"|"G"}
 4. {"azione":"ore_settimanali","persona":id,"sede":id,"ore":n}
 5. {"azione":"riuniti","sede":id,"numero":n}
-6. {"azione":"limiti_figura","figura":"REC"|"RAP"|"RUL"|"Altro","minimo":n oppure null,"massimo":n oppure null}
+6. {"azione":"limiti_figura","figura":"REC"|"RAP"|"RUL"|"Extrambulatoriale"|"Altro","minimo":n oppure null,"massimo":n oppure null}
 Se una parte non si può esprimere con queste azioni aggiungi {"azione":"non_supportata","motivo":"spiegazione breve in italiano"}.
 Non inventare persone o sedi: se un nome è ambiguo o non esiste, mettilo nei dubbi e non creare l'azione.
 

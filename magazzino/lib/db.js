@@ -144,6 +144,7 @@ async function migrate() {
       key text primary key,
       value text not null
     );
+    alter table users add column if not exists figura text;
   `);
 }
 

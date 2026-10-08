@@ -361,7 +361,7 @@ async function api(method, path, body, signal){
   return j;
 }
 function setPlan(pd){ pd = pd || {}; plan = pd.plan || {}; short = pd.short || {}; fixMiss = pd.fixMiss || {}; genAt = pd.genAt || ""; }
-function applyConfig(c){ SEDI=c.sedi||[]; STAFF=c.staff||[]; REMOVED=c.removed||[]; REG=c.reg; DEROGHE=c.deroghe||[]; CAD=c.cad||[]; UNAV=c.unav||[]; RULES_TXT=c.rules||[]; }
+function applyConfig(c){ SEDI=c.sedi||[]; STAFF=c.staff||[]; REMOVED=c.removed||[]; REG=normReg(c.reg); DEROGHE=c.deroghe||[]; CAD=c.cad||[]; UNAV=c.unav||[]; RULES_TXT=c.rules||[]; }
 const configNow = () => ({sedi:SEDI, staff:STAFF, removed:REMOVED, reg:REG, deroghe:DEROGHE, cad:CAD, unav:UNAV, rules:RULES_TXT});
 
 // ogni modifica dell'amministratore si salva da sola (dopo mezzo secondo di pausa)
@@ -469,7 +469,7 @@ function aiBox(scope){
 let editing = null, draft = null, rmConfirm = false;
 function startEdit(id){
   const e = id==="new" ? null : emp(id);
-  draft = e ? {id:e.id, nome:e.nome, cognome:e.cognome, cf:e.cf||"", email:e.email||"", ferie:e.ferie??22, rol:e.rol??72, tipo:e.tipo, cfg:JSON.parse(JSON.stringify(e.cfg||{}))}
+  draft = e ? {id:e.id, nome:e.nome, cognome:e.cognome, cf:e.cf||"", email:e.email||"", ferie:e.ferie??22, rol:e.rol??72, tipo:e.tipo, accesso:!!e.accesso, cfg:JSON.parse(JSON.stringify(e.cfg||{}))}
             : {id:null, nome:"", cognome:"", cf:"", email:"", ferie:22, rol:72, tipo:"ASO", cfg:{}};
   editing = id; rmConfirm = false; ai = {scope:"", text:"", busy:false, res:null, err:""};
   tab = "personale"; render(); window.scrollTo?.(0,0);
@@ -491,7 +491,7 @@ function vPersonale(){
   <div class="panel plist">${rows}</div>`;
 }
 function vEditor(){
-  const d = draft, isNew = !d.id, med = d.tipo==="Medico";
+  const d = draft, isNew = !d.id, med = d.tipo==="Medico", lk = d.accesso ? "disabled" : "";
   const sedeBlock = s => { const x = d.cfg[s.id]; if (!x) return "";
     const seg = (field, opts) => `<div class="seg alt" role="radiogroup">${opts.map(([v,l])=>`<button type="button" data-dcv="${s.id}|${field}|${v}" aria-pressed="${x[field]===v}">${l}</button>`).join("")}</div>`;
     const days = `<div class="ticks">${[1,2,3,4,5,6].map(w=>`<label class="tick sm"><input type="checkbox" data-dday="${s.id}|${w}" ${x.giorni.includes(w)?"checked":""}> ${DOWL[w].slice(0,3)}</label>`).join("")}</div>`;
@@ -515,12 +515,12 @@ function vEditor(){
   <h2>${isNew?"Nuovo collaboratore":esc(full(d))}</h2>
   <p class="lede">${isNew?"Compila le sezioni e salva.":"Modifica le sezioni e salva: per vederlo nel planning premi poi Genera turni."}</p>
   <div class="editor">
-    <section class="panel esec"><div class="enum">1</div><div class="ebody"><h3>Anagrafica</h3>
-      <div class="row"><div class="f"><label for="dNome">Nome</label><input id="dNome" data-dr="nome" value="${esc(d.nome)}" autocomplete="off"></div>
-        <div class="f"><label for="dCogn">Cognome</label><input id="dCogn" data-dr="cognome" value="${esc(d.cognome)}" autocomplete="off"></div></div>
-      <div class="row"><div class="f"><label for="dTipo">Figura</label><select id="dTipo" data-drt="1">${TIPI_PROF.map(t=>`<option ${t===d.tipo?"selected":""}>${t}</option>`).join("")}</select></div>
-        ${med?`<div class="f"><label>Codice fiscale</label><p class="hint" style="margin:8px 0 0">Non richiesto per i medici.</p></div>`:`<div class="f"><label for="dCf">Codice fiscale</label><input id="dCf" data-dr="cf" value="${esc(d.cf)}" maxlength="16" autocomplete="off" style="text-transform:uppercase;font-family:var(--f-mono)"><span class="hint">Serve per abbinare le buste paga.</span></div>`}</div>
-      <div class="row"><div class="f" style="flex:2 1 240px"><label for="dEmail">Email</label><input id="dEmail" type="email" data-dr="email" value="${esc(d.email)}" autocomplete="off"><span class="hint">La stessa con cui entra in appgestione.it: così vede i suoi turni e le sue buste.</span></div>
+    <section class="panel esec"><div class="enum">1</div><div class="ebody"><h3>Anagrafica</h3>${d.accesso?`<p class="hint" style="margin:0 0 12px">Nome, email, codice fiscale e figura arrivano dall'accesso unico: si cambiano in <a href="${esc(STATE.links?.admin||"https://appgestione.it/admin")}">Gestione accessi</a>.</p>`:""}
+      <div class="row"><div class="f"><label for="dNome">Nome</label><input id="dNome" data-dr="nome" value="${esc(d.nome)}" autocomplete="off" ${lk}></div>
+        <div class="f"><label for="dCogn">Cognome</label><input id="dCogn" data-dr="cognome" value="${esc(d.cognome)}" autocomplete="off" ${lk}></div></div>
+      <div class="row"><div class="f"><label for="dTipo">Figura</label><select id="dTipo" data-drt="1" ${lk}>${TIPI_PROF.map(t=>`<option ${t===d.tipo?"selected":""}>${t}</option>`).join("")}</select></div>
+        ${med?`<div class="f"><label>Codice fiscale</label><p class="hint" style="margin:8px 0 0">Non richiesto per i medici.</p></div>`:`<div class="f"><label for="dCf">Codice fiscale</label><input id="dCf" data-dr="cf" value="${esc(d.cf)}" maxlength="16" ${lk} autocomplete="off" style="text-transform:uppercase;font-family:var(--f-mono)"><span class="hint">Serve per abbinare le buste paga.</span></div>`}</div>
+      <div class="row"><div class="f" style="flex:2 1 240px"><label for="dEmail">Email</label><input id="dEmail" type="email" data-dr="email" value="${esc(d.email)}" autocomplete="off" ${lk}><span class="hint">La stessa con cui entra in appgestione.it: così vede i suoi turni e le sue buste.</span></div>
         <div class="f"><label for="dFerie">Ferie all'anno (giorni)</label><input id="dFerie" type="number" min="0" max="60" data-dr="ferie" value="${esc(d.ferie)}"></div>
         <div class="f"><label for="dRol">ROL all'anno (ore)</label><input id="dRol" type="number" min="0" max="300" data-dr="rol" value="${esc(d.rol)}"></div></div>
     </div></section>

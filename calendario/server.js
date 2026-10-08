@@ -49,8 +49,16 @@ async function localProfile(c, role, touch = true) {
   if (u.name !== name || u.role !== r) await db.q('update users set name = $2, role = $3, active = true where id = $1', [u.id, name, r]);
   if (u.username !== c.email) await db.q('update users set username = $2 where id = $1', [u.id, c.email]).catch(() => {});
   if (touch && (!u.last_login || Date.now() - new Date(u.last_login) > 3600e3)) await db.q('update users set last_login = now() where id = $1', [u.id]);
+  await figuraInCategoria(u.id, c.figura);
   return { id: u.id, username: c.email, name, role: r, from_env: u.from_env };
 }
+// La persona sta nella categoria della sua figura (e in nessun'altra categoria-figura); le altre categorie restano manuali
+async function figuraInCategoria(userId, figura) {
+  if (!figura) return;
+  await db.q(`delete from user_categories where user_id = $1 and category_id in (select id from categories where figura is not null and figura <> $2)`, [userId, figura]);
+  await db.q(`insert into user_categories (user_id, category_id) select $1, id from categories where figura = $2 on conflict do nothing`, [userId, figura]);
+}
+sso.onProvision(({ user, role }) => localProfile(user, role, false).then(() => null));
 sso.onDeleted(id => db.q('delete from users where sso_id = $1 and not from_env', [id]));
 
 async function loadUser(req, res, next) {
@@ -113,7 +121,7 @@ app.post('/api/me/password', needUser, wrap(async (req, res) => {
 /* ---------- dati di base ---------- */
 async function lists() {
   const [c, t, l] = await Promise.all([
-    db.q('select id, name from categories order by sort, name'),
+    db.q('select id, name, figura from categories order by sort, name'),
     db.q('select id, name, color from event_types order by sort, name'),
     db.q('select id, name, address from locations order by sort, name'),
   ]);
@@ -363,6 +371,13 @@ app.put('/api/weeks', needAdmin, wrap(async (req, res) => {
 
 /* ---------- persone (admin) ---------- */
 async function setUserCategories(userId, cats) {
+  // le categorie per figura le decide l'accesso unico: qui si cambiano solo le altre
+  if (sso.enabled()) {
+    await db.q('delete from user_categories where user_id = $1 and category_id in (select id from categories where figura is null)', [userId]);
+    if (cats.length) await db.q(`insert into user_categories (user_id, category_id)
+      select $1, id from categories where id = any($2) and figura is null on conflict do nothing`, [userId, cats]);
+    return;
+  }
   await db.q('delete from user_categories where user_id = $1', [userId]);
   if (cats.length) await db.q(`insert into user_categories (user_id, category_id)
     select $1, id from categories where id = any($2) on conflict do nothing`, [userId, cats]);
@@ -451,6 +466,10 @@ const listApi = (table, fields) => {
     res.json({ ok: true });
   }));
   app.delete(`/api/${table}/:id`, needAdmin, wrap(async (req, res) => {
+    if (table === 'categories') {
+      const { rows } = await db.q('select figura from categories where id = $1', [req.params.id]);
+      if (rows[0]?.figura) return bad(res, 400, 'Questa categoria è legata a una figura professionale: non si può eliminare (puoi rinominarla).');
+    }
     await db.q(`delete from ${table} where id = $1`, [req.params.id]);
     res.json({ ok: true });
   }));
@@ -504,6 +523,7 @@ async function start() {
   await db.migrate();
   await db.ensureEnvAdmin();
   await db.seedIfEmpty();
+  await db.categorieFigura();
   await push.init().catch(e => console.warn('Notifiche non attive:', e.message));
 }
 module.exports = { app, start };

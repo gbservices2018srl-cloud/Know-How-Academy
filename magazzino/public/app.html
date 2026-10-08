@@ -359,7 +359,7 @@ function renderRichieste() {
 }
 function reqCard(p) {
   return `<article class="card req ${p.stato === 'in_attesa' ? 'pending' : ''}">
-    <div class="req-h"><div><h3>n. ${p.numero} · ${esc(p.utente)}</h3><div class="meta">${fmtDT(p.creataIl)} · ${esc(p.utenteEmail)}</div></div>
+    <div class="req-h"><div><h3>n. ${p.numero} · ${esc(p.utente)}</h3><div class="meta">${p.utenteFigura ? `<b>${esc(p.utenteFigura)}</b> · ` : ''}${fmtDT(p.creataIl)} · ${esc(p.utenteEmail)}</div></div>
       <span class="pill ${STATO[p.stato][1]}">${STATO[p.stato][0]}${p.gestitaIl && p.stato !== 'in_attesa' ? ` · ${fmtD(p.gestitaIl)}` : ''}</span></div>
     ${righeHtml(p, true)}
     ${p.note ? `<div class="note"><b>Note:</b> ${esc(p.note)}</div>` : ''}

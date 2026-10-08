@@ -28,12 +28,13 @@ const sso = require('../accessi/collega')({ app: 'magazzino', toLocal: localProf
 async function localProfile(c, role) {
   const r = role === 'admin' ? 'admin' : 'client';
   const name = `${c.firstName} ${c.lastName}`.trim() || c.email;
-  const { rows } = await db.q(`insert into users (id, sso_id, email, name, role, last_seen) values ($1,$2,$3,$4,$5, now())
-    on conflict (sso_id) do update set email = excluded.email, name = excluded.name, role = excluded.role,
+  const { rows } = await db.q(`insert into users (id, sso_id, email, name, role, last_seen, figura) values ($1,$2,$3,$4,$5, now(), $6)
+    on conflict (sso_id) do update set email = excluded.email, name = excluded.name, role = excluded.role, figura = excluded.figura,
       last_seen = case when users.last_seen is null or users.last_seen < now() - interval '10 minutes' then now() else users.last_seen end
-    returning id, email, name, role`, [db.newId(), c.id, c.email, name, r]);
+    returning id, email, name, role, figura`, [db.newId(), c.id, c.email, name, r, c.figura || null]);
   return rows[0];
 }
+sso.onProvision(({ user, role }) => localProfile(user, role).then(() => null));
 
 app.use(wrap(async (req, res, next) => {
   const r = await sso.identify(req);
@@ -73,13 +74,13 @@ async function registraMovimento(qq, articoloId, delta, causale, riferimento, ut
 }
 
 async function prenotazioni(where, params) {
-  const { rows } = await db.q(`select p.*, u.name as utente_nome, u.email as utente_email, g.name as gestita_nome,
+  const { rows } = await db.q(`select p.*, u.name as utente_nome, u.email as utente_email, u.figura as utente_figura, g.name as gestita_nome,
       coalesce((select json_agg(json_build_object('id', r.id, 'articoloId', r.articolo_id, 'nome', r.nome, 'unita', r.unita, 'quantita', r.quantita) order by r.nome)
         from prenotazione_righe r where r.prenotazione_id = p.id), '[]') as righe
     from prenotazioni p join users u on u.id = p.utente_id left join users g on g.id = p.gestita_da
     ${where} order by p.creata_il desc limit 200`, params);
   return rows.map(p => ({ id: p.id, numero: p.numero, stato: p.stato, note: p.note, motivo: p.motivo, creataIl: p.creata_il,
-    gestitaIl: p.gestita_il, gestitaDa: p.gestita_nome, utente: p.utente_nome, utenteEmail: p.utente_email, righe: p.righe }));
+    gestitaIl: p.gestita_il, gestitaDa: p.gestita_nome, utente: p.utente_nome, utenteEmail: p.utente_email, utenteFigura: p.utente_figura || '', righe: p.righe }));
 }
 
 /* ---------- stato dell'app ---------- */

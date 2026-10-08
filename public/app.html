@@ -424,7 +424,7 @@ async function api(method, url, body){
 }
 async function loadState(){
   const j = await api('GET', '/api/state');
-  me = j.me; aiReady = j.ai; S.sso = j.sso || null; S.flows = j.flows; S.docs = j.docs; S.users = j.users || [];
+  me = j.me; aiReady = j.ai; S.sso = j.sso || null; S.flows = j.flows; S.docs = j.docs; S.users = j.users || []; S.figure = j.figure || [];
   markSynced();
 }
 // salvataggio dei flussi sul server (solo area admin)
@@ -1131,8 +1131,31 @@ function openUsers(){
   renderUserList(); renderUserEdit();
   l.addEventListener('click', usersClick); l.addEventListener('change', usersChange);
 }
+// Permessi per figura (Medici, ASO, REC…): valgono per tutte le persone di quella figura, salvo eccezioni personali
+const figOf = id => (S.figure || []).find(f => f.id === id);
+const nFig = id => S.users.filter(u => u.role !== 'admin' && u.figura === id).length;
 function renderUserList(){
-  $('#u-list').innerHTML = S.users.map(u => `<button class="u-row ${u.id === selUser ? 'on' : ''}" data-u="${u.id}"><span class="av ${u.role === 'admin' ? 'admin' : ''}">${esc(initials(u.name || u.username))}</span><span><b>${esc(u.name || u.username)}</b><small>${esc(u.username)} · ${u.role === 'admin' ? 'Amministratore' : esc(u.title || 'Collaboratore')}</small></span></button>`).join('');
+  const fig = (S.figure || []).length ? `<div class="sec-t" style="margin:2px 4px 6px">Per figura</div>` + S.figure.map(f => `<button class="u-row ${'fig:' + f.id === selUser ? 'on' : ''}" data-u="fig:${esc(f.id)}"><span class="av">${esc(f.id.slice(0, 3).toUpperCase())}</span><span><b>${esc(f.gruppo)}</b><small>${nFig(f.id)} ${nFig(f.id) === 1 ? 'persona' : 'persone'} · permessi di base</small></span></button>`).join('') + `<div class="sec-t" style="margin:14px 4px 6px">Persone</div>` : '';
+  $('#u-list').innerHTML = fig + S.users.map(u => `<button class="u-row ${u.id === selUser ? 'on' : ''}" data-u="${u.id}"><span class="av ${u.role === 'admin' ? 'admin' : ''}">${esc(initials(u.name || u.username))}</span><span><b>${esc(u.name || u.username)}</b><small>${u.role === 'admin' ? 'Amministratore' : esc([figOf(u.figura)?.id, u.title].filter(Boolean).join(' · ') || 'Collaboratore')}</small></span></button>`).join('');
+}
+function renderFigEdit(f){
+  $('#u-edit').innerHTML = `<div class="sec-t">${esc(f.gruppo)}</div>
+    <p class="note">Questi permessi valgono per tutte le persone con figura <b>${esc(f.nome)}</b> (${nFig(f.id)} ora). Per una singola persona puoi fare un'eccezione aprendo la sua scheda. La figura si sceglie in Gestione accessi.</p>
+    ${S.flows.map(fl => accSection({access: f.access}, fl, false)).join('')}`;
+}
+function accSection(u, f, conFigura){
+  const a = u.access?.[f.id] || (conFigura ? {mode: 'figura'} : {mode: 'none'});
+  const fa = conFigura ? figOf(u.figura)?.access?.[f.id] || {mode: 'none'} : null;
+  const figTxt = fa ? ({none: 'nessun accesso', all: 'tutto il flusso', some: `${(fa.nodes || []).length} fasi`})[fa.mode] : '';
+  const modes = [...(conFigura ? [['figura', `Come ${figOf(u.figura).gruppo}`]] : []), ['none', 'Nessun accesso'], ['all', 'Tutto il flusso'], ['some', 'Solo alcune fasi']];
+  return `<section class="acc"><h4>${esc(f.name)}</h4>
+    <div class="seg">${modes.map(([m, t]) => `<button data-mode="${f.id}|${m}" class="${a.mode === m ? 'on' : ''}">${t}</button>`).join('')}</div>
+    ${a.mode === 'figura' ? `<p class="note" style="margin:0">Segue i permessi della figura: ${figTxt}.</p>` : ''}
+    ${a.mode === 'some' ? `
+      <label class="chk"><input type="checkbox" id="hide-${f.id}" data-hide="${f.id}" ${a.hide ? 'checked' : ''}>Nascondi le fasi non autorizzate (altrimenti le vede sbiadite)</label>
+      <div class="row"><button class="linkish" data-all="${f.id}">Seleziona tutte</button><button class="linkish" data-none="${f.id}">Nessuna</button><span class="muted" style="font-size:13px" id="cnt-${f.id}">${(a.nodes || []).length} di ${f.nodes.length} fasi</span></div>
+      <div class="nodes-pick">${f.nodes.map(n => `<label class="chk"><input type="checkbox" id="pk-${f.id}-${n.id}" data-pick="${f.id}|${n.id}" ${(a.nodes || []).includes(n.id) ? 'checked' : ''}><span class="sw c-${n.c}"></span>${esc(n.label)}</label>`).join('')}</div>` : ''}
+  </section>`;
 }
 function renderNewUser(){
   $('#u-edit').innerHTML = `<div class="sec-t">Nuovo collaboratore</div>
@@ -1157,6 +1180,7 @@ function renderNewUser(){
   });
 }
 function renderUserEdit(){
+  if (String(selUser).startsWith('fig:')) { const f = figOf(selUser.slice(4)); if (f) return renderFigEdit(f); }
   const u = S.users.find(x => x.id === selUser); if (!u) { $('#u-edit').innerHTML = '<p class="note">Nessun collaboratore. Premi “Nuovo collaboratore”.</p>'; return; }
   const self = u.id === me.id, sso = !!S.sso, locked = self || u.fromEnv || sso;
   $('#u-edit').innerHTML = `
@@ -1165,23 +1189,22 @@ function renderUserEdit(){
       <div class="field" style="flex:1 1 180px">Nuova password${u.fromEnv ? '<small class="muted" style="font-weight:500">Si cambia da Render (ADMIN_PASSWORD).</small>' : `<div class="row" style="flex-wrap:nowrap"><input id="uf-pass" autocomplete="off" placeholder="Almeno 8 caratteri" style="flex:1;min-width:0;border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:9px 11px"><button class="btn" id="uf-gen" title="Genera">${I.wand}</button><button class="btn" id="uf-setpass">Imposta</button></div>`}</div></div>`}
     <div class="field">Tipo di account<div class="seg"><button data-role="collab" class="${u.role !== 'admin' ? 'on' : ''}" ${locked ? 'disabled' : ''}>Collaboratore · sola lettura</button><button data-role="admin" class="${u.role === 'admin' ? 'on' : ''}" ${locked ? 'disabled' : ''}>Amministratore</button></div>
       ${sso ? '' : u.fromEnv ? '<small class="muted" style="font-weight:500">Amministratore principale, definito nelle impostazioni di Render.</small>' : self ? '<small class="muted" style="font-weight:500">Non puoi cambiare il tuo stesso ruolo.</small>' : ''}</div>
-    ${u.role === 'admin' ? '<p class="note">Gli amministratori vedono tutti i flussi e da /admin possono modificare flussi, documenti e permessi.</p>' : S.flows.map(f => {
-      const a = access(u, f.id);
-      return `<section class="acc"><h4>${esc(f.name)}</h4>
-        <div class="seg">${[['none', 'Nessun accesso'], ['all', 'Tutto il flusso'], ['some', 'Solo alcune fasi']].map(([m, t]) => `<button data-mode="${f.id}|${m}" class="${a.mode === m ? 'on' : ''}">${t}</button>`).join('')}</div>
-        ${a.mode === 'some' ? `
-          <label class="chk"><input type="checkbox" id="hide-${f.id}" data-hide="${f.id}" ${a.hide ? 'checked' : ''}>Nascondi le fasi non autorizzate (altrimenti le vede sbiadite)</label>
-          <div class="row"><button class="linkish" data-all="${f.id}">Seleziona tutte</button><button class="linkish" data-none="${f.id}">Nessuna</button><span class="muted" style="font-size:13px" id="cnt-${f.id}">${(a.nodes || []).length} di ${f.nodes.length} fasi</span></div>
-          <div class="nodes-pick">${f.nodes.map(n => `<label class="chk"><input type="checkbox" id="pk-${f.id}-${n.id}" data-pick="${f.id}|${n.id}" ${(a.nodes || []).includes(n.id) ? 'checked' : ''}><span class="sw c-${n.c}"></span>${esc(n.label)}</label>`).join('')}</div>` : ''}
-      </section>`;
-    }).join('')}
+    ${u.role !== 'admin' && sso ? `<p class="note">${u.figura ? `Figura: <b>${esc(figOf(u.figura)?.nome || u.figura)}</b>. Per ogni flusso può seguire i permessi della sua figura o avere un'eccezione.` : 'Figura non ancora scelta in Gestione accessi: imposta qui i suoi permessi.'}</p>` : ''}
+    ${u.role === 'admin' ? '<p class="note">Gli amministratori vedono tutti i flussi e da /admin possono modificare flussi, documenti e permessi.</p>' : S.flows.map(f => accSection(u, f, !!figOf(u.figura))).join('')}
     ${locked ? '' : `<button class="btn danger" id="u-del" style="align-self:flex-start">${I.trash}Elimina l'accesso di ${esc(u.name || u.username)}</button>`}`;
 }
-function curU(){ return S.users.find(x => x.id === selUser); }
+function curU(){
+  if (String(selUser).startsWith('fig:')) { const f = figOf(selUser.slice(4)); return f && {id: selUser, figuraRow: f.id, access: f.access}; }
+  return S.users.find(x => x.id === selUser);
+}
 const accTimers = {};
 function pushAccess(u, fid){
   clearTimeout(accTimers[u.id + fid]);
-  accTimers[u.id + fid] = setTimeout(() => { const a = u.access[fid] || {mode: 'none'}; api('PUT', `/api/users/${u.id}/access/${fid}`, {mode: a.mode, hide: !!a.hide, nodes: a.nodes || []}).catch(e => toast(e.message)); }, 400);
+  accTimers[u.id + fid] = setTimeout(() => {
+    const a = u.access[fid] || {mode: u.figuraRow ? 'none' : figOf(u.figura) ? 'figura' : 'none'};
+    const url = u.figuraRow ? `/api/figure/${encodeURIComponent(u.figuraRow)}/access/${fid}` : `/api/users/${u.id}/access/${fid}`;
+    api('PUT', url, {mode: a.mode, hide: !!a.hide, nodes: a.nodes || []}).catch(e => toast(e.message));
+  }, 400);
 }
 async function usersClick(e){
   const r = e.target.closest('[data-u]'); if (r) { selUser = r.dataset.u; renderUserList(); renderUserEdit(); return; }
@@ -1196,7 +1219,10 @@ async function usersClick(e){
   const ro = e.target.closest('[data-role]');
   if (ro && !ro.disabled) { try { await api('PATCH', '/api/users/' + u.id, {role: ro.dataset.role}); u.role = ro.dataset.role; u.access = u.access || {}; renderUserList(); renderUserEdit(); } catch (err) { toast(err.message); } return; }
   const m = e.target.closest('[data-mode]');
-  if (m) { const [fid, mode] = m.dataset.mode.split('|'); const prev = u.access[fid] || {}; u.access[fid] = mode === 'some' ? {mode, hide: !!prev.hide, nodes: prev.nodes || []} : {mode}; pushAccess(u, fid); renderUserEdit(); return; }
+  if (m) { const [fid, mode] = m.dataset.mode.split('|'); const prev = u.access[fid] || {};
+    if (mode === 'figura') delete u.access[fid];
+    else u.access[fid] = mode === 'some' ? {mode, hide: !!prev.hide, nodes: prev.nodes || []} : {mode};
+    pushAccess(u, fid); renderUserList(); renderUserEdit(); return; }
   const al = e.target.closest('[data-all]'), no = e.target.closest('[data-none]');
   if (al || no) { const fid = al ? al.dataset.all : no.dataset.none; const f = S.flows.find(x => x.id === fid); u.access[fid].nodes = al ? f.nodes.map(n => n.id) : []; pushAccess(u, fid); renderUserEdit(); return; }
   const d = e.target.closest('#u-del');

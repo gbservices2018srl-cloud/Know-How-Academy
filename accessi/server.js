@@ -245,6 +245,7 @@ app.get('/esci', wrap(async (req, res) => {
 }));
 
 /* ---------- registrazione ---------- */
+app.get('/api/figure', (req, res) => res.json({ figure: store.FIGURE }));
 // Medico: provincia e numero di iscrizione all'albo (servono a Nuovalab). Vuoti = non è medico.
 function leggiAlbo(b) {
   const alboProvincia = store.cleanProv(b.alboProvincia), alboNumero = store.cleanAlbo(b.alboNumero);
@@ -266,14 +267,17 @@ app.post('/api/register', wrap(async (req, res) => {
   if (!birthDate) return bad(res, 400, 'Inserisci una data di nascita valida.');
   const cf = store.cleanCf(b.cf);
   if (!store.validCf(cf)) return bad(res, 400, 'Il codice fiscale non è corretto: controlla le 16 lettere e cifre.');
+  const figura = store.cleanFigura(b.figura);
+  if (!figura) return bad(res, 400, 'Scegli la tua figura professionale.');
   const albo = leggiAlbo(b);
   if (albo.errore) return bad(res, 400, albo.errore);
+  if (figura === 'Medico' && !albo.dati.alboNumero) return bad(res, 400, "Per i medici servono provincia e numero di iscrizione all'albo.");
   if (!store.validEmail(email)) return bad(res, 400, "Inserisci un'email valida.");
   if (password.length < 8) return bad(res, 400, 'La password deve avere almeno 8 caratteri.');
   if (!b.privacy) return bad(res, 400, "Per registrarti devi accettare l'informativa privacy.");
   if (await store.findByEmail(email)) return bad(res, 400, 'Esiste già un account con questa email. Se non ricordi la password usa «Password dimenticata».');
   if (await cfUsato(cf)) return bad(res, 400, 'Esiste già un account con questo codice fiscale. Se non ricordi la password usa «Password dimenticata».');
-  const u = await store.createUser({ firstName, lastName, birthDate, email, password, status: 'pending', cf, ...albo.dati });
+  const u = await store.createUser({ firstName, lastName, birthDate, email, password, status: 'pending', cf, figura, ...albo.dati });
   const adminUrl = PUBLIC_URL() + '/admin';
   mail.send({
     to: NOTIFY(), replyTo: email,
@@ -281,7 +285,7 @@ app.post('/api/register', wrap(async (req, res) => {
     text: `${fullName(u)} (nato/a il ${birthDate}, ${email}) chiede l'accesso alle app del gruppo.\nApprova e scegli le app da: ${adminUrl}`,
     html: mail.layout('Nuova richiesta di accesso', [
       `<b>${mail.esc(fullName(u))}</b> chiede l'accesso alle app del gruppo.`,
-      `Data di nascita: ${mail.esc(birthDate.split('-').reverse().join('/'))}<br>Codice fiscale: ${mail.esc(cf)}<br>Email: ${mail.esc(email)}` +
+      `Figura: <b>${mail.esc(store.FIGURE.find(f => f.id === figura).nome)}</b><br>Data di nascita: ${mail.esc(birthDate.split('-').reverse().join('/'))}<br>Codice fiscale: ${mail.esc(cf)}<br>Email: ${mail.esc(email)}` +
         (albo.dati.alboNumero ? `<br>Medico, iscritto all'albo di ${mail.esc(albo.dati.alboProvincia)} n. ${mail.esc(albo.dati.alboNumero)}` : ''),
       'Apri il pannello per approvarla e scegliere a quali app può accedere.',
     ], { url: adminUrl, label: 'Apri il pannello accessi' }),
@@ -351,6 +355,7 @@ app.get('/api/admin/users', needAdmin, wrap(async (req, res) => {
   res.json({
     me: req.user.id,
     apps: APPS.map(a => ({ key: a.key, name: a.name, adminOnly: !!a.adminOnly, livelli: a.livelli || null })),
+    figure: store.FIGURE,
     livelli: lv,
     mail: mail.enabled(),
     users: users.map(u => store.publicUser(u, u.owner ? Object.fromEntries(store.APP_KEYS.map(k => [k, 'admin'])) : (by[u.id] || {}))),
@@ -388,7 +393,9 @@ app.post('/api/admin/users', needAdmin, wrap(async (req, res) => {
   if (cf && await cfUsato(cf)) return bad(res, 400, 'Esiste già un utente con questo codice fiscale.');
   const albo = leggiAlbo(b);
   if (albo.errore) return bad(res, 400, albo.errore);
-  const u = await store.createUser({ firstName, lastName, birthDate, email, password: password || null, status: 'active', createdBy: req.user.id, cf, ...albo.dati });
+  const figura = b.figura ? store.cleanFigura(b.figura) : null;
+  if (b.figura && !figura) return bad(res, 400, 'Figura non valida.');
+  const u = await store.createUser({ firstName, lastName, birthDate, email, password: password || null, status: 'active', createdBy: req.user.id, cf, figura, ...albo.dati });
   for (const [k, v] of Object.entries(b.apps || {})) {
     const a = APPS.find(x => x.key === k); if (!a) continue;
     const [role, lv] = await leggiPermesso(a, v, req.user, u).catch(() => [null, null]);
@@ -425,6 +432,11 @@ app.patch('/api/admin/users/:id', needAdmin, wrap(async (req, res) => {
     if (v && !store.validCf(v)) return bad(res, 400, 'Il codice fiscale non è corretto.');
     if (v && await cfUsato(v, u.id)) return bad(res, 400, 'Esiste già un utente con questo codice fiscale.');
     await store.q('update users set cf = $2 where id = $1', [u.id, v]);
+  }
+  if (b.figura !== undefined) {
+    const v = b.figura ? store.cleanFigura(b.figura) : null;
+    if (b.figura && !v) return bad(res, 400, 'Figura non valida.');
+    await store.q('update users set figura = $2 where id = $1', [u.id, v]);
   }
   if (b.alboProvincia !== undefined || b.alboNumero !== undefined) {
     const albo = leggiAlbo(b);
