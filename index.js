@@ -36,8 +36,18 @@ function route(req) {
   await calendario.start();
   await magazzino.start();
   await turni.start();
+  // Trasloco del database (solo sul servizio nuovo, con COPIA_DA): copia tutto e poi riparte con i dati copiati
+  if (await require('./lib/trasloco').eseguiSeServe()) { console.log('Trasloco completato: riavvio per caricare i dati copiati.'); process.exit(1); }
   http.createServer((req, res) => {
     if (req.url === '/healthz') { res.writeHead(200); return res.end('ok'); }
+    // MANUTENZIONE=true: durante il trasloco nessuno può scrivere nel vecchio server (così non si perde niente)
+    if (process.env.MANUTENZIONE === 'true') {
+      res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8', 'Retry-After': '600', 'Cache-Control': 'no-store' });
+      return res.end(`<!doctype html><html lang="it"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Aggiornamento in corso</title>
+<body style="margin:0;font-family:system-ui,sans-serif;background:#FBFBF8;color:#2B3033;display:grid;place-items:center;min-height:100vh;padding:24px;text-align:center">
+<div><div style="font-weight:800;font-size:22px;color:#2A7C7D">To Smile</div><h1 style="font-size:22px">Stiamo aggiornando le app</h1>
+<p style="color:#6B7276;max-width:420px">Torniamo tra pochi minuti, con app più veloci. I tuoi dati sono al sicuro: riprova un po' più tardi.</p></div></body></html>`);
+    }
     // www.appgestione.it → appgestione.it (un solo indirizzo, così il cookie dell'accesso è sempre lo stesso)
     if (hostOf(req) === 'www.appgestione.it') { res.writeHead(301, { Location: 'https://appgestione.it' + req.url }); return res.end(); }
     route(req)(req, res);
