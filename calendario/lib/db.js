@@ -170,6 +170,7 @@ const FIGURE = require('../../accessi/figure');
 const norm = s => String(s || '').toLowerCase().replace(/[^a-z]/g, '').replace(/aa/g, 'a').replace(/(i|e)$/, ''); // "Extra-ambulatoriali" = "Extrambulatoriale"
 async function categorieFigura() {
   await q('alter table categories add column if not exists figura text unique');
+  await q('alter table locations add column if not exists centrale text unique'); // sedi del gruppo dal pannello accessi
   const { rows } = await q('select id, name, figura from categories');
   for (const f of FIGURE) {
     if (rows.some(c => c.figura === f.id)) continue;

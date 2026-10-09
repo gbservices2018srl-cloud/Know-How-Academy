@@ -26,6 +26,8 @@ function collega({ app, toLocal }) {
     usersWithApp: () => accessi.store.usersWithApp(app),
     // Persona approvata o con permessi/dati cambiati: fn({ user, role, livello, oldEmail }) crea o aggiorna il profilo nell'app
     onProvision: fn => accessi.store.events.on('provision:' + app, fn),
+    // Le sedi del gruppo (pannello accessi) sono cambiate: fn(sedi) le copia nell'app; può restituire avvisi
+    onSedi: fn => accessi.store.events.on('sedi', fn),
     onDeleted: fn => accessi.store.events.on('deleted', id => Promise.resolve(fn(id)).catch(e => console.warn('Pulizia profilo:', e.message))),
     links: () => ({ home: accessi.publicUrl(), admin: accessi.publicUrl() + '/admin', logout: accessi.publicUrl() + '/esci' }),
   };

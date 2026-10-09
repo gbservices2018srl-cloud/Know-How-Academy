@@ -96,6 +96,41 @@ sso.onProvision(async ({ user, livello, oldEmail }) => {
   });
 });
 
+/* ---------- sedi dal pannello accessi ---------- */
+// Le sedi si gestiscono in Gestione accessi: qui si copiano nome, sigla e riuniti. Una sede disattivata
+// esce dal planning (le ore dei collaboratori in quella sede si tolgono, i turni futuri lì si cancellano).
+const normSede = s => String(s || '').toLowerCase().replace(/to\s*smile|studio|sede|ambulatorio/g, '').replace(/[^a-z0-9]/g, '');
+sso.onSedi(async sedi => {
+  await caricaConfig();
+  return db.tx(async qq => {
+    const { rows } = await qq('select data from config where id = 1 for update');
+    const c = rows[0].data; c.sedi ||= [];
+    const prima = JSON.stringify(c), tolte = [];
+    for (const x of sedi) {
+      let t = c.sedi.find(s => s.centrale === x.id)
+        || c.sedi.find(s => !s.centrale && (String(s.sigla).toUpperCase() === x.sigla.toUpperCase() || normSede(s.nome) === normSede(x.nome)));
+      if (!x.attiva) { if (t) tolte.push(t.id); continue; }
+      if (!t) { t = { id: 's' + crypto.randomBytes(4).toString('hex') }; c.sedi.push(t); }
+      Object.assign(t, { centrale: x.id, nome: x.nome, sigla: x.sigla, riuniti: x.riuniti });
+    }
+    if (tolte.length) {
+      c.sedi = c.sedi.filter(s => !tolte.includes(s.id));
+      c.deroghe = (c.deroghe || []).filter(d => !tolte.includes(d.sede));
+      c.cad = (c.cad || []).filter(d => !tolte.includes(d.sede));
+      for (const e of c.staff || []) for (const id of tolte) { delete (e.ore || {})[id]; delete (e.cfg || {})[id]; }
+      const { rows: pr } = await qq('select data from piano where id = 1 for update');
+      if (pr[0]) {
+        const pd = pr[0].data, da = oggi();
+        for (const id in pd.plan || {}) for (const d in pd.plan[id]) if (d >= da && tolte.includes(pd.plan[id][d].s)) delete pd.plan[id][d];
+        await qq('update piano set data = $1 where id = 1', [JSON.stringify(pd)]);
+      }
+    }
+    if (JSON.stringify(c) !== prima)
+      await qq(`update config set data = $1, version = version + 1, aggiornata_il = now(), aggiornata_da = 'accesso unico' where id = 1`, [JSON.stringify(c)]);
+    return null;
+  });
+});
+
 /* ---------- caricamento dello stato ---------- */
 async function caricaConfig() {
   const { rows } = await db.q('select data, version, aggiornata_il from config where id = 1');
@@ -379,20 +414,20 @@ app.post('/api/ai/regola', needAdmin, wrap(async (req, res) => {
 DATI ATTUALI
 Sedi: ${JSON.stringify(st.SEDI.map(s => ({ id: s.id, nome: s.nome, riuniti: s.riuniti })))}
 Persone: ${JSON.stringify(st.STAFF.map(e => ({ id: e.id, nome: m.full(e), figura: e.tipo })))}
-Figure: Medico, ASO (assistente alla poltrona), REC (reception), RAP, RUL, Extrambulatoriale, Altro. Ogni riunito ha un medico e un'ASO.
+Figure: Medico, Igienista (igienista dentale), ASO (assistente alla poltrona), REC (reception), RAP, RUL, Extrambulatoriale, Altro. Ogni riunito ha un medico e un'ASO.
 Giorni: 1 lunedì, 2 martedì, 3 mercoledì, 4 giovedì, 5 venerdì, 6 sabato (la domenica è chiuso).
 Turni: "M" mattina ${st.REG.ore.M.join('-')}, "P" pomeriggio ${st.REG.ore.P.join('-')}, "G" giornata intera.
 Oggi è ${oggi()}. Il planning copre ${mesi}. Date nel formato AAAA-MM-GG.
 ${p ? `La regola riguarda ${m.full(p)} (id "${p.id}", ${p.tipo}): se non nomina altre persone, è lei.` : ''}
 
 AZIONI POSSIBILI (usa solo queste, con questi campi)
-1. {"azione":"deroga_sede","sede":id,"quando":"sempre"|"giorno"|"data","giorno":1-6,"data":"AAAA-MM-GG","cosa":"chiusa"|"solo_mattina"|"aperta"|"riuniti"|"minimo","numero":n,"figura":"REC"|"RAP"|"RUL"|"Extrambulatoriale"|"Altro","turno":"M"|"P"|"MP"}
+1. {"azione":"deroga_sede","sede":id,"quando":"sempre"|"giorno"|"data","giorno":1-6,"data":"AAAA-MM-GG","cosa":"chiusa"|"solo_mattina"|"aperta"|"riuniti"|"minimo","numero":n,"figura":"Igienista"|"REC"|"RAP"|"RUL"|"Extrambulatoriale"|"Altro","turno":"M"|"P"|"MP"}
    ("riuniti" = quanti riuniti sono disponibili; "minimo" = persone minime di una figura non medica. Per "tutte le sedi" crea un'azione per ogni sede.)
 2. {"azione":"presenza_fissa","persona":id,"sede":id,"settimane":[1,2,3,4,5] dove 5 = ultima del mese, oppure [0] per ogni settimana,"giorno":1-6,"turno":"M"|"P"|"G","ogni_due_settimane":true|false}
 3. {"azione":"non_disponibile","persona":id,"giorno":1-6 oppure null,"dal":"AAAA-MM-GG" oppure null,"al":"AAAA-MM-GG" oppure null,"turno":"M"|"P"|"G"}
 4. {"azione":"ore_settimanali","persona":id,"sede":id,"ore":n}
 5. {"azione":"riuniti","sede":id,"numero":n}
-6. {"azione":"limiti_figura","figura":"REC"|"RAP"|"RUL"|"Extrambulatoriale"|"Altro","minimo":n oppure null,"massimo":n oppure null}
+6. {"azione":"limiti_figura","figura":"Igienista"|"REC"|"RAP"|"RUL"|"Extrambulatoriale"|"Altro","minimo":n oppure null,"massimo":n oppure null}
 Se una parte non si può esprimere con queste azioni aggiungi {"azione":"non_supportata","motivo":"spiegazione breve in italiano"}.
 Non inventare persone o sedi: se un nome è ambiguo o non esiste, mettilo nei dubbi e non creare l'azione.
 

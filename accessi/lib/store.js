@@ -92,7 +92,21 @@ async function migrate() {
     alter table user_apps add column if not exists ente text;
     alter table user_apps add column if not exists ente_nome text;
     alter table sso_tickets drop constraint if exists sso_tickets_purpose_check;
-    alter table sso_tickets add constraint sso_tickets_purpose_check check (purpose in ('login','revoke','catalog','sync'));`);
+    alter table sso_tickets add constraint sso_tickets_purpose_check check (purpose in ('login','revoke','catalog','sync','sedi'));`);
+  // Sedi del gruppo: si gestiscono qui e vengono copiate in Turni, Calendario, Ticket e Nuovalab
+  await q(`create table if not exists sedi (
+      id text primary key,
+      nome text not null,
+      sigla text not null,
+      indirizzo text not null default '',
+      societa text not null default '',
+      email text not null default '',
+      riuniti int not null default 0,
+      attiva boolean not null default true,
+      sort int not null default 0,
+      creata_il timestamptz not null default now()
+    );
+    create unique index if not exists sedi_sigla_idx on sedi (upper(sigla));`);
   // Turni: la figura scelta prima nel permesso diventa la figura della persona
   await q(`update users u set figura = ua.ente from user_apps ua
     where ua.user_id = u.id and ua.app = 'turni' and u.figura is null and ua.ente = any($1)`, [FIGURE.map(f => f.id)]);
@@ -295,7 +309,13 @@ async function redeemTicket(token, app) {
       cf: u.cf || null, alboProvincia: u.albo_provincia || null, alboNumero: u.albo_numero || null, figura: u.figura || null,
       oldEmail: t.data?.oldEmail && t.data.oldEmail !== u.email ? t.data.oldEmail : null };
   }
+  if (t.purpose === 'sedi') return { purpose: 'sedi', email: t.email, sedi: t.data?.sedi || [] };
   return { purpose: t.purpose, ssoId: t.user_id || null, email: t.email };
+}
+const shapeSede = r => ({ id: r.id, nome: r.nome, sigla: r.sigla, indirizzo: r.indirizzo, societa: r.societa, email: r.email, riuniti: r.riuniti, attiva: r.attiva });
+async function listSedi() {
+  const { rows } = await q('select * from sedi order by attiva desc, sort, nome');
+  return rows.map(shapeSede);
 }
 // Conferma dell'email dopo la registrazione (link valido 7 giorni)
 async function confirmEmail(token) {
@@ -334,5 +354,5 @@ module.exports = {
   pool, q, SCHEMA, APPS, APP_KEYS, events, migrate, ensureOwner,
   cleanEmail, validEmail, cleanName, cleanDate, cleanFigura, FIGURE, cleanCf, validCf, cleanProv, cleanAlbo, appsOf, publicUser, getUser, findByEmail, createUser, setPassword,
   setAppRole, livelliOf, deleteUser, usersWithApp, logoutEverywhere, createSession, endSession, check, verify,
-  createPasswordLink, usePasswordLink, peekPasswordLink, confirmEmail, SESSION_DAYS, sha, createTicket, redeemTicket,
+  createPasswordLink, usePasswordLink, peekPasswordLink, confirmEmail, listSedi, SESSION_DAYS, sha, createTicket, redeemTicket,
 };

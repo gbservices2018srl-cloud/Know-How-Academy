@@ -59,6 +59,22 @@ async function figuraInCategoria(userId, figura) {
   await db.q(`insert into user_categories (user_id, category_id) select $1, id from categories where figura = $2 on conflict do nothing`, [userId, figura]);
 }
 sso.onProvision(({ user, role }) => localProfile(user, role, false).then(() => null));
+// Sedi del gruppo (pannello accessi) → luoghi del Calendario, con nome e indirizzo. Gli altri luoghi restano liberi.
+const normSede = s => String(s || '').toLowerCase().replace(/to\s*smile|studio|sede|ambulatorio/g, '').replace(/[^a-z0-9]/g, '');
+sso.onSedi(async sedi => {
+  const { rows } = await db.q('select id, name, address, centrale from locations');
+  for (const x of sedi) {
+    let l = rows.find(r => r.centrale === x.id) || rows.find(r => !r.centrale && normSede(r.name) === normSede(x.nome));
+    if (!l && !x.attiva) continue;
+    if (!l) {
+      const { rows: m } = await db.q('select coalesce(max(sort), -1) + 1 as s from locations');
+      await db.q('insert into locations (id, name, address, sort, centrale) values ($1,$2,$3,$4,$5)', [db.newId(), x.nome, x.indirizzo || '', m[0].s, x.id]);
+    } else if (l.name !== x.nome || (x.indirizzo && l.address !== x.indirizzo) || l.centrale !== x.id) {
+      await db.q('update locations set name = $2, address = case when $3 = \'\' then address else $3 end, centrale = $4 where id = $1', [l.id, x.nome, x.indirizzo || '', x.id]);
+    }
+  }
+  return null;
+});
 sso.onDeleted(id => db.q('delete from users where sso_id = $1 and not from_env', [id]));
 
 async function loadUser(req, res, next) {
@@ -123,7 +139,7 @@ async function lists() {
   const [c, t, l] = await Promise.all([
     db.q('select id, name, figura from categories order by sort, name'),
     db.q('select id, name, color from event_types order by sort, name'),
-    db.q('select id, name, address from locations order by sort, name'),
+    db.q('select id, name, address, centrale from locations order by sort, name'),
   ]);
   return { categories: c.rows, types: t.rows, locations: l.rows };
 }
@@ -459,6 +475,10 @@ const listApi = (table, fields) => {
     res.json({ id });
   }));
   app.put(`/api/${table}/:id`, needAdmin, wrap(async (req, res) => {
+    if (table === 'locations') {
+      const { rows } = await db.q('select centrale from locations where id = $1', [req.params.id]);
+      if (rows[0]?.centrale) return bad(res, 400, 'Questa è una sede del gruppo: nome e indirizzo si cambiano da Gestione accessi.');
+    }
     const o = pick(req.body);
     if (!o.name) return bad(res, 400, 'Manca il nome.');
     const keys = Object.keys(o);
@@ -466,6 +486,10 @@ const listApi = (table, fields) => {
     res.json({ ok: true });
   }));
   app.delete(`/api/${table}/:id`, needAdmin, wrap(async (req, res) => {
+    if (table === 'locations') {
+      const { rows } = await db.q('select centrale from locations where id = $1', [req.params.id]);
+      if (rows[0]?.centrale) return bad(res, 400, 'Questa è una sede del gruppo: si gestisce da Gestione accessi.');
+    }
     if (table === 'categories') {
       const { rows } = await db.q('select figura from categories where id = $1', [req.params.id]);
       if (rows[0]?.figura) return bad(res, 400, 'Questa categoria è legata a una figura professionale: non si può eliminare (puoi rinominarla).');

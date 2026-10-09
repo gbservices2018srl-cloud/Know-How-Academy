@@ -968,22 +968,22 @@ function vSedi(){
   <p class="lede">Le sedi dell'azienda e i riuniti di ognuna. Le regole generali valgono per tutte; le eccezioni di una sede si mettono nelle deroghe.</p>
   <div class="grid2">
     <div class="panel"><div class="stat"><div><b>${SEDI.length}</b><span>Sedi</span></div><div><b>${SEDI.reduce((a,s)=>a+s.riuniti,0)}</b><span>Riuniti</span></div><div><b>${STAFF.length}</b><span>Professionisti</span></div></div></div>
-    <form id="addS" class="panel" novalidate><h3>Nuova sede</h3>
+    ${SEDI.some(s=>s.centrale)?`<div class="panel"><h3>Sedi del gruppo</h3><p class="lede" style="margin:0">Le sedi si aggiungono e si modificano in <a href="${esc(STATE.links?.admin||"https://appgestione.it/admin")}">Gestione accessi → Sedi</a>, così sono uguali in tutte le app. Arrivano qui da sole con nome, sigla e riuniti.</p></div>`:`<form id="addS" class="panel" novalidate><h3>Nuova sede</h3>
       <div class="row"><div class="f" style="flex:3 1 150px"><label for="sNome">Nome</label><input id="sNome" placeholder="es. Pavia" autocomplete="off"></div>
         <div class="f" style="flex:1 1 70px"><label for="sSig">Sigla</label><input id="sSig" maxlength="3" placeholder="PV" autocomplete="off"></div>
         <div class="f" style="flex:1 1 70px"><label for="sRiu">Riuniti</label><input type="number" id="sRiu" min="0" max="20" value="2"></div></div>
-      <div class="err" id="sErr" aria-live="polite"></div><button class="btn" type="submit">Aggiungi sede</button></form>
+      <div class="err" id="sErr" aria-live="polite"></div><button class="btn" type="submit">Aggiungi sede</button></form>`}
   </div>
   <div class="panel" style="margin-top:24px">${SEDI.map(s=>{ const np=STAFF.filter(e=>(e.ore[s.id]||0)>0).length, nd=DEROGHE.filter(x=>x.sede===s.id).length;
     const med=STAFF.filter(e=>e.tipo==="Medico").reduce((a,e)=>a+(e.ore[s.id]||0),0), aso=STAFF.filter(e=>e.tipo==="ASO").reduce((a,e)=>a+(e.ore[s.id]||0),0);
     return `<div class="der"><span class="sigla">${esc(s.sigla)}</span>
       <div style="min-width:0"><div class="row" style="align-items:flex-end">
-        <div class="f" style="margin:0;flex:3 1 150px"><label for="sn-${s.id}">Nome</label><input id="sn-${s.id}" data-sn="${s.id}" value="${esc(s.nome)}"></div>
-        <div class="f" style="margin:0;flex:1 1 70px"><label for="sg-${s.id}">Sigla</label><input id="sg-${s.id}" data-sg="${s.id}" maxlength="3" value="${esc(s.sigla)}"></div>
-        <div class="f" style="margin:0;flex:1 1 70px"><label for="sr-${s.id}">Riuniti</label><input type="number" id="sr-${s.id}" data-sr="${s.id}" min="0" max="20" value="${s.riuniti}"></div>
+        <div class="f" style="margin:0;flex:3 1 150px"><label for="sn-${s.id}">Nome</label><input id="sn-${s.id}" data-sn="${s.id}" value="${esc(s.nome)}" ${s.centrale?"disabled":""}></div>
+        <div class="f" style="margin:0;flex:1 1 70px"><label for="sg-${s.id}">Sigla</label><input id="sg-${s.id}" data-sg="${s.id}" maxlength="3" value="${esc(s.sigla)}" ${s.centrale?"disabled":""}></div>
+        <div class="f" style="margin:0;flex:1 1 70px"><label for="sr-${s.id}">Riuniti</label><input type="number" id="sr-${s.id}" data-sr="${s.id}" min="0" max="20" value="${s.riuniti}" ${s.centrale?"disabled":""}></div>
       </div>
       <div class="mono" style="margin-top:8px">${np} professionisti · ${nd} deroghe · ore medico ${med} h/sett. · ore ASO ${aso} h/sett.</div></div>
-      <div style="white-space:nowrap">${rmSede===s.id?`<button class="btn sm bad" data-srmok="${s.id}">Conferma</button> <button class="btn sm ghost" data-srmno="1">Annulla</button>`:`<button class="btn sm bad" data-srm="${s.id}">Elimina</button>`}</div></div>`; }).join("")}</div>`;
+      <div style="white-space:nowrap">${s.centrale?`<span class="chip n">Gestione accessi</span>`:rmSede===s.id?`<button class="btn sm bad" data-srmok="${s.id}">Conferma</button> <button class="btn sm ghost" data-srmno="1">Annulla</button>`:`<button class="btn sm bad" data-srm="${s.id}">Elimina</button>`}</div></div>`; }).join("")}</div>`;
 }
 // ---------- richieste ----------
 function reqCard(r, actions){

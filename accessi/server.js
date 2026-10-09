@@ -496,6 +496,103 @@ app.put('/api/admin/users/:id/apps/:app', needAdmin, wrap(async (req, res) => {
   if (!role) revokeIn(u, [a.key]); else if (u.status === 'active') avvisi = await provisiona(u, [a.key]);
   res.json({ apps: await store.appsOf(u), livelli: await store.livelliOf(u.id), avvisi });
 }));
+/* ---------- sedi del gruppo ---------- */
+// Si gestiscono qui e vengono copiate nelle app: Turni e Calendario (in questo servizio, evento "sedi"),
+// Ticket e Nuovalab (funzione "sso" con un biglietto "sedi"). Le app non le modificano: le ricevono.
+async function sincronizzaSedi(u) {
+  const sedi = await store.listSedi();
+  const avvisi = [];
+  for (const fn of store.events.listeners('sedi')) {
+    try { const w = await fn(sedi); if (w) avvisi.push(...[].concat(w)); } catch (e) { console.warn('Sedi:', e.message); avvisi.push('Sedi: ' + e.message); }
+  }
+  for (const a of APPS.filter(x => x.sso)) {
+    try {
+      const ticket = await store.createTicket(u, a.key, 'sedi', null, { sedi });
+      const r = await fetch(a.sso, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ticket }), signal: AbortSignal.timeout(30000) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) avvisi.push(`${a.name}: sedi non aggiornate.`);
+      for (const w of j.avvisi || []) avvisi.push(`${a.name}: ${w}`);
+    } catch (e) { avvisi.push(`${a.name}: non risponde, sedi non aggiornate.`); }
+    catalogCache.delete(a.key);
+  }
+  return avvisi;
+}
+function leggiSede(b) {
+  const nome = store.cleanName(b.nome), sigla = String(b.sigla || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
+  if (!nome) throw Object.assign(new Error('Scrivi il nome della sede.'), { status: 400 });
+  if (sigla.length < 2) throw Object.assign(new Error('La sigla deve avere 2 o 3 lettere (es. CAB).'), { status: 400 });
+  const email = store.cleanEmail(b.email || '');
+  if (email && !store.validEmail(email)) throw Object.assign(new Error("L'email della sede non è valida."), { status: 400 });
+  const riuniti = Math.max(0, Math.min(20, Math.round(+b.riuniti || 0)));
+  return { nome, sigla, indirizzo: String(b.indirizzo || '').trim().slice(0, 200), societa: store.cleanName(b.societa || ''), email, riuniti };
+}
+async function salvaSede(id, d) {
+  const { rows } = await store.q('select id from sedi where upper(sigla) = $1 and id <> $2', [d.sigla, id || '']);
+  if (rows.length) throw Object.assign(new Error(`La sigla ${d.sigla} è già di un'altra sede.`), { status: 400 });
+  if (id) await store.q(`update sedi set nome=$2, sigla=$3, indirizzo=$4, societa=$5, email=$6, riuniti=$7 where id=$1`, [id, d.nome, d.sigla, d.indirizzo, d.societa, d.email, d.riuniti]);
+  else {
+    id = require('crypto').randomUUID();
+    await store.q(`insert into sedi (id, nome, sigla, indirizzo, societa, email, riuniti, sort) values ($1,$2,$3,$4,$5,$6,$7, (select coalesce(max(sort),0)+1 from sedi))`,
+      [id, d.nome, d.sigla, d.indirizzo, d.societa, d.email, d.riuniti]);
+  }
+  return id;
+}
+app.get('/api/admin/sedi', needAdmin, wrap(async (req, res) => res.json({ sedi: await store.listSedi() })));
+app.post('/api/admin/sedi', needAdmin, wrap(async (req, res) => {
+  await salvaSede(null, leggiSede(req.body));
+  res.json({ sedi: await store.listSedi(), avvisi: await sincronizzaSedi(req.user) });
+}));
+app.put('/api/admin/sedi/:id', needAdmin, wrap(async (req, res) => {
+  const { rows } = await store.q('select id from sedi where id = $1', [req.params.id]);
+  if (!rows[0]) return bad(res, 404, 'Sede non trovata');
+  await salvaSede(req.params.id, leggiSede(req.body));
+  res.json({ sedi: await store.listSedi(), avvisi: await sincronizzaSedi(req.user) });
+}));
+app.post('/api/admin/sedi/:id/stato', needAdmin, wrap(async (req, res) => {
+  await store.q('update sedi set attiva = $2 where id = $1', [req.params.id, !!req.body.attiva]);
+  res.json({ sedi: await store.listSedi(), avvisi: await sincronizzaSedi(req.user) });
+}));
+app.post('/api/admin/sedi/sincronizza', needAdmin, wrap(async (req, res) => {
+  res.json({ sedi: await store.listSedi(), avvisi: await sincronizzaSedi(req.user) });
+}));
+// Prima volta: crea le sedi centrali partendo da quelle già presenti in Nuovalab e Ticket (senza doppioni)
+const normNome = s => String(s || '').toLowerCase().replace(/to\s*smile|studio|sede|ambulatorio/g, '').replace(/[^a-z0-9]/g, '');
+app.post('/api/admin/sedi/importa', needAdmin, wrap(async (req, res) => {
+  const esistenti = await store.listSedi();
+  const trova = (nome, sigla) => esistenti.find(x => (sigla && x.sigla.toUpperCase() === sigla) || (normNome(nome) && normNome(x.nome) === normNome(nome)));
+  // sigla libera: quella proposta, altrimenti le prime lettere dell'ultima parola del nome, altrimenti con un numero
+  const libera = (sigla, nome) => {
+    const usate = new Set(esistenti.map(x => String(x.sigla).toUpperCase()));
+    const parola = String(nome || '').replace(/to\s*smile/ig, '').trim().split(/\s+/).pop() || 'SED';
+    const prove = [sigla, parola.slice(0, 3), parola.slice(0, 2)].map(x => String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3)).filter(x => x.length >= 2);
+    for (const p of prove) if (!usate.has(p)) return p;
+    for (let i = 1; i < 10; i++) { const p = (prove[0] || 'SE').slice(0, 2) + i; if (!usate.has(p)) return p; }
+    return null;
+  };
+  let nuove = 0;
+  const lab = APPS.find(a => a.key === 'laboratorio'), tk = APPS.find(a => a.key === 'ticket');
+  const catLab = await catalogo(lab, req.user, true).catch(() => ({}));
+  for (const st of catLab.studi || []) {
+    const sigla = String(st.sigla || '').trim().toUpperCase();
+    if (trova(st.nome, sigla)) continue;
+    const sig = libera(sigla, st.nome); if (!sig) continue;
+    const id = await salvaSede(null, leggiSede({ nome: st.nome, sigla: sig, email: st.email || '' }));
+    esistenti.push({ id, nome: st.nome, sigla: sig });
+    nuove++;
+  }
+  const catTk = await catalogo(tk, req.user, true).catch(() => ({}));
+  for (const st of catTk.studi || []) {
+    const e = esistenti.find(x => normNome(x.nome) === normNome(st.nome) || (normNome(st.nome).length >= 4 && normNome(x.nome).includes(normNome(st.nome))));
+    if (e) { // completa indirizzo e società se mancano
+      await store.q(`update sedi set indirizzo = case when indirizzo = '' then $2 else indirizzo end, societa = case when societa = '' then $3 else societa end where id = $1`, [e.id, st.indirizzo || '', st.info || '']);
+      continue;
+    }
+    const sig = libera('', st.nome); if (!sig) continue;
+    try { const id = await salvaSede(null, leggiSede({ nome: st.nome, sigla: sig, indirizzo: st.indirizzo, societa: st.info })); esistenti.push({ id, nome: st.nome, sigla: sig }); nuove++; } catch {}
+  }
+  res.json({ sedi: await store.listSedi(), nuove, avvisi: nuove ? await sincronizzaSedi(req.user) : [] });
+}));
+
 app.get('/api/admin/apps/:app/enti', needAdmin, wrap(async (req, res) => {
   const a = APPS.find(x => x.key === req.params.app && x.livelli);
   if (!a) return bad(res, 404, 'App sconosciuta');
