@@ -290,15 +290,33 @@ app.post('/api/register', wrap(async (req, res) => {
       'Apri il pannello per approvarla e scegliere a quali app può accedere.',
     ], { url: adminUrl, label: 'Apri il pannello accessi' }),
   });
+  const verifyLink = `${PUBLIC_URL()}/conferma-email?t=${await store.createPasswordLink(u.id, 'verify', 24 * 7)}`;
   mail.send({
-    to: email, subject: 'Abbiamo ricevuto la tua registrazione',
-    text: `Ciao ${firstName}, la tua richiesta di accesso alle app To Smile è arrivata. Riceverai un'email quando l'amministratore l'avrà approvata.`,
+    to: email, subject: 'Conferma la tua email · To Smile',
+    text: `Ciao ${firstName}, la tua richiesta di accesso alle app To Smile è arrivata. Conferma la tua email aprendo questo link (vale 7 giorni): ${verifyLink}\nRiceverai un'altra email quando l'amministratore l'avrà approvata.`,
     html: mail.layout(`Ciao ${firstName}`, [
       'la tua richiesta di accesso alle app del gruppo To Smile è arrivata.',
+      "Per prima cosa conferma che questa email è tua con il pulsante qui sotto (il link vale 7 giorni).",
       "Riceverai un'altra email quando l'amministratore l'avrà approvata: da quel momento entrerai con la tua email e la password che hai scelto.",
-    ]),
+    ], { url: verifyLink, label: 'Conferma la mia email' }),
   });
   res.json({ ok: true });
+}));
+
+// Link di conferma dell'email (dalla registrazione)
+app.get('/conferma-email', wrap(async (req, res) => {
+  const u = await store.confirmEmail(String(req.query.t || ''));
+  res.redirect('/accedi?email=' + (u ? 'ok' : 'scaduta'));
+}));
+// L'amministratore rimanda il link di conferma
+app.post('/api/admin/users/:id/verify-link', needAdmin, wrap(async (req, res) => {
+  const u = await store.getUser(req.params.id);
+  if (!u) return bad(res, 404, 'Utente non trovato');
+  const link = `${PUBLIC_URL()}/conferma-email?t=${await store.createPasswordLink(u.id, 'verify', 24 * 7)}`;
+  const sent = await mail.send({ to: u.email, subject: 'Conferma la tua email · To Smile',
+    text: `Ciao ${u.first_name}, conferma la tua email aprendo questo link (vale 7 giorni): ${link}`,
+    html: mail.layout(`Ciao ${u.first_name}`, ['conferma che questa email è tua con il pulsante qui sotto (il link vale 7 giorni).'], { url: link, label: 'Conferma la mia email' }) });
+  res.json({ sent, link: sent ? null : link });
 }));
 
 /* ---------- password ---------- */
@@ -396,12 +414,13 @@ app.post('/api/admin/users', needAdmin, wrap(async (req, res) => {
   const figura = b.figura ? store.cleanFigura(b.figura) : null;
   if (b.figura && !figura) return bad(res, 400, 'Figura non valida.');
   const u = await store.createUser({ firstName, lastName, birthDate, email, password: password || null, status: 'active', createdBy: req.user.id, cf, figura, ...albo.dati });
+  const avvisi = [];
   for (const [k, v] of Object.entries(b.apps || {})) {
     const a = APPS.find(x => x.key === k); if (!a) continue;
-    const [role, lv] = await leggiPermesso(a, v, req.user, u).catch(() => [null, null]);
+    const [role, lv] = await leggiPermesso(a, v, req.user, u).catch(e => { avvisi.push(`${a.name}: accesso non dato (${e.message})`); return [null, null]; });
     if (role) await store.setAppRole(u.id, k, role, lv);
   }
-  const avvisi = await provisiona(u);
+  avvisi.push(...await provisiona(u));
   let link = null;
   if (!password) link = `${PUBLIC_URL()}/reimposta?t=${await store.createPasswordLink(u.id, 'invite', 24 * 7)}`;
   const sent = b.notify !== false ? await sendActivation(u, link) : false;
@@ -412,41 +431,47 @@ app.patch('/api/admin/users/:id', needAdmin, wrap(async (req, res) => {
   const u = await store.getUser(req.params.id);
   if (!u) return bad(res, 404, 'Utente non trovato');
   const b = req.body;
-  if (b.firstName !== undefined) { const v = store.cleanName(b.firstName); if (!v) return bad(res, 400, 'Il nome non può essere vuoto.'); await store.q('update users set first_name = $2 where id = $1', [u.id, v]); }
-  if (b.lastName !== undefined) { const v = store.cleanName(b.lastName); if (!v) return bad(res, 400, 'Il cognome non può essere vuoto.'); await store.q('update users set last_name = $2 where id = $1', [u.id, v]); }
+  // prima si controllano tutti i dati, poi si salvano insieme: o tutto o niente
+  const set = {};
+  if (b.firstName !== undefined) { const v = store.cleanName(b.firstName); if (!v) return bad(res, 400, 'Il nome non può essere vuoto.'); set.first_name = v; }
+  if (b.lastName !== undefined) { const v = store.cleanName(b.lastName); if (!v) return bad(res, 400, 'Il cognome non può essere vuoto.'); set.last_name = v; }
   if (b.birthDate !== undefined) {
     const v = b.birthDate ? store.cleanDate(b.birthDate) : null;
     if (b.birthDate && !v) return bad(res, 400, 'La data di nascita non è valida.');
-    await store.q('update users set birth_date = $2 where id = $1', [u.id, v]);
+    set.birth_date = v;
   }
-  if (b.email !== undefined) {
+  if (b.email !== undefined && store.cleanEmail(b.email) !== u.email) {
     if (u.owner) return bad(res, 400, "L'email del proprietario si cambia da Render (ADMIN_USERNAME).");
     const v = store.cleanEmail(b.email);
     if (!store.validEmail(v)) return bad(res, 400, "Email non valida.");
     const ex = await store.findByEmail(v);
     if (ex && ex.id !== u.id) return bad(res, 400, 'Esiste già un utente con questa email.');
-    await store.q('update users set email = $2 where id = $1', [u.id, v]);
+    set.email = v; set.email_verificata = true; // l'ha scritta l'amministratore
   }
   if (b.cf !== undefined) {
     const v = b.cf ? store.cleanCf(b.cf) : null;
     if (v && !store.validCf(v)) return bad(res, 400, 'Il codice fiscale non è corretto.');
     if (v && await cfUsato(v, u.id)) return bad(res, 400, 'Esiste già un utente con questo codice fiscale.');
-    await store.q('update users set cf = $2 where id = $1', [u.id, v]);
+    set.cf = v;
   }
   if (b.figura !== undefined) {
     const v = b.figura ? store.cleanFigura(b.figura) : null;
     if (b.figura && !v) return bad(res, 400, 'Figura non valida.');
-    await store.q('update users set figura = $2 where id = $1', [u.id, v]);
+    set.figura = v;
   }
   if (b.alboProvincia !== undefined || b.alboNumero !== undefined) {
     const albo = leggiAlbo(b);
     if (albo.errore) return bad(res, 400, albo.errore);
-    await store.q('update users set albo_provincia = $2, albo_numero = $3 where id = $1', [u.id, albo.dati.alboProvincia, albo.dati.alboNumero]);
+    set.albo_provincia = albo.dati.alboProvincia; set.albo_numero = albo.dati.alboNumero;
   }
-  let sent, avvisi = [];
   if (b.status !== undefined) {
     if (!['active', 'disabled'].includes(b.status)) return bad(res, 400, 'Stato non valido');
     if (u.owner || u.id === req.user.id) return bad(res, 400, 'Non puoi disattivare questo account.');
+  }
+  const keys = Object.keys(set);
+  if (keys.length) await store.q(`update users set ${keys.map((k, i) => `${k} = $${i + 2}`).join(', ')} where id = $1`, [u.id, ...keys.map(k => set[k])]);
+  let sent, avvisi = [];
+  if (b.status !== undefined) {
     const wasPending = u.status === 'pending';
     await store.q(`update users set status = $2, approved_at = coalesce(approved_at, case when $2 = 'active' then now() end) where id = $1`, [u.id, b.status]);
     if (b.status === 'disabled') { await store.logoutEverywhere(u.id); revokeIn(u, SSO_KEYS); }
@@ -454,7 +479,7 @@ app.patch('/api/admin/users/:id', needAdmin, wrap(async (req, res) => {
   }
   const fresh = await store.getUser(u.id);
   // persona attiva: le app ricevono subito i dati aggiornati (o il nuovo profilo, appena approvata)
-  if (fresh.status === 'active' && b.status !== 'disabled') avvisi = await provisiona(fresh, null, { oldEmail: u.email });
+  if (fresh.status === 'active' && b.status !== 'disabled') avvisi = await provisiona(fresh, null, { oldEmail: u.email !== fresh.email ? u.email : null });
   res.json({ user: store.publicUser(fresh, await store.appsOf(fresh)), livelli: await store.livelliOf(u.id), sent, avvisi });
 }));
 

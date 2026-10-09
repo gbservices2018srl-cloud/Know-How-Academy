@@ -474,7 +474,7 @@ app.get('/healthz', (req, res) => res.send('ok'));
 app.use((req, res) => res.status(404).send('Pagina non trovata'));
 
 app.use((err, req, res, next) => {
-  if (err.status && err.status < 500) return bad(res, err.status, err.message);
+  if (err.status && err.status !== 500 && err.status < 600) return bad(res, err.status, err.message); // anche 502: messaggio utile (es. email non partita)
   if (err.type === 'entity.parse.failed') return bad(res, 400, 'Richiesta non valida');
   if (err.code === '23503') return bad(res, 400, 'Dato collegato non valido (categoria o fornitore inesistente).');
   console.error('Magazzino:', err);

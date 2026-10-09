@@ -67,7 +67,7 @@ async function unisci(bufs) {
 }
 
 // Divide il PDF: ogni pagina va al collaboratore il cui codice fiscale compare nel testo.
-// Pagine consecutive dello stesso codice fiscale formano una busta sola.
+// Tutte le pagine dello stesso codice fiscale formano una busta sola (anche se non sono una dopo l'altra, es. la tredicesima in fondo).
 // Le pagine senza codice fiscale riconosciuto restano "da assegnare" (con un suggerimento: la persona della pagina prima).
 async function dividi(buf, staff) {
   const conCf = staff.filter(e => /^[A-Z0-9]{16}$/.test(String(e.cf || '').toUpperCase()));
@@ -82,9 +82,8 @@ async function dividi(buf, staff) {
   const gruppi = [], sospese = [];
   for (let i = 0; i < n; i++) {
     if (!chi[i]) { sospese.push({ pagina: i, suggerito: i > 0 ? chi[i - 1] : null }); continue; }
-    const ult = gruppi[gruppi.length - 1];
-    if (ult && ult.staffId === chi[i] && ult.pagine[ult.pagine.length - 1] === i - 1) ult.pagine.push(i);
-    else gruppi.push({ staffId: chi[i], pagine: [i] });
+    const g = gruppi.find(x => x.staffId === chi[i]);
+    if (g) g.pagine.push(i); else gruppi.push({ staffId: chi[i], pagine: [i] });
   }
   for (const g of gruppi) g.buf = await estrai(buf, g.pagine);
   for (const s of sospese) s.buf = await estrai(buf, [s.pagina]);

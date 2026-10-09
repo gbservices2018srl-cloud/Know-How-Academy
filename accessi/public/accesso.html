@@ -77,6 +77,10 @@ const views = {
       <div class="links"><a href="${withNext('/password-dimenticata')}">Password dimenticata?</a><a href="${withNext('/registrati')}">Non hai un account? <b>Registrati</b></a></div>
     </form>`;
     $('#email').focus();
+    const em = new URLSearchParams(location.search).get('email');
+    if (em) $('#err').insertAdjacentHTML('beforebegin', em === 'ok'
+      ? '<div class="msg ok" role="status">Email confermata, grazie! Potrai entrare appena l\'amministratore avrà approvato la richiesta.</div>'
+      : '<div class="msg err" role="status">Il link di conferma è scaduto o è già stato usato.</div>');
     $('#f').addEventListener('submit', async e => {
       e.preventDefault(); const f = e.target; $('#err').textContent = '';
       busy(f, true);

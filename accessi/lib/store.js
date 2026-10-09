@@ -80,6 +80,10 @@ async function migrate() {
   await q(`delete from password_links where expires_at < now() - interval '7 days'`);
   await q(`delete from sso_tickets where expires_at < now() - interval '1 day'`);
   // livello dentro l'app (Nuovalab, Ticket): ruolo e laboratorio/studio/medico/azienda scelti dal pannello accessi
+  // email confermata: chi si registra conferma con un link; gli account già esistenti o creati dall'amministratore valgono come confermati
+  await q(`alter table users add column if not exists email_verificata boolean;
+    update users set email_verificata = true where email_verificata is null;
+    alter table users alter column email_verificata set default false;`);
   await q(`alter table users add column if not exists figura text;
     alter table users add column if not exists cf text;
     alter table users add column if not exists albo_provincia text;
@@ -168,7 +172,7 @@ function publicUser(u, apps) {
   return {
     id: u.id, firstName: u.first_name, lastName: u.last_name, birthDate: u.birth_date, email: u.email,
     status: u.status, owner: u.owner, createdAt: u.created_at, approvedAt: u.approved_at, lastLogin: u.last_login,
-    hasPassword: !!u.password_hash, figura: u.figura || '', cf: u.cf || '', alboProvincia: u.albo_provincia || '', alboNumero: u.albo_numero || '',
+    hasPassword: !!u.password_hash, emailVerificata: u.email_verificata !== false || !!u.owner, figura: u.figura || '', cf: u.cf || '', alboProvincia: u.albo_provincia || '', alboNumero: u.albo_numero || '',
     ...(apps ? { apps } : {}),
   };
 }
@@ -184,11 +188,11 @@ async function findByEmail(email) {
 
 async function createUser({ firstName, lastName, birthDate, email, password, status = 'pending', createdBy = null, cf = null, alboProvincia = null, alboNumero = null, figura = null }) {
   const id = crypto.randomUUID();
-  await q(`insert into users (id, first_name, last_name, birth_date, email, password_hash, status, created_by, approved_at, cf, albo_provincia, albo_numero, figura)
-           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+  await q(`insert into users (id, first_name, last_name, birth_date, email, password_hash, status, created_by, approved_at, cf, albo_provincia, albo_numero, figura, email_verificata)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
     [id, cleanName(firstName), cleanName(lastName), birthDate || null, cleanEmail(email),
      password ? await bcrypt.hash(password, 12) : null, status, createdBy, status === 'active' ? new Date() : null,
-     cf || null, alboProvincia || null, alboNumero || null, figura || null]);
+     cf || null, alboProvincia || null, alboNumero || null, figura || null, !!createdBy]);
   return getUser(id);
 }
 
@@ -286,24 +290,33 @@ async function redeemTicket(token, app) {
     const role = (await appsOf(u))[app];
     if (!role) return null;
     const lv = u.owner ? null : (await livelliOf(u.id))[app] || null;
-    return { purpose: t.purpose, email: u.email, firstName: u.first_name, lastName: u.last_name, birthDate: u.birth_date, role,
+    return { purpose: t.purpose, ssoId: u.id, email: u.email, firstName: u.first_name, lastName: u.last_name, birthDate: u.birth_date, role,
       livello: lv?.livello || null, ente: lv?.ente || null,
       cf: u.cf || null, alboProvincia: u.albo_provincia || null, alboNumero: u.albo_numero || null, figura: u.figura || null,
       oldEmail: t.data?.oldEmail && t.data.oldEmail !== u.email ? t.data.oldEmail : null };
   }
-  return { purpose: t.purpose, email: t.email };
+  return { purpose: t.purpose, ssoId: t.user_id || null, email: t.email };
+}
+// Conferma dell'email dopo la registrazione (link valido 7 giorni)
+async function confirmEmail(token) {
+  const { rows } = await q(`update password_links set used_at = now() where token_hash = $1 and purpose = 'verify' and used_at is null and expires_at > now()
+    returning user_id`, [sha(token)]);
+  if (!rows[0]) return null;
+  await q('update users set email_verificata = true where id = $1', [rows[0].user_id]);
+  return getUser(rows[0].user_id);
 }
 
 /* ---------- link per impostare o reimpostare la password ---------- */
 async function createPasswordLink(userId, purpose = 'reset', hours = 2) {
   const token = randomToken();
-  await q(`update password_links set used_at = now() where user_id = $1 and used_at is null`, [userId]);
+  // un nuovo link annulla i precedenti dello stesso tipo (la conferma email resta separata dai link per la password)
+  await q(`update password_links set used_at = now() where user_id = $1 and used_at is null and (purpose = 'verify') = ($2 = 'verify')`, [userId, purpose]);
   await q(`insert into password_links (token_hash, user_id, purpose, expires_at) values ($1,$2,$3, now() + ($4 || ' hours')::interval)`,
     [sha(token), userId, purpose, String(hours)]);
   return token;
 }
 async function usePasswordLink(token, password) {
-  const { rows } = await q(`select * from password_links where token_hash = $1 and used_at is null and expires_at > now()`, [sha(token)]);
+  const { rows } = await q(`select * from password_links where token_hash = $1 and purpose <> 'verify' and used_at is null and expires_at > now()`, [sha(token)]);
   const l = rows[0];
   if (!l) return null;
   await q('update password_links set used_at = now() where token_hash = $1', [l.token_hash]);
@@ -313,7 +326,7 @@ async function usePasswordLink(token, password) {
 }
 async function peekPasswordLink(token) {
   const { rows } = await q(`select u.first_name, u.email, l.purpose from password_links l join users u on u.id = l.user_id
-    where l.token_hash = $1 and l.used_at is null and l.expires_at > now()`, [sha(token)]);
+    where l.token_hash = $1 and l.purpose <> 'verify' and l.used_at is null and l.expires_at > now()`, [sha(token)]);
   return rows[0] || null;
 }
 
@@ -321,5 +334,5 @@ module.exports = {
   pool, q, SCHEMA, APPS, APP_KEYS, events, migrate, ensureOwner,
   cleanEmail, validEmail, cleanName, cleanDate, cleanFigura, FIGURE, cleanCf, validCf, cleanProv, cleanAlbo, appsOf, publicUser, getUser, findByEmail, createUser, setPassword,
   setAppRole, livelliOf, deleteUser, usersWithApp, logoutEverywhere, createSession, endSession, check, verify,
-  createPasswordLink, usePasswordLink, peekPasswordLink, SESSION_DAYS, sha, createTicket, redeemTicket,
+  createPasswordLink, usePasswordLink, peekPasswordLink, confirmEmail, SESSION_DAYS, sha, createTicket, redeemTicket,
 };

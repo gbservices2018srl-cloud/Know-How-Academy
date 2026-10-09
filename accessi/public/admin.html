@@ -198,7 +198,7 @@ function card(u, homonym) {
       ? `<button class="btn small" data-act="disable" data-u="${u.id}">Disattiva</button>`
       : `<button class="btn small" data-act="enable" data-u="${u.id}">Riattiva</button>`) +
     `<button class="btn small" data-act="pw" data-u="${u.id}">Password</button><button class="btn small danger" data-act="delete" data-u="${u.id}">Elimina</button>`;
-  actions = `<button class="btn small" data-act="edit" data-u="${u.id}">Modifica</button>` + actions;
+  actions = `<button class="btn small" data-act="edit" data-u="${u.id}">Modifica</button>` + (u.emailVerificata ? '' : `<button class="btn small" data-act="verify" data-u="${u.id}">Rimanda conferma email</button>`) + actions;
   const open = aperti.has(u.id), nApp = Object.keys(u.apps).filter(k => k !== 'accessi').length;
   const row = `<button class="urow" data-toggle="${u.id}" aria-expanded="${open}" aria-controls="ub-${u.id}">
       <span class="nm">${esc(fullName(u))}${homonym ? ` <small>nato/a il ${fmtDate(u.birthDate)}</small>` : ''}</span>
@@ -208,7 +208,7 @@ function card(u, homonym) {
   if (!open) return `<article class="user ${u.status}">${row}</article>`;
   return `<article class="user ${u.status} open">${row}<div class="ubody" id="ub-${u.id}">
     <div class="uh">
-      <div class="meta" style="margin:0">${u.figura ? `<span style="color:var(--fg);font-weight:700">${esc(figNome(u.figura))}</span>` : '<span style="color:var(--olive-ink)">Figura da scegliere</span>'}<span>${esc(u.email)}</span><span ${homonym ? 'style="color:var(--fg);font-weight:600"' : ''}>Nato/a il ${fmtDate(u.birthDate)}</span>
+      <div class="meta" style="margin:0">${u.figura ? `<span style="color:var(--fg);font-weight:700">${esc(figNome(u.figura))}</span>` : '<span style="color:var(--olive-ink)">Figura da scegliere</span>'}<span>${esc(u.email)}${u.emailVerificata ? '' : ' <b style="color:var(--olive-ink)">· email non ancora confermata</b>'}</span><span ${homonym ? 'style="color:var(--fg);font-weight:600"' : ''}>Nato/a il ${fmtDate(u.birthDate)}</span>
         <span>${u.cf ? 'CF ' + esc(u.cf) : '<span style="color:var(--olive-ink)">Codice fiscale mancante</span>'}</span>
         ${u.alboNumero ? `<span>Medico, albo ${esc(u.alboProvincia)} n. ${esc(u.alboNumero)}</span>` : ''}
         <span>${u.status === 'pending' ? 'Richiesta del ' + fmtTime(u.createdAt) : 'Ultimo accesso: ' + fmtTime(u.lastLogin)}</span>
@@ -265,6 +265,7 @@ document.addEventListener('click', async e => {
   const act = b.dataset.act;
   try {
     if (act === 'approve') {
+      if (!u.emailVerificata && !confirm(`${fullName(u)} non ha ancora confermato l'email ${u.email}: non è sicuro che sia davvero sua. Approvare lo stesso?`)) return;
       if (!Object.keys(u.apps).length && !confirm(`${fullName(u)} non ha ancora nessuna app. Vuoi approvare lo stesso?`)) return;
       b.disabled = true;
       const r = await api('PATCH', '/api/admin/users/' + u.id, {status: 'active'});
@@ -284,6 +285,9 @@ document.addEventListener('click', async e => {
       if (!confirm(`Eliminare definitivamente ${fullName(u)}? Non potrà più entrare in nessuna app. L'operazione non si può annullare.`)) return;
       await api('DELETE', '/api/admin/users/' + u.id);
       S.users = S.users.filter(x => x.id !== u.id); render(); toast('Utente eliminato');
+    } else if (act === 'verify') {
+      const r = await api('POST', `/api/admin/users/${u.id}/verify-link`, {});
+      if (r.link) linkResult(r.link, u.firstName, 'per confermare la sua email'); else toast(`Email di conferma rimandata a ${u.email}`);
     } else if (act === 'edit') openEdit(u);
     else if (act === 'pw') openPassword(u);
   } catch (err) { b.disabled = false; toast(err.message); }
@@ -314,8 +318,8 @@ function personFields(u = {}) {
     <div class="two"><label class="field">Provincia albo <small class="muted" style="font-weight:500">solo medici</small><input id="d-ap" value="${esc(u.alboProvincia || '')}" maxlength="2" style="text-transform:uppercase" autocomplete="off"></label>
     <label class="field">Numero iscrizione albo<input id="d-an" value="${esc(u.alboNumero || '')}" maxlength="20" autocomplete="off"></label></div>`;
 }
-function linkResult(link, who) {
-  open(`<h2>Link per la password</h2><p class="muted" style="margin:0">Le email non sono attive: copia questo link e mandalo tu a ${esc(who)} (WhatsApp, email…). Serve per scegliere la password.</p>
+function linkResult(link, who, cosa = 'per scegliere la password') {
+  open(`<h2>Link da inviare</h2><p class="muted" style="margin:0">Le email non sono attive: copia questo link e mandalo tu a ${esc(who)} (WhatsApp, email…). Serve ${cosa}.</p>
     <div class="linkbox"><input id="d-link" readonly value="${esc(link)}"><button class="btn" type="button" id="d-copy">Copia</button></div>
     <div class="row"><button class="btn primary" value="cancel">Fatto</button></div>`, null);
   $('#d-copy').onclick = () => { navigator.clipboard.writeText(link).then(() => toast('Link copiato'), () => { $('#d-link').select(); }); };

@@ -40,8 +40,8 @@ async function localProfile(c, role) {
   const name = `${c.firstName} ${c.lastName}`.trim() || c.email;
   const { rows } = await db.q(`insert into users (id, sso_id, email, name, role) values ($1,$2,$3,$4,$5)
     on conflict (sso_id) do update set email = excluded.email, name = excluded.name, role = excluded.role
-    returning id, email, name, role`, [db.newId(), c.id, c.email.toLowerCase(), name, r]);
-  return rows[0];
+    returning id, email, name, role, sso_id`, [db.newId(), c.id, c.email.toLowerCase(), name, r]);
+  return { ...rows[0], emailOk: c.emailVerificata !== false };
 }
 app.use(wrap(async (req, res, next) => {
   const r = await sso.identify(req);
@@ -59,23 +59,40 @@ sso.onProvision(async ({ user, livello, oldEmail }) => {
   // la figura è quella della persona (pannello accessi); "Amministratore, non in turno" non entra nel Personale
   const inTurno = !livello || livello.livello !== 'admin_no';
   const figura = inTurno && user.figura ? user.figura : null;
-  const emails = [user.email, oldEmail].filter(Boolean).map(x => x.toLowerCase());
+  const low = x => String(x || '').toLowerCase();
+  const email = low(user.email), vecchia = low(oldEmail);
   await caricaConfig(); // crea la configurazione vuota se non c'è ancora
   return db.tx(async qq => {
     const { rows } = await qq('select data from config where id = 1 for update');
-    const c = rows[0].data; c.staff ||= [];
-    let e = c.staff.find(x => emails.includes(String(x.email || '').toLowerCase()));
-    if (!e && user.cf) e = c.staff.find(x => x.tipo !== 'Medico' && String(x.cf || '').toUpperCase() === user.cf);
+    const c = rows[0].data; c.staff ||= []; c.removed ||= [];
+    const prima = JSON.stringify(c);
+    // 1) il collaboratore già collegato a questa persona
+    let e = c.staff.find(x => x.ssoId === user.id);
+    // chi è stato rimosso dal Personale non rientra da solo
+    if (!e && c.removed.some(x => x.ssoId === user.id || (!x.ssoId && [email, vecchia].includes(low(x.email))))) return null;
+    // 2) una scheda inserita a mano con la stessa email (solo se l'email è confermata e la scheda non è di un altro)
+    if (!e && user.emailVerificata) e = c.staff.find(x => !x.ssoId && [email, vecchia].filter(Boolean).includes(low(x.email)));
+    // 3) stesso codice fiscale su una scheda senza email: non la prendiamo da soli, lo segnaliamo
+    if (!e && user.cf) {
+      const g = c.staff.find(x => !x.ssoId && !x.email && String(x.cf || '').toUpperCase() === user.cf);
+      if (g) return `Turni: nel Personale c'è già «${g.nome} ${g.cognome}» con lo stesso codice fiscale ma senza email. Se è la stessa persona scrivi ${user.email} nella sua scheda in Turni.`;
+    }
     if (!e && !figura) return inTurno && livello ? 'Turni: manca la figura della persona, scegline una con «Modifica».' : null;
+    const avvisi = [];
     if (!e) {
       e = { id: 'u' + crypto.randomBytes(6).toString('hex'), ore: {}, cfg: {}, ferie: 22, rol: 72 };
       c.staff.push(e);
     }
-    Object.assign(e, { nome: user.firstName, cognome: user.lastName, email: user.email.toLowerCase(), accesso: true });
-    if (user.cf) e.cf = user.cf;
+    const altro = c.staff.find(x => x !== e && low(x.email) === email);
+    Object.assign(e, { ssoId: user.id, nome: user.firstName, cognome: user.lastName, accesso: true });
+    if (altro) avvisi.push(`Turni: l'email ${email} è già nella scheda di ${altro.nome} ${altro.cognome}; correggila in Turni.`);
+    else e.email = email;
+    if (user.cf && !c.staff.some(x => x !== e && x.tipo !== 'Medico' && String(x.cf || '').toUpperCase() === user.cf)) e.cf = user.cf;
     if (figura) e.tipo = figura;
-    await qq(`update config set data = $1, version = version + 1, aggiornata_il = now(), aggiornata_da = 'accesso unico' where id = 1`, [JSON.stringify(c)]);
-    return null;
+    if (!e.tipo) e.tipo = 'Altro';
+    if (JSON.stringify(c) !== prima) // si salva solo se è cambiato qualcosa (così non si disturba chi sta lavorando sui turni)
+      await qq(`update config set data = $1, version = version + 1, aggiornata_il = now(), aggiornata_da = 'accesso unico' where id = 1`, [JSON.stringify(c)]);
+    return avvisi.join(' ') || null;
   });
 });
 
@@ -113,17 +130,21 @@ async function salvaPiano(m) {
 }
 const staffById = (cfg, id) => (cfg.data.staff || []).find(e => e.id === id) || (cfg.data.removed || []).find(e => e.id === id);
 const nome = e => e ? `${e.nome} ${e.cognome}` : '—';
+// Il collaboratore che corrisponde a chi è entrato: prima quello collegato al suo accesso unico,
+// poi una scheda inserita a mano con la sua email (solo se l'email è confermata e la scheda non è di un altro).
+const staffDiUtente = (staff, user) => (staff || []).find(x => x.ssoId && x.ssoId === user.sso_id)
+  || (user.emailOk ? (staff || []).find(x => !x.ssoId && String(x.email || '').toLowerCase() === user.email) : null);
 async function staffDi(user) {
   const cfg = await caricaConfig();
-  const e = (cfg.data.staff || []).find(x => String(x.email || '').toLowerCase() === user.email);
-  return { cfg, e };
+  return { cfg, e: staffDiUtente(cfg.data.staff, user) };
 }
 
 /* ---------- notifiche ---------- */
 async function utentiDiStaff(cfg, ids) {
-  const emails = ids.map(id => String(staffById(cfg, id)?.email || '').toLowerCase()).filter(Boolean);
-  if (!emails.length) return [];
-  const { rows } = await db.q('select id from users where email = any($1)', [emails]);
+  const st = ids.map(id => staffById(cfg, id)).filter(Boolean);
+  const sso = st.map(e => e.ssoId).filter(Boolean), emails = st.filter(e => !e.ssoId).map(e => String(e.email || '').toLowerCase()).filter(Boolean);
+  if (!sso.length && !emails.length) return [];
+  const { rows } = await db.q('select id from users where sso_id = any($1) or email = any($2)', [sso, emails]);
   return rows.map(r => r.id);
 }
 async function avvisaStaff(cfg, ids, payload, email) {
@@ -153,7 +174,7 @@ app.get('/api/state', needUser, wrap(async (req, res) => {
 async function statoAdmin(req) {
   const [cfg, pd, reqs, ai] = await Promise.all([caricaConfig(), caricaPiano(), caricaRichieste(), caricaAI()]);
   const { rows: priv } = await db.q('select staff_id, accettata_il, dispositivo from privacy');
-  const meStaff = (cfg.data.staff || []).find(x => String(x.email || '').toLowerCase() === req.user.email);
+  const meStaff = staffDiUtente(cfg.data.staff, req.user);
   return {
     role: 'admin', me: { name: req.user.name, email: req.user.email, staffId: meStaff?.id || null },
     today: oggi(), config: cfg.data, version: cfg.version, planDoc: pd.data,
@@ -432,11 +453,10 @@ app.post('/api/buste/carica', needAdmin, upload.single('file'), wrap(async (req,
   const doppi = [];
   await db.tx(async qq => {
     for (const g of r.gruppi) {
-      if (giaCaricati.includes(g.staffId)) { doppi.push(nome(staffById(cfg, g.staffId))); continue; }
+      if (giaCaricati.includes(g.staffId)) { doppi.push(nome(staffById(cfg, g.staffId))); continue; } // busta del mese caricata in un caricamento precedente
       const c = buste.cifra(g.buf);
       await qq(`insert into buste (id, staff_id, mese, file, iv, tag, impronta, pagine, origine) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
         [db.newId(), g.staffId, mese, c.file, c.iv, c.tag, buste.impronta(g.buf), g.pagine.length, origine]);
-      giaCaricati.push(g.staffId);
     }
     for (const s of r.sospese) {
       const c = buste.cifra(s.buf);
@@ -508,13 +528,16 @@ app.get('/api/buste/mese/:mese/pdf', needAdmin, wrap(async (req, res) => {
 }));
 app.get('/api/buste/mese/:mese/registro.csv', needAdmin, wrap(async (req, res) => {
   const mese = req.params.mese;
+  if (!meseOk(mese)) return res.status(400).send('Mese non valido');
   const { rows } = await db.q('select * from buste where mese = $1 order by staff_id', [mese]);
   const cfg = await caricaConfig();
   const f = d => d ? new Date(d).toLocaleString('it-IT', { timeZone: 'Europe/Rome' }) : '';
   const righe = [['Dipendente', 'Codice fiscale', 'Mese', 'Pubblicata', 'Aperta', 'Dispositivo apertura', 'Presa visione', 'Dispositivo presa visione', 'Impronta SHA-256']]
     .concat(rows.map(b => { const e = staffById(cfg, b.staff_id); return [nome(e), e?.cf || '', b.mese, f(b.pubblicata_il), f(b.aperta_il), b.aperta_disp || '', f(b.confermata_il), b.confermata_disp || '', b.impronta]; }));
   res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="registro-buste-${mese}.csv"` });
-  res.send('﻿' + righe.map(r => r.map(x => `"${String(x).replace(/"/g, '""')}"`).join(';')).join('\n'));
+  // una cella che inizia con = + - @ verrebbe letta da Excel come formula: la neutralizziamo con un apostrofo
+  const cella = x => { let v = String(x ?? ''); if (/^[=+\-@\t\r]/.test(v)) v = "'" + v; return `"${v.replace(/"/g, '""')}"`; };
+  res.send('﻿' + righe.map(r => r.map(cella).join(';')).join('\n'));
 }));
 app.delete('/api/buste/mese/:mese', needAdmin, wrap(async (req, res) => {
   const mese = req.params.mese;
