@@ -152,9 +152,17 @@ async function syncIn(u, key, oldEmail) {
     const r = await fetch(a.sso, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ticket }), signal: AbortSignal.timeout(20000) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok || j.ok === false) return `${a.name}: profilo non creato${j.motivo ? ' (' + j.motivo + ')' : ''}. Riprova o controlla i dati.`;
-    if (j.ente) { // ente appena creato (es. il nuovo medico): da ora il permesso punta a quello
-      await store.q(`update user_apps set ente = $3, ente_nome = coalesce($4, ente_nome) where user_id = $1 and app = $2 and ente like 'nuovo:%'`,
-        [u.id, a.key, String(j.ente), j.enteNome ? String(j.enteNome) : null]);
+    // enti appena creati (es. il nuovo medico in uno o più studi): da ora il permesso punta a quelli
+    const creati = Array.isArray(j.creati) ? j.creati : j.ente ? [{ da: null, id: j.ente, nome: j.enteNome }] : [];
+    if (creati.length) {
+      const { rows } = await store.q('select ente, ente_nome, enti from user_apps where user_id = $1 and app = $2', [u.id, a.key]);
+      if (rows[0]) {
+        const r = rows[0], sost = x => creati.find(c => c.da ? c.da === x.id : String(x.id).startsWith('nuovo:'));
+        let enti = Array.isArray(r.enti) && r.enti.length ? r.enti : [{ id: r.ente, nome: r.ente_nome }];
+        enti = enti.map(x => { const c = sost(x); return c ? { id: String(c.id), nome: c.nome ? String(c.nome) : x.nome } : x; });
+        await store.q('update user_apps set ente = $3, ente_nome = $4, enti = $5 where user_id = $1 and app = $2',
+          [u.id, a.key, enti[0].id, enti[0].nome, JSON.stringify(enti)]);
+      }
       catalogCache.delete(a.key);
     }
     return null;
@@ -192,21 +200,28 @@ async function leggiPermesso(a, v, u, persona) {
   }
   const L = a.livelli.find(l => l.key === v.livello);
   if (!L) throw Object.assign(new Error('Livello non valido'), { status: 400 });
-  let lv = { livello: L.key, ente: null, enteNome: null };
+  let lv = { livello: L.key, ente: null, enteNome: null, enti: [] };
   if (L.ente) {
-    const cerca = async fresh => {
+    // un solo ente, oppure (livelli "multi") più studi: il primo è il principale
+    const ids = [...new Set((L.multi && Array.isArray(v.enti) && v.enti.length ? v.enti : [v.ente]).map(x => String(x || '')).filter(Boolean))].slice(0, 20);
+    if (!ids.length) throw Object.assign(new Error(`${L.enteLabel}: scegli dall'elenco.`), { status: 400 });
+    const cerca = async (id, fresh) => {
       const cat = await catalogo(a, u, fresh);
-      if (L.nuovo && String(v.ente || '').startsWith('nuovo:')) { // nuovo medico in uno studio, con i dati dell'albo della persona
-        const st = (cat[L.nuovo] || []).find(x => 'nuovo:' + x.id === v.ente);
-        return st && { id: v.ente, nome: `Nuovo medico · ${st.nome}` };
+      if (L.nuovo && id.startsWith('nuovo:')) { // nuovo medico in uno studio, con i dati dell'albo della persona
+        const st = (cat[L.nuovo] || []).find(x => 'nuovo:' + x.id === id);
+        return st && { id, nome: `Nuovo medico · ${st.nome}` };
       }
-      return (cat[L.ente] || []).find(x => x.id === v.ente);
+      const x = (cat[L.ente] || []).find(y => y.id === id);
+      return x && { id: x.id, nome: x.nome + (x.info ? ' · ' + x.info : '') };
     };
-    const e = await cerca(false) || await cerca(true);
-    if (!e) throw Object.assign(new Error(`${L.enteLabel}: scegli dall'elenco.`), { status: 400 });
-    if (e.id.startsWith('nuovo:') && persona && !(persona.albo_provincia && persona.albo_numero))
-      throw Object.assign(new Error("Per creare il medico servono provincia e numero d'albo: aggiungili con «Modifica»."), { status: 400 });
-    lv = { ...lv, ente: e.id, enteNome: e.nome };
+    for (const id of ids) {
+      const e = await cerca(id, false) || await cerca(id, true);
+      if (!e) throw Object.assign(new Error(`${L.enteLabel}: scegli dall'elenco.`), { status: 400 });
+      if (e.id.startsWith('nuovo:') && persona && !(persona.albo_provincia && persona.albo_numero))
+        throw Object.assign(new Error("Per creare il medico servono provincia e numero d'albo: aggiungili con «Modifica»."), { status: 400 });
+      lv.enti.push(e);
+    }
+    lv = { ...lv, ente: lv.enti[0].id, enteNome: lv.enti[0].nome };
   }
   return [L.role || 'user', lv];
 }
@@ -367,11 +382,12 @@ app.post('/api/me/password', needUser, wrap(async (req, res) => {
 /* ---------- pannello amministratore ---------- */
 app.get('/api/admin/users', needAdmin, wrap(async (req, res) => {
   const { rows: users } = await store.q('select * from users order by (status = \'pending\') desc, owner desc, last_name, first_name');
-  const { rows: ua } = await store.q('select user_id, app, role, livello, ente, ente_nome from user_apps');
+  const { rows: ua } = await store.q('select user_id, app, role, livello, ente, ente_nome, enti from user_apps');
   const by = {}, lv = {};
   for (const r of ua) {
     (by[r.user_id] ||= {})[r.app] = r.role;
-    if (r.livello) (lv[r.user_id] ||= {})[r.app] = { livello: r.livello, ente: r.ente, enteNome: r.ente_nome };
+    if (r.livello) (lv[r.user_id] ||= {})[r.app] = { livello: r.livello, ente: r.ente, enteNome: r.ente_nome,
+      enti: Array.isArray(r.enti) && r.enti.length ? r.enti : r.ente ? [{ id: r.ente, nome: r.ente_nome }] : [] };
   }
   res.json({
     me: req.user.id,

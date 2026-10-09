@@ -4,6 +4,7 @@
 // sso: indirizzo della funzione "sso" su Supabase, per le app che usano Supabase per l'accesso (Nuovalab, Ticket):
 // il riquadro passa da /sso/<app>, che crea un biglietto monouso e lo consegna a quella funzione.
 // livelli: i ruoli interni dell'app; il pannello accessi li assegna (con laboratorio/studio/medico/azienda)
+// multi: la persona può lavorare in più studi (il primo è quello principale; nell'app sceglie lo studio in alto)
 // e la funzione "sso" crea o aggiorna il profilo nell'app, così la persona non deve avere un'altra password.
 module.exports = [
   { key: 'finanza', name: 'Gestione finanziaria', url: 'https://finanza.appgestione.it', color: 'teal',
@@ -13,8 +14,8 @@ module.exports = [
     livelli: [
       { key: 'ADMIN', label: 'Amministratore', role: 'admin' },
       { key: 'LABORATORIO', label: 'Laboratorio', ente: 'laboratori', enteLabel: 'Quale laboratorio' },
-      { key: 'STUDIO', label: 'Studio', ente: 'studi', enteLabel: 'Quale studio' },
-      { key: 'MEDICO', label: 'Medico', ente: 'medici', enteLabel: 'Quale medico', nuovo: 'studi' },
+      { key: 'STUDIO', label: 'Studio', ente: 'studi', enteLabel: 'Quale studio', multi: true },
+      { key: 'MEDICO', label: 'Medico', ente: 'medici', enteLabel: 'Quale medico', nuovo: 'studi', multi: true },
     ],
     desc: "L'app del laboratorio." },
   { key: 'ticket', name: 'Ticket assistenza', url: 'https://ticket.appgestione.it', color: 'yellow',
@@ -22,7 +23,7 @@ module.exports = [
     livelli: [
       { key: 'super_admin', label: 'Amministratore', role: 'admin' },
       { key: 'admin_azienda', label: 'Responsabile azienda', ente: 'aziende', enteLabel: 'Quale azienda' },
-      { key: 'utente_studio', label: 'Utente studio', ente: 'studi', enteLabel: 'Quale studio' },
+      { key: 'utente_studio', label: 'Utente studio', ente: 'studi', enteLabel: 'Quale studio', multi: true },
     ],
     desc: "Richieste di supporto tra gli studi e l'amministrazione." },
   { key: 'protocolli', name: 'Protocolli', url: 'https://protocolli.appgestione.it', color: 'teal',

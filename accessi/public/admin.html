@@ -64,6 +64,11 @@ header p{margin:0;color:var(--muted);max-width:70ch}
 .apps{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
 .ap{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;color:var(--muted)}
 .ap select{min-height:40px;padding:8px 10px;font-size:14.5px;border-radius:10px}
+.ap-in{display:flex;flex-direction:column;gap:5px}
+.enti-x{display:flex;flex-direction:column;gap:5px}
+.ente-chip{display:flex;align-items:center;justify-content:space-between;gap:6px;background:var(--surface-2,#F4F4EF);border-radius:9px;padding:6px 6px 6px 10px;color:var(--fg);font-weight:600;font-size:13px}
+.ente-chip button{appearance:none;border:0;background:transparent;color:var(--danger,#B3261E);font-weight:800;cursor:pointer;min-width:28px;min-height:28px;border-radius:7px}
+.enti-x select{border-style:dashed}
 .ap select.user{border-color:var(--teal);color:var(--teal-ink)}
 .ap select.admin{border-color:var(--purple);color:var(--purple-ink);font-weight:700}
 .hint{font-size:13.5px;color:var(--muted);margin:0}
@@ -138,6 +143,23 @@ function enteSelect(a, L, sel, attrs, selNome) {
     (nuovi.length ? `<optgroup label="Crea con i dati della registrazione">${nuovi.map(x => opt('nuovo:' + x.id, '+ Nuovo medico in ' + esc(x.nome))).join('')}</optgroup>` : '') +
     `</select>`;
 }
+// Più studi (Nuovalab: studio o medico; Ticket: utente studio): il primo è il principale, gli altri si aggiungono qui
+function altriEnti(a, L, u, cur) {
+  const v = ENTI_V[a.key]; if (!v || v.errore) return '';
+  const list = v[L.ente] || [], nuovi = L.nuovo ? (v[L.nuovo] || []) : [];
+  const scelti = (cur.enti || []).map(x => x.id), extra = (cur.enti || []).slice(1);
+  // per i medici: un altro studio = il suo nome nell'elenco medici di quello studio, oppure "nuovo medico" lì
+  const liberi = list.filter(x => !scelti.includes(x.id)).map(x => [x.id, x.nome + (x.info ? ' · ' + x.info : '')])
+    .concat(nuovi.filter(x => !scelti.includes('nuovo:' + x.id)).map(x => ['nuovo:' + x.id, '+ Nuovo medico in ' + x.nome]));
+  return `<div class="enti-x">${extra.map(x => `<span class="ente-chip">${esc(x.nome || x.id)}<button type="button" data-ente-rm="${a.key}" data-u="${u.id}" data-id="${esc(x.id)}" aria-label="Togli ${esc(x.nome || '')}">✕</button></span>`).join('')}
+    ${liberi.length ? `<select data-ente-add="${a.key}" data-u="${u.id}" data-lv="${L.key}" aria-label="Aggiungi un altro studio"><option value="">+ Aggiungi ${L.key === 'MEDICO' ? 'un altro studio (medico)' : 'un altro studio'}…</option>${liberi.map(([id, n]) => `<option value="${esc(id)}">${esc(n)}</option>`).join('')}</select>` : ''}</div>`;
+}
+async function salvaEnti(u, app, livello, enti) {
+  try {
+    const r = await api('PUT', `/api/admin/users/${u.id}/apps/${app}`, {livello, ente: enti[0], enti});
+    u.apps = r.apps; S.livelli[u.id] = r.livelli; if (enti.some(x => String(x).startsWith('nuovo:'))) rinfrescaEnti(); render(); avvisa(r, 'Salvato');
+  } catch (err) { render(); toast(err.message); }
+}
 let filter = 'pending';
 const aperti = new Set(); // schede aperte
 const avvisa = (r, ok) => r?.avvisi?.length ? toast(r.avvisi.join(' · ')) : toast(ok);
@@ -194,7 +216,8 @@ function card(u, homonym) {
       const opts = `<option value="">Nessun accesso</option>${sel === '_old' ? '<option value="_old" selected>Utente (scegli il livello)</option>' : ''}` +
         a.livelli.map(l => `<option value="${l.key}" ${l.key === sel ? 'selected' : ''}>${esc(l.label)}</option>`).join('');
       const ente = L?.ente ? enteSelect(a, L, cur?.livello === sel ? cur.ente : '', `data-ente="${a.key}" data-u="${u.id}" data-lv="${L.key}"`, cur?.enteNome) : '';
-      return `<label class="ap">${esc(a.name)}<select data-app="${a.key}" data-u="${u.id}" class="${role}">${opts}</select>${ente}</label>`;
+      const altri = L?.multi && cur?.livello === sel && cur.ente ? altriEnti(a, L, u, cur) : '';
+      return `<div class="ap"><label class="ap-in">${esc(a.name)}<select data-app="${a.key}" data-u="${u.id}" class="${role}">${opts}</select>${ente}</label>${altri}</div>`;
     }
     const dis = u.owner || (u.id === S.me && a.key === 'accessi');
     const opts = a.adminOnly
@@ -232,15 +255,28 @@ function card(u, homonym) {
 }
 
 /* ---------- permessi per app ---------- */
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-ente-rm]'); if (!b) return;
+  const u = S.users.find(x => x.id === b.dataset.u), a0 = S.apps.find(x => x.key === b.dataset.enteRm), cur = lvOf(u, a0);
+  await salvaEnti(u, a0.key, cur.livello, (cur.enti || []).map(x => x.id).filter(id => id !== b.dataset.id));
+});
 document.addEventListener('change', async e => {
   const se = e.target.closest('select[data-ente]');
   if (se) {
     const u = S.users.find(x => x.id === se.dataset.u), k = u.id + '|' + se.dataset.ente;
     if (!se.value) return;
-    try {
-      const r = await api('PUT', `/api/admin/users/${u.id}/apps/${se.dataset.ente}`, {livello: se.dataset.lv, ente: se.value});
-      u.apps = r.apps; S.livelli[u.id] = r.livelli; delete pend[k]; if (se.value.startsWith('nuovo:')) rinfrescaEnti(); render(); avvisa(r, 'Salvato');
-    } catch (err) { toast(err.message); }
+    const a0 = S.apps.find(x => x.key === se.dataset.ente), L0 = a0.livelli.find(l => l.key === se.dataset.lv), cur = lvOf(u, a0);
+    // cambia lo studio principale: gli altri studi restano (solo se il livello è lo stesso)
+    const altri = L0.multi && cur?.livello === L0.key ? (cur.enti || []).slice(1).map(x => x.id).filter(id => id !== se.value) : [];
+    delete pend[k];
+    await salvaEnti(u, se.dataset.ente, se.dataset.lv, [se.value, ...altri]);
+    return;
+  }
+  const sa = e.target.closest('select[data-ente-add]');
+  if (sa) {
+    if (!sa.value) return;
+    const u = S.users.find(x => x.id === sa.dataset.u), a0 = S.apps.find(x => x.key === sa.dataset.enteAdd), cur = lvOf(u, a0);
+    await salvaEnti(u, a0.key, sa.dataset.lv, [...(cur.enti || []).map(x => x.id), sa.value]);
     return;
   }
   const s = e.target.closest('select[data-app]'); if (!s) return;

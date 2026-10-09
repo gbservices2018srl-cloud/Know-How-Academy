@@ -91,6 +91,7 @@ async function migrate() {
     alter table user_apps add column if not exists livello text;
     alter table user_apps add column if not exists ente text;
     alter table user_apps add column if not exists ente_nome text;
+    alter table user_apps add column if not exists enti jsonb; -- più studi: [{ id, nome }], il primo è anche in "ente"
     alter table sso_tickets drop constraint if exists sso_tickets_purpose_check;
     alter table sso_tickets add constraint sso_tickets_purpose_check check (purpose in ('login','revoke','catalog','sync','sedi'));`);
   // Sedi del gruppo: si gestiscono qui e vengono copiate in Turni, Calendario, Ticket e Nuovalab
@@ -173,8 +174,9 @@ const cleanProv = s => String(s || '').toUpperCase().replace(/[^A-Z]/g, '').slic
 const cleanAlbo = s => String(s || '').trim().replace(/\s+/g, '').slice(0, 20);
 
 async function livelliOf(userId) {
-  const { rows } = await q('select app, livello, ente, ente_nome from user_apps where user_id = $1 and livello is not null', [userId]);
-  return Object.fromEntries(rows.map(r => [r.app, { livello: r.livello, ente: r.ente, enteNome: r.ente_nome }]));
+  const { rows } = await q('select app, livello, ente, ente_nome, enti from user_apps where user_id = $1 and livello is not null', [userId]);
+  return Object.fromEntries(rows.map(r => [r.app, { livello: r.livello, ente: r.ente, enteNome: r.ente_nome,
+    enti: Array.isArray(r.enti) && r.enti.length ? r.enti : r.ente ? [{ id: r.ente, nome: r.ente_nome }] : [] }]));
 }
 async function appsOf(user) {
   if (user.owner) return Object.fromEntries(APP_KEYS.map(k => [k, 'admin']));
@@ -219,9 +221,10 @@ async function setAppRole(userId, app, role, livello = null) {
   if (!APP_KEYS.includes(app)) throw new Error('App sconosciuta');
   if (role === 'user' || role === 'admin') {
     if (app === 'accessi' && role === 'user') role = 'admin';
-    await q(`insert into user_apps (user_id, app, role, livello, ente, ente_nome) values ($1,$2,$3,$4,$5,$6)
-             on conflict (user_id, app) do update set role = excluded.role, livello = excluded.livello, ente = excluded.ente, ente_nome = excluded.ente_nome`,
-      [userId, app, role, livello?.livello || null, livello?.ente || null, livello?.enteNome || null]);
+    await q(`insert into user_apps (user_id, app, role, livello, ente, ente_nome, enti) values ($1,$2,$3,$4,$5,$6,$7)
+             on conflict (user_id, app) do update set role = excluded.role, livello = excluded.livello, ente = excluded.ente, ente_nome = excluded.ente_nome, enti = excluded.enti`,
+      [userId, app, role, livello?.livello || null, livello?.ente || null, livello?.enteNome || null,
+       livello?.enti?.length ? JSON.stringify(livello.enti) : null]);
   } else {
     await q('delete from user_apps where user_id = $1 and app = $2', [userId, app]);
   }
@@ -306,7 +309,7 @@ async function redeemTicket(token, app) {
     if (!role) return null;
     const lv = u.owner ? null : (await livelliOf(u.id))[app] || null;
     return { purpose: t.purpose, ssoId: u.id, email: u.email, firstName: u.first_name, lastName: u.last_name, birthDate: u.birth_date, role,
-      livello: lv?.livello || null, ente: lv?.ente || null,
+      livello: lv?.livello || null, ente: lv?.ente || null, enti: (lv?.enti || []).map(x => x.id),
       cf: u.cf || null, alboProvincia: u.albo_provincia || null, alboNumero: u.albo_numero || null, figura: u.figura || null,
       oldEmail: t.data?.oldEmail && t.data.oldEmail !== u.email ? t.data.oldEmail : null };
   }
