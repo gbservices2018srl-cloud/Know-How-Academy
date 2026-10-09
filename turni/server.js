@@ -12,6 +12,7 @@ const db = require('./lib/db');
 const motore = require('./lib/motore');
 const push = require('./lib/push');
 const buste = require('./lib/buste');
+const saldiCedolino = require('./lib/saldi');
 const mail = require('../accessi/lib/mail');
 const accessiStore = require('../accessi/lib/store');
 
@@ -259,13 +260,24 @@ async function statoDipendente(req) {
       stessa: x.tipo === e.tipo, vicino: x.tipo === e.tipo && m.sediOf(x).some(s => m.sediOf(e).includes(s)) }))
     .sort((a, b) => (b.vicino - a.vicino) || a.cognome.localeCompare(b.cognome, 'it') || a.nome.localeCompare(b.nome, 'it'));
   const oreMese = Object.fromEntries(st.MONTHS.map(ym => [ym, m.oreMese(e, ym).coll]));
-  const { rows: bl } = await db.q(`select id, tipo, mese, aperta_il, confermata_il, firmata_il from buste where staff_id = $1 and stato = 'pubblicata' and ${VISIBILE}
+  const { rows: bl } = await db.q(`select id, tipo, mese, aperta_il, confermata_il, firmata_il, saldi from buste where staff_id = $1 and stato = 'pubblicata' and ${VISIBILE}
     order by mese desc`, [e.id, cutoff(), cutoffCud()]);
+  // Saldi: se c'è un cedolino pubblicato con i residui letti, valgono quelli (nell'unità del cedolino);
+  // si indicano a parte ferie e ROL approvati con inizio dopo quel mese, che il cedolino non conosce ancora.
+  const ult = bl.find(b => b.tipo === 'busta' && b.saldi && !b.saldi.vuoto);
+  let cedolino = null;
+  if (ult) {
+    const fine = ult.mese + '-31';
+    const dopo = mie.filter(r => r.stato === 'approvata' && r.dal > fine);
+    cedolino = { mese: ult.mese, ferie: ult.saldi.ferie, rol: ult.saldi.rol, exfest: ult.saldi.exfest,
+      dopo: { ferieGiorni: dopo.filter(r => r.tipo === 'FE').reduce((s, r) => s + m.diffDays(r.dal, r.al) + 1, 0),
+        rolOre: dopo.filter(r => r.tipo === 'ROL').reduce((s, r) => s + (r.ore || 8), 0) } };
+  }
   return {
     ...base, privacy: true,
     staff: { id: e.id, nome: e.nome, cognome: e.cognome, tipo: e.tipo,
       descr: [m.oreList(e) ? m.oreList(e) + ' a settimana' : '', ...st.CAD.filter(c => c.emp === e.id && m.sede(c.sede)).map(c => `${m.sede(c.sede).nome} ${m.cadTxt(c)}`)].filter(Boolean).join(' · '),
-      ferie: (e.ferie ?? 22) - ferieUsate, rol: (e.rol ?? 72) - rolUsate, medico: e.tipo === 'Medico' },
+      ferie: (e.ferie ?? 22) - ferieUsate, rol: (e.rol ?? 72) - rolUsate, medico: e.tipo === 'Medico', cedolino },
     months: st.MONTHS, ore: st.REG.ore, giorni, next, oreMese,
     myAI: [...st.AI].filter(k => k.startsWith(e.id + '|')).map(k => k.split('|')[1]),
     mie: mie.map(conNomi).sort((a, b) => b.dal.localeCompare(a.dal)),
@@ -513,7 +525,7 @@ const nomeDoc = tipo => tipo === 'cud' ? 'CUD' : 'busta paga';
 app.get('/api/buste', needAdmin, wrap(async (req, res) => {
   const tipo = tipoDoc(req.query.tipo);
   const { rows } = await db.q(`select id, staff_id, tipo, mese, impronta, pagine, stato, origine, creata_il, pubblicata_il, aperta_il, aperta_disp,
-    confermata_il, confermata_disp, firmata_il, firmata_disp from buste where tipo = $1 order by mese desc, staff_id`, [tipo]);
+    confermata_il, confermata_disp, firmata_il, firmata_disp, saldi from buste where tipo = $1 order by mese desc, staff_id`, [tipo]);
   const { rows: sosp } = await db.q('select id, mese, origine, pagina, suggerito from pagine_sospese where tipo = $1 order by mese desc, pagina', [tipo]);
   res.json({ tipo, buste: rows, sospese: sosp, cutoff: cutoffDi(tipo), attive: buste.attive() });
 }));
@@ -530,13 +542,14 @@ app.post('/api/buste/carica', needAdmin, upload.single('file'), wrap(async (req,
   catch (e) { console.warn('Buste, PDF:', e.message); return bad(res, 400, 'Non riesco a leggere questo PDF. È protetto da password o danneggiato?'); }
   const origine = str(req.file.originalname, 120);
   const giaCaricati = (await db.q('select staff_id from buste where mese = $1 and tipo = $2', [mese, tipo])).rows.map(x => x.staff_id);
-  const doppi = [];
+  const doppi = [], nuove = [];
   await db.tx(async qq => {
     for (const g of r.gruppi) {
       if (giaCaricati.includes(g.staffId)) { doppi.push(nome(staffById(cfg, g.staffId))); continue; } // busta del mese caricata in un caricamento precedente
-      const c = buste.cifra(g.buf);
+      const c = buste.cifra(g.buf), id = db.newId();
       await qq(`insert into buste (id, staff_id, tipo, mese, file, iv, tag, impronta, pagine, origine) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-        [db.newId(), g.staffId, tipo, mese, c.file, c.iv, c.tag, buste.impronta(g.buf), g.pagine.length, origine]);
+        [id, g.staffId, tipo, mese, c.file, c.iv, c.tag, buste.impronta(g.buf), g.pagine.length, origine]);
+      nuove.push({ id, testo: g.testo });
     }
     for (const s of r.sospese) {
       const c = buste.cifra(s.buf);
@@ -544,7 +557,34 @@ app.post('/api/buste/carica', needAdmin, upload.single('file'), wrap(async (req,
         [db.newId(), tipo, mese, origine, s.pagina + 1, c.file, c.iv, c.tag, s.suggerito]);
     }
   });
-  res.json({ pagine: r.pagine, abbinate: r.gruppi.length - doppi.length, sospese: r.sospese.length, doppi });
+  res.json({ pagine: r.pagine, abbinate: r.gruppi.length - doppi.length, sospese: r.sospese.length, doppi, leggoResidui: tipo === 'busta' && !!process.env.ANTHROPIC_API_KEY && nuove.length > 0 });
+  if (tipo === 'busta') leggiResidui(nuove); // residui di ferie e permessi: si leggono dopo, senza far aspettare
+}));
+// Residui dal testo dei cedolini (in sottofondo); si salvano nella busta
+function leggiResidui(lista) {
+  if (!process.env.ANTHROPIC_API_KEY || !lista.length) return;
+  saldiCedolino.leggiTutte(lista, (id, s) => db.q('update buste set saldi = $2 where id = $1', [id, JSON.stringify(s)]))
+    .catch(e => console.warn('Turni, residui:', e.message));
+}
+// L'amministrazione può rileggere o correggere a mano i residui di una busta
+app.post('/api/buste/:id/residui', needAdmin, wrap(async (req, res) => {
+  const { rows } = await db.q(`select * from buste where id = $1 and tipo = 'busta'`, [req.params.id]);
+  if (!rows[0]) return bad(res, 404, 'Busta non trovata');
+  if (req.body.rileggi) {
+    if (!process.env.ANTHROPIC_API_KEY) return bad(res, 400, "La lettura automatica non è attiva: manca ANTHROPIC_API_KEY su Render.");
+    const testo = (await buste.testoPagine(buste.decifra(rows[0]))).join('\n');
+    let s;
+    try { s = await saldiCedolino.leggi(testo); } catch (e) { return bad(res, 502, 'Lettura non riuscita, riprova tra poco.'); }
+    if (!s || s.vuoto && !s.ferie.residuo && /testo leggibile/.test(s.dubbi?.[0] || '')) return bad(res, 400, 'In questa busta non c\'è testo da leggere (è una scansione?): scrivi i residui a mano.');
+    await db.q('update buste set saldi = $2 where id = $1', [rows[0].id, JSON.stringify(s)]);
+    return res.json({ saldi: s });
+  }
+  const voce = v => { const n = v?.residuo === '' || v?.residuo == null ? null : Number(String(v.residuo).replace(',', '.'));
+    return { residuo: Number.isFinite(n) ? Math.round(n * 100) / 100 : null, unita: ['ore', 'giorni'].includes(v?.unita) ? v.unita : null }; };
+  const b = req.body || {}, s = { ferie: voce(b.ferie), rol: voce(b.rol), exfest: voce(b.exfest), dubbi: [], manuale: true, letto: new Date().toISOString() };
+  for (const k of ['ferie', 'rol', 'exfest']) if (s[k].residuo != null && !s[k].unita) return bad(res, 400, 'Indica se il residuo è in ore o in giorni.');
+  await db.q('update buste set saldi = $2 where id = $1', [rows[0].id, JSON.stringify(s)]);
+  res.json({ saldi: s });
 }));
 // Pagina senza codice fiscale riconosciuto: si assegna a una persona (si aggiunge alla sua busta del mese) o si scarta
 app.post('/api/buste/sospese/:id/assegna', needAdmin, wrap(async (req, res) => {
@@ -569,6 +609,10 @@ app.post('/api/buste/sospese/:id/assegna', needAdmin, wrap(async (req, res) => {
     await qq('delete from pagine_sospese where id = $1', [p.id]);
   });
   res.json({ ok: true });
+  if (p.tipo === 'busta') (async () => { // la busta è cambiata: si rileggono i residui
+    const { rows: nb } = await db.q(`select * from buste where staff_id = $1 and mese = $2 and tipo = 'busta'`, [staffId, p.mese]);
+    if (nb[0] && !nb[0].saldi?.manuale) leggiResidui([{ id: nb[0].id, testo: (await buste.testoPagine(buste.decifra(nb[0]))).join('\n') }]);
+  })().catch(e => console.warn('Turni, residui:', e.message));
 }));
 app.delete('/api/buste/sospese/:id', needAdmin, wrap(async (req, res) => {
   await db.q('delete from pagine_sospese where id = $1', [req.params.id]);

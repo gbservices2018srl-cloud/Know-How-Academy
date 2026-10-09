@@ -354,6 +354,13 @@ details summary{cursor:pointer;font-weight:700}
 .storico ul{margin:6px 0 0;padding-left:18px}
 .storico li{margin:2px 0}
 
+/* saldi dal cedolino */
+.stat.saldi em{display:block;font-style:normal;font-size:12px;color:var(--muted);margin-top:4px;max-width:180px}
+.resedit{margin-top:4px}
+.resedit summary{cursor:pointer;color:var(--teal-ink);font-weight:700;font-size:12.5px}
+.resrow{display:grid;grid-template-columns:62px 72px 86px;gap:6px;align-items:center;margin-top:6px}
+.resrow input,.resrow select{min-height:32px;padding:4px 6px;font-size:13px}
+
 </style>
 </head>
 <body>
@@ -727,10 +734,11 @@ function vStato(){
   <div class="grid2">
     <div class="panel"><h3>Prossimo turno</h3>${np?`<div class="nextwhen">${np.d===TODAY?"Oggi":DOWL[dow(np.d)]+" "+fmt(np.d)}</div>
       <div class="nextrow"><div class="agt k-${np.code}">${np.code}</div><div class="agi">${np.turni.map(x=>`<div class="t">${esc(x.label)} · ${esc(x.sede)}</div><div class="meta">${x.conChi}</div>`).join("")}</div></div>`:`<p style="color:var(--muted);margin:0">Nessun turno in programma.</p>`}</div>
-    <div class="panel"><h3>Saldi ${TODAY.slice(0,4)}</h3><div class="stat">
+    ${s.cedolino ? saldiCedolinoHtml(s.cedolino) : `<div class="panel"><h3>Saldi ${TODAY.slice(0,4)}</h3><div class="stat">
       <div><b>${s.ferie}</b><span>Giorni ferie</span></div>
       <div><b>${s.rol}</b><span>Ore ROL</span></div>
-      <div><b>${STATE.mie.filter(r=>r.stato.startsWith("attesa")).length}</b><span>In attesa</span></div></div></div>
+      <div><b>${STATE.mie.filter(r=>r.stato.startsWith("attesa")).length}</b><span>In attesa</span></div></div>
+      <p class="hint" style="margin:10px 0 0">Calcolati dall'app. Quando arriva il cedolino valgono i residui scritti lì.</p></div>`}
   </div>
   <div class="panel" style="margin-top:24px">
     <div class="bar" style="justify-content:space-between"><h3 style="margin:0">I miei turni · ${fmtH(STATE.oreMese[empMonth]||0)} a ${meseShort(empMonth)}</h3>
@@ -738,6 +746,17 @@ function vStato(){
     <div class="agenda">${ag||`<p style="color:var(--muted);margin:0">Nessun turno in questo mese.</p>`}</div>
   </div>
   <div class="panel" style="margin-top:24px"><h3>Le mie richieste</h3>${STATE.mie.length?STATE.mie.map(r=>empReqCard(r, r.stato.startsWith("attesa")?`<button class="btn sm ghost bad" data-annulla="${r.id}">Annulla</button>`:"")).join(""):`<p style="color:var(--muted);margin:0">Nessuna richiesta. Usa “Richiedi” per ferie, ROL, malattia, congedo parentale o altro motivo.</p>`}</div>`;
+}
+// Saldi letti dall'ultimo cedolino, nell'unità scritta nel cedolino (ore o giorni)
+const numIt = n => Number(n).toLocaleString("it-IT",{maximumFractionDigits:2});
+function saldiCedolinoHtml(c){
+  const d = c.dopo || {}, voci = [];
+  const voce = (v, nome, togli, unitaTogli) => { if (!v || v.residuo==null) return;
+    const ok = togli && v.unita===unitaTogli, resta = ok ? v.residuo - togli : v.residuo;
+    voci.push(`<div><b>${numIt(resta)}</b><span>${v.unita==="ore"?"Ore":v.unita==="giorni"?"Giorni":""} ${nome}</span>${togli?`<em>${ok?`${numIt(v.residuo)} nel cedolino − ${numIt(togli)} ${unitaTogli} approvati dopo`:`+ ${numIt(togli)} ${unitaTogli} approvati dopo, da togliere`}</em>`:""}</div>`); };
+  voce(c.ferie, "ferie", d.ferieGiorni, "giorni"); voce(c.rol, "ROL", d.rolOre, "ore"); voce(c.exfest, "ex festività");
+  return `<div class="panel"><h3>Saldi</h3><div class="stat saldi">${voci.join("")||"<p>—</p>"}</div>
+    <p class="hint" style="margin:10px 0 0">Residui del cedolino di ${meseLabel(c.mese)}${d.ferieGiorni||d.rolOre?", meno le assenze approvate dopo":""}. Per dubbi chiedi all'ufficio personale.</p></div>`;
 }
 function vNuova(){
   const s = STATE.staff, fine = `${MONTHS[MONTHS.length-1]}-${pad(daysIn(MONTHS[MONTHS.length-1]))}`;
@@ -878,8 +897,8 @@ function vBusteAdmin(){
       ${pub.length && ok<pub.length?`<button class="btn ghost" id="sollecito">Sollecita chi non ha firmato (${pub.length-ok})</button>`:""}
       ${del.length?`<a class="btn ghost" href="/api/buste/mese/${bustaMese}/registro.csv${qt}">Registro (CSV)</a><a class="btn ghost" href="/api/buste/mese/${bustaMese}/pdf${qt}">Tutti i documenti (PDF)</a>`:""}</div>
     ${sosp.length && bozze.length?`<p class="hint" style="margin:-6px 0 12px">Prima assegna o scarta le pagine qui sopra.</p>`:""}
-    <div class="overflow"><table class="rules"><thead><tr><th>Dipendente</th><th>Stato</th><th>Dispositivo</th><th>Impronta file</th><th></th></tr></thead><tbody>
-      ${righe.map(([e,b])=>`<tr><td>${esc(full(e))}<div class="mono">${esc(e?.cf||"codice fiscale mancante")}</div></td><td>${statoB(b)}</td><td style="font-size:13px">${esc(b?.firmata_disp||b?.confermata_disp||b?.aperta_disp||"—")}</td>
+    <div class="overflow"><table class="rules"><thead><tr><th>Dipendente</th><th>Stato</th>${T==="busta"?"<th>Residui dal cedolino</th>":""}<th>Dispositivo</th><th>Impronta file</th><th></th></tr></thead><tbody>
+      ${righe.map(([e,b])=>`<tr><td>${esc(full(e))}<div class="mono">${esc(e?.cf||"codice fiscale mancante")}</div></td><td>${statoB(b)}</td>${T==="busta"?`<td style="font-size:13px">${b?residuiCell(b):"—"}</td>`:""}<td style="font-size:13px">${esc(b?.firmata_disp||b?.confermata_disp||b?.aperta_disp||"—")}</td>
         <td class="mono">${b?esc(b.impronta.slice(0,12))+"…":"—"}</td><td style="white-space:nowrap">${b?`<a class="btn sm ghost" href="/api/buste/${b.id}/anteprima" target="_blank" rel="noopener">Vedi</a>${b.firmata_il?` <a class="btn sm" href="/api/buste/${b.id}/firmata" target="_blank" rel="noopener">Copia firmata</a>`:""}${b.stato==="bozza"?` <button class="btn sm ghost bad" data-bdel="${b.id}">Togli</button>`:""}`:""}</td></tr>`).join("")||`<tr><td colspan="5">Nessun dipendente (i medici non ricevono i documenti dall'app).</td></tr>`}
     </tbody></table></div>
   </div>
@@ -890,6 +909,16 @@ function vBusteAdmin(){
       <div class="acts"><a class="btn sm ghost" href="/api/buste/mese/${m}/pdf${qt}">PDF</a><a class="btn sm ghost" href="/api/buste/mese/${m}/registro.csv${qt}">Registro</a>${delPending===m?`<button class="btn sm bad" data-delok="${m}">Conferma eliminazione</button><button class="btn sm ghost" data-delno="1">Annulla</button>`:`<button class="btn sm ghost bad" data-del="${m}">Elimina</button>`}</div></div>`;}).join("")
       :`<p style="margin:0;color:var(--muted)">Nessun documento in archivio.</p>`}
   </div>`;
+}
+const uTxt = u => u==="ore" ? "h" : u==="giorni" ? "gg" : "";
+function residuiCell(b){
+  const s = b.saldi, v = (x,n) => x && x.residuo!=null ? `${n} <b>${numIt(x.residuo)} ${uTxt(x.unita)}</b>` : "";
+  const txt = !s ? `<span class="mono">${STATE.aiEnabled?"in lettura…":"lettura automatica non attiva"}</span>` : s.vuoto ? `<span class="chip warn" title="${esc((s.dubbi||[]).join(" · "))}">Non trovati</span>`
+    : [v(s.ferie,"Ferie"), v(s.rol,"ROL"), v(s.exfest,"Ex fest.")].filter(Boolean).join(" · ") + (s.manuale?` <span class="chip n">a mano</span>`:"") + (s.dubbi?.length?` <span class="chip warn" title="${esc(s.dubbi.join(" · "))}">da controllare</span>`:"");
+  const riga = (k,n) => { const x = s?.[k]||{}; return `<div class="resrow"><span>${n}</span><input type="text" inputmode="decimal" data-res="${k}" value="${x.residuo!=null?String(x.residuo).replace(".",","):""}" aria-label="${n}">
+    <select data-resu="${k}" aria-label="Unità ${n}"><option value="">—</option><option value="giorni" ${x.unita==="giorni"?"selected":""}>giorni</option><option value="ore" ${x.unita==="ore"?"selected":""}>ore</option></select></div>`; };
+  return `${txt}<details class="resedit"><summary>Correggi</summary><div data-resbox="${b.id}">${riga("ferie","Ferie")}${riga("rol","ROL")}${riga("exfest","Ex fest.")}
+    <div class="bar" style="margin:6px 0 0"><button class="btn sm" data-ressave="${b.id}">Salva</button>${STATE.aiEnabled?`<button class="btn sm ghost" data-resread="${b.id}">Rileggi dal cedolino</button>`:""}</div></div></details>`;
 }
 async function loadBuste(){ const T=docT(); try { BUSTE = await api("GET","/api/buste?tipo="+T); } catch(e){ BUSTE = {tipo:T, buste:[], sospese:[], cutoff:"0000-00"}; toast(e.message); } if (tab==="bpAdmin"||tab==="cudAdmin") render(); }
 
@@ -1248,6 +1277,11 @@ function bind(){
     try { const r=await api("POST","/api/buste/pubblica",{mese:bustaMese, tipo:T}); upMsg=""; ricaricaBuste(`${r.pubblicate} documenti pubblicati`); } catch(e){ el.disabled=false; toast(e.message); } });
   q("#sollecito",el=>el.onclick=async()=>{ el.disabled=true;
     try { const r=await api("POST","/api/buste/sollecito",{mese:bustaMese, tipo:docT()}); toast(`Promemoria inviato a ${r.sollecitati} ${r.sollecitati===1?"persona":"persone"}`); } catch(e){ el.disabled=false; toast(e.message); } });
+  on("[data-ressave]","click",async b=>{ const box=$(`[data-resbox="${b.dataset.ressave}"]`), body={};
+    for (const k of ["ferie","rol","exfest"]) body[k]={residuo:box.querySelector(`[data-res="${k}"]`).value.trim(), unita:box.querySelector(`[data-resu="${k}"]`).value};
+    b.disabled=true; try { await api("POST",`/api/buste/${b.dataset.ressave}/residui`,body); ricaricaBuste("Residui salvati"); } catch(e){ b.disabled=false; toast(e.message); } });
+  on("[data-resread]","click",async b=>{ b.disabled=true; b.textContent="Sto leggendo…";
+    try { await api("POST",`/api/buste/${b.dataset.resread}/residui`,{rileggi:true}); ricaricaBuste("Residui riletti dal cedolino"); } catch(e){ b.disabled=false; b.textContent="Rileggi dal cedolino"; toast(e.message); } });
   on("[data-bdel]","click",async b=>{ if (!confirm("Togliere questo documento? Potrai ricaricarlo.")) return;
     try { await api("DELETE",`/api/buste/${b.dataset.bdel}`); ricaricaBuste("Documento tolto"); } catch(e){ toast(e.message); } });
   on("[data-del]","click",b=>{ delPending=b.dataset.del; render(); });

@@ -85,7 +85,7 @@ async function dividi(buf, staff) {
     const g = gruppi.find(x => x.staffId === chi[i]);
     if (g) g.pagine.push(i); else gruppi.push({ staffId: chi[i], pagine: [i] });
   }
-  for (const g of gruppi) g.buf = await estrai(buf, g.pagine);
+  for (const g of gruppi) { g.buf = await estrai(buf, g.pagine); g.testo = g.pagine.map(i => testi[i] || '').join('\n'); }
   for (const s of sospese) s.buf = await estrai(buf, [s.pagina]);
   return { pagine: n, gruppi, sospese };
 }
@@ -135,4 +135,4 @@ function dispositivo(ua) {
   return `${os} · ${br}`;
 }
 
-module.exports = { attive, cifra, decifra, impronta, dividi, estrai, unisci, dispositivo, ricevuta };
+module.exports = { attive, cifra, decifra, impronta, dividi, estrai, unisci, dispositivo, ricevuta, testoPagine };

@@ -140,6 +140,7 @@ async function migrate() {
     alter table buste add column if not exists firmata_disp text;
     alter table pagine_sospese add column if not exists tipo text not null default 'busta';
     create index if not exists buste_tipo_idx on buste(tipo, mese);
+    alter table buste add column if not exists saldi jsonb; -- residui di ferie, ROL, ex festività letti dal cedolino (con l'unità scritta lì)
     -- storico delle richieste: invio, risposte del sostituto (anche i cambi da sì a no e viceversa), decisione dell'amministrazione
     create table if not exists richieste_eventi (
       id bigserial primary key,
