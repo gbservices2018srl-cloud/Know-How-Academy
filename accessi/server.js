@@ -259,7 +259,9 @@ async function cfUsato(cf, tranneId) {
   return rows.length > 0;
 }
 app.post('/api/register', wrap(async (req, res) => {
-  if (limited('reg|' + req.ip, 5, 60)) return bad(res, 429, 'Troppe registrazioni da questa connessione. Riprova più tardi.');
+  // freno contro gli abusi: i tentativi con errori (es. codice fiscale sbagliato) contano poco; le registrazioni riuscite
+  // sono al massimo 20 all'ora dalla stessa connessione (es. tutto lo studio sullo stesso Wi-Fi)
+  if (limited('regtry|' + req.ip, 60, 15)) return bad(res, 429, 'Troppi tentativi da questa connessione. Riprova tra un quarto d\'ora.');
   const b = req.body;
   const firstName = store.cleanName(b.firstName), lastName = store.cleanName(b.lastName);
   const email = store.cleanEmail(b.email), birthDate = store.cleanDate(b.birthDate), password = String(b.password || '');
@@ -277,6 +279,7 @@ app.post('/api/register', wrap(async (req, res) => {
   if (!b.privacy) return bad(res, 400, "Per registrarti devi accettare l'informativa privacy.");
   if (await store.findByEmail(email)) return bad(res, 400, 'Esiste già un account con questa email. Se non ricordi la password usa «Password dimenticata».');
   if (await cfUsato(cf)) return bad(res, 400, 'Esiste già un account con questo codice fiscale. Se non ricordi la password usa «Password dimenticata».');
+  if (limited('reg|' + req.ip, 20, 60)) return bad(res, 429, 'Troppe registrazioni da questa connessione nell\'ultima ora. Riprova più tardi oppure usa i dati mobili del telefono.');
   const u = await store.createUser({ firstName, lastName, birthDate, email, password, status: 'pending', cf, figura, ...albo.dati });
   const adminUrl = PUBLIC_URL() + '/admin';
   mail.send({
