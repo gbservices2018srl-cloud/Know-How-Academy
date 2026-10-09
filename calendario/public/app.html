@@ -267,6 +267,15 @@ dialog::backdrop{background:rgba(10,30,30,.45);backdrop-filter:blur(2px)}
 .rsvp-box{background:var(--surface-2);border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
 .rsvp-box p{margin:0;font-size:14px;color:var(--muted)}
 .rsvp-box p b{color:var(--fg)}
+.rsvp button{touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
+.rsvp button:disabled{opacity:.6}
+.rsvp button.busy{opacity:1;outline:3px solid color-mix(in srgb,var(--ok) 45%,transparent)}
+.rsvp-box.fatto{background:color-mix(in srgb,var(--ok) 14%,var(--surface));border-color:var(--ok)}
+.rsvp-box.fatto.no{background:var(--surface-2);border-color:var(--line)}
+.rsvp-box.fatto p:first-child{display:flex;gap:8px;align-items:center;font-size:16px}
+.rsvp-box.fatto svg{width:22px;height:22px;color:var(--ok)}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px}
+@keyframes spin{to{transform:rotate(360deg)}}
 .att{display:flex;flex-direction:column;gap:8px}
 .att-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .att-stats button{border:1.5px solid var(--line);background:var(--surface);border-radius:14px;padding:10px 8px;text-align:center;display:flex;flex-direction:column;gap:2px;align-items:center}
@@ -385,7 +394,12 @@ async function api(url, opt = {}) {
   return j;
 }
 let toastT;
-function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 2600); }
+const TOAST = document.getElementById('toast');
+function toast(msg) {
+  const d = document.getElementById('dlg'), t = TOAST, host = d && d.open ? d : document.body; // con una finestra aperta il messaggio va dentro, altrimenti resta nascosto dietro
+  if (t.parentNode !== host) host.appendChild(t);
+  t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 2600);
+}
 const store = {
   get(k, d) { try { const v = localStorage.getItem('cal.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem('cal.' + k, JSON.stringify(v)); } catch {} },
@@ -794,17 +808,29 @@ function rsvpBox(e) {
     <button class="yes ${e.myRsvp === 'yes' ? 'on' : ''}" data-rsvp="yes">${ic('check')}Ci sarò</button>
     <button class="no ${e.myRsvp === 'no' ? 'on' : ''}" data-rsvp="no">${ic('x')}Non ci sarò</button></div>`}</div>`;
 }
+// Ci sarò / Non ci sarò: mentre salva lo dice (il server gratuito può metterci fino a un minuto se si era addormentato),
+// poi mostra la conferma ben visibile e chiude la finestra da solo.
 function bindRsvp(sheet, e) {
   sheet.addEventListener('click', async ev => {
-    const b = ev.target.closest('[data-rsvp]'); if (!b) return;
+    const b = ev.target.closest('[data-rsvp]'); if (!b || b.disabled) return;
     const status = e.myRsvp === b.dataset.rsvp ? null : b.dataset.rsvp;
+    const box = $('#rsvp', sheet), msg = $('p', box);
     sheet.querySelectorAll('[data-rsvp]').forEach(x => x.disabled = true);
+    b.classList.add('busy');
+    msg.innerHTML = '<span class="spin" aria-hidden="true"></span> <b>Sto salvando la tua risposta…</b>';
+    const lento = setTimeout(() => { if (msg.isConnected) msg.innerHTML = '<span class="spin" aria-hidden="true"></span> <b>Ancora un attimo…</b> il server si sta svegliando, può volerci fino a un minuto. Non chiudere.'; }, 4000);
     try {
       await api(`/api/events/${e.id}/rsvp`, { method: 'POST', body: { status } });
-      e.myRsvp = status; $('#rsvp', sheet).outerHTML = rsvpBox(e);
-      toast(status === 'yes' ? 'Presenza confermata' : status === 'no' ? 'Assenza segnata' : 'Risposta tolta');
-      render();
-    } catch (x) { toast(x.message); sheet.querySelectorAll('[data-rsvp]').forEach(x => x.disabled = false); }
+      clearTimeout(lento);
+      e.myRsvp = status; render();
+      const txt = status === 'yes' ? 'Presenza confermata: ci sarai!' : status === 'no' ? 'Assenza segnata: non ci sarai.' : 'Risposta tolta.';
+      box.outerHTML = `<div class="rsvp-box fatto ${status || ''}" id="rsvp" role="status"><p>${ic(status === 'no' ? 'x' : 'check')}<b>${txt}</b></p><p class="muted" style="margin:0;font-size:13px">Puoi cambiarla fino al giorno dell'evento.</p></div>`;
+      setTimeout(() => { if (sheet.isConnected) closeDialog(); }, 1600);
+    } catch (x) {
+      clearTimeout(lento);
+      msg.innerHTML = `<b style="color:var(--danger,#B3261E)">Risposta non salvata.</b> ${esc(x.message === 'Failed to fetch' ? 'Controlla la connessione e riprova.' : x.message)}`;
+      b.classList.remove('busy'); sheet.querySelectorAll('[data-rsvp]').forEach(x => x.disabled = false);
+    }
   });
 }
 async function loadAttendance(sheet, e, open = '') {
