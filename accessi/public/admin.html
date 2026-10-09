@@ -46,6 +46,8 @@ header p{margin:0;color:var(--muted);max-width:70ch}
 .urow .nm small{font:500 13px var(--f-body);color:var(--muted)}
 .urow .chev{width:20px;height:20px;flex:none;color:var(--muted);transition:transform .15s}
 .user.open .urow .chev{transform:rotate(90deg)}
+.user.open .urow{background:var(--surface-2);box-shadow:inset 4px 0 0 var(--teal)}
+.ad{font-weight:500!important;font-size:12.5px!important}
 .user.open{background:color-mix(in srgb,var(--teal) 4%,var(--surface))}
 .user.pending .urow{box-shadow:inset 4px 0 0 var(--yellow)}
 .user.disabled .urow .nm{opacity:.6}
@@ -357,9 +359,13 @@ document.addEventListener('click', async e => {
 
 /* ---------- azioni ---------- */
 document.addEventListener('click', async e => {
-  const chip = e.target.closest('.chip'); if (chip) { filter = chip.dataset.f; render(); return; }
+  const chip = e.target.closest('.chip'); if (chip) { filter = chip.dataset.f; aperti.clear(); render(); return; }
   const tg = e.target.closest('[data-toggle]');
-  if (tg) { const id = tg.dataset.toggle; aperti.has(id) ? aperti.delete(id) : aperti.add(id); render(); document.querySelector(`[data-toggle="${id}"]`)?.focus(); return; }
+  if (tg) { // menu a scomparsa: si apre una persona alla volta
+    const id = tg.dataset.toggle, era = aperti.has(id); aperti.clear(); if (!era) aperti.add(id);
+    render(); const el = document.querySelector(`[data-toggle="${id}"]`); el?.focus();
+    if (!era && el && el.getBoundingClientRect().top < 0) el.scrollIntoView({block: 'start', behavior: 'smooth'});
+    return; }
   const b = e.target.closest('[data-act]'); if (!b) return;
   const u = S.users.find(x => x.id === b.dataset.u);
   const act = b.dataset.act;
@@ -369,7 +375,7 @@ document.addEventListener('click', async e => {
       if (!Object.keys(u.apps).length && !confirm(`${fullName(u)} non ha ancora nessuna app. Vuoi approvare lo stesso?`)) return;
       b.disabled = true;
       const r = await api('PATCH', '/api/admin/users/' + u.id, {status: 'active'});
-      Object.assign(u, r.user); S.livelli[u.id] = r.livelli; rinfrescaEnti(); render();
+      Object.assign(u, r.user); S.livelli[u.id] = r.livelli; rinfrescaEnti(); if (!r.avvisi?.length) aperti.delete(u.id); render();
       if (r.avvisi?.length) toast(r.avvisi.join(' · '));
       else toast((r.sent ? `Approvato: ${u.firstName} riceve un'email` : `Approvato. Avvisa tu ${u.firstName}: le email non sono attive.`) + ' Profili creati nelle app.');
     } else if (act === 'reject') {
@@ -443,7 +449,7 @@ $('#add').addEventListener('click', () => {
     }
     const r = await api('POST', '/api/admin/users', {firstName: val('d-fn'), lastName: val('d-ln'), birthDate: val('d-bd'), email: val('d-em'), password: val('d-pw'),
       cf: val('d-cf'), figura: val('d-fig'), alboProvincia: val('d-ap'), alboNumero: val('d-an'), apps});
-    S.users.push(r.user); S.livelli[r.user.id] = r.livelli || {}; aperti.add(r.user.id); filter = 'active'; render(); dlg.close();
+    S.users.push(r.user); S.livelli[r.user.id] = r.livelli || {}; aperti.clear(); aperti.add(r.user.id); filter = 'active'; render(); dlg.close();
     if (r.avvisi?.length) toast(r.avvisi.join(' · '));
     if (r.link) linkResult(r.link, r.user.firstName);
     else toast(r.sent ? `Utente creato: ${r.user.firstName} riceve un'email` : 'Utente creato');
