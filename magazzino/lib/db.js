@@ -145,7 +145,36 @@ async function migrate() {
       value text not null
     );
     alter table users add column if not exists figura text;
+    alter table fornitori add column if not exists piva text not null default '';
+    alter table fornitori add column if not exists indirizzo text not null default '';
+    -- righe delle bolle già registrate: la prossima volta lo stesso prodotto va da solo al suo articolo/categoria
+    create table if not exists bolla_memo (
+      fornitore_id text not null default '',
+      chiave text not null,
+      articolo_id text references articoli(id) on delete set null,
+      categoria_id text references categorie(id) on delete cascade,
+      aggiornato_il timestamptz not null default now(),
+      primary key (fornitore_id, chiave)
+    );
+    create table if not exists bolle (
+      id text primary key,
+      fornitore_id text references fornitori(id) on delete set null,
+      fornitore_nome text not null default '',
+      numero text not null default '',
+      data text not null default '',
+      righe int not null default 0,
+      giacenza boolean not null default true,
+      caricata_il timestamptz not null default now(),
+      utente_id text references users(id)
+    );
+    -- eliminando un articolo le prenotazioni passate restano (con nome e quantità), senza collegamento
+    alter table prenotazione_righe alter column articolo_id drop not null;
   `);
+  await q(`do $$ begin
+    if exists (select 1 from pg_constraint where conrelid = 'prenotazione_righe'::regclass and conname = 'prenotazione_righe_articolo_id_fkey' and confdeltype <> 'n') then
+      alter table prenotazione_righe drop constraint prenotazione_righe_articolo_id_fkey;
+      alter table prenotazione_righe add constraint prenotazione_righe_articolo_id_fkey foreign key (articolo_id) references articoli(id) on delete set null;
+    end if; end $$`);
 }
 
 module.exports = { pool, q, tx, newId, SCHEMA, migrate };

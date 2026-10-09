@@ -75,6 +75,8 @@ Protocolli e Calendario: `ADMIN_USERNAME` / `ADMIN_PASSWORD` nelle impostazioni 
 - Disponibile = giacenza − prenotazioni in attesa: nessuno può prenotare più di quello che c'è. Confermare scala la giacenza, rifiutare la libera.
 - Riordino: quando (giacenza + merce già ordinata) scende alla scorta minima, l'articolo entra nel carrello con la quantità per tornare al livello di carico. Dal carrello nasce un ordine per fornitore, inviato via email (Resend) o stampato. "Merce ricevuta" ricarica la giacenza. Ogni variazione resta nei Movimenti.
 - Notifiche sul telefono (Web Push) agli amministratori per ogni nuova prenotazione e al cliente per l'esito. Dati nello schema `magazzino`.
+- Articoli divisi in macro categorie a fisarmonica (se ne apre una alla volta). «Elimina tutto» elimina la categoria con i suoi articoli e movimenti, dopo aver scritto ELIMINA; non si può se un articolo è in una prenotazione in attesa o in un ordine aperto. Prenotazioni e ordini passati restano con nome e quantità.
+- Importa bolla (Articoli): foto o PDF del DDT letti con l'API di Claude (`ANTHROPIC_API_KEY`, modello `MAG_AI_MODEL` o `TURNI_AI_MODEL`). Riconosce il fornitore (P.IVA o nome) e lo crea se manca; per ogni riga propone l'articolo già esistente (memoria delle bolle precedenti in `bolla_memo`, poi codice, poi nome) o chiede la categoria la prima volta. Registrando crea gli articoli nuovi, carica le quantità (movimento «Merce ricevuta (bolla)») e ricorda le scelte. Avvisa se la stessa bolla dello stesso fornitore è già stata registrata.
 
 ## Turni
 - Solo con l'accesso unico. Il dipendente è riconosciuto dall'email della sua scheda in Personale; al primo accesso accetta l'informativa privacy (registrata con data e dispositivo).

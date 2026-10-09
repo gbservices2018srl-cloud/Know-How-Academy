@@ -29,6 +29,7 @@
   --bg:#15191B; --surface:#1D2326; --surface-2:#252C30; --fg:#ECEFF0; --muted:#A3AAAE; --line:#2F383C;
   --danger:#F2B8B5; --danger-bg:#3A2222; --ok:#6CC7C7; --ok-bg:#1F3436; --warn:#E8E560; --warn-bg:#35341C; color-scheme:dark}}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{margin:0}
 body{background:var(--bg);color:var(--fg);font:15.5px/1.5 var(--f-body);min-height:100vh}
 a{color:var(--teal-ink)}
@@ -147,6 +148,38 @@ dialog form{padding:20px;display:flex;flex-direction:column;gap:12px}
   .tbl.cards td.full{grid-column:1/-1}
   .tbl.cards .num{text-align:left}
 }
+/* categorie a fisarmonica: se ne apre una alla volta */
+.acc{margin-bottom:8px}
+.acc-h{appearance:none;width:100%;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:13px 16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);cursor:pointer;text-align:left;min-height:54px}
+.acc-h:hover{border-color:var(--teal)}
+.acc-h h2{font-size:17px;flex:1 1 auto;min-width:120px}
+.acc-h .chev{width:22px;height:22px;display:grid;place-items:center;border-radius:6px;background:var(--surface-2);font-weight:800;transition:transform .15s;flex:none}
+.acc.open>.acc-h{border-color:var(--teal);box-shadow:inset 4px 0 0 var(--teal)}
+.acc.open>.acc-h .chev{transform:rotate(90deg)}
+.acc-b{padding:10px 0 14px}
+.acc-act{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-bottom:10px}
+.acc-h:focus-visible{outline:3px solid color-mix(in srgb,var(--teal) 55%,transparent);outline-offset:2px}
+/* bolla */
+dialog.wide{width:min(940px,calc(100vw - 24px))}
+.drop{display:flex;flex-direction:column;align-items:center;gap:8px;border:2px dashed var(--line);border-radius:14px;padding:22px 14px;text-align:center;cursor:pointer;background:var(--surface-2)}
+.drop:hover{border-color:var(--teal)}
+.drop input{width:auto;min-height:0;border:0;background:none;padding:0}
+.thumbs{display:flex;gap:8px;flex-wrap:wrap}
+.thumbs img{width:72px;height:96px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.thumbs .pdf{width:72px;height:96px;display:grid;place-items:center;border-radius:8px;border:1px solid var(--line);font-weight:800;color:var(--danger);background:var(--danger-bg)}
+.brows{display:flex;flex-direction:column;gap:8px;max-height:52vh;overflow:auto;padding-right:2px}
+.br{display:grid;grid-template-columns:28px minmax(0,1.5fr) 150px minmax(0,1.3fr);gap:8px 10px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:12px}
+.br.off{opacity:.5}
+.br.todo{border-color:color-mix(in srgb,var(--yellow) 85%,var(--line));box-shadow:inset 4px 0 0 var(--yellow)}
+.br input[type=checkbox]{width:20px;height:20px;min-height:0}
+.br .q{display:flex;gap:6px;align-items:center}
+.br .q input{width:80px;text-align:right}
+.br .sub{font-size:12.5px;color:var(--muted);margin-top:3px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+@media (max-width:700px){.br{grid-template-columns:28px 1fr}.br>.q,.br>.dest{grid-column:2}.brows{max-height:none;overflow:visible}}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.note.warn{background:var(--warn-bg);color:var(--fg)}
+.note.danger{background:var(--danger-bg);color:var(--fg)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -171,7 +204,7 @@ const store = { get(k, d) { try { const v = localStorage.getItem('mag_' + k); re
   set(k, v) { try { localStorage.setItem('mag_' + k, JSON.stringify(v)); } catch {} } };
 
 let S = { me: null, categorie: [], articoli: [], prenotazioni: [], fornitori: [], carrello: [], ordini: [], links: {} };
-let view = null, catFilter = '', query = '';
+let view = null, catAperta = store.get('catAperta', ''), query = '';
 let cart = store.get('cart', {}); // cliente: { articoloId: quantita }
 const isAdmin = () => S.me && S.me.role === 'admin';
 
@@ -225,17 +258,31 @@ function render() {
 function catOptions() { return S.categorie.filter(c => S.articoli.some(a => a.categoriaId === c.id && (isAdmin() || a.disponibile > 0 || cart[a.id]))); }
 function filtroArticoli(list) {
   const q = query.trim().toLowerCase();
-  return list.filter(a => (!catFilter || a.categoriaId === catFilter) && (!q || `${a.nome} ${a.codice}`.toLowerCase().includes(q)));
+  return list.filter(a => !q || `${a.nome} ${a.codice}`.toLowerCase().includes(q));
 }
 function toolsHtml(placeholder) {
   return `<div class="tools"><input class="search" type="search" id="q" placeholder="${placeholder}" value="${esc(query)}" aria-label="Cerca">
-    <div class="chips" role="group" aria-label="Categorie"><button class="chip" data-cat="" aria-pressed="${!catFilter}">Tutte</button>
-    ${catOptions().map(c => `<button class="chip" data-cat="${c.id}" aria-pressed="${catFilter === c.id}">${esc(c.nome)}</button>`).join('')}</div></div>`;
+    ${query ? '' : '<span class="muted" style="font-size:13.5px">Tocca una categoria per vederne gli articoli.</span>'}</div>`;
 }
+let redrawCats = null;
 function bindTools(redraw) {
+  redrawCats = redraw;
   $('#q').addEventListener('input', e => { query = e.target.value; redraw(); });
-  document.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { catFilter = b.dataset.cat; document.querySelectorAll('[data-cat]').forEach(x => x.setAttribute('aria-pressed', x === b)); redraw(); });
 }
+// Fisarmonica: una categoria aperta alla volta; durante una ricerca si aprono tutte quelle con risultati.
+const aperta = id => !!query.trim() || catAperta === id;
+function accHead(c, extra) {
+  const op = aperta(c.id);
+  return `<button type="button" class="acc-h" data-acc="${c.id}" aria-expanded="${op}"><span class="chev" aria-hidden="true">›</span><h2>${esc(c.nome)}</h2>${extra}</button>`;
+}
+document.addEventListener('click', e => {
+  const h = e.target.closest('[data-acc]'); if (!h || !redrawCats) return;
+  if (query.trim()) return;
+  catAperta = catAperta === h.dataset.acc ? '' : h.dataset.acc; store.set('catAperta', catAperta);
+  redrawCats();
+  const el = document.querySelector(`[data-acc="${CSS.escape(h.dataset.acc)}"]`);
+  if (el && catAperta && el.getBoundingClientRect().top < 70) el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+});
 function renderCatalogo() {
   $('#main').innerHTML = `${pushBanner()}<div class="head"><div><h1>Magazzino</h1><p>Le quantità mostrate sono quelle disponibili adesso. Scegli gli articoli e invia la prenotazione.</p></div></div>
     ${toolsHtml('Cerca articolo o codice')}<div id="cat-list"></div>`;
@@ -244,8 +291,11 @@ function renderCatalogo() {
 function drawCatalogo() {
   const arts = filtroArticoli(S.articoli);
   const byCat = S.categorie.map(c => [c, arts.filter(a => a.categoriaId === c.id)]).filter(([, l]) => l.length);
-  $('#cat-list').innerHTML = byCat.length ? byCat.map(([c, l]) => `<div class="cat-title"><h2>${esc(c.nome)}</h2><span class="line"></span></div>
-    <div class="items">${l.map(itemCard).join('')}</div>`).join('')
+  $('#cat-list').innerHTML = byCat.length ? byCat.map(([c, l]) => {
+    const disp = l.filter(a => a.disponibile > 0).length, nel = l.filter(a => cart[a.id]).length;
+    return `<section class="acc ${aperta(c.id) ? 'open' : ''}">${accHead(c, `<span class="muted" style="font-size:13px">${disp} disponibili</span>${nel ? ` <span class="pill ok">${nel} nel carrello</span>` : ''}`)}
+      ${aperta(c.id) ? `<div class="acc-b"><div class="items">${l.map(itemCard).join('')}</div></div>` : ''}</section>`;
+  }).join('')
     : `<div class="card empty"><b>Nessun articolo</b>${S.articoli.length ? 'Nessun articolo corrisponde alla ricerca.' : 'Il magazzino non ha ancora articoli disponibili.'}</div>`;
 }
 function itemCard(a) {
@@ -378,37 +428,63 @@ function statoScorta(a) {
 }
 function renderArticoli() {
   $('#main').innerHTML = `<div class="head"><div><h1>Articoli</h1><p>Giacenza, scorta minima e livello di carico. Disponibile = giacenza − prenotazioni in attesa.</p></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-new-cat>+ Macro categoria</button><button class="btn primary" data-new-art>+ Articolo</button></div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-new-cat>+ Macro categoria</button>
+      <button class="btn" data-bolla ${S.categorie.length ? '' : 'title="Crea prima le macro categorie"'}>📷 Importa bolla</button>
+      <button class="btn primary" data-new-art>+ Articolo</button></div></div>
     ${toolsHtml('Cerca articolo o codice')}<div id="art-list"></div>`;
   bindTools(drawArticoli); drawArticoli();
   $('[data-new-cat]').onclick = () => editCategoria();
+  $('[data-bolla]').onclick = () => S.categorie.length ? importaBolla() : (toast('Crea prima le macro categorie: poi importa la bolla'), editCategoria());
   $('[data-new-art]').onclick = () => S.categorie.length ? editArticolo() : (toast('Crea prima una macro categoria'), editCategoria());
 }
 function drawArticoli() {
   const arts = filtroArticoli(S.articoli);
-  const cats = S.categorie.filter(c => !catFilter || c.id === catFilter);
+  const cats = S.categorie;
   if (!S.categorie.length) { $('#art-list').innerHTML = '<div class="card empty"><b>Inizia dalle macro categorie</b>Ad esempio «Monouso», «Igiene», «Cancelleria». Poi aggiungi gli articoli dentro ciascuna.</div>'; return; }
   $('#art-list').innerHTML = cats.map(c => {
     const l = arts.filter(a => a.categoriaId === c.id);
     if (query && !l.length) return '';
-    return `<div class="cat-title"><h2>${esc(c.nome)}</h2><span class="muted" style="font-size:13px">${l.length} ${l.length === 1 ? 'articolo' : 'articoli'}</span><span class="line"></span>
-      <button class="btn sm ghost" data-ren-cat="${c.id}">Rinomina</button><button class="btn sm ghost danger" data-del-cat="${c.id}">Elimina</button></div>
+    const sotto = l.filter(a => a.attivo && a.giacenza > 0 && a.scortaMinima && a.giacenza <= a.scortaMinima).length, esa = l.filter(a => a.attivo && a.giacenza === 0).length;
+    const head = accHead(c, `<span class="muted" style="font-size:13px">${l.length} ${l.length === 1 ? 'articolo' : 'articoli'}</span>${sotto ? ` <span class="pill warn">${sotto} sotto scorta</span>` : ''}${esa ? ` <span class="pill no">${esa} esauriti</span>` : ''}`);
+    if (!aperta(c.id)) return `<section class="acc">${head}</section>`;
+    return `<section class="acc open">${head}<div class="acc-b">
+      <div class="acc-act"><button class="btn sm" data-new-art-in="${c.id}">+ Articolo qui</button><button class="btn sm ghost" data-ren-cat="${c.id}">Rinomina</button>
+        <button class="btn sm ghost danger" data-del-cat="${c.id}">${l.length || S.articoli.some(a => a.categoriaId === c.id) ? 'Elimina tutto' : 'Elimina categoria'}</button></div>
       ${l.length ? `<div class="card tbl-wrap"><table class="tbl cards"><thead><tr><th>Articolo</th><th class="num">Giacenza</th><th class="num">Prenotato</th><th class="num">Disponibile</th><th class="num">Scorta min.</th><th class="num">Carico</th><th>Fornitore</th><th></th></tr></thead><tbody>
         ${l.map(a => `<tr class="${a.attivo ? '' : 'off'}"><td class="full"><b>${esc(a.nome)}</b> ${statoScorta(a)}${a.codice ? `<div class="muted" style="font-size:12.5px">Cod. ${esc(a.codice)}</div>` : ''}</td>
           <td class="num" data-l="Giacenza"><b>${a.giacenza}</b> ${esc(a.unita)}</td><td class="num" data-l="Prenotato">${a.impegnato || '—'}</td><td class="num" data-l="Disponibile">${a.disponibile}</td>
           <td class="num" data-l="Scorta min.">${a.scortaMinima || '—'}</td><td class="num" data-l="Carico">${a.livelloCarico || '—'}${a.inArrivo ? `<div class="pill purple" style="margin-top:3px">+${a.inArrivo} in arrivo</div>` : ''}</td>
           <td data-l="Fornitore">${esc(a.fornitoreNome || '—')}</td>
           <td class="full"><div class="rowact"><button class="btn sm" data-giac="${a.id}">Giacenza</button><button class="btn sm" data-mov="${a.id}">Movimenti</button><button class="btn sm" data-edit-art="${a.id}">Modifica</button></div></td></tr>`).join('')}
-        </tbody></table></div>` : '<div class="card empty" style="padding:16px">Nessun articolo in questa categoria.</div>'}`;
+        </tbody></table></div>` : '<div class="card empty" style="padding:16px">Nessun articolo in questa categoria.</div>'}</div></section>`;
   }).join('') || '<div class="card empty">Nessun articolo corrisponde alla ricerca.</div>';
   document.querySelectorAll('[data-edit-art]').forEach(b => b.onclick = () => editArticolo(S.articoli.find(a => a.id === b.dataset.editArt)));
   document.querySelectorAll('[data-giac]').forEach(b => b.onclick = () => rettifica(S.articoli.find(a => a.id === b.dataset.giac)));
   document.querySelectorAll('[data-mov]').forEach(b => b.onclick = () => movimenti(S.articoli.find(a => a.id === b.dataset.mov)));
   document.querySelectorAll('[data-ren-cat]').forEach(b => b.onclick = () => editCategoria(S.categorie.find(c => c.id === b.dataset.renCat)));
-  document.querySelectorAll('[data-del-cat]').forEach(b => b.onclick = async () => {
-    const c = S.categorie.find(x => x.id === b.dataset.delCat);
-    if (!confirm(`Eliminare la categoria «${c.nome}»?`)) return;
+  document.querySelectorAll('[data-del-cat]').forEach(b => b.onclick = () => eliminaCategoria(S.categorie.find(x => x.id === b.dataset.delCat)));
+  document.querySelectorAll('[data-new-art-in]').forEach(b => b.onclick = () => { catAperta = b.dataset.newArtIn; editArticolo(); });
+}
+// Elimina la macro categoria; se contiene articoli li elimina tutti, dopo una conferma scritta.
+async function eliminaCategoria(c) {
+  const l = S.articoli.filter(a => a.categoriaId === c.id);
+  if (!l.length) {
+    if (!confirm(`Eliminare la macro categoria «${c.nome}»? È vuota.`)) return;
     try { await api('/api/categorie/' + c.id, { method: 'DELETE' }); await load(); render(); toast('Categoria eliminata'); } catch (e) { toast(e.message); }
+    return;
+  }
+  const pezzi = l.reduce((t, a) => t + (a.giacenza || 0), 0);
+  open(`<div class="dlg-h"><h2>Eliminare «${esc(c.nome)}» e tutto il suo contenuto?</h2></div>
+    <div class="note danger">Verranno eliminati <b>definitivamente</b> la macro categoria e i suoi <b>${l.length} ${l.length === 1 ? 'articolo' : 'articoli'}</b>${pezzi ? ` (in giacenza ${pezzi} in tutto)` : ''}, con i loro movimenti.
+      Le prenotazioni e gli ordini passati restano nello storico. <b>L'operazione non si può annullare.</b></div>
+    <div class="req-lines" style="max-height:30vh;overflow:auto">${l.slice(0, 50).map(a => `<div><span>${esc(a.nome)}</span><span class="muted">${a.giacenza} ${esc(a.unita)}</span></div>`).join('')}${l.length > 50 ? `<div class="muted">… e altri ${l.length - 50}</div>` : ''}</div>
+    <label class="f">Per confermare scrivi ELIMINA<input id="del-ok" autocomplete="off" autocapitalize="characters" placeholder="ELIMINA"></label>
+    <div class="msg err" role="alert"></div>
+    <div class="dlg-f"><button class="btn" value="cancel" formnovalidate>Annulla</button><button class="btn danger" value="save">Elimina tutto</button></div>`, async () => {
+    if ($('#del-ok').value.trim().toUpperCase() !== 'ELIMINA') throw new Error('Scrivi ELIMINA per confermare.');
+    const r = await api('/api/categorie/' + c.id + '?tutto=1', { method: 'DELETE' });
+    if (catAperta === c.id) { catAperta = ''; store.set('catAperta', ''); }
+    closeDlg(); await load(); render(); toast(`Eliminata «${c.nome}» con ${r.articoli} articoli`);
   });
 }
 function editCategoria(c) {
@@ -418,7 +494,7 @@ function editCategoria(c) {
     <div class="dlg-f"><button class="btn" value="cancel" formnovalidate>Annulla</button><button class="btn primary" value="save">Salva</button></div>`, async () => {
     const nome = $('#k-nome').value.trim();
     if (c) await api('/api/categorie/' + c.id, { method: 'PUT', body: { nome } });
-    else { const r = await api('/api/categorie', { method: 'POST', body: { nome } }); catFilter = r.id; }
+    else { const r = await api('/api/categorie', { method: 'POST', body: { nome } }); catAperta = r.id; store.set('catAperta', r.id); }
     closeDlg(); await load(); render(); toast('Categoria salvata');
   });
 }
@@ -427,7 +503,7 @@ function editArticolo(a) {
   open(`<div class="dlg-h"><h2>${nuovo ? 'Nuovo articolo' : 'Modifica articolo'}</h2></div>
     <label class="f">Nome<input id="a-nome" maxlength="120" value="${esc(a?.nome || '')}" placeholder="Es. Guanti in nitrile taglia M"></label>
     <div class="grid2">
-      <label class="f">Macro categoria<select id="a-cat">${S.categorie.map(c => `<option value="${c.id}" ${(a ? a.categoriaId : catFilter) === c.id ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}</select></label>
+      <label class="f">Macro categoria<select id="a-cat">${S.categorie.map(c => `<option value="${c.id}" ${(a ? a.categoriaId : catAperta) === c.id ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}</select></label>
       <label class="f">Codice <small>Facoltativo</small><input id="a-cod" maxlength="60" value="${esc(a?.codice || '')}"></label>
     </div>
     <div class="grid3">
@@ -474,6 +550,148 @@ async function movimenti(a) {
       ${m.map(x => `<tr><td>${fmtDT(x.creato_il)}<div class="muted" style="font-size:12px">${esc(x.utente || '')}</div></td><td>${esc(x.causale)}${x.riferimento ? `<div class="muted" style="font-size:12px">${esc(x.riferimento)}</div>` : ''}</td>
         <td class="num" style="color:${x.delta < 0 ? 'var(--danger)' : 'var(--ok)'};font-weight:700">${x.delta > 0 ? '+' : ''}${x.delta}</td><td class="num">${x.giacenza_dopo}</td></tr>`).join('')}
     </tbody></table></div>` : '<p class="muted">Nessun movimento.</p>'}`, null);
+}
+
+/* ---- importazione della bolla del fornitore ---- */
+// Foto → riduzione a JPEG (max 2000 px) nel browser; PDF così com'è.
+async function preparaFile(file) {
+  const leggiURL = b => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(b); });
+  if (file.type === 'application/pdf') {
+    if (file.size > 15e6) throw new Error(`«${file.name}» è troppo grande (max 15 MB).`);
+    return { tipo: 'application/pdf', dati: await leggiURL(file), nome: file.name };
+  }
+  try {
+    const img = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    const k = Math.min(1, 2000 / Math.max(img.width, img.height));
+    const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    const blob = await new Promise(ok => c.toBlob(ok, 'image/jpeg', 0.86));
+    return { tipo: 'image/jpeg', dati: await leggiURL(blob), nome: file.name };
+  } catch {
+    if (/^image\/(jpeg|png|webp|gif)$/.test(file.type) && file.size < 4.5e6) return { tipo: file.type, dati: await leggiURL(file), nome: file.name };
+    throw new Error(`«${file.name}»: formato della foto non leggibile. Scatta la foto dalla fotocamera o usa JPG/PNG/PDF.`);
+  }
+}
+function importaBolla() {
+  if (!S.bollaAttiva) {
+    open(`<div class="dlg-h"><h2>Importa bolla</h2></div><div class="note warn">La lettura delle bolle non è ancora attiva: serve la chiave <b>ANTHROPIC_API_KEY</b> su Render (è la stessa usata dai Turni).</div>
+      <div class="dlg-f"><button class="btn" value="cancel">Chiudi</button></div>`, null);
+    return;
+  }
+  let files = [];
+  open(`<div class="dlg-h"><h2>Importa bolla</h2><button class="btn sm ghost" value="cancel" aria-label="Chiudi" formnovalidate>✕</button></div>
+    <p class="muted" style="margin:0">Fotografa la bolla del fornitore (anche più pagine) oppure scegli il PDF. La leggo, riconosco fornitore e prodotti e ti faccio controllare prima di registrare.</p>
+    <label class="drop"><span style="font-size:30px" aria-hidden="true">📷</span><b>Scatta o scegli le foto della bolla</b>
+      <span class="muted" style="font-size:13px">Foto ben dritta e illuminata · JPG, PNG o PDF · fino a 6 pagine</span>
+      <input type="file" id="b-file" accept="image/*,application/pdf" multiple></label>
+    <div class="thumbs" id="b-th"></div>
+    <div class="muted" id="b-st" style="font-size:14px" aria-live="polite"></div>
+    <div class="msg err" role="alert"></div>
+    <div class="dlg-f"><button class="btn" value="cancel" formnovalidate>Annulla</button><button class="btn primary" value="save" id="b-go" disabled>Leggi la bolla</button></div>`, async () => {
+    if (!files.length) throw new Error('Scegli almeno una foto o un PDF.');
+    $('#b-st').innerHTML = '<span class="spin"></span> Sto leggendo la bolla… può servire fino a un minuto.';
+    try {
+      const d = await api('/api/bolla/leggi', { method: 'POST', body: { files: files.map(f => ({ tipo: f.tipo, dati: f.dati })) } });
+      if (!d.righe.length) throw new Error('Non ho trovato righe di merce: riprova con una foto più nitida, dritta e completa.');
+      revisioneBolla(d);
+    } finally { const st = $('#b-st'); if (st) st.textContent = ''; }
+  }, { nofocus: true });
+  $('#b-file').onchange = async e => {
+    const err = dlgf.querySelector('.msg.err'); err.textContent = '';
+    try {
+      const nuovi = [...e.target.files].slice(0, 6 - files.length);
+      for (const f of nuovi) files.push(await preparaFile(f));
+    } catch (x) { err.textContent = x.message; }
+    e.target.value = '';
+    $('#b-th').innerHTML = files.map((f, i) => f.tipo === 'application/pdf' ? `<div class="pdf" title="${esc(f.nome)}">PDF</div>` : `<img src="${f.dati}" alt="Pagina ${i + 1}">`).join('')
+      + (files.length ? ` <button type="button" class="btn sm ghost" id="b-clear">Ricomincia</button>` : '');
+    $('#b-go').disabled = !files.length;
+    $('#b-clear')?.addEventListener('click', () => { files = []; $('#b-th').innerHTML = ''; $('#b-go').disabled = true; });
+  };
+}
+function revisioneBolla(d) {
+  const cats = S.categorie, arts = [...S.articoli].sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
+  const catNome = id => S.categorie.find(c => c.id === id)?.nome || '';
+  const destOpts = r => {
+    const v = r.articoloId ? 'a:' + r.articoloId : r.categoriaId ? 'c:' + r.categoriaId : '';
+    return `<option value="" ${v ? '' : 'selected'}>— Scegli la categoria —</option>
+      <optgroup label="Nuovo articolo nella categoria">${cats.map(c => `<option value="c:${c.id}" ${v === 'c:' + c.id ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}</optgroup>
+      ${arts.length ? `<optgroup label="Aggiungi a un articolo che esiste già">${arts.map(a => `<option value="a:${a.id}" ${v === 'a:' + a.id ? 'selected' : ''}>${esc(a.nome)} · ${esc(catNome(a.categoriaId))}</option>`).join('')}</optgroup>` : ''}`;
+  };
+  const ORIG = { memoria: ['Riconosciuto', 'ok'], codice: ['Stesso codice', 'ok'], nome: ['Stesso nome', 'ok'] };
+  const f = d.fornitore, match = d.fornitoreId;
+  const nuove = d.righe.filter(r => !r.articoloId && !r.categoriaId).length;
+  open(`<div class="dlg-h"><div><h2>Controlla la bolla</h2><p class="muted" style="margin:4px 0 0;font-size:14px">${d.righe.length} righe lette${nuove ? ` · <b>${nuove} prodotti nuovi</b>: scegli la categoria (la ricordo per le prossime bolle)` : ' · tutti i prodotti riconosciuti'}</p></div>
+      <button class="btn sm ghost" value="cancel" aria-label="Chiudi" formnovalidate>✕</button></div>
+    ${d.giaCaricata ? `<div class="note danger"><b>Attenzione:</b> la bolla n. ${esc(d.numero)} di questo fornitore risulta già registrata il ${fmtDT(d.giaCaricata)}. Se la registri di nuovo, le quantità si sommano due volte.</div>` : ''}
+    ${d.ordiniAperti?.length ? `<div class="note warn">Per questo fornitore c'è l'ordine aperto n. ${d.ordiniAperti.join(', ')}. Se questa merce è di quell'ordine, puoi registrare qui la bolla e poi annullare l'ordine in Riordino, oppure usare «Merce ricevuta» nell'ordine e qui togliere la spunta «Carica le quantità».</div>` : ''}
+    ${d.dubbi?.length ? `<div class="note warn"><b>Da controllare:</b> ${d.dubbi.map(esc).join(' · ')}</div>` : ''}
+    <div class="grid3">
+      <label class="f" style="grid-column:span 2">Fornitore <small>${f.nome ? `Letto sulla bolla: ${esc(f.nome)}${f.piva ? ' · P.IVA ' + esc(f.piva) : ''}` : 'Non letto sulla bolla'}</small>
+        <select id="bf-sel"><option value="">— Nessun fornitore —</option>
+          ${f.nome ? `<option value="nuovo" ${match ? '' : 'selected'}>+ Nuovo fornitore: ${esc(f.nome)}</option>` : ''}
+          ${S.fornitori.map(x => `<option value="${x.id}" ${match === x.id ? 'selected' : ''}>${esc(x.nome)}</option>`).join('')}</select></label>
+      <div class="grid2" style="gap:8px"><label class="f">N. bolla<input id="bf-num" maxlength="40" value="${esc(d.numero)}"></label>
+        <label class="f">Data<input id="bf-data" type="date" value="${esc(d.data)}"></label></div>
+    </div>
+    <div class="grid2" id="bf-nuovo" ${match || !f.nome ? 'hidden' : ''}>
+      <label class="f">Nome fornitore<input id="bf-nome" maxlength="120" value="${esc(f.nome)}"></label>
+      <label class="f">Partita IVA<input id="bf-piva" maxlength="20" value="${esc(f.piva)}"></label>
+      <label class="f">Email per gli ordini<input id="bf-email" maxlength="160" value="${esc(f.email)}"></label>
+      <label class="f">Telefono<input id="bf-tel" maxlength="40" value="${esc(f.telefono)}"></label>
+    </div>
+    ${nuove > 1 ? `<div class="tools" style="margin:0"><select id="bf-tutte" style="max-width:420px"><option value="">Metti tutti i prodotti nuovi nella categoria…</option>${cats.map(c => `<option value="c:${c.id}">${esc(c.nome)}</option>`).join('')}</select></div>` : ''}
+    <div class="brows">${d.righe.map((r, i) => {
+      const o = ORIG[r.origine];
+      const todo = !r.articoloId && !r.categoriaId;
+      return `<div class="br ${todo ? 'todo' : ''}" data-br="${i}">
+        <input type="checkbox" checked data-inc aria-label="Includi la riga">
+        <div><input data-nome maxlength="120" value="${esc(r.descrizione)}" aria-label="Nome dell'articolo" ${r.articoloId ? 'hidden' : ''}>
+          <div data-art-nome ${r.articoloId ? '' : 'hidden'} style="font-weight:700">${esc(S.articoli.find(a => a.id === r.articoloId)?.nome || '')}</div>
+          <div class="sub">${r.codice ? `<span>Cod. ${esc(r.codice)}</span>` : ''}${r.articoloId ? `<span>Sulla bolla: ${esc(r.descrizione)}</span>` : ''}
+            ${o ? `<span class="pill ${o[1]}">${o[0]}</span>` : '<span class="pill warn" data-tag>Nuovo prodotto</span>'}</div></div>
+        <div class="q"><input type="number" min="0" inputmode="numeric" data-qta value="${r.quantita}" aria-label="Quantità"><span class="muted">${esc(r.unita)}</span></div>
+        <div class="dest"><select data-dest aria-label="Dove va">${destOpts(r)}</select></div>
+      </div>`;
+    }).join('')}</div>
+    <label style="display:flex;gap:8px;align-items:center;font-weight:600;font-size:14px"><input type="checkbox" id="bf-giac" style="width:20px;min-height:0" checked> Carica le quantità in giacenza (merce arrivata)</label>
+    <div class="msg err" role="alert"></div>
+    <div class="dlg-f"><button class="btn" value="cancel" formnovalidate>Annulla</button><button class="btn primary" value="save">Registra bolla</button></div>`, async () => {
+    const sel = $('#bf-sel').value;
+    const righe = [];
+    for (const el of dlgf.querySelectorAll('[data-br]')) {
+      if (!el.querySelector('[data-inc]').checked) continue;
+      const r = d.righe[Number(el.dataset.br)], dest = el.querySelector('[data-dest]').value;
+      const nome = el.querySelector('[data-nome]').value.trim();
+      if (!dest) { el.scrollIntoView({ block: 'center' }); throw new Error(`Scegli la categoria per «${nome || r.descrizione}».`); }
+      if (dest.startsWith('c:') && !nome) throw new Error('Ogni articolo nuovo deve avere un nome.');
+      righe.push({ codice: r.codice, descrizione: r.descrizione, nome, unita: r.unita, quantita: el.querySelector('[data-qta]').value,
+        articoloId: dest.startsWith('a:') ? dest.slice(2) : null, categoriaId: dest.startsWith('c:') ? dest.slice(2) : null });
+    }
+    if (!righe.length) throw new Error('Hai tolto tutte le righe.');
+    const dati = sel === 'nuovo' ? { nome: $('#bf-nome').value, piva: $('#bf-piva').value, email: $('#bf-email').value, telefono: $('#bf-tel').value, indirizzo: f.indirizzo }
+      : { piva: f.piva, email: f.email, telefono: f.telefono, indirizzo: f.indirizzo };
+    if (sel === 'nuovo' && !dati.nome.trim()) throw new Error('Scrivi il nome del fornitore.');
+    const r = await api('/api/bolla/carica', { method: 'POST', body: { fornitoreId: sel && sel !== 'nuovo' ? sel : null, fornitoreDati: sel ? dati : null,
+      numero: $('#bf-num').value, data: $('#bf-data').value, caricaGiacenza: $('#bf-giac').checked, righe } });
+    closeDlg(); await load(); render();
+    toast(`Bolla registrata: ${r.creati} articoli nuovi${r.caricati ? `, ${r.caricati} quantità caricate` : ''}${r.fornitoreNuovo ? ', fornitore creato' : ''}`);
+  }, { wide: true, nofocus: true });
+  $('#bf-sel').onchange = e => { $('#bf-nuovo').hidden = e.target.value !== 'nuovo'; };
+  const aggiorna = el => {
+    const v = el.querySelector('[data-dest]').value, a = v.startsWith('a:') && S.articoli.find(x => x.id === v.slice(2));
+    el.querySelector('[data-nome]').hidden = !!a; const an = el.querySelector('[data-art-nome]'); an.hidden = !a; an.textContent = a ? a.nome : '';
+    el.classList.toggle('todo', !v);
+  };
+  dlgf.querySelectorAll('[data-br]').forEach(el => {
+    el.querySelector('[data-dest]').onchange = () => aggiorna(el);
+    el.querySelector('[data-inc]').onchange = e => el.classList.toggle('off', !e.target.checked);
+  });
+  $('#bf-tutte')?.addEventListener('change', e => {
+    if (!e.target.value) return;
+    dlgf.querySelectorAll('[data-br]').forEach(el => { const s = el.querySelector('[data-dest]'); if (!s.value) { s.value = e.target.value; aggiorna(el); } });
+    e.target.value = '';
+  });
 }
 
 /* ---- riordino ---- */
@@ -588,7 +806,7 @@ function renderFornitori() {
   $('#main').innerHTML = `<div class="head"><div><h1>Fornitori</h1><p>Associa a ogni articolo il suo fornitore: gli ordini di riordino partono già divisi per fornitore.</p></div>
     <button class="btn primary" data-new-for>+ Fornitore</button></div>
     ${S.fornitori.length ? `<div class="card tbl-wrap"><table class="tbl cards"><thead><tr><th>Fornitore</th><th>Email ordini</th><th>Telefono</th><th class="num">Articoli</th><th></th></tr></thead><tbody>
-      ${S.fornitori.map(f => `<tr><td class="full"><b>${esc(f.nome)}</b>${f.note ? `<div class="muted" style="font-size:12.5px">${esc(f.note)}</div>` : ''}</td>
+      ${S.fornitori.map(f => `<tr><td class="full"><b>${esc(f.nome)}</b>${f.piva ? ` <span class="muted" style="font-size:12.5px">P.IVA ${esc(f.piva)}</span>` : ''}${f.note ? `<div class="muted" style="font-size:12.5px">${esc(f.note)}</div>` : ''}</td>
         <td data-l="Email">${f.email ? esc(f.email) : '<span class="pill warn">Manca</span>'}</td><td data-l="Telefono">${esc(f.telefono || '—')}</td>
         <td class="num" data-l="Articoli">${S.articoli.filter(a => a.fornitoreId === f.id).length}</td>
         <td><div class="rowact"><button class="btn sm" data-edit-for="${f.id}">Modifica</button></div></td></tr>`).join('')}
@@ -601,6 +819,8 @@ function editFornitore(f) {
     <label class="f">Nome<input id="f-nome" maxlength="120" value="${esc(f?.nome || '')}"></label>
     <div class="grid2"><label class="f">Email per gli ordini<input id="f-email" type="email" maxlength="160" value="${esc(f?.email || '')}"></label>
       <label class="f">Telefono<input id="f-tel" maxlength="40" value="${esc(f?.telefono || '')}"></label></div>
+    <div class="grid2"><label class="f">Partita IVA<input id="f-piva" maxlength="20" value="${esc(f?.piva || '')}"></label>
+      <label class="f">Indirizzo<input id="f-ind" maxlength="200" value="${esc(f?.indirizzo || '')}"></label></div>
     <label class="f">Note<textarea id="f-note" maxlength="500">${esc(f?.note || '')}</textarea></label>
     <div class="msg err" role="alert"></div>
     <div class="dlg-f">${f ? '<button class="btn danger" value="delete" formnovalidate style="margin-right:auto">Elimina</button>' : ''}<button class="btn" value="cancel" formnovalidate>Annulla</button><button class="btn primary" value="save">Salva</button></div>`, async v => {
@@ -608,7 +828,7 @@ function editFornitore(f) {
       if (!confirm(`Eliminare «${f.nome}»? Gli articoli restano, senza fornitore.`)) return;
       await api('/api/fornitori/' + f.id, { method: 'DELETE' }); closeDlg(); await load(); render(); return;
     }
-    const body = { nome: $('#f-nome').value, email: $('#f-email').value, telefono: $('#f-tel').value, note: $('#f-note').value };
+    const body = { nome: $('#f-nome').value, email: $('#f-email').value, telefono: $('#f-tel').value, note: $('#f-note').value, piva: $('#f-piva').value, indirizzo: $('#f-ind').value };
     if (f) await api('/api/fornitori/' + f.id, { method: 'PUT', body }); else await api('/api/fornitori', { method: 'POST', body });
     closeDlg(); await load(); render(); toast('Fornitore salvato');
   });
@@ -617,7 +837,10 @@ function editFornitore(f) {
 /* ---------------- finestre ---------------- */
 const dlg = $('#dlg'), dlgf = $('#dlgf');
 let onSave = null;
-function open(html, save) { dlgf.innerHTML = html; onSave = save; dlg.showModal(); dlgf.querySelector('input:not([disabled]),textarea,select')?.focus(); }
+function open(html, save, opt = {}) {
+  dlg.classList.toggle('wide', !!opt.wide); dlgf.innerHTML = html; onSave = save; dlg.showModal();
+  if (!opt.nofocus) dlgf.querySelector('input:not([disabled]):not([type=file]),textarea,select')?.focus();
+}
 function closeDlg() { if (dlg.open) dlg.close(); }
 dlgf.addEventListener('submit', async e => {
   e.preventDefault();

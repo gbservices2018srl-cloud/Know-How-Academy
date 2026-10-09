@@ -6,6 +6,7 @@ const path = require('path');
 const express = require('express');
 const db = require('./lib/db');
 const push = require('./lib/push');
+const bolla = require('./lib/bolla');
 const mail = require('../accessi/lib/mail');
 
 const app = express();
@@ -15,6 +16,7 @@ app.use((req, res, next) => {
   res.set({ 'X-Frame-Options': 'DENY', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin' });
   next();
 });
+app.use('/api/bolla/leggi', express.json({ limit: '28mb' })); // foto o PDF della bolla
 app.use(express.json({ limit: '300kb' }));
 
 const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -91,7 +93,7 @@ app.get('/api/state', needUser, wrap(async (req, res) => {
     db.q(`${ARTICOLI_SQL} ${admin ? '' : 'where a.attivo'} order by a.nome`),
   ]);
   const out = {
-    me: req.user, links: sso.links(),
+    me: req.user, links: sso.links(), bollaAttiva: admin && !!process.env.ANTHROPIC_API_KEY,
     categorie: cat.rows, articoli: art.rows.map(a => shapeArticolo(a, admin)),
     prenotazioni: await prenotazioni(admin ? `where p.stato = 'in_attesa' or p.creata_il > now() - interval '60 days'` : 'where p.utente_id = $1',
       admin ? [] : [req.user.id]),
@@ -203,11 +205,29 @@ app.post('/api/categorie/ordine', needAdmin, wrap(async (req, res) => {
   for (let i = 0; i < ids.length; i++) await db.q('update categorie set ordine = $2 where id = $1', [ids[i], i]);
   res.json({ ok: true });
 }));
+// ?tutto=1 elimina anche tutti gli articoli della categoria (con i loro movimenti). Le prenotazioni e gli ordini
+// passati restano con nome e quantità. Non si può se qualche articolo è in una prenotazione in attesa o in un ordine aperto.
 app.delete('/api/categorie/:id', needAdmin, wrap(async (req, res) => {
-  const { rows } = await db.q('select count(*)::int n from articoli where categoria_id = $1', [req.params.id]);
-  if (rows[0].n) return bad(res, 400, `La categoria contiene ${rows[0].n} articoli: spostali o eliminali prima.`);
-  await db.q('delete from categorie where id = $1', [req.params.id]);
-  res.json({ ok: true });
+  const tutto = req.query.tutto === '1';
+  const n = await db.tx(async qq => {
+    const { rows: c } = await qq('select id from categorie where id = $1 for update', [req.params.id]);
+    if (!c[0]) throw fail(404, 'Categoria non trovata.');
+    const { rows } = await qq('select id from articoli where categoria_id = $1 for update', [req.params.id]);
+    const ids = rows.map(r => r.id);
+    if (ids.length && !tutto) throw fail(400, `La categoria contiene ${ids.length} articoli: usa «Elimina tutto».`);
+    if (ids.length) {
+      const { rows: p } = await qq(`select distinct p.numero from prenotazione_righe r join prenotazioni p on p.id = r.prenotazione_id
+        where p.stato = 'in_attesa' and r.articolo_id = any($1) order by p.numero`, [ids]);
+      if (p.length) throw fail(409, `Alcuni articoli sono in prenotazioni in attesa (n. ${p.map(x => x.numero).join(', ')}): confermale o rifiutale prima.`);
+      const { rows: o } = await qq(`select distinct o.numero from ordine_righe r join ordini_fornitore o on o.id = r.ordine_id
+        where o.stato in ('da_inviare','inviato') and r.articolo_id = any($1) order by o.numero`, [ids]);
+      if (o.length) throw fail(409, `Alcuni articoli sono in ordini ai fornitori ancora aperti (n. ${o.map(x => x.numero).join(', ')}): segnali come ricevuti o annullali prima.`);
+      await qq('delete from articoli where id = any($1)', [ids]);
+    }
+    await qq('delete from categorie where id = $1', [req.params.id]);
+    return ids.length;
+  });
+  res.json({ ok: true, articoli: n });
 }));
 
 /* ---------- articoli ---------- */
@@ -272,24 +292,111 @@ app.delete('/api/articoli/:id', needAdmin, wrap(async (req, res) => {
 
 /* ---------- fornitori ---------- */
 function datiFornitore(b) {
-  const o = { nome: str(b.nome, 120), email: str(b.email, 160).toLowerCase(), telefono: str(b.telefono, 40), note: str(b.note, 500) };
+  const o = { nome: str(b.nome, 120), email: str(b.email, 160).toLowerCase(), telefono: str(b.telefono, 40), note: str(b.note, 500),
+    piva: str(b.piva, 20), indirizzo: str(b.indirizzo, 200) };
   if (!o.nome) throw fail(400, 'Scrivi il nome del fornitore.');
   if (o.email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(o.email)) throw fail(400, "L'email del fornitore non è valida.");
   return o;
 }
 app.post('/api/fornitori', needAdmin, wrap(async (req, res) => {
   const o = datiFornitore(req.body), id = db.newId();
-  await db.q('insert into fornitori (id, nome, email, telefono, note) values ($1,$2,$3,$4,$5)', [id, o.nome, o.email, o.telefono, o.note]);
+  await db.q('insert into fornitori (id, nome, email, telefono, note, piva, indirizzo) values ($1,$2,$3,$4,$5,$6,$7)', [id, o.nome, o.email, o.telefono, o.note, o.piva, o.indirizzo]);
   res.json({ id });
 }));
 app.put('/api/fornitori/:id', needAdmin, wrap(async (req, res) => {
   const o = datiFornitore(req.body);
-  await db.q('update fornitori set nome=$2, email=$3, telefono=$4, note=$5 where id=$1', [req.params.id, o.nome, o.email, o.telefono, o.note]);
+  await db.q('update fornitori set nome=$2, email=$3, telefono=$4, note=$5, piva=$6, indirizzo=$7 where id=$1', [req.params.id, o.nome, o.email, o.telefono, o.note, o.piva, o.indirizzo]);
   res.json({ ok: true });
 }));
 app.delete('/api/fornitori/:id', needAdmin, wrap(async (req, res) => {
   await db.q('delete from fornitori where id = $1', [req.params.id]); // gli articoli restano, senza fornitore
   res.json({ ok: true });
+}));
+
+/* ---------- bolle dei fornitori ---------- */
+// 1) /api/bolla/leggi: la foto (o il PDF) viene letta; si riconosce il fornitore e, per ogni riga, l'articolo o la categoria
+//    già usati le volte precedenti. 2) L'amministratore controlla, sceglie la categoria delle righe nuove e conferma:
+//    /api/bolla/carica crea fornitore e articoli mancanti, carica le quantità e ricorda le scelte per le prossime bolle.
+const letture = new Map(); // limite: 40 letture all'ora per persona
+app.post('/api/bolla/leggi', needAdmin, wrap(async (req, res) => {
+  const ora = Date.now(), l = (letture.get(req.user.id) || []).filter(t => t > ora - 3600e3);
+  if (l.length >= 40) return bad(res, 429, "Hai letto molte bolle nell'ultima ora: riprova più tardi.");
+  const files = (Array.isArray(req.body.files) ? req.body.files : []).slice(0, 6)
+    .map(f => ({ tipo: str(f.tipo, 40).toLowerCase(), dati: String(f.dati || '').replace(/^data:[^,]*,/, '') })).filter(f => f.dati);
+  if (!files.length) return bad(res, 400, 'Scegli la foto o il PDF della bolla.');
+  if (files.some(f => !/^[A-Za-z0-9+/=]+$/.test(f.dati))) return bad(res, 400, 'File non valido.');
+  l.push(ora); letture.set(req.user.id, l);
+  const letta = await bolla.leggi(files);
+  const { rows: fornitori } = await db.q('select id, nome, email, telefono, piva, indirizzo from fornitori');
+  const f = bolla.trovaFornitore(fornitori, letta.fornitore);
+  const righe = await bolla.abbina(db.q, f?.id, letta.righe);
+  let giaCaricata = null;
+  if (f && letta.numero) {
+    const { rows } = await db.q(`select caricata_il from bolle where fornitore_id = $1 and lower(numero) = lower($2) order by caricata_il desc limit 1`, [f.id, letta.numero]);
+    giaCaricata = rows[0]?.caricata_il || null;
+  }
+  const ordiniAperti = f ? (await db.q(`select numero from ordini_fornitore where fornitore_id = $1 and stato in ('da_inviare','inviato') order by numero`, [f.id])).rows.map(r => r.numero) : [];
+  res.json({ ...letta, righe, fornitoreId: f?.id || null, giaCaricata, ordiniAperti });
+}));
+
+app.post('/api/bolla/carica', needAdmin, wrap(async (req, res) => {
+  const b = req.body || {};
+  const numero = str(b.numero, 40), data = /^\d{4}-\d{2}-\d{2}$/.test(str(b.data, 10)) ? str(b.data, 10) : '';
+  const caricaGiacenza = b.caricaGiacenza !== false;
+  const righe = (Array.isArray(b.righe) ? b.righe : []).slice(0, 200).map(r => ({
+    codice: str(r.codice, 60), descrizione: str(r.descrizione, 120), nome: str(r.nome, 120) || str(r.descrizione, 120),
+    quantita: int(r.quantita, 0, 1e6) ?? 0, unita: str(r.unita, 20) || 'pz',
+    articoloId: str(r.articoloId, 64) || null, categoriaId: str(r.categoriaId, 64) || null,
+  })).filter(r => r.nome);
+  if (!righe.length) return bad(res, 400, 'Nessuna riga da registrare.');
+  const out = await db.tx(async qq => {
+    // fornitore: quello scelto, oppure nuovo con i dati letti dalla bolla
+    let forn = null;
+    if (b.fornitoreId) {
+      forn = (await qq('select * from fornitori where id = $1', [str(b.fornitoreId, 64)])).rows[0];
+      if (!forn) throw fail(400, 'Il fornitore scelto non esiste più: aggiorna la pagina.');
+      const n = b.fornitoreDati || {}; // completa solo i dati mancanti
+      const piva = str(n.piva, 20), email = str(n.email, 160).toLowerCase(), tel = str(n.telefono, 40), ind = str(n.indirizzo, 200);
+      await qq(`update fornitori set piva = case when piva = '' then $2 else piva end,
+        email = case when email = '' and $3 ~ '^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$' then $3 else email end,
+        telefono = case when telefono = '' then $4 else telefono end, indirizzo = case when indirizzo = '' then $5 else indirizzo end where id = $1`,
+        [forn.id, piva, email, tel, ind]);
+    } else if (b.fornitoreDati && str(b.fornitoreDati.nome, 120)) {
+      const o = datiFornitore({ ...b.fornitoreDati, email: /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(str(b.fornitoreDati.email, 160)) ? b.fornitoreDati.email : '' });
+      forn = { id: db.newId(), ...o };
+      await qq('insert into fornitori (id, nome, email, telefono, note, piva, indirizzo) values ($1,$2,$3,$4,$5,$6,$7)',
+        [forn.id, o.nome, o.email, o.telefono, 'Creato dalla bolla' + (numero ? ' n. ' + numero : ''), o.piva, o.indirizzo]);
+    }
+    const fid = forn?.id || null;
+    const { rows: cats } = await qq('select id from categorie');
+    const catOk = new Set(cats.map(c => c.id));
+    const rif = `Bolla${numero ? ' n. ' + numero : ''}${data ? ' del ' + data.split('-').reverse().join('/') : ''}${forn ? ' — ' + forn.nome : ''}`;
+    let creati = 0, caricati = 0;
+    for (const r of righe) {
+      let art = r.articoloId ? (await qq('select id, categoria_id, fornitore_id, codice from articoli where id = $1', [r.articoloId])).rows[0] : null;
+      if (r.articoloId && !art) throw fail(400, `«${r.nome}»: l'articolo scelto non esiste più. Aggiorna la pagina.`);
+      if (art) {
+        await qq(`update articoli set fornitore_id = coalesce(fornitore_id, $2), codice = case when codice = '' then $3 else codice end, aggiornato_il = now() where id = $1`,
+          [art.id, fid, r.codice]);
+      } else {
+        if (!r.categoriaId || !catOk.has(r.categoriaId)) throw fail(400, `Scegli la categoria per «${r.nome}».`);
+        art = { id: db.newId(), categoria_id: r.categoriaId };
+        await qq(`insert into articoli (id, categoria_id, nome, codice, unita, fornitore_id, giacenza) values ($1,$2,$3,$4,$5,$6,0)`,
+          [art.id, r.categoriaId, r.nome, r.codice, r.unita, fid]);
+        creati++;
+      }
+      if (caricaGiacenza && r.quantita > 0) { await registraMovimento(qq, art.id, r.quantita, 'Merce ricevuta (bolla)', rif, req.user.id); caricati++; }
+      for (const k of bolla.chiavi(r)) {
+        await qq(`insert into bolla_memo (fornitore_id, chiave, articolo_id, categoria_id) values ($1,$2,$3,$4)
+          on conflict (fornitore_id, chiave) do update set articolo_id = excluded.articolo_id, categoria_id = excluded.categoria_id, aggiornato_il = now()`,
+          [fid || '', k, art.id, art.categoria_id]);
+      }
+    }
+    await qq('insert into bolle (id, fornitore_id, fornitore_nome, numero, data, righe, giacenza, utente_id) values ($1,$2,$3,$4,$5,$6,$7,$8)',
+      [db.newId(), fid, forn?.nome || '', numero, data, righe.length, caricaGiacenza, req.user.id]);
+    return { creati, caricati, fornitoreNuovo: !b.fornitoreId && !!fid };
+  });
+  res.json({ ok: true, ...out });
 }));
 
 /* ---------- carrello di riordino ---------- */
