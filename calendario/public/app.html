@@ -820,7 +820,16 @@ function bindRsvp(sheet, e) {
     msg.innerHTML = '<span class="spin" aria-hidden="true"></span> <b>Sto salvando la tua risposta…</b>';
     const lento = setTimeout(() => { if (msg.isConnected) msg.innerHTML = '<span class="spin" aria-hidden="true"></span> <b>Ancora un attimo…</b> il server si sta svegliando, può volerci fino a un minuto. Non chiudere.'; }, 4000);
     try {
-      await api(`/api/events/${e.id}/rsvp`, { method: 'POST', body: { status } });
+      // se la rete salta o il server si sta riavviando, ritenta da solo (fino a 4 volte)
+      for (let tent = 1; ; tent++) {
+        try { await api(`/api/events/${e.id}/rsvp`, { method: 'POST', body: { status } }); break; }
+        catch (err) {
+          const temporaneo = err instanceof TypeError || /50[234]|non risponde|Operazione non riuscita/.test(err.message);
+          if (!temporaneo || tent >= 4) throw err;
+          if (msg.isConnected) msg.innerHTML = `<span class="spin" aria-hidden="true"></span> <b>Riprovo…</b> (tentativo ${tent + 1} di 4)`;
+          await new Promise(r => setTimeout(r, 2500 * tent));
+        }
+      }
       clearTimeout(lento);
       e.myRsvp = status; render();
       const txt = status === 'yes' ? 'Presenza confermata: ci sarai!' : status === 'no' ? 'Assenza segnata: non ci sarai.' : 'Risposta tolta.';
