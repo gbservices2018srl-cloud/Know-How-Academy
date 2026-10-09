@@ -282,7 +282,7 @@ function applySubstitution(r){
     delete plan[r.emp][d];
     for (const t of shiftsOf(p)){
       const v = p[t];
-      if (sub && plan[sub.id] && freeAt(sub,p.s,d,t)){ plan[sub.id][d] ||= {s:p.s}; plan[sub.id][d][t]=v; dalSost++; continue; }
+      if (sub && sub.tipo===tipo && plan[sub.id] && freeAt(sub,p.s,d,t)){ /* il sostituto prende il turno solo se ha la stessa figura */ plan[sub.id][d] ||= {s:p.s}; plan[sub.id][d][t]=v; dalSost++; continue; }
       if (tipo!=="Medico" && tipo!=="ASO" && inShift(p.s,d,t,tipo).length >= need(p.s,d,tipo,t)) continue;
       const o = STAFF.filter(x=>x.tipo===tipo && x.id!==r.emp && (x.ore[p.s]||0)>0 && freeAt(x,p.s,d,t))
         .sort((a,b)=>placedIn(a,p.s,[d])-placedIn(b,p.s,[d]))[0];

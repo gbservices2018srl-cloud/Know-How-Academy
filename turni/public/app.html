@@ -340,6 +340,20 @@ details summary{cursor:pointer;font-weight:700}
 #f .seg.alt{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));width:100%}
 #f .seg.alt button{border-left:0;border-right:1px solid var(--line);border-bottom:1px solid var(--line);margin:0 -1px -1px 0}
 
+/* scelta del sostituto con ricerca */
+.sost-pick{border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
+.sost-pick input[type=search]{border:0;border-bottom:1px solid var(--line);border-radius:0;width:100%}
+.sost-list{max-height:260px;overflow:auto}
+.sost-opt{display:flex;flex-wrap:wrap;gap:2px 8px;align-items:center;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--fg);padding:10px 12px;cursor:pointer;min-height:48px}
+.sost-opt span{color:var(--muted);font-size:13px;flex:1 1 auto}
+.sost-opt i{font-style:normal}
+.sost-opt[aria-selected="true"]{background:var(--ok-soft);box-shadow:inset 4px 0 0 var(--ok)}
+/* storico richiesta */
+.storico{margin-top:8px;font-size:13px}
+.storico summary{cursor:pointer;color:var(--muted);font-weight:700}
+.storico ul{margin:6px 0 0;padding-left:18px}
+.storico li{margin:2px 0}
+
 </style>
 </head>
 <body>
@@ -740,20 +754,38 @@ function vNuova(){
     </div>
     <div class="f" id="motivoBox" hidden><label for="motivo">Motivazione <span aria-hidden="true">*</span></label><textarea id="motivo" rows="3" maxlength="500" placeholder="Scrivi il motivo dell'assenza"></textarea><span class="hint">Obbligatoria: senza motivazione la richiesta non parte.</span></div>
     <div class="f" id="protBox" hidden><label for="prot">Protocollo certificato medico</label><input id="prot" inputmode="numeric" placeholder="es. 8812047"><span class="hint">Lo trovi nel messaggio del tuo medico.</span></div>
-    <div class="f"><label for="sost">Chi ti sostituisce <span id="sostReq">*</span></label>
-      <select id="sost"><option value="">Scegli un collega</option>${STATE.colleghi.map(c=>`<option value="${c.id}">${esc(c.nome)} · ${esc(c.sedi)}</option>`).join("")}</select>
-      <span class="hint">Solo colleghi con la tua stessa figura (${esc(s.tipo)}) che lavorano in almeno una delle tue sedi.</span></div>
+    <div class="f"><label for="sostQ">Chi ti sostituisce <span id="sostReq">*</span></label>
+      <input type="hidden" id="sost" value="">
+      <div class="sost-pick"><input type="search" id="sostQ" placeholder="🔍 Cerca per nome o cognome" autocomplete="off" aria-controls="sostList">
+        <div class="sost-list" id="sostList" role="listbox" aria-label="Colleghi">${sostListHtml("")}</div></div>
+      <span class="hint" id="sostHint">Tutti i colleghi registrati. In alto chi ha la tua stessa figura (${esc(s.tipo)}) e lavora in una tua sede.</span></div>
     <div class="f"><label class="check"><input type="checkbox" id="accordo"> <span>Confermo di essermi accordato con il collega indicato. Senza la sua conferma la richiesta non viene valutata e l'assenza risulterà <b>non giustificata</b>.</span></label></div>
     <div class="f"><label for="note">Note (facoltative)</label><textarea id="note" rows="2" maxlength="500"></textarea></div>
     <div class="err" id="err" aria-live="polite"></div>
     <button class="btn" type="submit">Invia richiesta</button>
   </form>`;
 }
+// elenco dei colleghi per scegliere il sostituto, filtrato per nome o cognome
+function sostListHtml(q){
+  const n = x => String(x||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  const parole = n(q).split(/\s+/).filter(Boolean), sel = $("#sost")?.value || "";
+  const l = STATE.colleghi.filter(c=>parole.every(p=>n(c.nome).includes(p)));
+  return l.length ? l.map(c=>`<button type="button" class="sost-opt" role="option" data-sostpick="${c.id}" aria-selected="${c.id===sel}">
+      <b>${esc(c.nome)}</b><span>${esc(c.figura)}${c.sedi?` · ${esc(c.sedi)}`:""}</span>${c.vicino?`<i class="chip ok">tua figura e sede</i>`:c.stessa?`<i class="chip n">tua figura</i>`:""}</button>`).join("")
+    : `<p class="hint" style="margin:8px">Nessun collega con questo nome.</p>`;
+}
 function vConferme(){
   const list = STATE.sostituzioni;
   return `<h2>Sostituzioni</h2>
   <p class="lede">Colleghi che ti hanno indicato come sostituto. Confermando ti impegni a coprire i loro turni in quei giorni.</p>
-  <div class="panel">${list.length?list.map(r=>empReqCard(r, r.stato==="attesa_sost"?`<button class="btn sm" data-sok="${r.id}">Confermo</button><button class="btn sm ghost bad" data-sno="${r.id}">Non posso</button>`:"")).join(""):`<p style="color:var(--muted);margin:0">Nessuno ti ha indicato come sostituto.</p>`}</div>`;
+  <div class="panel">${list.length?list.map(r=>{
+      const aperta = !r.decisaAdmin && r.stato!=="approvata";
+      const az = r.stato==="attesa_sost" ? `<button class="btn sm" data-sok="${r.id}">Confermo</button><button class="btn sm ghost bad" data-sno="${r.id}">Non posso</button>`
+        : aperta && r.sostOk===true ? `<button class="btn sm ghost bad" data-sno="${r.id}">Non posso più</button>`
+        : aperta && r.sostOk===false ? `<button class="btn sm ghost" data-sok="${r.id}">Ora posso</button>` : "";
+      return empReqCard(r, az);
+    }).join(""):`<p style="color:var(--muted);margin:0">Nessuno ti ha indicato come sostituto.</p>`}</div>
+  <p class="lede" style="margin-top:14px;font-size:13px">Puoi cambiare risposta finché l'amministrazione non ha deciso. Ogni risposta viene registrata con data e ora.</p>`;
 }
 // ================= documenti (buste paga e CUD): dipendente =================
 const docT = () => (tab==="cudAdmin"||tab==="cudEmp") ? "cud" : "busta";
@@ -1033,11 +1065,22 @@ function reqCard(r, actions){
   return `<div class="req"><div style="min-width:0">
     <div class="t">${esc(full(e))} · ${TIPI[r.tipo]}</div>
     <div class="meta">${periodo(r)} · ${esc(e.tipo)} · ${esc(sedeList(e))} · sostituto: <b>${r.sost?esc(full(emp(r.sost))):"—"}</b>${r.prot?` · prot. INPS ${esc(r.prot)}`:""}${r.motivo?` · motivo: <b>${esc(r.motivo)}</b>`:""}${r.note?` · “${esc(r.note)}”`:""}</div>
-    <div style="margin-top:8px">${lateness(r)}</div>${stepsHtml(r)}</div>
+    <div style="margin-top:8px">${lateness(r)}</div>${stepsHtml(r)}${storicoHtml(r)}</div>
     <div class="acts">${actions||""}</div></div>`;
 }
 // Filtri: tipo di assenza, stato e persona (si ricordano sul dispositivo)
 let rqF = Object.assign({tipo:"", stato:"", emp:""}, store.get("rqF", {}));
+// Storico con data e ora: invio, risposte del sostituto (con i cambi), decisione dell'amministrazione
+const AZIONI = {inviata:"Inviata", sost_si:"Sostituto: sì", sost_no:"Sostituto: no", sost_si_cambio:"Sostituto cambia in sì", sost_no_cambio:"Sostituto cambia in no",
+  approvata:"Approvata", rifiutata:"Rifiutata", annullata:"Annullata"};
+function storicoHtml(r){
+  const ev = r.eventi||[]; if (!ev.length) return "";
+  const chi = c => emp(c) ? full(emp(c)) : c;
+  const cambi = ev.filter(x=>x.azione.endsWith("_cambio")).length;
+  return `<details class="storico"><summary>Storico (${ev.length})${cambi?` · <b class="neg">${cambi} ${cambi===1?"cambio":"cambi"} di risposta</b>`:""}</summary>
+    <ul>${ev.map(x=>`<li><span class="mono">${esc(dtS(x.il))}</span> <b class="${x.azione.endsWith("_cambio")?"neg":""}">${AZIONI[x.azione]||esc(x.azione)}</b> · ${esc(chi(x.chi))}${x.disp?` <span class="mono">· ${esc(x.disp)}</span>`:""}</li>`).join("")}</ul></details>`;
+}
+const dtS = s => s ? new Date(s).toLocaleString("it-IT",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",second:"2-digit"}) : "";
 function vRichieste(){
   const order = {attesa_admin:0, attesa_sost:1, approvata:2, rifiutata:3};
   const STATI_F = [["","Tutti gli stati"],["attesa","In attesa"],["approvata","Approvate"],["rifiutata","Rifiutate"]];
@@ -1144,6 +1187,11 @@ function bind(){
     $("#accordo").closest(".f").hidden = t==="MAL";
     $("#tipoHint").textContent = PREAVVISO_TXT[t];
     if (t==="MAL"){ $("#dal").min=""; $("#dal").value=TODAY; $("#al").value=TODAY; } else $("#dal").min=TODAY; });
+  q("#sostQ",el=>el.oninput=()=>{ $("#sostList").innerHTML=sostListHtml(el.value); });
+  q("#sostList",el=>el.onclick=ev=>{ const b=ev.target.closest("[data-sostpick]"); if (!b) return;
+    $("#sost").value=b.dataset.sostpick; $$("#sostList [data-sostpick]").forEach(x=>x.setAttribute("aria-selected", x===b));
+    const c=STATE.colleghi.find(x=>x.id===b.dataset.sostpick); $("#sostQ").value=c.nome;
+    $("#sostHint").textContent = c.stessa ? `Hai scelto ${c.nome}.` : `${c.nome} ha una figura diversa (${c.figura}): ti sostituisce, ma i tuoi turni li riassegna l'amministrazione.`; });
   q("#dal",el=>el.onchange=()=>{ const al=$("#al"); if (al.value<el.value) al.value=el.value; al.min=el.value; });
   q("#f",f=>f.onsubmit=async ev=>{ ev.preventDefault();
     const t=$("#tipo").value, b={tipo:t, dal:$("#dal").value, al:$("#al").value, ore:+$("#ore").value, sost:$("#sost").value, prot:$("#prot").value.trim(), motivo:$("#motivo").value.trim(), note:$("#note").value.trim(), accordo:$("#accordo").checked};
@@ -1158,7 +1206,8 @@ function bind(){
       toast(r.stato==="approvata" ? "Malattia registrata" : "Richiesta inviata: ora deve confermare il collega"); }
     catch(e){ btn.disabled=false; err.textContent=e.message; } });
   const sostituto = async (id, ok) => { if (!ok && !confirm("Non puoi sostituire il collega? La sua richiesta verrà respinta.")) return;
-    try { await api("POST",`/api/richieste/${id}/sostituto`,{ok}); await load(vista); render(); toast(ok ? "Confermato: la richiesta passa all'amministrazione" : "Risposta inviata al collega"); } catch(e){ toast(e.message); } };
+    try { const r=await api("POST",`/api/richieste/${id}/sostituto`,{ok}); await load(vista); render();
+      toast(ok ? (r.cambio ? "Risposta cambiata: ora confermi la sostituzione" : "Confermato: la richiesta passa all'amministrazione") : (r.cambio ? "Risposta cambiata: non sostituisci più il collega" : "Risposta inviata al collega")); } catch(e){ toast(e.message); } };
   on("[data-sok]","click",b=>sostituto(b.dataset.sok,true));
   on("[data-sno]","click",b=>sostituto(b.dataset.sno,false));
   on("[data-annulla]","click",async b=>{ if (!confirm("Annullare la richiesta?")) return;

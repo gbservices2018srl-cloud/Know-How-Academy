@@ -140,6 +140,16 @@ async function migrate() {
     alter table buste add column if not exists firmata_disp text;
     alter table pagine_sospese add column if not exists tipo text not null default 'busta';
     create index if not exists buste_tipo_idx on buste(tipo, mese);
+    -- storico delle richieste: invio, risposte del sostituto (anche i cambi da sì a no e viceversa), decisione dell'amministrazione
+    create table if not exists richieste_eventi (
+      id bigserial primary key,
+      richiesta_id text not null,
+      azione text not null,
+      chi text not null default '',
+      il timestamptz not null default now(),
+      dispositivo text not null default ''
+    );
+    create index if not exists richieste_eventi_idx on richieste_eventi(richiesta_id, il);
   `);
 }
 

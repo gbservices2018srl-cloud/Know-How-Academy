@@ -144,11 +144,17 @@ async function caricaPiano() {
   return rows[0] || { data: {}, generato_il: null };
 }
 const reqFromRow = r => ({ id: r.id, numero: r.numero, emp: r.staff_id, tipo: r.tipo, dal: r.dal, al: r.al, ore: r.ore ?? undefined,
-  sost: r.sost || null, prot: r.prot || undefined, note: r.note, motivo: r.motivo || undefined, stato: r.stato, sostOk: r.sost_ok, inviata: r.inviata });
+  sost: r.sost || null, prot: r.prot || undefined, note: r.note, motivo: r.motivo || undefined, stato: r.stato, sostOk: r.sost_ok, inviata: r.inviata,
+  decisaAdmin: !!r.gestita_da, ...(r.eventi ? { eventi: r.eventi } : {}) });
 async function caricaRichieste() {
-  const { rows } = await db.q(`select * from richieste where stato <> 'annullata' order by dal`);
+  const { rows } = await db.q(`select r.*, coalesce((select json_agg(json_build_object('azione', e.azione, 'chi', e.chi, 'il', e.il, 'disp', e.dispositivo) order by e.il)
+      from richieste_eventi e where e.richiesta_id = r.id), '[]') as eventi
+    from richieste r where r.stato <> 'annullata' order by r.dal`);
   return rows.map(reqFromRow);
 }
+// Storico della richiesta (chi = id del collaboratore, oppure l'email dell'amministratore)
+const evento = (id, azione, chi, req) => db.q('insert into richieste_eventi (richiesta_id, azione, chi, dispositivo) values ($1,$2,$3,$4)',
+  [id, azione, chi || '', req ? buste.dispositivo(req.get('user-agent')) : '']).catch(e => console.warn('Turni, storico richiesta:', e.message));
 async function caricaAI() {
   const { rows } = await db.q('select staff_id, data from assenze_ai');
   return rows.map(r => `${r.staff_id}|${r.data}`);
@@ -245,10 +251,13 @@ async function statoDipendente(req) {
   const mie = reqs.filter(r => r.emp === e.id);
   const ferieUsate = mie.filter(r => r.tipo === 'FE' && r.stato === 'approvata' && r.dal.startsWith(anno)).reduce((s, r) => s + m.diffDays(r.dal, r.al) + 1, 0);
   const rolUsate = mie.filter(r => r.tipo === 'ROL' && r.stato === 'approvata' && r.dal.startsWith(anno)).reduce((s, r) => s + (r.ore || 8), 0);
-  const conNomi = r => ({ ...r, nome: m.full(m.emp(r.emp)), figura: m.emp(r.emp)?.tipo || '', sedi: m.emp(r.emp) ? m.sedeList(m.emp(r.emp)) : '',
+  const conNomi = r => ({ ...r, eventi: undefined, nome: m.full(m.emp(r.emp)), figura: m.emp(r.emp)?.tipo || '', sedi: m.emp(r.emp) ? m.sedeList(m.emp(r.emp)) : '',
     sostNome: r.sost ? m.full(m.emp(r.sost)) : null });
-  const colleghi = st.STAFF.filter(x => x.id !== e.id && x.tipo === e.tipo && m.sediOf(x).some(s => m.sediOf(e).includes(s)))
-    .map(x => ({ id: x.id, nome: m.full(x), sedi: m.sedeList(x) }));
+  // per il sostituto si può scegliere chiunque sia registrato (con accesso all'app); in testa chi ha la stessa figura e una sede in comune
+  const colleghi = st.STAFF.filter(x => x.id !== e.id && (x.ssoId || x.email))
+    .map(x => ({ id: x.id, nome: m.full(x), cognome: x.cognome || '', sedi: m.sedeList(x), figura: x.tipo,
+      stessa: x.tipo === e.tipo, vicino: x.tipo === e.tipo && m.sediOf(x).some(s => m.sediOf(e).includes(s)) }))
+    .sort((a, b) => (b.vicino - a.vicino) || a.cognome.localeCompare(b.cognome, 'it') || a.nome.localeCompare(b.nome, 'it'));
   const oreMese = Object.fromEntries(st.MONTHS.map(ym => [ym, m.oreMese(e, ym).coll]));
   const { rows: bl } = await db.q(`select id, tipo, mese, aperta_il, confermata_il, firmata_il from buste where staff_id = $1 and stato = 'pubblicata' and ${VISIBILE}
     order by mese desc`, [e.id, cutoff(), cutoffCud()]);
@@ -319,6 +328,7 @@ app.post('/api/richieste/:id/approva', needAdmin, wrap(async (req, res) => {
   const { rows } = await db.q(`update richieste set stato = 'approvata', gestita_il = now(), gestita_da = $2
     where id = $1 and stato = 'attesa_admin' returning *`, [req.params.id, req.user.email]);
   if (!rows[0]) return bad(res, 400, 'La richiesta non è più in attesa.');
+  await evento(rows[0].id, 'approvata', req.user.email, req);
   const { m, cfg } = await motoreCompleto();
   const esito = m.applySubstitution(reqFromRow(rows[0]));
   await salvaPiano(m);
@@ -331,6 +341,7 @@ app.post('/api/richieste/:id/rifiuta', needAdmin, wrap(async (req, res) => {
   const { rows } = await db.q(`update richieste set stato = 'rifiutata', gestita_il = now(), gestita_da = $2
     where id = $1 and stato in ('attesa_admin','attesa_sost') returning *`, [req.params.id, req.user.email]);
   if (!rows[0]) return bad(res, 400, 'La richiesta non è più in attesa.');
+  await evento(rows[0].id, 'rifiutata', req.user.email, req);
   const cfg = await caricaConfig();
   avvisaStaff(cfg, [rows[0].staff_id], { title: 'Richiesta rifiutata', body: "L'amministrazione ha rifiutato la tua richiesta di assenza.", url: '/' });
   res.json({ reqs: await caricaRichieste() });
@@ -355,7 +366,7 @@ app.post('/api/richieste', needUser, wrap(async (req, res) => {
   if (sovrapposta) return bad(res, 400, `Hai già una richiesta per quei giorni (${m.TIPI[sovrapposta.tipo].toLowerCase()} dal ${m.fmt(sovrapposta.dal)} al ${m.fmt(sovrapposta.al)}).`);
   if (sost) {
     const x = m.emp(sost);
-    if (!x || x.tipo !== e.tipo || !m.sediOf(x).some(s => m.sediOf(e).includes(s)) || x.id === e.id) return bad(res, 400, 'Sostituto non valido.');
+    if (!x || x.id === e.id) return bad(res, 400, 'Sostituto non valido.');
     for (let d = dal; d <= al; d = m.addDays(d, 1)) if (m.blocked(sost, d)) return bad(res, 400, `${m.full(x)} è assente il ${m.fmt(d)}: scegli un altro collega.`);
   }
   const id = db.newId(), ore = tipo === 'ROL' ? Math.min(8, Math.max(1, int(b.ore) || 4)) : null;
@@ -363,6 +374,7 @@ app.post('/api/richieste', needUser, wrap(async (req, res) => {
   const { rows } = await db.q(`insert into richieste (id, staff_id, tipo, dal, al, ore, sost, prot, note, motivo, stato, sost_ok, inviata)
     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning *`,
     [id, e.id, tipo, dal, al, ore, sost, tipo === 'MAL' ? str(b.prot, 40) : '', str(b.note, 500), tipo === 'ALT' ? motivo : '', stato, tipo === 'MAL' ? (sost ? true : null) : null, oggi()]);
+  await evento(id, 'inviata', e.id, req);
   if (tipo === 'MAL') {
     const mm = (await motoreCompleto()).m;
     mm.applySubstitution(reqFromRow(rows[0]));
@@ -380,19 +392,36 @@ app.post('/api/richieste/:id/sostituto', needUser, wrap(async (req, res) => {
   const { cfg, e } = await staffDi(req.user);
   if (!e) return bad(res, 403, 'Non sei nell\'elenco del personale.');
   const ok = !!req.body.ok;
-  const { rows } = await db.q(`update richieste set sost_ok = $3, stato = $4 where id = $1 and sost = $2 and stato = 'attesa_sost' returning *`,
+  // la risposta si può cambiare (sì → no, no → sì) finché l'amministrazione non ha deciso; ogni risposta resta nello storico
+  const { rows: pr } = await db.q(`select * from richieste where id = $1 and sost = $2`, [req.params.id, e.id]);
+  const prima = pr[0];
+  if (!prima) return bad(res, 404, 'Richiesta non trovata.');
+  if (prima.gestita_da || prima.stato === 'approvata' || prima.stato === 'annullata')
+    return bad(res, 400, prima.stato === 'annullata' ? 'Il collega ha annullato la richiesta.' : "L'amministrazione ha già deciso: per cambiare la tua risposta contattala.");
+  if (prima.sost_ok === ok) return bad(res, 400, ok ? 'Hai già confermato.' : 'Hai già risposto che non puoi.');
+  if (ok && prima.stato === 'rifiutata') { // nel frattempo il collega potrebbe aver chiesto gli stessi giorni con un altro sostituto
+    const { rows: alt } = await db.q(`select 1 from richieste where staff_id = $1 and id <> $2 and stato in ('attesa_sost','attesa_admin','approvata') and dal <= $4 and al >= $3`,
+      [prima.staff_id, prima.id, prima.dal, prima.al]);
+    if (alt.length) return bad(res, 400, 'Il collega ha già fatto un\'altra richiesta per quei giorni: non serve più la tua conferma.');
+  }
+  const { rows } = await db.q(`update richieste set sost_ok = $3, stato = $4 where id = $1 and sost = $2 and gestita_da is null and stato in ('attesa_sost','attesa_admin','rifiutata') returning *`,
     [req.params.id, e.id, ok, ok ? 'attesa_admin' : 'rifiutata']);
-  if (!rows[0]) return bad(res, 400, 'La richiesta non è più in attesa della tua conferma.');
-  const r = rows[0];
-  if (ok) avvisaAdmin({ title: 'Richiesta da approvare', body: `${nome(staffById(cfg, r.staff_id))}: sostituto confermato.`, url: '/?tab=richieste' });
-  avvisaStaff(cfg, [r.staff_id], { title: ok ? 'Il sostituto ha confermato' : 'Il sostituto non può', body: ok ? 'Ora la richiesta passa all\'amministrazione.' : 'Indica un altro collega con una nuova richiesta.', url: '/' });
-  res.json({ ok: true });
+  if (!rows[0]) return bad(res, 400, 'La richiesta non è più modificabile.');
+  const r = rows[0], cambio = prima.sost_ok !== null;
+  await evento(r.id, (ok ? 'sost_si' : 'sost_no') + (cambio ? '_cambio' : ''), e.id, req);
+  const chi = nome(staffById(cfg, r.staff_id));
+  if (ok) avvisaAdmin({ title: cambio ? 'Sostituto ci ripensa: ora conferma' : 'Richiesta da approvare', body: `${chi}: ${nome(e)} conferma la sostituzione.`, url: '/?tab=richieste' });
+  else if (cambio) avvisaAdmin({ title: 'Sostituto ritira la conferma', body: `${chi}: ${nome(e)} ora non può sostituire. La richiesta è respinta.`, url: '/?tab=richieste' });
+  avvisaStaff(cfg, [r.staff_id], { title: ok ? 'Il sostituto ha confermato' : (cambio ? 'Il sostituto non può più' : 'Il sostituto non può'),
+    body: ok ? 'Ora la richiesta passa all\'amministrazione.' : 'Indica un altro collega con una nuova richiesta.', url: '/' });
+  res.json({ ok: true, cambio });
 }));
 app.post('/api/richieste/:id/annulla', needUser, wrap(async (req, res) => {
   const { e } = await staffDi(req.user);
   if (!e) return bad(res, 403, 'Non sei nell\'elenco del personale.');
   const { rowCount } = await db.q(`update richieste set stato = 'annullata' where id = $1 and staff_id = $2 and stato in ('attesa_sost','attesa_admin')`, [req.params.id, e.id]);
   if (!rowCount) return bad(res, 400, 'La richiesta non si può più annullare.');
+  await evento(req.params.id, 'annullata', e.id, req);
   res.json({ ok: true });
 }));
 
