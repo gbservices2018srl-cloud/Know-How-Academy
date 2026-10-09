@@ -7,14 +7,14 @@ Tutte le app sono su **Render** (workspace "Giancarlo's workspace"), il codice �
 
 | App | Indirizzo | Area admin | Servizio Render | Repository |
 |---|---|---|---|---|
-| Accesso unico (login, registrazione, riquadri delle app) | appgestione.it (www → appgestione.it) | `/admin` → "Gestione accessi" | `mappa-protocolli` (lo stesso di Protocolli e Calendario) | `Know-How-Academy`, cartella `accessi/` (la cartella `portale/` è la vecchia pagina statica) |
+| Accesso unico (login, registrazione, riquadri delle app) | appgestione.it (www → appgestione.it) | `/admin` → "Gestione accessi" | `appgestione-eu` (lo stesso di Protocolli e Calendario) | `Know-How-Academy`, cartella `accessi/` (la cartella `portale/` è la vecchia pagina statica) |
 | Gestione finanziaria | finanza.appgestione.it (si apre su `/finanziario`) | `/admin` → "Pannello Master" | `APP-Gestione-Finanziaria` (Python, piano Starter, disco 1 GB) | `APP-Gestione-Finanziaria` (codice in `server/`) |
 | Nuovalab (laboratorio) | laboratorio.appgestione.it | `/admin` → accesso, l'area admin si apre col ruolo ADMIN | `App-Nuova-lab` (sito statico, dati su Supabase) | `App-Nuova-lab` |
 | Ticket assistenza | ticket.appgestione.it (si apre su `/ticketassistenza`) | `/admin` → accesso, poi pannello in base al ruolo (super_admin / admin_azienda) | `app-ticket-assistenza` (Next.js, Frankfurt, dati su Supabase) | `app-ticket-assistenza` |
-| Protocolli | protocolli.appgestione.it | `/admin` | `mappa-protocolli` (Node, piano gratuito) — **lo stesso servizio fa girare anche il Calendario** | `Know-How-Academy` |
-| Calendario eventi | calendario.appgestione.it | `/admin` → accesso | `mappa-protocolli` (lo stesso dei Protocolli); il vecchio servizio `calendario-eventi` va eliminato dopo il collegamento | `Know-How-Academy`, cartella `calendario/` (il repository `app-calendario-eventi` non si usa più) |
-| Magazzino centrale | magazzino.appgestione.it (**da collegare**: CNAME su Aruba e dominio nel servizio `mappa-protocolli`) | stessa app: chi è Amministratore nel pannello accessi vede Richieste, Articoli, Riordino, Fornitori | `mappa-protocolli` (lo stesso di Protocolli e Calendario) | `Know-How-Academy`, cartella `magazzino/` |
-| Turni | turni.appgestione.it (**da collegare**: CNAME su Aruba e dominio nel servizio `mappa-protocolli`) | stessa app: Amministratore = planning, richieste, personale, regole, sedi, buste paga; Utente = il dipendente (riconosciuto dall'email scritta nella sua scheda) | `mappa-protocolli` | `Know-How-Academy`, cartella `turni/` |
+| Protocolli | protocolli.appgestione.it | `/admin` | `appgestione-eu` (Node, Francoforte) — **lo stesso servizio fa girare anche il Calendario** | `Know-How-Academy` |
+| Calendario eventi | calendario.appgestione.it | `/admin` → accesso | `appgestione-eu` (lo stesso dei Protocolli); il vecchio servizio `calendario-eventi` va eliminato dopo il collegamento | `Know-How-Academy`, cartella `calendario/` (il repository `app-calendario-eventi` non si usa più) |
+| Magazzino centrale | magazzino.appgestione.it | stessa app: chi è Amministratore nel pannello accessi vede Richieste, Articoli, Riordino, Fornitori | `appgestione-eu` (lo stesso di Protocolli e Calendario) | `Know-How-Academy`, cartella `magazzino/` |
+| Turni | turni.appgestione.it | stessa app: Amministratore = planning, richieste, personale, regole, sedi, buste paga; Utente = il dipendente (riconosciuto dall'email scritta nella sua scheda) | `appgestione-eu` | `Know-How-Academy`, cartella `turni/` |
 | Radiografia studio | radiografia-studio.onrender.com | — | `radiografia-studio` (Python) | `app-radiografia-studi-dentalia` |
 
 I vecchi indirizzi `www.appgestione.it/finanziario`, `/ticketassistenza` e `/laboratorio` portano da soli ai nuovi sottodomini.
@@ -24,20 +24,22 @@ I vecchi indirizzi `www.appgestione.it/finanziario`, `/ticketassistenza` e `/lab
 | Nome | Tipo | Valore |
 |---|---|---|
 | `@` | A | `216.24.57.1` (Render) |
-| `www` | CNAME | `mappa-protocolli.onrender.com` |
+| `www` | CNAME | `appgestione-eu.onrender.com` |
 | `finanza` | CNAME | `app-gestione-finanziaria.onrender.com` |
 | `laboratorio` | CNAME | `app-nuova-lab.onrender.com` |
 | `ticket` | CNAME | `app-ticket-assistenza.onrender.com` |
-| `protocolli` | CNAME | `mappa-protocolli.onrender.com` |
-| `calendario` | CNAME | `mappa-protocolli.onrender.com` |
-| `magazzino` | CNAME | `mappa-protocolli.onrender.com` (da aggiungere) |
-| `turni` | CNAME | `mappa-protocolli.onrender.com` (da aggiungere) |
+| `protocolli` | CNAME | `appgestione-eu.onrender.com` |
+| `calendario` | CNAME | `appgestione-eu.onrender.com` |
+| `magazzino` | CNAME | `appgestione-eu.onrender.com` |
+| `turni` | CNAME | `appgestione-eu.onrender.com` |
 
 Per ogni nuovo sottodominio: record CNAME su Aruba **e** "Custom Domains" nel servizio su Render. Il piano Hobby di Render include 2 domini personalizzati; ogni dominio in più costa 0,25 $ al mese.
 
 ## Database
 
-- **`mappa-protocolli-db`** (PostgreSQL a pagamento, 1 GB, circa 6,30 $/mese, nessuna scadenza): usato da Protocolli (schema `mappa`), Calendario eventi (`calendario`), Accesso unico (`accessi`), Magazzino (`magazzino`) e Turni (`turni`).
+**Trasloco in Europa (9 ottobre 2026, sera):** tutto è passato dal vecchio servizio `mappa-protocolli` + database `mappa-protocolli-db` (Oregon, USA) al nuovo servizio `appgestione-eu` + database `appgestione-db-eu` (Francoforte). Copia fatta con `lib/trasloco.js` (variabile `COPIA_DA`, ora vuota), verificata tabella per tabella: 56 tabelle, 830 righe, identiche. Il vecchio servizio è in manutenzione (`MANUTENZIONE=true`) e il vecchio database è intatto: si tengono come copia di sicurezza per almeno 1–2 settimane e si eliminano solo con l'OK del proprietario. La gestione finanziaria non è stata toccata.
+
+- **`appgestione-db-eu`** (PostgreSQL a pagamento, Francoforte, 1 GB, circa 6,30 $/mese, nessuna scadenza): usato da Protocolli (schema `mappa`), Calendario eventi (`calendario`), Accesso unico (`accessi`), Magazzino (`magazzino`) e Turni (`turni`).
 - **`radiografia-db`** (PostgreSQL gratuito): **scade il 29 ottobre 2026** e viene cancellato con i dati circa 14 giorni dopo, se non si passa a un piano a pagamento.
 - Ticket assistenza e Nuovalab usano **Supabase**.
 - Gestione finanziaria salva i dati sul disco del suo servizio (`/var/data`).
@@ -57,7 +59,7 @@ Protocolli e Calendario: `ADMIN_USERNAME` / `ADMIN_PASSWORD` nelle impostazioni 
 ## Accesso unico (appgestione.it)
 - Una sola email e password per tutte le app. Chi si registra resta "in attesa"; l'amministratore lo approva da `appgestione.it/admin` e sceglie per ogni app: nessun accesso, Utente o Amministratore.
 - L'amministratore può anche creare utenti (con password o con link per sceglierla), disattivarli (escono subito da tutte le app) ed eliminarli.
-- Il proprietario è `ADMIN_USERNAME` / `ADMIN_PASSWORD` del servizio `mappa-protocolli`: è sempre amministratore di tutto.
+- Il proprietario è `ADMIN_USERNAME` / `ADMIN_PASSWORD` del servizio `appgestione-eu`: è sempre amministratore di tutto.
 - Dati nello schema `accessi` del database. Il cookie `ag_sso` vale per tutti i sottodomini di appgestione.it.
 - Protocolli e Calendario (stesso servizio) lo usano direttamente quando `SSO_ATTIVO=true`. Le app su altri servizi chiedono `POST https://appgestione.it/api/sso/verify` con `Authorization: Bearer <SSO_API_KEY>` e `{ token: <cookie ag_sso>, app: "finanza" }`.
 - Email (notifiche registrazioni a `NOTIFY_EMAIL`, recupero password) con Resend: `RESEND_API_KEY`. Senza chiave il pannello mostra i link da copiare.
