@@ -687,7 +687,7 @@ app.get('/sso/:app', wrap(async (req, res) => {
 }));
 // La funzione "sso" dell'app riscatta il biglietto: chi è, che ruolo ha (oppure: va bloccato).
 app.post('/api/sso/ticket', wrap(async (req, res) => {
-  if (limited('ticket|' + req.ip, 120, 15)) return bad(res, 429, 'Troppe richieste');
+  if (limited('ticket|' + req.ip, 1500, 15)) /* larga: tutto uno studio può essere sulla stessa connessione */ return bad(res, 429, 'Troppe richieste');
   const t = await store.redeemTicket(String(req.body.ticket || ''), String(req.body.app || ''));
   if (!t) return bad(res, 404, 'Biglietto non valido o scaduto');
   res.json(t);
