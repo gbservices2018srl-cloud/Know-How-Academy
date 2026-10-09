@@ -179,6 +179,19 @@ td.c:hover span{transform:translateY(-1px);box-shadow:0 3px 8px rgba(43,48,51,.1
 .k-G{--kb:linear-gradient(135deg,var(--m) 0 50%,var(--p) 50% 100%);--kf:#FFFFFF}
 .k-FE{--kb:var(--ok);--kf:#FFFFFF} .k-ROL{--kb:var(--ok-soft);--kf:var(--ok)}
 .k-MAL{--kb:var(--warn);--kf:#FFFFFF}
+.k-CP{--kb:#8C6898;--kf:#FFFFFF} .k-ALT{--kb:#5B6670;--kf:#FFFFFF}
+td.c.k-ALT span{font-size:8.5px}
+.note-reg{background:var(--accent-soft);border-radius:12px;padding:10px 14px;font-size:14px;margin:0 0 12px}
+/* filtri richieste */
+.rq-filtri{display:flex;flex-direction:column;gap:10px;margin:0 0 14px}
+.chips-f{display:flex;gap:6px;flex-wrap:wrap}
+.fchip{display:inline-flex;gap:7px;align-items:center;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:7px 12px;font-weight:700;font-size:13.5px;cursor:pointer;min-height:38px}
+.fchip span{font-size:12px;font-weight:800;min-width:20px;padding:1px 6px;border-radius:9px;background:var(--sunken);color:var(--muted);text-align:center}
+.fchip[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.fchip[aria-pressed="true"] span{background:color-mix(in srgb,var(--bg) 25%,transparent);color:var(--bg)}
+/* firma */
+.firma-box{margin-top:16px;border-top:1px solid var(--line);padding-top:14px}
+canvas.firma{display:block;width:100%;height:190px;background:#FFFFFF;border:2px dashed var(--line);border-radius:14px;touch-action:none;cursor:crosshair}
 .k-AI{--kb:repeating-linear-gradient(-45deg,var(--bad) 0 5px,#8f1b14 5px 10px);--kf:#FFFFFF}
 .k-PEND{--kb:repeating-linear-gradient(45deg,var(--yellow) 0 4px,var(--surface) 4px 8px);--kf:#3A3816}
 .k-X{--kb:transparent;--kf:var(--muted)}
@@ -302,7 +315,7 @@ ul.azl li.no::before{content:"✕ ";color:var(--bad)}
 .agd b{display:block;font-family:var(--f-display);font-size:28px;font-weight:800;line-height:1}
 .agd span{font-size:12px;font-weight:600;color:var(--muted)}
 .agt{display:grid;place-items:center;height:46px;border-radius:12px;font-family:var(--f-display);font-size:19px;font-weight:800;background:var(--kb);color:var(--kf)}
-.agt.k-ROL,.agt.k-FE,.agt.k-MAL,.agt.k-AI,.agt.k-PEND{font-size:14px}
+.agt.k-ROL,.agt.k-FE,.agt.k-MAL,.agt.k-AI,.agt.k-PEND,.agt.k-CP,.agt.k-ALT{font-size:14px}
 .agt.k-ROL{box-shadow:inset 0 0 0 2px var(--ok)}
 .agi .t{font-weight:700}
 .agi .t + .meta{margin-bottom:4px}
@@ -323,6 +336,9 @@ iframe.pdf{display:block;width:100%;height:min(70vh,900px);border:1px solid var(
 .drop{border:1px dashed var(--edge);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px;background:var(--sunken)}
 details summary{cursor:pointer;font-weight:700}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}td.c:hover span{transform:none}}
+/* tipo di richiesta: 5 scelte, vanno a capo sul telefono */
+#f .seg.alt{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));width:100%}
+#f .seg.alt button{border-left:0;border-right:1px solid var(--line);border-bottom:1px solid var(--line);margin:0 -1px -1px 0}
 
 </style>
 </head>
@@ -398,6 +414,9 @@ async function load(vista){
 }
 
 const SHORT = {bpAdmin:"Buste", bpEmp:"Buste", stato:"Turni", conferme:"Cambi"};
+const PREAVVISO = {FE:7, CP:5, ROL:2, ALT:2};
+const PREAVVISO_TXT = {FE:"Preavviso minimo 7 giorni.", ROL:"Preavviso minimo 2 giorni.", CP:"Preavviso minimo 5 giorni.",
+  ALT:"Scrivi la motivazione: è obbligatoria. Preavviso minimo 2 giorni.", MAL:"Il sostituto è facoltativo: se lo indichi prende subito i tuoi turni."};
 const ICON = {
   planning:'<path d="M3 5h18M3 12h18M3 19h18M9 3v18M15 3v18"/>',
   richieste:'<path d="M4 13l2-8h12l2 8M4 13v6h16v-6M4 13h5l1 2h4l1-2h5"/>',
@@ -406,6 +425,8 @@ const ICON = {
   sedi:'<path d="M12 21s-7-6.2-7-11.5a7 7 0 0114 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
   bpAdmin:'<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/>',
   bpEmp:'<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/>',
+  cudAdmin:'<path d="M6 3h12v18H6z"/><path d="M9 7h6M9 11h6M9 15h3M14 17l1.5 1.5L18 16"/>',
+  cudEmp:'<path d="M6 3h12v18H6z"/><path d="M9 7h6M9 11h6M9 15h3M14 17l1.5 1.5L18 16"/>',
   stato:'<rect x="3" y="5" width="18" height="16" rx="1"/><path d="M3 10h18M8 3v4M16 3v4"/>',
   nuova:'<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
   conferme:'<path d="M7 7h11l-3-3M17 17H6l3 3"/>'
@@ -419,7 +440,7 @@ const stepsHtml = r => {
 };
 const lateness = r => {
   if (r.tipo==="MAL") return "";
-  const gg = diffDays(r.inviata, r.dal), min = r.tipo==="FE"?7:2;
+  const gg = diffDays(r.inviata, r.dal), min = PREAVVISO[r.tipo] ?? 2;
   return gg<min ? `<span class="chip bad">Fuori termine · ${gg} gg</span>` : `<span class="chip n">Preavviso ${gg} gg</span>`;
 };
 const periodo = r => (r.dal===r.al? fmt(r.dal) : `${fmt(r.dal)} → ${fmt(r.al)}`) + (r.tipo==="ROL" && r.ore ? ` · ${r.ore} h` : "");
@@ -487,7 +508,8 @@ function vPersonale(){
         <span class="pa">${a?`<b class="neg">${fmtH(a)} in avanzo</b>`:""}</span><span class="pgo" aria-hidden="true">›</span></button>`; }).join(""); }).join("");
   return `<h2>Personale</h2>
   <p class="lede">Tocca un collaboratore per aprire la sua scheda: sedi, orario, ripetizione e regole personali.</p>
-  <div class="bar"><button type="button" class="btn" data-edit="new">+ Nuovo collaboratore</button><span class="mono">${STAFF.length} collaboratori · avanzo di ${meseShort(month)}</span></div>
+  <div class="note-reg">I collaboratori si <b>registrano da soli</b> su appgestione.it: quando li approvi in <a href="${esc((STATE.links?.admin)||"https://appgestione.it/admin")}">Gestione accessi</a> compaiono qui con nome, email, codice fiscale e figura. Qui imposti sedi e orario.</div>
+  <div class="bar">${STATE.me?.pannello?`<button type="button" class="btn ghost" data-edit="new" title="Solo per chi non può registrarsi">+ Aggiungi a mano</button>`:""}<span class="mono">${STAFF.length} collaboratori · avanzo di ${meseShort(month)}</span></div>
   <div class="panel plist">${rows}</div>`;
 }
 function vEditor(){
@@ -624,16 +646,17 @@ function render(){
   let tabs;
   if (role === "admin"){
     const pendAdmin = reqs.filter(r=>r.stato==="attesa_admin").length;
-    tabs = [["planning","Planning"],["richieste","Richieste"+badge(pendAdmin)],["personale","Personale"],["regole","Regole"],["sedi","Sedi"],["bpAdmin","Buste paga"]];
+    tabs = [["planning","Planning"],["richieste","Richieste"+badge(pendAdmin)],["personale","Personale"],["regole","Regole"],["sedi","Sedi"],["bpAdmin","Buste paga"],["cudAdmin","CUD"]];
   } else {
     const daConf = STATE.sostituzioni.filter(r=>r.stato==="attesa_sost").length;
-    const daLeggere = STATE.buste.filter(b=>!b.confermata).length;
-    tabs = [["stato","I miei turni"],["nuova","Richiedi"],["conferme","Sostituzioni"+badge(daConf)],...(STATE.staff.medico && !STATE.buste.length ? [] : [["bpEmp","Buste paga"+badge(daLeggere)]])];
+    const bp = STATE.buste.filter(b=>b.tipo!=="cud"), cud = STATE.buste.filter(b=>b.tipo==="cud"), daFirm = l => l.filter(b=>!b.firmata && !b.confermata).length;
+    tabs = [["stato","I miei turni"],["nuova","Richiedi"],["conferme","Sostituzioni"+badge(daConf)],...(STATE.staff.medico && !bp.length ? [] : [["bpEmp","Buste paga"+badge(daFirm(bp))]]),
+      ...(cud.length ? [["cudEmp","CUD"+badge(daFirm(cud))]] : [])];
   }
   if (!tabs.some(t=>t[0]===tab)) tab = tabs[0][0];
   $("#tabs").innerHTML = tabs.map(([k,l])=>{ const [txt,b=""]=l.split(" <span"); return `<button role="tab" aria-selected="${k===tab}" data-tab="${k}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg><span class="lbl">${SHORT[k]?`<span class="lf">${txt}</span><span class="ls">${SHORT[k]}</span>`:txt}</span>${b?"<span"+b:""}</button>`; }).join("");
-  const V = {planning:vPlanning, richieste:vRichieste, personale:vPersonale, regole:vRegole, sedi:vSedi, bpAdmin:vBusteAdmin,
-    stato:vStato, nuova:vNuova, conferme:vConferme, bpEmp:vBusteEmp}[tab];
+  const V = {planning:vPlanning, richieste:vRichieste, personale:vPersonale, regole:vRegole, sedi:vSedi, bpAdmin:vBusteAdmin, cudAdmin:vBusteAdmin,
+    stato:vStato, nuova:vNuova, conferme:vConferme, bpEmp:vBusteEmp, cudEmp:vBusteEmp}[tab];
   $("#view").innerHTML = (role === "admin" || tab === "stato" ? pushBanner() : "") + V() + (modal ? vModal() : "");
   bind();
 }
@@ -650,10 +673,10 @@ function vPrivacy(){
     <p class="lede">Ciao ${esc(STATE.staff?.nome || "")}, è il tuo primo accesso ai Turni. Per continuare leggi e accetta l'informativa.</p>
     <div class="privacy-text">
       <h4>Titolare del trattamento</h4><p>La società del gruppo To Smile con cui hai il rapporto di lavoro, che gestisce turni, sedi, assenze e buste paga.</p>
-      <h4>Quali dati trattiamo</h4><p>Nome, cognome, email, codice fiscale, figura professionale, sedi e turni, richieste di ferie, permessi e malattia (solo il numero di protocollo del certificato, mai la diagnosi), buste paga, data e ora di apertura e di presa visione dei documenti, tipo di dispositivo usato.</p>
+      <h4>Quali dati trattiamo</h4><p>Nome, cognome, email, codice fiscale, figura professionale, sedi e turni, richieste di ferie, permessi, malattia, congedo parentale e altre assenze con la motivazione che scrivi (della malattia solo il numero di protocollo del certificato, mai la diagnosi), buste paga e CUD, data e ora di apertura dei documenti, la firma per ricevuta che fai nell'app, tipo di dispositivo usato.</p>
       <h4>Perché</h4><p>Gestire il rapporto di lavoro, organizzare i turni e consegnarti le buste paga in formato elettronico, conservando la prova della consegna.</p>
       <h4>Chi li vede</h4><p>Tu vedi i tuoi dati e i nomi dei colleghi nei tuoi stessi turni. L'amministrazione e il consulente del lavoro vedono quelli necessari al loro compito.</p>
-      <h4>Dove e per quanto tempo</h4><p>I dati sono conservati sui server del fornitore Render (negli Stati Uniti); le buste paga sono salvate cifrate. Restano consultabili nell'app per 18 mesi, poi le conserva solo l'amministrazione, che può fornirtele su richiesta.</p>
+      <h4>Dove e per quanto tempo</h4><p>I dati sono conservati sui server del fornitore Render (negli Stati Uniti); buste paga, CUD e firme sono salvati cifrati. Le buste restano consultabili nell'app per 18 mesi e i CUD per 5 anni, poi li conserva solo l'amministrazione, che può fornirteli su richiesta.</p>
       <h4>I tuoi diritti</h4><p>Puoi chiedere accesso, rettifica e limitazione dei tuoi dati all'amministrazione e presentare reclamo al Garante per la protezione dei dati personali.</p>
     </div>
     <label class="check" style="margin-top:16px"><input type="checkbox" id="pchk"> <span>Ho letto l'informativa sul trattamento dei miei dati personali.</span></label>
@@ -678,7 +701,7 @@ function stepsEmp(r){
 function empReqCard(r, actions){
   return `<div class="req"><div style="min-width:0">
     <div class="t">${esc(r.nome)} · ${TIPI[r.tipo]}</div>
-    <div class="meta">${periodo(r)} · ${esc(r.figura)} · ${esc(r.sedi)} · sostituto: <b>${r.sostNome?esc(r.sostNome):"—"}</b>${r.prot?` · prot. ${esc(r.prot)}`:""}${r.note?` · “${esc(r.note)}”`:""}</div>
+    <div class="meta">${periodo(r)} · ${esc(r.figura)} · ${esc(r.sedi)} · sostituto: <b>${r.sostNome?esc(r.sostNome):"—"}</b>${r.prot?` · prot. ${esc(r.prot)}`:""}${r.motivo?` · motivo: <b>${esc(r.motivo)}</b>`:""}${r.note?` · “${esc(r.note)}”`:""}</div>
     ${stepsEmp(r)}</div><div class="acts">${actions||""}</div></div>`;
 }
 function vStato(){
@@ -700,12 +723,12 @@ function vStato(){
       <div class="seg alt" role="group" aria-label="Mese">${MONTHS.map(m=>`<button data-em="${m}" aria-pressed="${m===empMonth}">${meseShort(m).slice(0,3)}</button>`).join("")}</div></div>
     <div class="agenda">${ag||`<p style="color:var(--muted);margin:0">Nessun turno in questo mese.</p>`}</div>
   </div>
-  <div class="panel" style="margin-top:24px"><h3>Le mie richieste</h3>${STATE.mie.length?STATE.mie.map(r=>empReqCard(r, r.stato.startsWith("attesa")?`<button class="btn sm ghost bad" data-annulla="${r.id}">Annulla</button>`:"")).join(""):`<p style="color:var(--muted);margin:0">Nessuna richiesta. Usa “Richiedi” per ferie, ROL o malattia.</p>`}</div>`;
+  <div class="panel" style="margin-top:24px"><h3>Le mie richieste</h3>${STATE.mie.length?STATE.mie.map(r=>empReqCard(r, r.stato.startsWith("attesa")?`<button class="btn sm ghost bad" data-annulla="${r.id}">Annulla</button>`:"")).join(""):`<p style="color:var(--muted);margin:0">Nessuna richiesta. Usa “Richiedi” per ferie, ROL, malattia, congedo parentale o altro motivo.</p>`}</div>`;
 }
 function vNuova(){
   const s = STATE.staff, fine = `${MONTHS[MONTHS.length-1]}-${pad(daysIn(MONTHS[MONTHS.length-1]))}`;
   return `<h2>Nuova richiesta</h2>
-  <p class="lede">Ferie e ROL partono solo se indichi il collega che ti sostituisce e confermi di esserti accordato. Lui deve confermare, e solo dopo la richiesta arriva all'amministrazione.</p>
+  <p class="lede">Ferie, ROL, congedo parentale e altri motivi partono solo se indichi il collega che ti sostituisce e confermi di esserti accordato. Lui deve confermare, e solo dopo la richiesta arriva all'amministrazione. Per la malattia basta il protocollo del certificato.</p>
   <form id="f" class="panel" novalidate>
     <div class="f"><label>Tipo</label>
       <div class="seg alt" role="radiogroup">${Object.entries(TIPI).map(([k,v],i)=>`<button type="button" data-tipo="${k}" aria-pressed="${i===0}">${v}</button>`).join("")}</div>
@@ -715,6 +738,7 @@ function vNuova(){
       <div class="f"><label for="al">Al</label><input type="date" id="al" value="${addDays(TODAY,7)}" min="${TODAY}" max="${fine}"></div>
       <div class="f" id="oreBox" hidden><label for="ore">Ore</label><input type="number" id="ore" min="1" max="8" value="4"></div>
     </div>
+    <div class="f" id="motivoBox" hidden><label for="motivo">Motivazione <span aria-hidden="true">*</span></label><textarea id="motivo" rows="3" maxlength="500" placeholder="Scrivi il motivo dell'assenza"></textarea><span class="hint">Obbligatoria: senza motivazione la richiesta non parte.</span></div>
     <div class="f" id="protBox" hidden><label for="prot">Protocollo certificato medico</label><input id="prot" inputmode="numeric" placeholder="es. 8812047"><span class="hint">Lo trovi nel messaggio del tuo medico.</span></div>
     <div class="f"><label for="sost">Chi ti sostituisce <span id="sostReq">*</span></label>
       <select id="sost"><option value="">Scegli un collega</option>${STATE.colleghi.map(c=>`<option value="${c.id}">${esc(c.nome)} · ${esc(c.sedi)}</option>`).join("")}</select>
@@ -731,93 +755,111 @@ function vConferme(){
   <p class="lede">Colleghi che ti hanno indicato come sostituto. Confermando ti impegni a coprire i loro turni in quei giorni.</p>
   <div class="panel">${list.length?list.map(r=>empReqCard(r, r.stato==="attesa_sost"?`<button class="btn sm" data-sok="${r.id}">Confermo</button><button class="btn sm ghost bad" data-sno="${r.id}">Non posso</button>`:"")).join(""):`<p style="color:var(--muted);margin:0">Nessuno ti ha indicato come sostituto.</p>`}</div>`;
 }
+// ================= documenti (buste paga e CUD): dipendente =================
+const docT = () => (tab==="cudAdmin"||tab==="cudEmp") ? "cud" : "busta";
+const perLabel = (T,p) => T==="cud" ? `CUD ${p} (redditi ${(+p)-1})` : meseLabel(p);
+const docNome = T => T==="cud" ? "CUD" : "busta paga";
 function vBusteEmp(){
-  const mie = STATE.buste;
-  return `<h2>Le mie buste paga</h2>
-  <p class="lede">Per aprire una busta ti chiediamo di nuovo la password di appgestione.it. Quando confermi la presa visione, l'amministrazione la riceve con data e ora.</p>
-  <div class="panel">${mie.length?mie.map(b=>`<div class="req"><div><div class="t">${meseLabel(b.mese)}</div><div style="margin-top:6px">${b.confermata?`<span class="chip ok">Presa visione ${esc(dt(b.confermata))}</span>`:b.aperta?`<span class="chip warn">Aperta, da confermare</span>`:`<span class="chip bad">Da aprire</span>`}</div></div>
-    <div class="acts"><button class="btn sm ${b.confermata?"ghost":""}" data-open="${b.id}">Apri</button></div></div>`).join(""):`<p style="color:var(--muted);margin:0">Nessuna busta paga disponibile.</p>`}</div>
-  <p class="lede" style="margin-top:14px;font-size:13px">Le buste più vecchie di 18 mesi sono conservate dall'amministrazione: chiedile all'ufficio personale.</p>`;
+  const T = docT(), mie = STATE.buste.filter(b=>(b.tipo||"busta")===T);
+  return `<h2>${T==="cud"?"I miei CUD":"Le mie buste paga"}</h2>
+  <p class="lede">Per aprire ${T==="cud"?"un CUD":"una busta"} ti chiediamo di nuovo la password di appgestione.it. Dopo averlo letto <b>firmi per ricevuta</b> con il dito o con il mouse: la firma arriva all'amministrazione con data e ora.</p>
+  <div class="panel">${mie.length?mie.map(b=>`<div class="req"><div><div class="t">${perLabel(T,b.mese)}</div><div style="margin-top:6px">${b.firmata?`<span class="chip ok">Firmato ${esc(dt(b.firmata))}</span>`:b.confermata?`<span class="chip ok">Presa visione ${esc(dt(b.confermata))}</span>`:b.aperta?`<span class="chip warn">Aperto, da firmare</span>`:`<span class="chip bad">Da aprire e firmare</span>`}</div></div>
+    <div class="acts"><button class="btn sm ${b.firmata||b.confermata?"ghost":""}" data-open="${b.id}">${b.firmata||b.confermata?"Apri":"Apri e firma"}</button></div></div>`).join(""):`<p style="color:var(--muted);margin:0">Nessun documento disponibile.</p>`}</div>
+  <p class="lede" style="margin-top:14px;font-size:13px">${T==="cud"?"I CUD più vecchi di 5 anni":"Le buste più vecchie di 18 mesi"} sono conservati dall'amministrazione: chiedili all'ufficio personale.</p>`;
 }
 const dt = s => s ? new Date(s).toLocaleString("it-IT",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}) : "";
 function vModal(){
   const b = STATE.buste.find(x=>x.id===modal.id); if (!b) return "";
+  const T = b.tipo||"busta", tit = T==="cud" ? perLabel(T,b.mese) : `Busta paga di ${meseLabel(b.mese)}`;
   if (modal.step==="pwd") return `<div class="modal" role="dialog" aria-modal="true" aria-label="Conferma password"><form class="box" id="mpwd" novalidate>
-    <h3>Busta paga di ${meseLabel(b.mese)}</h3><p class="lede" style="font-size:14px;margin-bottom:12px">Inserisci la password con cui entri in appgestione.it.</p>
+    <h3>${esc(tit)}</h3><p class="lede" style="font-size:14px;margin-bottom:12px">Inserisci la password con cui entri in appgestione.it.</p>
     <input type="email" autocomplete="username" value="${esc(STATE.me.email)}" hidden>
     <input type="password" id="mp" autocomplete="current-password" style="width:100%" aria-label="Password">
     <div class="err" style="min-height:20px;margin-top:6px" aria-live="polite">${esc(modal.err||"")}</div>
-    <div class="bar" style="margin:8px 0 0"><button class="btn" type="submit">Apri busta</button><button class="btn ghost" type="button" data-close="1">Annulla</button></div></form></div>`;
-  return `<div class="modal" role="dialog" aria-modal="true" aria-label="Busta paga"><div class="box wide">
-    <div class="bar" style="justify-content:space-between;margin:0 0 10px"><h3 style="margin:0">${meseLabel(b.mese)}</h3><div class="bar" style="margin:0"><a class="btn sm ghost" href="/api/buste/${b.id}/file?t=${encodeURIComponent(modal.token)}" target="_blank" rel="noopener">Apri a schermo intero</a><button class="btn sm ghost" data-close="1">Chiudi</button></div></div>
-    ${matchMedia("(pointer:fine) and (min-width:700px)").matches ? `<iframe class="pdf" src="/api/buste/${b.id}/file?t=${encodeURIComponent(modal.token)}" title="Busta paga di ${meseLabel(b.mese)}"></iframe>`
-      : `<a class="btn" style="width:100%;min-height:52px" href="/api/buste/${b.id}/file?t=${encodeURIComponent(modal.token)}" target="_blank" rel="noopener">Leggi la busta paga (PDF)</a><p class="hint" style="margin:8px 0 0">Si apre in una nuova pagina. Poi torna qui per confermare la presa visione.</p>`}
-    ${b.confermata?`<p><span class="chip ok">Presa visione registrata il ${esc(dt(b.confermata))}</span></p>`
-      :`<label class="check" style="margin-top:12px"><input type="checkbox" id="mchk"> <span>Dichiaro di aver ricevuto e preso visione della mia busta paga di ${meseLabel(b.mese)}.</span></label>
-        <button class="btn" id="mconf" style="margin-top:12px;width:100%" disabled>Confermo la presa visione</button>`}
+    <div class="bar" style="margin:8px 0 0"><button class="btn" type="submit">Apri</button><button class="btn ghost" type="button" data-close="1">Annulla</button></div></form></div>`;
+  const url = `/api/buste/${b.id}/file?t=${encodeURIComponent(modal.token)}`;
+  return `<div class="modal" role="dialog" aria-modal="true" aria-label="${esc(tit)}"><div class="box wide">
+    <div class="bar" style="justify-content:space-between;margin:0 0 10px"><h3 style="margin:0">${esc(tit)}</h3><div class="bar" style="margin:0"><a class="btn sm ghost" href="${url}" target="_blank" rel="noopener">Apri a schermo intero</a><button class="btn sm ghost" data-close="1">Chiudi</button></div></div>
+    ${matchMedia("(pointer:fine) and (min-width:700px)").matches ? `<iframe class="pdf" src="${url}" title="${esc(tit)}"></iframe>`
+      : `<a class="btn" style="width:100%;min-height:52px" href="${url}" target="_blank" rel="noopener">Leggi ${T==="cud"?"il CUD":"la busta paga"} (PDF)</a><p class="hint" style="margin:8px 0 0">Si apre in una nuova pagina. Poi torna qui per firmare.</p>`}
+    ${b.firmata?`<p><span class="chip ok">Firmato per ricevuta il ${esc(dt(b.firmata))}</span></p>`
+      : b.confermata?`<p><span class="chip ok">Presa visione registrata il ${esc(dt(b.confermata))}</span></p>`
+      :`<div class="firma-box"><h4 style="margin:0 0 4px">Firma per ricevuta</h4>
+        <p class="hint" style="margin:0 0 10px">Firmando dichiari di aver ricevuto e preso visione di: ${esc(tit)}. Firma qui sotto con il dito o con il mouse.</p>
+        <canvas id="firma" class="firma" aria-label="Riquadro per la firma"></canvas>
+        <div class="bar" style="margin:10px 0 0"><button class="btn" id="fsend" disabled>Firma e invia</button><button class="btn ghost" type="button" id="fclear">Cancella</button></div></div>`}
   </div></div>`;
 }
 
-// ================= amministratore: buste paga =================
+// ================= documenti: amministratore =================
 const mesiCarica = () => { const out=[]; const [y,m]=TODAY.split("-").map(Number); for (let k=-3;k<=0;k++){ const t=new Date(y,m-1+k,15); out.push(`${t.getFullYear()}-${pad(t.getMonth()+1)}`); } return out.reverse(); };
+const anniCud = () => { const y=+TODAY.slice(0,4); return [y, y-1, y-2].map(String); };
 function vBusteAdmin(){
-  if (!STATE.busteEnabled) return `<h2>Buste paga</h2><div class="panel"><p style="margin:0">Le buste paga non sono ancora attive: manca la chiave di cifratura <b>BUSTE_KEY</b> sulle impostazioni di Render.</p></div>`;
-  if (!BUSTE){ loadBuste(); return `<h2>Buste paga</h2><p class="lede">Caricamento…</p>`; }
+  const T = docT(), Tit = T==="cud" ? "CUD" : "Buste paga";
+  if (!STATE.busteEnabled) return `<h2>${Tit}</h2><div class="panel"><p style="margin:0">${Tit} non ancora attivi: manca la chiave di cifratura <b>BUSTE_KEY</b> sulle impostazioni di Render.</p></div>`;
+  if (BUSTE && BUSTE.tipo!==T){ BUSTE=null; bustaMese=""; delPending=null; upMsg=""; }
+  if (!BUSTE){ loadBuste(); return `<h2>${Tit}</h2><p class="lede">Caricamento…</p>`; }
+  const qt = `?tipo=${T}`, opzioni = T==="cud" ? anniCud() : mesiCarica(), predef = T==="cud" ? anniCud()[0] : mesiCarica()[1];
   const dip = STAFF.filter(e=>e.tipo!=="Medico");
   const mesi = [...new Set(BUSTE.buste.map(b=>b.mese))].sort().reverse();
   const attivi = mesi.filter(m=>m>=BUSTE.cutoff), arch = mesi.filter(m=>m<BUSTE.cutoff);
-  if (!bustaMese || !mesi.includes(bustaMese)) bustaMese = attivi[0] || mesiCarica()[1];
+  if (!bustaMese || !mesi.includes(bustaMese)) bustaMese = attivi[0] || predef;
   const del = BUSTE.buste.filter(b=>b.mese===bustaMese), byStaff = Object.fromEntries(del.map(b=>[b.staff_id,b]));
-  const pub = del.filter(b=>b.stato==="pubblicata"), bozze = del.filter(b=>b.stato==="bozza"), ok = pub.filter(b=>b.confermata_il).length;
+  const fatto = b => b.firmata_il || b.confermata_il;
+  const pub = del.filter(b=>b.stato==="pubblicata"), bozze = del.filter(b=>b.stato==="bozza"), ok = pub.filter(fatto).length;
   const sosp = BUSTE.sospese.filter(s=>s.mese===bustaMese);
   const nonAcc = STAFF.filter(e=>!privacy[e.id]);
-  const statoB = b => !b ? `<span class="chip bad">Nessuna busta</span>` : b.stato==="bozza" ? `<span class="chip n">Da pubblicare</span>`
-    : b.confermata_il ? `<span class="chip ok">Presa visione ${esc(dt(b.confermata_il))}</span>` : b.aperta_il ? `<span class="chip warn">Aperta ${esc(dt(b.aperta_il))}</span>` : `<span class="chip bad">Non aperta</span>`;
+  const statoB = b => !b ? `<span class="chip bad">Nessun documento</span>` : b.stato==="bozza" ? `<span class="chip n">Da pubblicare</span>`
+    : b.firmata_il ? `<span class="chip ok">Firmato ${esc(dt(b.firmata_il))}</span>` : b.confermata_il ? `<span class="chip ok">Presa visione ${esc(dt(b.confermata_il))} · senza firma</span>`
+    : b.aperta_il ? `<span class="chip warn">Aperto ${esc(dt(b.aperta_il))}, da firmare</span>` : `<span class="chip bad">Non aperto</span>`;
   const righe = [...dip.map(e=>[e, byStaff[e.id]]), ...del.filter(b=>!dip.some(e=>e.id===b.staff_id)).map(b=>[emp(b.staff_id), b])];
-  return `<h2>Buste paga</h2>
-  <p class="lede">Carica il PDF della consulente: l'app lo divide per codice fiscale e mette ogni busta nell'area del dipendente, cifrata. Qui vedi chi ha preso visione e quando.</p>
+  const nDoc = n => T==="cud" ? `${n} CUD` : `${n} ${n===1?"busta":"buste"}`;
+  const suggeribili = sosp.filter(s=>s.suggerito && dip.some(e=>e.id===s.suggerito)).length;
+  return `<h2>${Tit}</h2>
+  <p class="lede">Carica il PDF ${T==="cud"?"con tutti i CUD":"della consulente"}: l'app lo divide per codice fiscale e mette ogni documento nell'area del dipendente, cifrato. Il dipendente lo apre e <b>firma per ricevuta</b>: qui vedi chi ha firmato e quando, e ricevi la ricevuta firmata.</p>
   <div class="grid2">
-    <form class="panel" id="upForm" novalidate><h3>Carica cedolini</h3>
+    <form class="panel" id="upForm" novalidate><h3>Carica ${T==="cud"?"i CUD":"cedolini"}</h3>
       <div class="drop">
-        <label for="upMese">Mese</label><select id="upMese">${mesiCarica().map(m=>`<option value="${m}" ${m===mesiCarica()[1]?"selected":""}>${meseLabel(m)}</option>`).join("")}</select>
-        <label for="upFile">PDF unico con tutte le buste</label><input type="file" id="upFile" accept="application/pdf">
+        <label for="upMese">${T==="cud"?"Anno del CUD":"Mese"}</label><select id="upMese">${opzioni.map(m=>`<option value="${m}" ${m===predef?"selected":""}>${perLabel(T,m)}</option>`).join("")}</select>
+        <label for="upFile">PDF unico con ${T==="cud"?"tutti i CUD":"tutte le buste"}</label><input type="file" id="upFile" accept="application/pdf">
         <button class="btn" type="submit" id="upGo">Carica e dividi</button>
       </div>
       ${upMsg?`<p class="hint" style="margin:10px 0 0">${upMsg}</p>`:""}
-      <p class="hint" style="margin:10px 0 0">Il codice fiscale di ogni dipendente deve essere scritto nella sua scheda in Personale. Le buste restano in bozza finché non le pubblichi.</p></form>
+      <p class="hint" style="margin:10px 0 0">Il codice fiscale di ogni dipendente deve essere scritto nella sua scheda in Personale. I documenti restano in bozza finché non li pubblichi.</p></form>
     <div class="panel"><h3>Informativa privacy</h3>
       <div class="stat"><div><b>${STAFF.length-nonAcc.length}/${STAFF.length}</b><span>Accettata</span></div></div>
       <p style="margin:12px 0 0;font-size:14px">${nonAcc.length?`Manca: ${nonAcc.map(e=>esc(full(e))).join(", ")}. La vedranno al primo accesso.`:"Tutti hanno accettato."}</p>
       <details style="margin-top:12px;font-size:13px"><summary style="cursor:pointer">Registro accettazioni</summary>
         <ul class="plain" style="margin-top:8px">${STAFF.filter(e=>privacy[e.id]).map(e=>`<li>${esc(full(e))} · <span class="mono">${esc(dt(privacy[e.id].il))} · ${esc(privacy[e.id].disp||"")}</span></li>`).join("")||"<li>Nessuna accettazione.</li>"}</ul></details></div>
   </div>
-  ${sosp.length?`<div class="panel" style="margin-top:24px;background:var(--accent-soft)"><h3>Pagine da assegnare · ${meseLabel(bustaMese)}</h3>
-    <p style="margin:0 0 10px;font-size:14px">In queste pagine non ho trovato il codice fiscale di un dipendente. Guardale e assegnale (si aggiungono alla sua busta) oppure scartale.</p>
+  ${sosp.length?`<div class="panel" style="margin-top:24px;background:var(--accent-soft)"><h3>Pagine da assegnare · ${perLabel(T,bustaMese)}</h3>
+    <p style="margin:0 0 10px;font-size:14px">In queste pagine non ho trovato il codice fiscale di un dipendente. Guardale e assegnale (si aggiungono al suo documento) oppure scartale.${T==="cud"?" Nei CUD capita spesso con le pagine successive alla prima: di solito sono della persona della pagina prima.":""}</p>
+    ${suggeribili>1?`<div class="bar"><button class="btn sm" id="assignAll">Assegna tutte come suggerito (${suggeribili})</button></div>`:""}
     ${sosp.map(s=>`<div class="bar"><span class="mono">Pagina ${s.pagina} · ${esc(s.origine)}</span><a class="btn sm ghost" href="/api/buste/sospese/${s.id}/file" target="_blank" rel="noopener">Guarda</a>
       <select id="assign-${s.id}" aria-label="Assegna pagina ${s.pagina}"><option value="">Assegna a…</option>${dip.map(e=>`<option value="${e.id}" ${s.suggerito===e.id?"selected":""}>${esc(full(e))}</option>`).join("")}</select>
       <button class="btn sm" data-assign="${s.id}">Assegna</button><button class="btn sm ghost bad" data-scarta="${s.id}">Scarta</button></div>`).join("")}</div>`:""}
   <div class="panel" style="margin-top:24px">
-    <div class="bar" style="justify-content:space-between"><h3 style="margin:0">Registro prese visione</h3>
-      <select id="bpMese" aria-label="Mese">${(attivi.length?attivi:[bustaMese]).map(m=>`<option value="${m}" ${m===bustaMese?"selected":""}>${meseLabel(m)}</option>`).join("")}</select></div>
-    <div class="stat" style="margin-bottom:12px"><div><b>${ok}/${pub.length}</b><span>Prese visione</span></div>${bozze.length?`<div><b>${bozze.length}</b><span>Da pubblicare</span></div>`:""}</div>
-    <div class="bar">${bozze.length?`<button class="btn" id="pubblica" ${sosp.length?"disabled":""}>Pubblica ${bozze.length} ${bozze.length===1?"busta":"buste"} ai dipendenti</button>`:""}
-      ${pub.length && ok<pub.length?`<button class="btn ghost" id="sollecito">Sollecita chi manca (${pub.length-ok})</button>`:""}
-      ${del.length?`<a class="btn ghost" href="/api/buste/mese/${bustaMese}/registro.csv">Registro (CSV)</a><a class="btn ghost" href="/api/buste/mese/${bustaMese}/pdf">Tutte le buste (PDF)</a>`:""}</div>
+    <div class="bar" style="justify-content:space-between"><h3 style="margin:0">Registro firme</h3>
+      <select id="bpMese" aria-label="Periodo">${(attivi.length?attivi:[bustaMese]).map(m=>`<option value="${m}" ${m===bustaMese?"selected":""}>${perLabel(T,m)}</option>`).join("")}</select></div>
+    <div class="stat" style="margin-bottom:12px"><div><b>${ok}/${pub.length}</b><span>Firmati</span></div>${bozze.length?`<div><b>${bozze.length}</b><span>Da pubblicare</span></div>`:""}</div>
+    <div class="bar">${bozze.length?`<button class="btn" id="pubblica" ${sosp.length?"disabled":""}>Pubblica ${nDoc(bozze.length)} ai dipendenti</button>`:""}
+      ${pub.length && ok<pub.length?`<button class="btn ghost" id="sollecito">Sollecita chi non ha firmato (${pub.length-ok})</button>`:""}
+      ${del.length?`<a class="btn ghost" href="/api/buste/mese/${bustaMese}/registro.csv${qt}">Registro (CSV)</a><a class="btn ghost" href="/api/buste/mese/${bustaMese}/pdf${qt}">Tutti i documenti (PDF)</a>`:""}</div>
     ${sosp.length && bozze.length?`<p class="hint" style="margin:-6px 0 12px">Prima assegna o scarta le pagine qui sopra.</p>`:""}
     <div class="overflow"><table class="rules"><thead><tr><th>Dipendente</th><th>Stato</th><th>Dispositivo</th><th>Impronta file</th><th></th></tr></thead><tbody>
-      ${righe.map(([e,b])=>`<tr><td>${esc(full(e))}<div class="mono">${esc(e?.cf||"codice fiscale mancante")}</div></td><td>${statoB(b)}</td><td style="font-size:13px">${esc(b?.confermata_disp||b?.aperta_disp||"—")}</td>
-        <td class="mono">${b?esc(b.impronta.slice(0,12))+"…":"—"}</td><td style="white-space:nowrap">${b?`<a class="btn sm ghost" href="/api/buste/${b.id}/anteprima" target="_blank" rel="noopener">Vedi</a>${b.stato==="bozza"?` <button class="btn sm ghost bad" data-bdel="${b.id}">Togli</button>`:""}`:""}</td></tr>`).join("")||`<tr><td colspan="5">Nessun dipendente (i medici non ricevono la busta dall'app).</td></tr>`}
+      ${righe.map(([e,b])=>`<tr><td>${esc(full(e))}<div class="mono">${esc(e?.cf||"codice fiscale mancante")}</div></td><td>${statoB(b)}</td><td style="font-size:13px">${esc(b?.firmata_disp||b?.confermata_disp||b?.aperta_disp||"—")}</td>
+        <td class="mono">${b?esc(b.impronta.slice(0,12))+"…":"—"}</td><td style="white-space:nowrap">${b?`<a class="btn sm ghost" href="/api/buste/${b.id}/anteprima" target="_blank" rel="noopener">Vedi</a>${b.firmata_il?` <a class="btn sm" href="/api/buste/${b.id}/firmata" target="_blank" rel="noopener">Copia firmata</a>`:""}${b.stato==="bozza"?` <button class="btn sm ghost bad" data-bdel="${b.id}">Togli</button>`:""}`:""}</td></tr>`).join("")||`<tr><td colspan="5">Nessun dipendente (i medici non ricevono i documenti dall'app).</td></tr>`}
     </tbody></table></div>
   </div>
   <div class="panel" style="margin-top:24px"><h3>Archivio amministrazione</h3>
-    <p class="lede" style="font-size:14px">Mesi precedenti a ${meseLabel(BUSTE.cutoff)}: oltre i 18 mesi non sono più visibili ai dipendenti. Restano qui finché non li elimini.</p>
-    ${arch.length?arch.map(m=>{ const n=BUSTE.buste.filter(b=>b.mese===m), c=n.filter(b=>b.confermata_il).length;
-      return `<div class="req"><div><div class="t">${meseLabel(m)}</div><div class="meta">${n.length} buste · ${c} prese visione registrate</div></div>
-      <div class="acts"><a class="btn sm ghost" href="/api/buste/mese/${m}/pdf">PDF</a><a class="btn sm ghost" href="/api/buste/mese/${m}/registro.csv">Registro</a>${delPending===m?`<button class="btn sm bad" data-delok="${m}">Conferma eliminazione</button><button class="btn sm ghost" data-delno="1">Annulla</button>`:`<button class="btn sm ghost bad" data-del="${m}">Elimina</button>`}</div></div>`;}).join("")
-      :`<p style="margin:0;color:var(--muted)">Nessun mese in archivio.</p>`}
+    <p class="lede" style="font-size:14px">Prima di ${perLabel(T,BUSTE.cutoff)}: oltre ${T==="cud"?"i 5 anni":"i 18 mesi"} non sono più visibili ai dipendenti. Restano qui finché non li elimini.</p>
+    ${arch.length?arch.map(m=>{ const n=BUSTE.buste.filter(b=>b.mese===m), c=n.filter(fatto).length;
+      return `<div class="req"><div><div class="t">${perLabel(T,m)}</div><div class="meta">${nDoc(n.length)} · ${c} firmati</div></div>
+      <div class="acts"><a class="btn sm ghost" href="/api/buste/mese/${m}/pdf${qt}">PDF</a><a class="btn sm ghost" href="/api/buste/mese/${m}/registro.csv${qt}">Registro</a>${delPending===m?`<button class="btn sm bad" data-delok="${m}">Conferma eliminazione</button><button class="btn sm ghost" data-delno="1">Annulla</button>`:`<button class="btn sm ghost bad" data-del="${m}">Elimina</button>`}</div></div>`;}).join("")
+      :`<p style="margin:0;color:var(--muted)">Nessun documento in archivio.</p>`}
   </div>`;
 }
-async function loadBuste(){ try { BUSTE = await api("GET","/api/buste"); } catch(e){ BUSTE = {buste:[], sospese:[], cutoff:"0000-00"}; toast(e.message); } if (tab==="bpAdmin") render(); }
+async function loadBuste(){ const T=docT(); try { BUSTE = await api("GET","/api/buste?tipo="+T); } catch(e){ BUSTE = {tipo:T, buste:[], sospese:[], cutoff:"0000-00"}; toast(e.message); } if (tab==="bpAdmin"||tab==="cudAdmin") render(); }
 
 // ---------- planning ----------
 function vPlanning(){
@@ -846,7 +888,7 @@ function vPlanning(){
     <span><i class="k-M">M<sub>1</sub></i>${turnoTxt("M")} · il numero è il riunito</span><span><i class="k-P">P</i>${turnoTxt("P")}</span>
     <span><i class="k-G">G</i>Mattina e pomeriggio (${fmtH(H("M")+H("P"))})</span><span><i class="k-R">·</i>Riposo</span>
     <span><i class="k-X" style="border:1px dashed var(--line)">${esc(SEDI[1]?.sigla||"")}</i>Quel giorno lavora in un'altra sede (sigla della sede)</span><span><i class="k-G pin">G</i>Presenza a cadenza fissa</span>
-    <span><i class="k-FE">FE</i>Ferie</span><span><i class="k-ROL">ROL</i>Permesso</span><span><i class="k-MAL">MAL</i>Malattia</span>
+    <span><i class="k-FE">FE</i>Ferie</span><span><i class="k-ROL">ROL</i>Permesso</span><span><i class="k-MAL">MAL</i>Malattia</span><span><i class="k-CP">CP</i>Congedo parentale</span><span><i class="k-ALT">ALT</i>Altro motivo</span>
     <span><i class="k-PEND">?</i>Richiesta in attesa</span><span><i class="k-AI">AI</i>Assenza senza richiesta</span>
     <span><i style="background:repeating-linear-gradient(-45deg,var(--sunken) 0 4px,var(--surface) 4px 8px);box-shadow:inset 0 0 0 1px var(--line)"></i>Sede chiusa</span>
   </div>`;
@@ -935,7 +977,7 @@ function vRegole(){
       <li>Ogni professionista lavora in una sola sede al giorno.</li>
       <li>Le presenze a cadenza fissa (in Personale) vengono messe per prime; il resto delle ore si distribuisce intorno.</li>
       <li>Le ore a settimana di ciascuno si impostano in Personale. Quelle che non trovano posto compaiono come ore in avanzo nel Planning.</li>
-      <li>Chi ha ferie, ROL o malattia approvati non viene messo in turno e le sue ore di quei giorni non contano come avanzo.</li>
+      <li>Chi ha ferie, ROL, malattia, congedo parentale o altro motivo approvati non viene messo in turno e le sue ore di quei giorni non contano come avanzo.</li>
     </ul>
   </div>
   <div class="panel" style="margin-top:28px">
@@ -990,16 +1032,30 @@ function reqCard(r, actions){
   const e = emp(r.emp);
   return `<div class="req"><div style="min-width:0">
     <div class="t">${esc(full(e))} · ${TIPI[r.tipo]}</div>
-    <div class="meta">${periodo(r)} · ${esc(e.tipo)} · ${esc(sedeList(e))} · sostituto: <b>${r.sost?esc(full(emp(r.sost))):"—"}</b>${r.prot?` · prot. INPS ${esc(r.prot)}`:""}${r.note?` · “${esc(r.note)}”`:""}</div>
+    <div class="meta">${periodo(r)} · ${esc(e.tipo)} · ${esc(sedeList(e))} · sostituto: <b>${r.sost?esc(full(emp(r.sost))):"—"}</b>${r.prot?` · prot. INPS ${esc(r.prot)}`:""}${r.motivo?` · motivo: <b>${esc(r.motivo)}</b>`:""}${r.note?` · “${esc(r.note)}”`:""}</div>
     <div style="margin-top:8px">${lateness(r)}</div>${stepsHtml(r)}</div>
     <div class="acts">${actions||""}</div></div>`;
 }
+// Filtri: tipo di assenza, stato e persona (si ricordano sul dispositivo)
+let rqF = Object.assign({tipo:"", stato:"", emp:""}, store.get("rqF", {}));
 function vRichieste(){
   const order = {attesa_admin:0, attesa_sost:1, approvata:2, rifiutata:3};
-  const list = [...reqs].sort((a,b)=>order[a.stato]-order[b.stato] || a.dal.localeCompare(b.dal));
+  const STATI_F = [["","Tutti gli stati"],["attesa","In attesa"],["approvata","Approvate"],["rifiutata","Rifiutate"]];
+  const okStato = r => !rqF.stato || (rqF.stato==="attesa" ? r.stato.startsWith("attesa") : r.stato===rqF.stato);
+  const base = reqs.filter(r=>okStato(r) && (!rqF.emp || r.emp===rqF.emp));
+  const list = base.filter(r=>!rqF.tipo || r.tipo===rqF.tipo).sort((a,b)=>order[a.stato]-order[b.stato] || a.dal.localeCompare(b.dal));
+  const conta = t => base.filter(r=>!t || r.tipo===t).length;
+  const persone = [...new Set(reqs.map(r=>r.emp))].map(emp).filter(Boolean).sort((a,b)=>full(a).localeCompare(full(b),"it"));
   return `<h2>Richieste di assenza</h2>
   <p class="lede">Arrivano qui solo dopo che il sostituto ha confermato. Quando approvi, il sostituto prende in automatico i turni del collega.</p>
-  <div class="panel">${list.map(r=>reqCard(r, r.stato==="attesa_admin" ? `<button class="btn sm" data-ok="${r.id}">Approva</button><button class="btn sm bad" data-no="${r.id}">Rifiuta</button>` : "")).join("")}</div>`;
+  <div class="rq-filtri">
+    <div class="chips-f" role="group" aria-label="Tipo di assenza">${[["","Tutte"],...Object.entries(TIPI)].map(([k,v])=>`<button type="button" class="fchip" data-rqt="${k}" aria-pressed="${rqF.tipo===k}">${v}<span>${conta(k)}</span></button>`).join("")}</div>
+    <div class="bar" style="margin:0"><select id="rqStato" aria-label="Stato">${STATI_F.map(([k,v])=>`<option value="${k}" ${rqF.stato===k?"selected":""}>${v}</option>`).join("")}</select>
+      <select id="rqEmp" aria-label="Persona"><option value="">Tutte le persone</option>${persone.map(e=>`<option value="${e.id}" ${rqF.emp===e.id?"selected":""}>${esc(full(e))}</option>`).join("")}</select>
+      ${rqF.tipo||rqF.stato||rqF.emp?`<button type="button" class="btn sm ghost" id="rqReset">Togli filtri</button>`:""}</div>
+  </div>
+  <div class="panel">${list.length?list.map(r=>reqCard(r, r.stato==="attesa_admin" ? `<button class="btn sm" data-ok="${r.id}">Approva</button><button class="btn sm bad" data-no="${r.id}">Rifiuta</button>` : "")).join("")
+    :`<p style="color:var(--muted);margin:0">${reqs.length?"Nessuna richiesta con questi filtri.":"Nessuna richiesta."}</p>`}</div>`;
 }
 function bind(){
   const q = (s,fn)=>{ const el=$(s); if(el) fn(el); };
@@ -1027,6 +1083,11 @@ function bind(){
       toast(r.attiva ? `${emp(id).nome}: assenza senza richiesta il ${fmt(d)}` : "Assenza senza richiesta tolta"); } catch(e){ toast(e.message); }
   });
   // richieste
+  const rqSet = o => { Object.assign(rqF, o); store.set("rqF", rqF); render(); };
+  on("[data-rqt]","click",b=>rqSet({tipo:b.dataset.rqt}));
+  q("#rqStato",el=>el.onchange=()=>rqSet({stato:el.value}));
+  q("#rqEmp",el=>el.onchange=()=>rqSet({emp:el.value}));
+  q("#rqReset",el=>el.onclick=()=>rqSet({tipo:"", stato:"", emp:""}));
   on("[data-ok]","click",async b=>{ b.disabled=true;
     try { const r = await api("POST",`/api/richieste/${b.dataset.ok}/approva`,{}); reqs=r.reqs; setPlan(r.planDoc); render(); const x=r.esito, rr=reqs.find(q=>q.id===b.dataset.ok);
       toast(`Approvata · ${x.dalSost} turni a ${rr && emp(rr.sost)?.nome || "nessuno"}${x.altri?` · ${x.altri} ad altri colleghi`:""}${x.fermi?` · ${x.fermi} riuniti fermi`:""}${x.scoperti?` · ${x.scoperti} scoperti`:""}`); }
@@ -1079,18 +1140,19 @@ function bind(){
     try { await api("POST","/api/privacy/accetta",{}); await load(vista); render(); toast("Grazie, informativa accettata"); } catch(e){ el.disabled=false; toast(e.message); } });
   on("[data-em]","click",b=>{ empMonth=b.dataset.em; render(); });
   on("[data-tipo]","click",b=>{ const t=b.dataset.tipo; $$("[data-tipo]").forEach(x=>x.setAttribute("aria-pressed", x===b)); $("#tipo").value=t;
-    $("#oreBox").hidden = t!=="ROL"; $("#protBox").hidden = t!=="MAL"; $("#sostReq").hidden = t==="MAL";
+    $("#oreBox").hidden = t!=="ROL"; $("#protBox").hidden = t!=="MAL"; $("#motivoBox").hidden = t!=="ALT"; $("#sostReq").hidden = t==="MAL";
     $("#accordo").closest(".f").hidden = t==="MAL";
-    $("#tipoHint").textContent = t==="FE" ? "Preavviso minimo 7 giorni." : t==="ROL" ? "Preavviso minimo 2 giorni." : "Il sostituto è facoltativo: se lo indichi prende subito i tuoi turni.";
+    $("#tipoHint").textContent = PREAVVISO_TXT[t];
     if (t==="MAL"){ $("#dal").min=""; $("#dal").value=TODAY; $("#al").value=TODAY; } else $("#dal").min=TODAY; });
   q("#dal",el=>el.onchange=()=>{ const al=$("#al"); if (al.value<el.value) al.value=el.value; al.min=el.value; });
   q("#f",f=>f.onsubmit=async ev=>{ ev.preventDefault();
-    const t=$("#tipo").value, b={tipo:t, dal:$("#dal").value, al:$("#al").value, ore:+$("#ore").value, sost:$("#sost").value, prot:$("#prot").value.trim(), note:$("#note").value.trim(), accordo:$("#accordo").checked};
+    const t=$("#tipo").value, b={tipo:t, dal:$("#dal").value, al:$("#al").value, ore:+$("#ore").value, sost:$("#sost").value, prot:$("#prot").value.trim(), motivo:$("#motivo").value.trim(), note:$("#note").value.trim(), accordo:$("#accordo").checked};
     const err=$("#err"); err.textContent="";
     if (!b.dal || !b.al || b.al<b.dal){ err.textContent="Controlla le date: la fine non può precedere l'inizio."; return; }
     if (t!=="MAL" && !b.sost){ err.textContent="Indica il collega che ti sostituisce."; return; }
     if (t!=="MAL" && !b.accordo){ err.textContent="Conferma di esserti accordato con il collega."; return; }
     if (t==="MAL" && !b.prot){ err.textContent="Inserisci il numero di protocollo del certificato."; return; }
+    if (t==="ALT" && b.motivo.length<3){ err.textContent="Scrivi la motivazione: è obbligatoria."; $("#motivo").focus(); return; }
     const btn=f.querySelector("button[type=submit]"); btn.disabled=true;
     try { const r=await api("POST","/api/richieste",b); await load(vista); tab="stato"; render(); window.scrollTo?.(0,0);
       toast(r.stato==="approvata" ? "Malattia registrata" : "Richiesta inviata: ora deve confermare il collega"); }
@@ -1108,33 +1170,40 @@ function bind(){
   q("#mpwd",f=>f.onsubmit=async ev=>{ ev.preventDefault(); const btn=f.querySelector("button[type=submit]"); btn.disabled=true;
     try { const r=await api("POST",`/api/buste/${modal.id}/apri`,{password:$("#mp").value}); const id=modal.id; await load(vista); modal={id, step:"view", token:r.token}; render(); }
     catch(e){ modal.err=e.message; render(); $("#mp")?.focus(); } });
-  q("#mchk",el=>el.onchange=()=>{ $("#mconf").disabled=!el.checked; });
-  q("#mconf",el=>el.onclick=async()=>{ el.disabled=true;
-    try { await api("POST",`/api/buste/${modal.id}/conferma`,{}); await load(vista); render(); toast("Presa visione registrata"); } catch(e){ el.disabled=false; toast(e.message); } });
+  q("#firma",cv=>padFirma(cv));
+  q("#fclear",el=>el.onclick=()=>padFirma($("#firma")));
+  q("#fsend",el=>el.onclick=async()=>{ const cv=$("#firma"); if ((cv._punti||0)<8){ toast("Firma nel riquadro prima di inviare"); return; }
+    el.disabled=true;
+    try { await api("POST",`/api/buste/${modal.id}/firma`,{firma:cv.toDataURL("image/png")}); await load(vista); render(); toast("Firma inviata all'amministrazione"); }
+    catch(e){ el.disabled=false; toast(e.message); } });
   // ---------- amministratore: buste paga ----------
   q("#upForm",f=>f.onsubmit=async ev=>{ ev.preventDefault();
     const file=$("#upFile").files[0], mese=$("#upMese").value; if (!file){ toast("Scegli il PDF"); return; }
-    const fd=new FormData(); fd.append("mese",mese); fd.append("file",file);
+    const T=docT(), fd=new FormData(); fd.append("tipo",T); fd.append("mese",mese); fd.append("file",file);
     const btn=$("#upGo"); btn.disabled=true; btn.textContent="Sto dividendo il PDF…";
     try { const r=await api("POST","/api/buste/carica",fd);
-      upMsg = `${meseLabel(mese)}: ${r.pagine} pagine · ${r.abbinate} buste abbinate${r.sospese?` · <b class="neg">${r.sospese} pagine da assegnare</b>`:""}${r.doppi.length?` · già caricate prima: ${esc(r.doppi.join(", "))}`:""}.`;
-      bustaMese=mese; BUSTE=null; render(); toast("PDF diviso: controlla e pubblica"); }
+      upMsg = `${perLabel(T,mese)}: ${r.pagine} pagine · ${r.abbinate} ${T==="cud"?"CUD abbinati":"buste abbinate"}${r.sospese?` · <b class="neg">${r.sospese} pagine da assegnare</b>`:""}${r.doppi.length?` · già caricate prima: ${esc(r.doppi.join(", "))}`:""}.`;
+      BUSTE=null; await loadBuste(); bustaMese=mese; render(); toast("PDF diviso: controlla e pubblica"); }
     catch(e){ btn.disabled=false; btn.textContent="Carica e dividi"; toast(e.message); } });
   const ricaricaBuste = async msg => { BUSTE=null; await loadBuste(); if (msg) toast(msg); };
   on("[data-assign]","click",async b=>{ const id=b.dataset.assign, sid=$("#assign-"+id).value; if (!sid){ toast("Scegli a chi assegnare la pagina"); return; }
-    try { await api("POST",`/api/buste/sospese/${id}/assegna`,{staffId:sid}); ricaricaBuste(`Pagina aggiunta alla busta di ${full(emp(sid))}`); } catch(e){ toast(e.message); } });
+    try { await api("POST",`/api/buste/sospese/${id}/assegna`,{staffId:sid}); ricaricaBuste(`Pagina aggiunta al documento di ${full(emp(sid))}`); } catch(e){ toast(e.message); } });
+  q("#assignAll",el=>el.onclick=async()=>{ el.disabled=true; let n=0;
+    for (const s of BUSTE.sospese.filter(x=>x.mese===bustaMese && x.suggerito)){ const sid=$("#assign-"+s.id)?.value; if (!sid) continue;
+      try { await api("POST",`/api/buste/sospese/${s.id}/assegna`,{staffId:sid}); n++; } catch(e){ toast(e.message); break; } }
+    ricaricaBuste(`${n} pagine assegnate`); });
   on("[data-scarta]","click",async b=>{ if (!confirm("Scartare questa pagina?")) return;
     try { await api("DELETE",`/api/buste/sospese/${b.dataset.scarta}`); ricaricaBuste("Pagina scartata"); } catch(e){ toast(e.message); } });
   q("#bpMese",el=>el.onchange=()=>{ bustaMese=el.value; render(); });
-  q("#pubblica",el=>el.onclick=async()=>{ if (!confirm(`Pubblicare le buste di ${meseLabel(bustaMese)}? I dipendenti riceveranno un avviso.`)) return; el.disabled=true;
-    try { const r=await api("POST","/api/buste/pubblica",{mese:bustaMese}); upMsg=""; ricaricaBuste(`${r.pubblicate} buste pubblicate`); } catch(e){ el.disabled=false; toast(e.message); } });
+  q("#pubblica",el=>el.onclick=async()=>{ const T=docT(); if (!confirm(`Pubblicare: ${perLabel(T,bustaMese)}? I dipendenti riceveranno un avviso per aprire e firmare.`)) return; el.disabled=true;
+    try { const r=await api("POST","/api/buste/pubblica",{mese:bustaMese, tipo:T}); upMsg=""; ricaricaBuste(`${r.pubblicate} documenti pubblicati`); } catch(e){ el.disabled=false; toast(e.message); } });
   q("#sollecito",el=>el.onclick=async()=>{ el.disabled=true;
-    try { const r=await api("POST","/api/buste/sollecito",{mese:bustaMese}); toast(`Promemoria inviato a ${r.sollecitati} ${r.sollecitati===1?"persona":"persone"}`); } catch(e){ el.disabled=false; toast(e.message); } });
-  on("[data-bdel]","click",async b=>{ if (!confirm("Togliere questa busta? Potrai ricaricarla.")) return;
-    try { await api("DELETE",`/api/buste/${b.dataset.bdel}`); ricaricaBuste("Busta tolta"); } catch(e){ toast(e.message); } });
+    try { const r=await api("POST","/api/buste/sollecito",{mese:bustaMese, tipo:docT()}); toast(`Promemoria inviato a ${r.sollecitati} ${r.sollecitati===1?"persona":"persone"}`); } catch(e){ el.disabled=false; toast(e.message); } });
+  on("[data-bdel]","click",async b=>{ if (!confirm("Togliere questo documento? Potrai ricaricarlo.")) return;
+    try { await api("DELETE",`/api/buste/${b.dataset.bdel}`); ricaricaBuste("Documento tolto"); } catch(e){ toast(e.message); } });
   on("[data-del]","click",b=>{ delPending=b.dataset.del; render(); });
   on("[data-delno]","click",()=>{ delPending=null; render(); });
-  on("[data-delok]","click",async b=>{ try { const r=await api("DELETE",`/api/buste/mese/${b.dataset.delok}`); delPending=null; ricaricaBuste(`${r.eliminate} buste eliminate dall'archivio`); } catch(e){ toast(e.message); } });
+  on("[data-delok]","click",async b=>{ try { const r=await api("DELETE",`/api/buste/mese/${b.dataset.delok}?tipo=${docT()}`); delPending=null; ricaricaBuste(`${r.eliminate} documenti eliminati dall'archivio`); } catch(e){ toast(e.message); } });
   // ---------- barra in alto ----------
   q("#vistaDip",el=>el.onclick=async()=>{ await doSave(); vista="dipendente"; tab=""; await load(vista); render(); window.scrollTo?.(0,0); });
   on("#vistaAdm","click",async()=>{ vista=""; tab=""; await load(); render(); window.scrollTo?.(0,0); });
@@ -1143,6 +1212,23 @@ function bind(){
   q("#pushOff",el=>el.onclick=()=>{ if (confirm("Disattivare le notifiche su questo dispositivo?")) pushDisable(); });
   on("[data-push-on]","click",pushEnable);
   on("[data-push-later]","click",()=>{ store.set("pushLater", Date.now()+3*24*3600e3); render(); });
+}
+
+// ================= firma col dito o col mouse =================
+// Riquadro bianco: si disegna con pointer events (mouse, dito, penna). Rifarlo da capo = "Cancella".
+function padFirma(cv){
+  if (!cv) return;
+  const r = cv.getBoundingClientRect(), k = Math.max(1, window.devicePixelRatio || 1);
+  cv.width = Math.round(r.width * k); cv.height = Math.round(r.height * k);
+  const c = cv.getContext("2d"); c.setTransform(k,0,0,k,0,0);
+  c.lineWidth = 2.6; c.lineCap = "round"; c.lineJoin = "round"; c.strokeStyle = c.fillStyle = "#1B2A4A";
+  cv._punti = 0; const send = $("#fsend"); if (send) send.disabled = true;
+  let giu = false, last = null;
+  const pos = ev => { const b = cv.getBoundingClientRect(); return [ev.clientX - b.left, ev.clientY - b.top]; };
+  const segna = () => { cv._punti++; if (send && cv._punti >= 8) send.disabled = false; };
+  cv.onpointerdown = ev => { ev.preventDefault(); try { cv.setPointerCapture(ev.pointerId); } catch {} giu = true; last = pos(ev); c.beginPath(); c.arc(last[0], last[1], 1.2, 0, 7); c.fill(); segna(); };
+  cv.onpointermove = ev => { if (!giu) return; ev.preventDefault(); const p = pos(ev); c.beginPath(); c.moveTo(last[0], last[1]); c.lineTo(p[0], p[1]); c.stroke(); last = p; segna(); };
+  cv.onpointerup = cv.onpointercancel = cv.onpointerleave = () => { giu = false; };
 }
 
 // ================= notifiche sul dispositivo =================

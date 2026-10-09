@@ -41,7 +41,7 @@ async function localProfile(c, role) {
   const { rows } = await db.q(`insert into users (id, sso_id, email, name, role) values ($1,$2,$3,$4,$5)
     on conflict (sso_id) do update set email = excluded.email, name = excluded.name, role = excluded.role
     returning id, email, name, role, sso_id`, [db.newId(), c.id, c.email.toLowerCase(), name, r]);
-  return { ...rows[0], emailOk: c.emailVerificata !== false };
+  return { ...rows[0], emailOk: c.emailVerificata !== false, pannello: !!c.pannello };
 }
 app.use(wrap(async (req, res, next) => {
   const r = await sso.identify(req);
@@ -144,7 +144,7 @@ async function caricaPiano() {
   return rows[0] || { data: {}, generato_il: null };
 }
 const reqFromRow = r => ({ id: r.id, numero: r.numero, emp: r.staff_id, tipo: r.tipo, dal: r.dal, al: r.al, ore: r.ore ?? undefined,
-  sost: r.sost || null, prot: r.prot || undefined, note: r.note, stato: r.stato, sostOk: r.sost_ok, inviata: r.inviata });
+  sost: r.sost || null, prot: r.prot || undefined, note: r.note, motivo: r.motivo || undefined, stato: r.stato, sostOk: r.sost_ok, inviata: r.inviata });
 async function caricaRichieste() {
   const { rows } = await db.q(`select * from richieste where stato <> 'annullata' order by dal`);
   return rows.map(reqFromRow);
@@ -211,7 +211,7 @@ async function statoAdmin(req) {
   const { rows: priv } = await db.q('select staff_id, accettata_il, dispositivo from privacy');
   const meStaff = staffDiUtente(cfg.data.staff, req.user);
   return {
-    role: 'admin', me: { name: req.user.name, email: req.user.email, staffId: meStaff?.id || null },
+    role: 'admin', me: { name: req.user.name, email: req.user.email, staffId: meStaff?.id || null, pannello: !!req.user.pannello },
     today: oggi(), config: cfg.data, version: cfg.version, planDoc: pd.data,
     dirty: !pd.generato_il || new Date(cfg.aggiornata_il) > new Date(pd.generato_il),
     reqs, ai, privacy: Object.fromEntries(priv.map(p => [p.staff_id, { il: p.accettata_il, disp: p.dispositivo }])),
@@ -250,8 +250,8 @@ async function statoDipendente(req) {
   const colleghi = st.STAFF.filter(x => x.id !== e.id && x.tipo === e.tipo && m.sediOf(x).some(s => m.sediOf(e).includes(s)))
     .map(x => ({ id: x.id, nome: m.full(x), sedi: m.sedeList(x) }));
   const oreMese = Object.fromEntries(st.MONTHS.map(ym => [ym, m.oreMese(e, ym).coll]));
-  const { rows: bl } = await db.q(`select id, mese, aperta_il, confermata_il from buste where staff_id = $1 and stato = 'pubblicata' and mese >= $2 order by mese desc`,
-    [e.id, cutoff()]);
+  const { rows: bl } = await db.q(`select id, tipo, mese, aperta_il, confermata_il, firmata_il from buste where staff_id = $1 and stato = 'pubblicata' and ${VISIBILE}
+    order by mese desc`, [e.id, cutoff(), cutoffCud()]);
   return {
     ...base, privacy: true,
     staff: { id: e.id, nome: e.nome, cognome: e.cognome, tipo: e.tipo,
@@ -261,7 +261,7 @@ async function statoDipendente(req) {
     myAI: [...st.AI].filter(k => k.startsWith(e.id + '|')).map(k => k.split('|')[1]),
     mie: mie.map(conNomi).sort((a, b) => b.dal.localeCompare(a.dal)),
     sostituzioni: reqs.filter(r => r.sost === e.id).map(conNomi),
-    colleghi, buste: bl.map(b => ({ id: b.id, mese: b.mese, aperta: b.aperta_il, confermata: b.confermata_il })),
+    colleghi, buste: bl.map(b => ({ id: b.id, tipo: b.tipo, mese: b.mese, aperta: b.aperta_il, confermata: b.confermata_il, firmata: b.firmata_il })),
   };
 }
 
@@ -282,6 +282,10 @@ function validaConfig(c) {
 }
 app.put('/api/config', needAdmin, wrap(async (req, res) => {
   const c = validaConfig(req.body.config);
+  if (!req.user.pannello) { // i collaboratori arrivano dalla registrazione su appgestione.it: qui non se ne aggiungono a mano
+    const ora = (await caricaConfig()).data, noti = new Set([...(ora.staff || []), ...(ora.removed || [])].map(e => e.id));
+    if (c.staff.some(e => !noti.has(e.id))) return bad(res, 403, "I collaboratori si registrano da appgestione.it e compaiono qui quando li approvi in Gestione accessi. Solo l'amministratore del pannello può aggiungerli a mano.");
+  }
   const json = JSON.stringify(c);
   if (json.length > 2.5e6) return bad(res, 400, 'Configurazione troppo grande');
   const { rows } = await db.q(`update config set data = $1, version = version + 1, aggiornata_il = now(), aggiornata_da = $3
@@ -336,14 +340,16 @@ app.post('/api/richieste/:id/rifiuta', needAdmin, wrap(async (req, res) => {
 app.post('/api/richieste', needUser, wrap(async (req, res) => {
   const { cfg, e } = await staffDi(req.user);
   if (!e) return bad(res, 403, 'Non sei nell\'elenco del personale.');
-  const b = req.body, tipo = ['FE', 'ROL', 'MAL'].includes(b.tipo) ? b.tipo : null;
+  const b = req.body, tipo = ['FE', 'ROL', 'MAL', 'CP', 'ALT'].includes(b.tipo) ? b.tipo : null;
+  const motivo = str(b.motivo, 500);
   const dal = str(b.dal, 10), al = str(b.al, 10), sost = str(b.sost, 64) || null;
   if (!tipo) return bad(res, 400, 'Tipo non valido');
   if (!isDate(dal) || !isDate(al) || al < dal) return bad(res, 400, 'Controlla le date: la fine non può precedere l\'inizio.');
-  if (tipo !== 'MAL' && dal < oggi()) return bad(res, 400, 'Le ferie e i permessi si chiedono per giorni futuri.');
+  if (tipo !== 'MAL' && dal < oggi()) return bad(res, 400, 'Questa richiesta si fa per oggi o per giorni futuri.');
   if (tipo !== 'MAL' && !sost) return bad(res, 400, 'Indica chi ti sostituisce.');
   if (tipo !== 'MAL' && !b.accordo) return bad(res, 400, 'Conferma di esserti accordato con il sostituto.');
   if (tipo === 'MAL' && !str(b.prot, 40)) return bad(res, 400, 'Inserisci il numero di protocollo del certificato.');
+  if (tipo === 'ALT' && motivo.length < 3) return bad(res, 400, 'Scrivi la motivazione della richiesta.');
   const { m, reqs } = await motoreCompleto();
   const sovrapposta = reqs.find(r => r.emp === e.id && ['attesa_sost', 'attesa_admin', 'approvata'].includes(r.stato) && r.dal <= al && r.al >= dal);
   if (sovrapposta) return bad(res, 400, `Hai già una richiesta per quei giorni (${m.TIPI[sovrapposta.tipo].toLowerCase()} dal ${m.fmt(sovrapposta.dal)} al ${m.fmt(sovrapposta.al)}).`);
@@ -354,9 +360,9 @@ app.post('/api/richieste', needUser, wrap(async (req, res) => {
   }
   const id = db.newId(), ore = tipo === 'ROL' ? Math.min(8, Math.max(1, int(b.ore) || 4)) : null;
   const stato = tipo === 'MAL' ? 'approvata' : 'attesa_sost';
-  const { rows } = await db.q(`insert into richieste (id, staff_id, tipo, dal, al, ore, sost, prot, note, stato, sost_ok, inviata)
-    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) returning *`,
-    [id, e.id, tipo, dal, al, ore, sost, str(b.prot, 40), str(b.note, 500), stato, tipo === 'MAL' ? (sost ? true : null) : null, oggi()]);
+  const { rows } = await db.q(`insert into richieste (id, staff_id, tipo, dal, al, ore, sost, prot, note, motivo, stato, sost_ok, inviata)
+    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning *`,
+    [id, e.id, tipo, dal, al, ore, sost, tipo === 'MAL' ? str(b.prot, 40) : '', str(b.note, 500), tipo === 'ALT' ? motivo : '', stato, tipo === 'MAL' ? (sost ? true : null) : null, oggi()]);
   if (tipo === 'MAL') {
     const mm = (await motoreCompleto()).m;
     mm.applySubstitution(reqFromRow(rows[0]));
@@ -465,38 +471,48 @@ function cutoff() { // mesi visibili ai dipendenti: gli ultimi 18
   return `${t.getUTCFullYear()}-${pad(t.getUTCMonth() + 1)}`;
 }
 const meseOk = s => /^\d{4}-(0[1-9]|1[0-2])$/.test(s);
+// I documenti sono di due tipi: buste paga (periodo AAAA-MM, visibili 18 mesi) e CUD (periodo AAAA = anno del CUD, redditi dell'anno prima; visibili 5 anni).
+const tipoDoc = v => v === 'cud' ? 'cud' : 'busta';
+const periodoOk = (tipo, s) => tipo === 'cud' ? /^20\d{2}$/.test(s) : meseOk(s);
+function cutoffCud() { return String(+oggi().slice(0, 4) - 5); }
+const cutoffDi = tipo => tipo === 'cud' ? cutoffCud() : cutoff();
+const VISIBILE = `((tipo = 'busta' and mese >= $2) or (tipo = 'cud' and mese >= $3))`; // con $2 = cutoff(), $3 = cutoffCud()
+const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+const titoloDoc = (tipo, periodo) => tipo === 'cud' ? `CUD ${periodo} (redditi ${+periodo - 1})` : `Busta paga di ${MESI[+periodo.slice(5, 7) - 1]} ${periodo.slice(0, 4)}`;
+const nomeDoc = tipo => tipo === 'cud' ? 'CUD' : 'busta paga';
 
 app.get('/api/buste', needAdmin, wrap(async (req, res) => {
-  const { rows } = await db.q(`select id, staff_id, mese, impronta, pagine, stato, origine, creata_il, pubblicata_il, aperta_il, aperta_disp, confermata_il, confermata_disp
-    from buste order by mese desc, staff_id`);
-  const { rows: sosp } = await db.q('select id, mese, origine, pagina, suggerito from pagine_sospese order by mese desc, pagina');
-  res.json({ buste: rows, sospese: sosp, cutoff: cutoff(), attive: buste.attive() });
+  const tipo = tipoDoc(req.query.tipo);
+  const { rows } = await db.q(`select id, staff_id, tipo, mese, impronta, pagine, stato, origine, creata_il, pubblicata_il, aperta_il, aperta_disp,
+    confermata_il, confermata_disp, firmata_il, firmata_disp from buste where tipo = $1 order by mese desc, staff_id`, [tipo]);
+  const { rows: sosp } = await db.q('select id, mese, origine, pagina, suggerito from pagine_sospese where tipo = $1 order by mese desc, pagina', [tipo]);
+  res.json({ tipo, buste: rows, sospese: sosp, cutoff: cutoffDi(tipo), attive: buste.attive() });
 }));
 
 app.post('/api/buste/carica', needAdmin, upload.single('file'), wrap(async (req, res) => {
   if (!buste.attive()) return bad(res, 400, 'Le buste paga non sono attive: manca BUSTE_KEY su Render.');
-  const mese = str(req.body.mese, 7);
-  if (!meseOk(mese)) return bad(res, 400, 'Scegli il mese.');
-  if (!req.file || !/pdf/i.test(req.file.mimetype + req.file.originalname)) return bad(res, 400, 'Carica il PDF con le buste.');
+  const tipo = tipoDoc(req.body.tipo), mese = str(req.body.mese, 7);
+  if (!periodoOk(tipo, mese)) return bad(res, 400, tipo === 'cud' ? "Scegli l'anno." : 'Scegli il mese.');
+  if (!req.file || !/pdf/i.test(req.file.mimetype + req.file.originalname)) return bad(res, 400, tipo === 'cud' ? 'Carica il PDF con i CUD.' : 'Carica il PDF con le buste.');
   const cfg = await caricaConfig();
   const staff = (cfg.data.staff || []).filter(e => e.tipo !== 'Medico');
   let r;
   try { r = await buste.dividi(req.file.buffer, staff); }
   catch (e) { console.warn('Buste, PDF:', e.message); return bad(res, 400, 'Non riesco a leggere questo PDF. È protetto da password o danneggiato?'); }
   const origine = str(req.file.originalname, 120);
-  const giaCaricati = (await db.q('select staff_id from buste where mese = $1', [mese])).rows.map(x => x.staff_id);
+  const giaCaricati = (await db.q('select staff_id from buste where mese = $1 and tipo = $2', [mese, tipo])).rows.map(x => x.staff_id);
   const doppi = [];
   await db.tx(async qq => {
     for (const g of r.gruppi) {
       if (giaCaricati.includes(g.staffId)) { doppi.push(nome(staffById(cfg, g.staffId))); continue; } // busta del mese caricata in un caricamento precedente
       const c = buste.cifra(g.buf);
-      await qq(`insert into buste (id, staff_id, mese, file, iv, tag, impronta, pagine, origine) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-        [db.newId(), g.staffId, mese, c.file, c.iv, c.tag, buste.impronta(g.buf), g.pagine.length, origine]);
+      await qq(`insert into buste (id, staff_id, tipo, mese, file, iv, tag, impronta, pagine, origine) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [db.newId(), g.staffId, tipo, mese, c.file, c.iv, c.tag, buste.impronta(g.buf), g.pagine.length, origine]);
     }
     for (const s of r.sospese) {
       const c = buste.cifra(s.buf);
-      await qq(`insert into pagine_sospese (id, mese, origine, pagina, file, iv, tag, suggerito) values ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [db.newId(), mese, origine, s.pagina + 1, c.file, c.iv, c.tag, s.suggerito]);
+      await qq(`insert into pagine_sospese (id, tipo, mese, origine, pagina, file, iv, tag, suggerito) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [db.newId(), tipo, mese, origine, s.pagina + 1, c.file, c.iv, c.tag, s.suggerito]);
     }
   });
   res.json({ pagine: r.pagine, abbinate: r.gruppi.length - doppi.length, sospese: r.sospese.length, doppi });
@@ -511,14 +527,16 @@ app.post('/api/buste/sospese/:id/assegna', needAdmin, wrap(async (req, res) => {
   if (!staffById(cfg, staffId)) return bad(res, 400, 'Scegli a chi assegnarla.');
   const pagina = buste.decifra(p);
   await db.tx(async qq => {
-    const { rows: es } = await qq(`select * from buste where staff_id = $1 and mese = $2 for update`, [staffId, p.mese]);
+    const { rows: es } = await qq(`select * from buste where staff_id = $1 and mese = $2 and tipo = $3 for update`, [staffId, p.mese, p.tipo]);
     let pdf = pagina, pagine = 1;
     if (es[0]) { pdf = await buste.unisci([buste.decifra(es[0]), pagina]); pagine = es[0].pagine + 1; }
     const c = buste.cifra(pdf);
-    if (es[0]) await qq(`update buste set file=$2, iv=$3, tag=$4, impronta=$5, pagine=$6, aperta_il=null, confermata_il=null where id=$1`,
+    // il documento cambia: aperture e firme precedenti non valgono più
+    if (es[0]) await qq(`update buste set file=$2, iv=$3, tag=$4, impronta=$5, pagine=$6, aperta_il=null, confermata_il=null,
+      firmata_il=null, firma=null, firma_iv=null, firma_tag=null, firmata_disp=null where id=$1`,
       [es[0].id, c.file, c.iv, c.tag, buste.impronta(pdf), pagine]);
-    else await qq(`insert into buste (id, staff_id, mese, file, iv, tag, impronta, pagine, origine) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [db.newId(), staffId, p.mese, c.file, c.iv, c.tag, buste.impronta(pdf), 1, p.origine]);
+    else await qq(`insert into buste (id, staff_id, tipo, mese, file, iv, tag, impronta, pagine, origine) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [db.newId(), staffId, p.tipo, p.mese, c.file, c.iv, c.tag, buste.impronta(pdf), 1, p.origine]);
     await qq('delete from pagine_sospese where id = $1', [p.id]);
   });
   res.json({ ok: true });
@@ -533,52 +551,52 @@ app.get('/api/buste/sospese/:id/file', needAdmin, wrap(async (req, res) => {
   inviaPdf(res, buste.decifra(rows[0]), `pagina-${rows[0].pagina}.pdf`);
 }));
 app.post('/api/buste/pubblica', needAdmin, wrap(async (req, res) => {
-  const mese = str(req.body.mese, 7);
-  if (!meseOk(mese)) return bad(res, 400, 'Mese non valido');
-  const { rows: sosp } = await db.q('select count(*)::int n from pagine_sospese where mese = $1', [mese]);
+  const tipo = tipoDoc(req.body.tipo), mese = str(req.body.mese, 7);
+  if (!periodoOk(tipo, mese)) return bad(res, 400, 'Periodo non valido');
+  const { rows: sosp } = await db.q('select count(*)::int n from pagine_sospese where mese = $1 and tipo = $2', [mese, tipo]);
   if (sosp[0].n) return bad(res, 400, `Ci sono ancora ${sosp[0].n} pagine da assegnare o scartare.`);
-  const { rows } = await db.q(`update buste set stato = 'pubblicata', pubblicata_il = now() where mese = $1 and stato = 'bozza' returning staff_id`, [mese]);
-  const cfg = await caricaConfig();
-  const mm = motore.crea({ config: cfg.data, today: oggi() });
-  avvisaStaff(cfg, rows.map(r => r.staff_id), { title: 'Nuova busta paga', body: `È disponibile la busta paga di ${mm.meseLabel(mese)}.`, url: '/?tab=bpEmp' },
-    { subject: 'Nuova busta paga disponibile', text: `È disponibile la tua busta paga di ${mm.meseLabel(mese)}. Aprila dall'app Turni con la password di appgestione.it e conferma la presa visione.` });
+  const { rows } = await db.q(`update buste set stato = 'pubblicata', pubblicata_il = now() where mese = $1 and tipo = $2 and stato = 'bozza' returning staff_id`, [mese, tipo]);
+  const cfg = await caricaConfig(), tit = titoloDoc(tipo, mese), tab = tipo === 'cud' ? 'cudEmp' : 'bpEmp';
+  avvisaStaff(cfg, rows.map(r => r.staff_id), { title: tipo === 'cud' ? 'Nuovo CUD' : 'Nuova busta paga', body: `È disponibile: ${tit}. Aprilo e firma per ricevuta.`, url: '/?tab=' + tab },
+    { subject: tipo === 'cud' ? 'Nuovo CUD disponibile' : 'Nuova busta paga disponibile',
+      text: `È disponibile: ${tit}. Aprilo dall'app Turni con la password di appgestione.it e firma per ricevuta.` });
   res.json({ pubblicate: rows.length });
 }));
 app.post('/api/buste/sollecito', needAdmin, wrap(async (req, res) => {
-  const mese = str(req.body.mese, 7);
-  const { rows } = await db.q(`select staff_id from buste where mese = $1 and stato = 'pubblicata' and confermata_il is null`, [mese]);
-  const cfg = await caricaConfig();
-  const mm = motore.crea({ config: cfg.data, today: oggi() });
-  avvisaStaff(cfg, rows.map(r => r.staff_id), { title: 'Busta paga da confermare', body: `Apri la busta paga di ${mm.meseLabel(mese)} e conferma la presa visione.`, url: '/?tab=bpEmp' },
-    { subject: 'Promemoria: busta paga da confermare', text: `Ti ricordiamo di aprire la busta paga di ${mm.meseLabel(mese)} e confermare la presa visione dall'app Turni.` });
+  const tipo = tipoDoc(req.body.tipo), mese = str(req.body.mese, 7);
+  const { rows } = await db.q(`select staff_id from buste where mese = $1 and tipo = $2 and stato = 'pubblicata' and firmata_il is null and confermata_il is null`, [mese, tipo]);
+  const cfg = await caricaConfig(), tit = titoloDoc(tipo, mese), tab = tipo === 'cud' ? 'cudEmp' : 'bpEmp';
+  avvisaStaff(cfg, rows.map(r => r.staff_id), { title: 'Documento da firmare', body: `${tit}: aprilo e firma per ricevuta.`, url: '/?tab=' + tab },
+    { subject: `Promemoria: ${nomeDoc(tipo)} da firmare`, text: `Ti ricordiamo di aprire ${tit} dall'app Turni e firmare per ricevuta.` });
   res.json({ sollecitati: rows.length });
 }));
 // Archivio dell'amministrazione: tutte le buste di un mese in un PDF, e il registro delle prese visione
 app.get('/api/buste/mese/:mese/pdf', needAdmin, wrap(async (req, res) => {
-  const mese = req.params.mese;
-  if (!meseOk(mese)) return res.status(400).send('Mese non valido');
-  const { rows } = await db.q('select * from buste where mese = $1 order by staff_id', [mese]);
-  if (!rows.length) return res.status(404).send('Nessuna busta');
-  inviaPdf(res, await buste.unisci(rows.map(b => buste.decifra(b))), `buste-${mese}.pdf`, true);
+  const tipo = tipoDoc(req.query.tipo), mese = req.params.mese;
+  if (!periodoOk(tipo, mese)) return res.status(400).send('Periodo non valido');
+  const { rows } = await db.q('select * from buste where mese = $1 and tipo = $2 order by staff_id', [mese, tipo]);
+  if (!rows.length) return res.status(404).send('Nessun documento');
+  inviaPdf(res, await buste.unisci(rows.map(b => buste.decifra(b))), `${tipo === 'cud' ? 'cud' : 'buste'}-${mese}.pdf`, true);
 }));
 app.get('/api/buste/mese/:mese/registro.csv', needAdmin, wrap(async (req, res) => {
-  const mese = req.params.mese;
-  if (!meseOk(mese)) return res.status(400).send('Mese non valido');
-  const { rows } = await db.q('select * from buste where mese = $1 order by staff_id', [mese]);
+  const tipo = tipoDoc(req.query.tipo), mese = req.params.mese;
+  if (!periodoOk(tipo, mese)) return res.status(400).send('Periodo non valido');
+  const { rows } = await db.q('select * from buste where mese = $1 and tipo = $2 order by staff_id', [mese, tipo]);
   const cfg = await caricaConfig();
   const f = d => d ? new Date(d).toLocaleString('it-IT', { timeZone: 'Europe/Rome' }) : '';
-  const righe = [['Dipendente', 'Codice fiscale', 'Mese', 'Pubblicata', 'Aperta', 'Dispositivo apertura', 'Presa visione', 'Dispositivo presa visione', 'Impronta SHA-256']]
-    .concat(rows.map(b => { const e = staffById(cfg, b.staff_id); return [nome(e), e?.cf || '', b.mese, f(b.pubblicata_il), f(b.aperta_il), b.aperta_disp || '', f(b.confermata_il), b.confermata_disp || '', b.impronta]; }));
-  res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="registro-buste-${mese}.csv"` });
+  const righe = [['Dipendente', 'Codice fiscale', 'Documento', 'Pubblicato', 'Aperto', 'Dispositivo apertura', 'Firmato', 'Dispositivo firma', 'Presa visione (senza firma)', 'Impronta SHA-256']]
+    .concat(rows.map(b => { const e = staffById(cfg, b.staff_id); return [nome(e), e?.cf || '', titoloDoc(tipo, b.mese), f(b.pubblicata_il), f(b.aperta_il), b.aperta_disp || '',
+      f(b.firmata_il), b.firmata_disp || '', b.firmata_il ? '' : f(b.confermata_il), b.impronta]; }));
+  res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="registro-${tipo === 'cud' ? 'cud' : 'buste'}-${mese}.csv"` });
   // una cella che inizia con = + - @ verrebbe letta da Excel come formula: la neutralizziamo con un apostrofo
   const cella = x => { let v = String(x ?? ''); if (/^[=+\-@\t\r]/.test(v)) v = "'" + v; return `"${v.replace(/"/g, '""')}"`; };
   res.send('﻿' + righe.map(r => r.map(cella).join(';')).join('\n'));
 }));
 app.delete('/api/buste/mese/:mese', needAdmin, wrap(async (req, res) => {
-  const mese = req.params.mese;
-  if (!meseOk(mese)) return bad(res, 400, 'Mese non valido');
-  const r = await db.q('delete from buste where mese = $1', [mese]);
-  await db.q('delete from pagine_sospese where mese = $1', [mese]);
+  const tipo = tipoDoc(req.query.tipo), mese = req.params.mese;
+  if (!periodoOk(tipo, mese)) return bad(res, 400, 'Periodo non valido');
+  const r = await db.q('delete from buste where mese = $1 and tipo = $2', [mese, tipo]);
+  await db.q('delete from pagine_sospese where mese = $1 and tipo = $2', [mese, tipo]);
   res.json({ eliminate: r.rowCount });
 }));
 app.delete('/api/buste/:id', needAdmin, wrap(async (req, res) => {
@@ -588,7 +606,17 @@ app.delete('/api/buste/:id', needAdmin, wrap(async (req, res) => {
 app.get('/api/buste/:id/anteprima', needAdmin, wrap(async (req, res) => {
   const { rows } = await db.q('select * from buste where id = $1', [req.params.id]);
   if (!rows[0]) return res.status(404).send('Non trovata');
-  inviaPdf(res, buste.decifra(rows[0]), `busta-${rows[0].mese}.pdf`);
+  inviaPdf(res, buste.decifra(rows[0]), `${rows[0].tipo === 'cud' ? 'cud' : 'busta'}-${rows[0].mese}.pdf`);
+}));
+// Copia firmata per l'amministrazione: il documento con in fondo la ricevuta (firma, data, dispositivo, impronta)
+app.get('/api/buste/:id/firmata', needAdmin, wrap(async (req, res) => {
+  const { rows } = await db.q('select * from buste where id = $1 and firmata_il is not null', [req.params.id]);
+  const b = rows[0];
+  if (!b) return res.status(404).send('Documento non firmato');
+  const cfg = await caricaConfig(), e = staffById(cfg, b.staff_id);
+  const pdf = await buste.ricevuta({ documento: buste.decifra(b), nome: nome(e), cf: e?.cf, titolo: titoloDoc(b.tipo, b.mese), firmataIl: b.firmata_il,
+    dispositivo: b.firmata_disp, impronta: b.impronta, firmaPng: buste.decifra({ file: b.firma, iv: b.firma_iv, tag: b.firma_tag }) });
+  inviaPdf(res, pdf, `${b.tipo === 'cud' ? 'cud' : 'busta'}-${b.mese}-firmata-${String(e?.cognome || 'dipendente').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.pdf`);
 }));
 
 // Dipendente: apre la busta con la sua password di appgestione.it
@@ -601,8 +629,9 @@ app.post('/api/buste/:id/apri', needUser, wrap(async (req, res) => {
   const k = req.user.email, now = Date.now();
   const t = (tentativi.get(k) || []).filter(x => now - x < 15 * 60000);
   if (t.length >= 5) return bad(res, 429, 'Troppi tentativi. Riprova tra 15 minuti.');
-  const { rows } = await db.q(`select id, aperta_il from buste where id = $1 and staff_id = $2 and stato = 'pubblicata' and mese >= $3`, [req.params.id, e.id, cutoff()]);
-  if (!rows[0]) return bad(res, 404, 'Busta non disponibile.');
+  const { rows } = await db.q(`select id, aperta_il from buste where id = $1 and staff_id = $4 and stato = 'pubblicata' and ${VISIBILE}`,
+    [req.params.id, cutoff(), cutoffCud(), e.id]);
+  if (!rows[0]) return bad(res, 404, 'Documento non disponibile.');
   const u = await accessiStore.findByEmail(req.user.email);
   if (!u?.password_hash || !(await bcrypt.compare(String(req.body.password || ''), u.password_hash))) {
     t.push(now); tentativi.set(k, t);
@@ -621,7 +650,34 @@ app.get('/api/buste/:id/file', needUser, wrap(async (req, res) => {
   if (!e || e.id !== a.staffId) return res.status(403).send('Questa busta non è tua.');
   const { rows } = await db.q('select * from buste where id = $1 and staff_id = $2', [a.id, a.staffId]);
   if (!rows[0]) return res.status(404).send('Non trovata');
-  inviaPdf(res, buste.decifra(rows[0]), `busta-paga-${rows[0].mese}.pdf`);
+  inviaPdf(res, buste.decifra(rows[0]), `${rows[0].tipo === 'cud' ? 'cud' : 'busta-paga'}-${rows[0].mese}.pdf`);
+}));
+// Firma per ricevuta (col dito o col mouse): si salva cifrata, l'amministrazione riceve la ricevuta firmata
+app.post('/api/buste/:id/firma', needUser, wrap(async (req, res) => {
+  const { cfg, e } = await staffDi(req.user);
+  if (!e) return bad(res, 403, 'Non sei nell\'elenco del personale.');
+  const m = String(req.body.firma || '').match(/^data:image\/png;base64,([A-Za-z0-9+/=]+)$/);
+  const png = m ? Buffer.from(m[1], 'base64') : null;
+  if (!png || png.length < 200 || png.length > 600000 || png.readUInt32BE(0) !== 0x89504e47) return bad(res, 400, 'Firma non valida: firma di nuovo nel riquadro.');
+  const c = buste.cifra(png), disp = buste.dispositivo(req.get('user-agent'));
+  const { rows } = await db.q(`update buste set firma = $3, firma_iv = $4, firma_tag = $5, firmata_il = now(), firmata_disp = $6,
+      confermata_il = coalesce(confermata_il, now()), confermata_disp = coalesce(confermata_disp, $6)
+    where id = $1 and staff_id = $2 and stato = 'pubblicata' and aperta_il is not null and firmata_il is null returning *`,
+    [req.params.id, e.id, c.file, c.iv, c.tag, disp]);
+  if (!rows[0]) return bad(res, 400, 'Apri prima il documento (o è già firmato).');
+  res.json({ ok: true });
+  const b = rows[0], tit = titoloDoc(b.tipo, b.mese);
+  avvisaAdmin({ title: `${b.tipo === 'cud' ? 'CUD' : 'Busta paga'} firmata`, body: `${nome(e)}: ${tit}.`, url: '/?tab=' + (b.tipo === 'cud' ? 'cudAdmin' : 'bpAdmin') });
+  if (mail.enabled()) (async () => { // email agli amministratori con la sola ricevuta (il documento resta nell'app)
+    const { rows: adm } = await db.q(`select email from users where role = 'admin'`);
+    if (!adm.length) return;
+    const pdf = await buste.ricevuta({ nome: nome(e), cf: e.cf, titolo: tit, firmataIl: b.firmata_il, dispositivo: disp, impronta: b.impronta, firmaPng: png });
+    const testo = `${nome(e)} ha firmato per ricevuta: ${tit}, il ${new Date(b.firmata_il).toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}.`;
+    await mail.send({ to: adm.map(a => a.email), subject: `Firmata: ${tit} · ${nome(e)}`, text: testo + ' In allegato la ricevuta firmata.',
+      html: mail.layout('Documento firmato', [mail.esc(testo), 'In allegato la ricevuta con la firma. La copia completa firmata è in Turni.'],
+        { url: 'https://turni.appgestione.it/?tab=' + (b.tipo === 'cud' ? 'cudAdmin' : 'bpAdmin'), label: 'Apri Turni' }),
+      attachments: [{ filename: `ricevuta-${b.tipo}-${b.mese}.pdf`, content: pdf }] });
+  })().catch(err => console.warn('Turni, email firma:', err.message));
 }));
 app.post('/api/buste/:id/conferma', needUser, wrap(async (req, res) => {
   const { e } = await staffDi(req.user);

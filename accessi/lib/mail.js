@@ -5,7 +5,7 @@ const FROM = () => process.env.MAIL_FROM || 'To Smile · Accessi <accessi@appges
 
 const enabled = () => !!process.env.RESEND_API_KEY;
 
-async function send({ to, subject, text, html, replyTo }) {
+async function send({ to, subject, text, html, replyTo, attachments }) {
   if (!enabled()) {
     console.log(`[email non inviata: manca RESEND_API_KEY] a ${to}: ${subject}`);
     return false;
@@ -14,7 +14,8 @@ async function send({ to, subject, text, html, replyTo }) {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: FROM(), to: [].concat(to), subject, text, html, ...(replyTo ? { reply_to: replyTo } : {}) }),
+      body: JSON.stringify({ from: FROM(), to: [].concat(to), subject, text, html, ...(replyTo ? { reply_to: replyTo } : {}),
+        ...(attachments?.length ? { attachments: attachments.map(a => ({ filename: a.filename, content: Buffer.from(a.content).toString('base64') })) } : {}) }),
       signal: AbortSignal.timeout(15000),
     });
     if (!r.ok) { console.warn('Email non inviata:', r.status, (await r.text()).slice(0, 300)); return false; }

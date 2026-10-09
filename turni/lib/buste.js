@@ -90,6 +90,43 @@ async function dividi(buf, staff) {
   return { pagine: n, gruppi, sospese };
 }
 
+// Pagina di ricevuta firmata: chi, quale documento, quando, da quale dispositivo, impronta del file e firma.
+// Se si passa il documento, la ricevuta viene aggiunta in fondo (copia firmata per l'amministrazione).
+async function ricevuta({ documento, nome, cf, titolo, firmataIl, dispositivo, impronta, firmaPng }) {
+  const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
+  const out = documento ? await PDFDocument.load(documento, { ignoreEncryption: true }) : await PDFDocument.create();
+  const p = out.addPage([595.28, 841.89]);
+  const f = await out.embedFont(StandardFonts.Helvetica), fb = await out.embedFont(StandardFonts.HelveticaBold);
+  // i font standard scrivono solo i caratteri dell'alfabeto latino (WinAnsi): il resto diventa "?"
+  const t = s => String(s ?? '').replace(/[’‘]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-').replace(/[^\x20-\x7E\xA0-\xFF]/g, '?');
+  const ink = rgb(0.17, 0.19, 0.2), muted = rgb(0.42, 0.45, 0.46), teal = rgb(0.16, 0.49, 0.49);
+  let y = 780;
+  p.drawText('To Smile', { x: 56, y, size: 16, font: fb, color: teal });
+  y -= 34; p.drawText(t('Ricevuta di consegna firmata'), { x: 56, y, size: 20, font: fb, color: ink });
+  y -= 22; p.drawText(t(titolo), { x: 56, y, size: 13, font: f, color: muted });
+  const riga = (k, v) => { y -= 26; p.drawText(t(k), { x: 56, y, size: 10.5, font: f, color: muted }); p.drawText(t(v), { x: 190, y, size: 11.5, font: fb, color: ink }); };
+  y -= 14;
+  riga('Dipendente', nome);
+  if (cf) riga('Codice fiscale', cf);
+  riga('Documento', titolo);
+  riga('Firmato il', new Date(firmataIl).toLocaleString('it-IT', { timeZone: 'Europe/Rome', dateStyle: 'long', timeStyle: 'short' }));
+  riga('Dispositivo', dispositivo || '-');
+  y -= 26; p.drawText('Impronta SHA-256 del documento', { x: 56, y, size: 10.5, font: f, color: muted });
+  y -= 16; p.drawText(t(impronta), { x: 56, y, size: 8.5, font: f, color: ink });
+  y -= 40; p.drawText(t('Il dipendente dichiara di aver ricevuto e preso visione del documento sopra indicato.'), { x: 56, y, size: 11, font: f, color: ink });
+  y -= 24; p.drawText('Firma', { x: 56, y, size: 10.5, font: f, color: muted });
+  if (firmaPng) {
+    const img = await out.embedPng(firmaPng);
+    const w = Math.min(380, img.width), h = img.height * (w / img.width);
+    const hh = Math.min(h, 170), ww = w * (hh / h);
+    p.drawRectangle({ x: 56, y: y - 14 - hh - 16, width: ww + 24, height: hh + 16, borderColor: rgb(0.85, 0.85, 0.82), borderWidth: 1 });
+    p.drawImage(img, { x: 68, y: y - 14 - hh - 8, width: ww, height: hh });
+  }
+  p.drawText(t('Documento generato da turni.appgestione.it.'), { x: 56, y: 72, size: 8.5, font: f, color: muted });
+  p.drawText(t("La firma e la data sono registrate sul server insieme all'impronta del file."), { x: 56, y: 60, size: 8.5, font: f, color: muted });
+  return Buffer.from(await out.save());
+}
+
 // "iPhone/iPad · Safari", "Windows · Edge"… (per il registro delle prese visione)
 function dispositivo(ua) {
   const u = String(ua || '');
@@ -98,4 +135,4 @@ function dispositivo(ua) {
   return `${os} · ${br}`;
 }
 
-module.exports = { attive, cifra, decifra, impronta, dividi, estrai, unisci, dispositivo };
+module.exports = { attive, cifra, decifra, impronta, dividi, estrai, unisci, dispositivo, ricevuta };

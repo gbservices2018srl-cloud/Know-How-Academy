@@ -25,7 +25,7 @@ const TIPI_PROF = ["Medico","Igienista","ASO","REC","RAP","RUL","Extrambulatoria
 const ALTRI = ["Igienista","REC","RAP","RUL","Extrambulatoriale","Altro"];
 // regole salvate prima che esistesse una figura: minimo 0, massimo 1 per turno
 const normReg = r => { if (r && r.altri) for (const t of ALTRI) if (!r.altri[t]) r.altri[t] = {min:0, max:1}; return r; };
-const TIPI = {FE:"Ferie", ROL:"ROL", MAL:"Malattia"};
+const TIPI = {FE:"Ferie", ROL:"ROL", MAL:"Malattia", CP:"Congedo parentale", ALT:"Altro motivo"};
 const emp = id => STAFF.find(e=>e.id===id) || REMOVED.find(e=>e.id===id);
 const full = e => e ? `${e.nome} ${e.cognome}` : "—";
 const sediOf = e => SEDI.filter(s=>(e.ore[s.id]||0)>0).map(s=>s.id);

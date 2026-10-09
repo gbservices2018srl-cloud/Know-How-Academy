@@ -57,6 +57,7 @@ async function migrate() {
       sost text,
       prot text not null default '',
       note text not null default '',
+      motivo text not null default '',
       stato text not null check (stato in ('attesa_sost','attesa_admin','approvata','rifiutata','annullata')),
       sost_ok boolean,
       inviata date not null,
@@ -126,6 +127,19 @@ async function migrate() {
       key text primary key,
       value text not null
     );
+    -- nuovi tipi di assenza: congedo parentale e altro motivo (con motivazione obbligatoria)
+    alter table richieste add column if not exists motivo text not null default '';
+    alter table richieste drop constraint if exists richieste_tipo_check;
+    alter table richieste add constraint richieste_tipo_check check (tipo in ('FE','ROL','MAL','CP','ALT'));
+    -- documenti: buste paga e CUD (per i CUD "mese" è l'anno del CUD, AAAA); firma per ricevuta, cifrata
+    alter table buste add column if not exists tipo text not null default 'busta';
+    alter table buste add column if not exists firma bytea;
+    alter table buste add column if not exists firma_iv bytea;
+    alter table buste add column if not exists firma_tag bytea;
+    alter table buste add column if not exists firmata_il timestamptz;
+    alter table buste add column if not exists firmata_disp text;
+    alter table pagine_sospese add column if not exists tipo text not null default 'busta';
+    create index if not exists buste_tipo_idx on buste(tipo, mese);
   `);
 }
 

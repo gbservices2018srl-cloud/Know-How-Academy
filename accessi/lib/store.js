@@ -270,7 +270,8 @@ async function verify(token, app) {
   if (!c) return null;
   const role = c.apps[app];
   if (!role) return { denied: true, user: publicUser(c.user) };
-  return { user: publicUser(c.user), role };
+  // pannello: è amministratore di Gestione accessi (o proprietario): può fare cose riservate anche nelle app
+  return { user: { ...publicUser(c.user), pannello: !!(c.user.owner || c.apps.accessi === 'admin') }, role };
 }
 
 // Tutti gli utenti attivi che possono entrare in un'app, con il loro ruolo (per preparare i profili nelle app).
