@@ -239,7 +239,7 @@ const pendingCount = () => S.prenotazioni.filter(p => p.stato === 'in_attesa').l
 function tabsFor() {
   if (isAdmin()) return [['richieste', 'Richieste', pendingCount()], ['catalogo', 'Ordina'], ['articoli', 'Articoli'],
     ['riordino', 'Riordino', S.carrello.length + S.ordini.filter(o => o.stato === 'da_inviare').length], ['fornitori', 'Fornitori']];
-  return [['catalogo', 'Magazzino'], ['mie', 'Le mie prenotazioni', pendingCount()]];
+  return [['catalogo', 'Nuovo ordine'], ['mie', 'I miei ordini', pendingCount()]];
 }
 function renderTop() {
   $('#tabs').innerHTML = tabsFor().map(([k, l, n]) => `<button class="tab" role="tab" aria-selected="${view === k}" data-tab="${k}">${l}${n ? ` <span class="count">${n}</span>` : ''}</button>`).join('');
@@ -291,7 +291,7 @@ document.addEventListener('click', e => {
   if (el && catAperta && el.getBoundingClientRect().top < 70) el.scrollIntoView({ block: 'start', behavior: 'smooth' });
 });
 function renderCatalogo() {
-  $('#main').innerHTML = `${pushBanner()}<div class="head"><div><h1>Magazzino</h1><p>Le quantità mostrate sono quelle disponibili adesso. Scegli gli articoli e invia la prenotazione.</p></div></div>
+  $('#main').innerHTML = `${pushBanner()}<div class="head"><div><h1>Nuovo ordine</h1><p><b>1.</b> Tocca una categoria · <b>2.</b> con <b>+</b> scegli le quantità · <b>3.</b> in basso tocca <b>«Rivedi e prenota»</b>, scegli ritiro o spedizione e invia. Le quantità sono quelle disponibili adesso.</p></div></div>
     ${toolsHtml('Cerca articolo o codice')}<div id="cat-list"></div>`;
   bindTools(drawCatalogo); drawCatalogo();
 }
@@ -304,7 +304,7 @@ function drawCatalogo() {
     return `<section class="acc ${aperta(c.id) ? 'open' : ''}">${accHead(c, `<span class="muted" style="font-size:13px">${disp} disponibili</span>${nel ? ` <span class="pill ok">${nel} nel carrello</span>` : ''}`)}
       ${aperta(c.id) ? `<div class="acc-b"><div class="items">${l.map(itemCard).join('')}</div></div>` : ''}</section>`;
   }).join('')
-    : `<div class="card empty"><b>Nessun articolo</b>${S.articoli.length ? 'Nessun articolo corrisponde alla ricerca.' : 'Il magazzino non ha ancora articoli: compariranno qui appena l\'amministratore li carica.'}</div>`;
+    : `<div class="card empty"><b>Nessun articolo</b>${S.articoli.length ? 'Nessun articolo corrisponde alla ricerca.' : 'Per ora il magazzino non ha articoli da ordinare: compariranno qui appena l\'amministratore li carica.'}</div>`;
 }
 function itemCard(a) {
   const inCart = cart[a.id] || 0, max = a.disponibile;
@@ -392,8 +392,8 @@ function righeHtml(p, withCheck) {
 }
 function renderMie() {
   const list = S.prenotazioni;
-  $('#main').innerHTML = `${pushBanner()}<div class="head"><div><h1>Le mie prenotazioni</h1><p>Quando il magazzino conferma o rifiuta, lo vedi qui${PUSH.state === 'on' ? ' e ricevi una notifica' : ''}.</p></div>
-    <button class="btn" data-tab="catalogo">+ Nuova prenotazione</button></div>
+  $('#main').innerHTML = `${pushBanner()}<div class="head"><div><h1>I miei ordini</h1><p>Quando il magazzino conferma o rifiuta, lo vedi qui${PUSH.state === 'on' ? ' e ricevi una notifica' : ''}.</p></div>
+    <button class="btn primary" data-tab="catalogo">+ Nuovo ordine</button></div>
     <div class="list">${list.length ? list.map(p => `<article class="card req ${p.stato === 'in_attesa' ? 'pending' : ''}">
       <div class="req-h"><div><h3>Prenotazione n. ${p.numero}</h3><div class="meta">${fmtDT(p.creataIl)}</div></div>
         <span class="pill ${STATO[p.stato][1]}">${STATO[p.stato][0]}</span></div>
@@ -402,7 +402,7 @@ function renderMie() {
       ${p.note ? `<div class="note"><b>Tue note:</b> ${esc(p.note)}</div>` : ''}
       ${p.stato === 'rifiutata' && p.motivo ? `<div class="note"><b>Motivo:</b> ${esc(p.motivo)}</div>` : ''}
       ${p.stato === 'in_attesa' ? `<div class="req-act"><button class="btn sm danger" data-annulla="${p.id}">Annulla prenotazione</button></div>` : ''}
-    </article>`).join('') : '<div class="card empty"><b>Nessuna prenotazione</b>Dalla scheda Magazzino scegli gli articoli e invia la richiesta.</div>'}</div>`;
+    </article>`).join('') : '<div class="card empty"><b>Nessun ordine</b>Tocca «+ Nuovo ordine», scegli gli articoli e invia la richiesta.</div>'}</div>`;
   document.querySelectorAll('[data-annulla]').forEach(b => b.onclick = async () => {
     if (!confirm('Annullare questa prenotazione?')) return;
     try { await api(`/api/prenotazioni/${b.dataset.annulla}/annulla`, { method: 'POST', body: {} }); await load(); render(); toast('Prenotazione annullata'); } catch (e) { toast(e.message); }
