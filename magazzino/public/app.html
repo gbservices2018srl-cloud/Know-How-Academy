@@ -82,6 +82,13 @@ label.f small{font-weight:500;color:var(--muted)}
 .pill.ok{background:var(--ok-bg);color:var(--ok)} .pill.warn{background:var(--warn-bg);color:var(--warn)} .pill.no{background:var(--danger-bg);color:var(--danger)}
 .pill.purple{background:color-mix(in srgb,var(--purple) 18%,transparent);color:var(--purple-ink)}
 .empty{padding:28px 20px;text-align:center;color:var(--muted)}
+.scelta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0;padding:0;border:0}
+.scelta legend{font-weight:600;font-size:13.5px;margin-bottom:6px;padding:0}
+.scelta label{display:flex;gap:9px;align-items:center;border:1.5px solid var(--line);border-radius:12px;padding:11px 12px;cursor:pointer;font-weight:700;font-size:14.5px;background:var(--surface)}
+.scelta label:has(input:checked){border-color:var(--teal);background:color-mix(in srgb,var(--teal) 10%,var(--surface))}
+.scelta input{width:18px;height:18px;min-height:0;margin:0;accent-color:var(--teal);flex:none}
+.scelta small{display:block;font-weight:500;color:var(--muted);font-size:12.5px}
+@media (max-width:420px){.scelta{grid-template-columns:1fr}}
 .empty b{display:block;color:var(--fg);font-size:16px;margin-bottom:4px}
 .cat-title{display:flex;align-items:center;gap:10px;margin:22px 0 10px}
 .cat-title h2{font-size:17px}
@@ -230,7 +237,7 @@ async function load() {
 /* ---------------- intestazione ---------------- */
 const pendingCount = () => S.prenotazioni.filter(p => p.stato === 'in_attesa').length;
 function tabsFor() {
-  if (isAdmin()) return [['richieste', 'Richieste', pendingCount()], ['articoli', 'Articoli'],
+  if (isAdmin()) return [['richieste', 'Richieste', pendingCount()], ['catalogo', 'Ordina'], ['articoli', 'Articoli'],
     ['riordino', 'Riordino', S.carrello.length + S.ordini.filter(o => o.stato === 'da_inviare').length], ['fornitori', 'Fornitori']];
   return [['catalogo', 'Magazzino'], ['mie', 'Le mie prenotazioni', pendingCount()]];
 }
@@ -289,14 +296,15 @@ function renderCatalogo() {
   bindTools(drawCatalogo); drawCatalogo();
 }
 function drawCatalogo() {
-  const arts = filtroArticoli(S.articoli);
+  const arts = filtroArticoli(S.articoli.filter(a => a.attivo !== false));
   const byCat = S.categorie.map(c => [c, arts.filter(a => a.categoriaId === c.id)]).filter(([, l]) => l.length);
+  if (!byCat.some(([c]) => c.id === catAperta)) catAperta = (byCat.find(([, l]) => l.some(a => a.disponibile > 0)) || byCat[0] || [{}])[0].id || '';
   $('#cat-list').innerHTML = byCat.length ? byCat.map(([c, l]) => {
     const disp = l.filter(a => a.disponibile > 0).length, nel = l.filter(a => cart[a.id]).length;
     return `<section class="acc ${aperta(c.id) ? 'open' : ''}">${accHead(c, `<span class="muted" style="font-size:13px">${disp} disponibili</span>${nel ? ` <span class="pill ok">${nel} nel carrello</span>` : ''}`)}
       ${aperta(c.id) ? `<div class="acc-b"><div class="items">${l.map(itemCard).join('')}</div></div>` : ''}</section>`;
   }).join('')
-    : `<div class="card empty"><b>Nessun articolo</b>${S.articoli.length ? 'Nessun articolo corrisponde alla ricerca.' : 'Il magazzino non ha ancora articoli disponibili.'}</div>`;
+    : `<div class="card empty"><b>Nessun articolo</b>${S.articoli.length ? 'Nessun articolo corrisponde alla ricerca.' : 'Il magazzino non ha ancora articoli: compariranno qui appena l\'amministratore li carica.'}</div>`;
 }
 function itemCard(a) {
   const inCart = cart[a.id] || 0, max = a.disponibile;
@@ -331,7 +339,7 @@ document.addEventListener('change', e => {
 function renderCartbar() {
   const bar = $('#cartbar');
   const n = Object.keys(cart).length;
-  if (isAdmin() || view !== 'catalogo' || !n) { bar.hidden = true; return; }
+  if (view !== 'catalogo' || !n) { bar.hidden = true; return; }
   const pezzi = Object.values(cart).reduce((a, b) => a + b, 0);
   bar.hidden = false;
   bar.innerHTML = `<div class="in"><div><b>${n} ${n === 1 ? 'articolo' : 'articoli'}</b> <span class="muted">· ${pezzi} in tutto</span></div>
@@ -343,20 +351,37 @@ function openCart() {
   open(`<div class="dlg-h"><h2>La tua prenotazione</h2><button class="btn sm ghost" value="cancel" aria-label="Chiudi">✕</button></div>
     <table class="tbl"><tbody>${righe.map(r => `<tr><td>${esc(r.a.nome)}<div class="muted" style="font-size:12.5px">disponibili ${r.a.disponibile} ${esc(r.a.unita)}</div></td>
       <td class="num"><input type="number" min="0" max="${r.a.disponibile}" value="${r.q}" data-cart-q="${r.a.id}" style="width:84px;text-align:right" aria-label="Quantità"></td><td style="width:1%">${esc(r.a.unita)}</td></tr>`).join('')}</tbody></table>
-    <label class="f">Note per il magazzino <small>Facoltative: ad esempio quando passi a ritirare</small><textarea id="c-note" maxlength="500"></textarea></label>
+    <fieldset class="scelta"><legend>Come vuoi ricevere la merce?</legend>
+      <label><input type="radio" name="c-cons" value="ritiro"><span>Passo io a ritirare<small>in magazzino</small></span></label>
+      <label><input type="radio" name="c-cons" value="spedizione"><span>Voglio la spedizione<small>indica dove</small></span></label></fieldset>
+    <label class="f" id="c-ind-box" hidden>Dove spedire <small>Studio o indirizzo completo</small><input id="c-ind" maxlength="300" autocomplete="street-address" value="${esc(store.get('indirizzo', ''))}"></label>
+    <label class="f">Note per il magazzino <small>Facoltative: ad esempio quando passi a ritirare o orari per la consegna</small><textarea id="c-note" maxlength="500"></textarea></label>
     <div class="msg err" role="alert"></div>
     <div class="dlg-f"><button class="btn" value="svuota" formnovalidate>Svuota</button><button class="btn primary" value="save">Invia prenotazione</button></div>`, async v => {
     if (v === 'svuota') { cart = {}; store.set('cart', cart); closeDlg(); render(); return; }
     document.querySelectorAll('[data-cart-q]').forEach(i => setCart(i.dataset.cartQ, i.value));
     const lines = Object.entries(cart).map(([articoloId, quantita]) => ({ articoloId, quantita }));
     if (!lines.length) throw new Error('Il carrello è vuoto.');
+    const consegna = document.querySelector('[name="c-cons"]:checked')?.value;
+    if (!consegna) throw new Error('Scegli se passi a ritirare o se vuoi la spedizione.');
+    const indirizzo = $('#c-ind').value.trim();
+    if (consegna === 'spedizione' && indirizzo.length < 5) { $('#c-ind').focus(); throw new Error('Scrivi dove spedire (studio o indirizzo).'); }
+    if (consegna === 'spedizione') store.set('indirizzo', indirizzo);
     try {
-      const r = await api('/api/prenotazioni', { method: 'POST', body: { righe: lines, note: $('#c-note').value } });
+      const r = await api('/api/prenotazioni', { method: 'POST', body: { righe: lines, note: $('#c-note').value, consegna, indirizzo } });
       cart = {}; store.set('cart', cart); closeDlg();
-      await load(); go('mie'); toast(`Prenotazione n. ${r.numero} inviata`);
+      await load(); go(isAdmin() ? 'richieste' : 'mie'); toast(`Prenotazione n. ${r.numero} inviata`);
     } catch (err) { await load().catch(() => {}); throw err; }
   });
 }
+document.addEventListener('change', e => {
+  if (e.target.name !== 'c-cons') return;
+  const sped = e.target.value === 'spedizione', box = $('#c-ind-box');
+  box.hidden = !sped; if (sped && !$('#c-ind').value) $('#c-ind').focus();
+  const m = dlgf.querySelector('.msg.err'); if (m) m.textContent = '';
+});
+const consegnaHtml = p => !p.consegna ? '' : p.consegna === 'spedizione'
+  ? `<div class="note"><b>🚚 Spedizione a:</b> ${esc(p.indirizzo)}</div>` : `<div class="note"><b>🏬 Ritiro in magazzino</b></div>`;
 const STATO = { in_attesa: ['In attesa', 'warn'], confermata: ['Confermata', 'ok'], rifiutata: ['Rifiutata', 'no'], annullata: ['Annullata', ''] };
 function righeHtml(p, withCheck) {
   return `<div class="req-lines">${p.righe.map(r => {
@@ -373,6 +398,7 @@ function renderMie() {
       <div class="req-h"><div><h3>Prenotazione n. ${p.numero}</h3><div class="meta">${fmtDT(p.creataIl)}</div></div>
         <span class="pill ${STATO[p.stato][1]}">${STATO[p.stato][0]}</span></div>
       ${righeHtml(p)}
+      ${consegnaHtml(p)}
       ${p.note ? `<div class="note"><b>Tue note:</b> ${esc(p.note)}</div>` : ''}
       ${p.stato === 'rifiutata' && p.motivo ? `<div class="note"><b>Motivo:</b> ${esc(p.motivo)}</div>` : ''}
       ${p.stato === 'in_attesa' ? `<div class="req-act"><button class="btn sm danger" data-annulla="${p.id}">Annulla prenotazione</button></div>` : ''}
@@ -412,6 +438,7 @@ function reqCard(p) {
     <div class="req-h"><div><h3>n. ${p.numero} · ${esc(p.utente)}</h3><div class="meta">${p.utenteFigura ? `<b>${esc(p.utenteFigura)}</b> · ` : ''}${fmtDT(p.creataIl)} · ${esc(p.utenteEmail)}</div></div>
       <span class="pill ${STATO[p.stato][1]}">${STATO[p.stato][0]}${p.gestitaIl && p.stato !== 'in_attesa' ? ` · ${fmtD(p.gestitaIl)}` : ''}</span></div>
     ${righeHtml(p, true)}
+    ${consegnaHtml(p)}
     ${p.note ? `<div class="note"><b>Note:</b> ${esc(p.note)}</div>` : ''}
     ${p.stato === 'rifiutata' && p.motivo ? `<div class="note"><b>Motivo del rifiuto:</b> ${esc(p.motivo)}</div>` : ''}
     ${p.stato === 'in_attesa' ? `<div class="req-act"><button class="btn primary" data-conferma="${p.id}">Conferma ordine</button><button class="btn danger" data-rifiuta="${p.id}">Rifiuta ordine</button></div>`

@@ -82,7 +82,8 @@ async function prenotazioni(where, params) {
     from prenotazioni p join users u on u.id = p.utente_id left join users g on g.id = p.gestita_da
     ${where} order by p.creata_il desc limit 200`, params);
   return rows.map(p => ({ id: p.id, numero: p.numero, stato: p.stato, note: p.note, motivo: p.motivo, creataIl: p.creata_il,
-    gestitaIl: p.gestita_il, gestitaDa: p.gestita_nome, utente: p.utente_nome, utenteEmail: p.utente_email, utenteFigura: p.utente_figura || '', righe: p.righe }));
+    gestitaIl: p.gestita_il, gestitaDa: p.gestita_nome, utente: p.utente_nome, utenteEmail: p.utente_email, utenteFigura: p.utente_figura || '',
+    utenteId: p.utente_id, consegna: p.consegna || '', indirizzo: p.indirizzo || '', righe: p.righe }));
 }
 
 /* ---------- stato dell'app ---------- */
@@ -114,6 +115,10 @@ app.post('/api/prenotazioni', needUser, wrap(async (req, res) => {
   if (!righe.length) return bad(res, 400, 'Il carrello è vuoto.');
   const ids = [...new Set(righe.map(r => r.articoloId))];
   if (ids.length !== righe.length) return bad(res, 400, 'Articolo ripetuto nella prenotazione.');
+  const consegna = req.body.consegna === 'spedizione' ? 'spedizione' : req.body.consegna === 'ritiro' ? 'ritiro' : '';
+  if (!consegna) return bad(res, 400, 'Scegli se passi a ritirare o se vuoi la spedizione.');
+  const indirizzo = consegna === 'spedizione' ? str(req.body.indirizzo, 300) : '';
+  if (consegna === 'spedizione' && indirizzo.length < 5) return bad(res, 400, 'Scrivi dove spedire (studio o indirizzo).');
   const id = db.newId();
   const numero = await db.tx(async qq => {
     // blocca le righe degli articoli: due prenotazioni contemporanee non possono superare la giacenza
@@ -128,7 +133,8 @@ app.post('/api/prenotazioni', needUser, wrap(async (req, res) => {
       if (r.quantita > disp) throw fail(409, `«${a.nome}»: ne restano solo ${Math.max(0, disp)} ${a.unita}: correggi la quantità.`);
       r.nome = a.nome; r.unita = a.unita;
     }
-    const { rows } = await qq('insert into prenotazioni (id, utente_id, note) values ($1,$2,$3) returning numero', [id, req.user.id, str(req.body.note, 500)]);
+    const { rows } = await qq('insert into prenotazioni (id, utente_id, note, consegna, indirizzo) values ($1,$2,$3,$4,$5) returning numero',
+      [id, req.user.id, str(req.body.note, 500), consegna, indirizzo]);
     for (const r of righe) {
       await qq('insert into prenotazione_righe (id, prenotazione_id, articolo_id, nome, unita, quantita) values ($1,$2,$3,$4,$5,$6)',
         [db.newId(), id, r.articoloId, r.nome, r.unita, r.quantita]);
@@ -136,7 +142,7 @@ app.post('/api/prenotazioni', needUser, wrap(async (req, res) => {
     return rows[0].numero;
   });
   avvisaAdmin({ title: `Nuova prenotazione n. ${numero}`,
-    body: `${req.user.name}: ${righe.length} ${righe.length === 1 ? 'articolo' : 'articoli'}. Tocca per confermare o rifiutare.`,
+    body: `${req.user.name}: ${righe.length} ${righe.length === 1 ? 'articolo' : 'articoli'} · ${consegna === 'spedizione' ? 'da spedire a ' + indirizzo : 'passa a ritirare'}. Tocca per confermare o rifiutare.`,
     url: '/?vista=richieste', tag: 'prenotazione-' + id });
   res.json({ ok: true, id, numero });
 }));
@@ -165,7 +171,10 @@ app.post('/api/prenotazioni/:id/conferma', needAdmin, wrap(async (req, res) => {
     await qq(`update prenotazioni set stato = 'confermata', gestita_il = now(), gestita_da = $2 where id = $1`, [p.id, req.user.id]);
     return p;
   });
-  push.sendToUsers([p.uid], { title: `Prenotazione n. ${p.numero} confermata`, body: 'Il magazzino ha confermato la tua richiesta.', url: '/', tag: 'esito-' + p.id }).catch(() => {});
+  push.sendToUsers([p.uid], { title: `Prenotazione n. ${p.numero} confermata`,
+    body: p.consegna === 'spedizione' ? `Il magazzino ha confermato: la merce verrà spedita a ${p.indirizzo}.`
+      : p.consegna === 'ritiro' ? 'Il magazzino ha confermato: puoi passare a ritirare.' : 'Il magazzino ha confermato la tua richiesta.',
+    url: '/?vista=mie', tag: 'esito-' + p.id }).catch(() => {});
   res.json({ ok: true });
 }));
 

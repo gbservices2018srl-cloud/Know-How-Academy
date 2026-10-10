@@ -169,6 +169,9 @@ async function migrate() {
     );
     -- eliminando un articolo le prenotazioni passate restano (con nome e quantità), senza collegamento
     alter table prenotazione_righe alter column articolo_id drop not null;
+    -- come vuole ricevere la merce chi prenota: ritiro in magazzino oppure spedizione (con indirizzo)
+    alter table prenotazioni add column if not exists consegna text not null default '';
+    alter table prenotazioni add column if not exists indirizzo text not null default '';
   `);
   await q(`do $$ begin
     if exists (select 1 from pg_constraint where conrelid = 'prenotazione_righe'::regclass and conname = 'prenotazione_righe_articolo_id_fkey' and confdeltype <> 'n') then

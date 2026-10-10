@@ -75,6 +75,7 @@ Protocolli e Calendario: `ADMIN_USERNAME` / `ADMIN_PASSWORD` nelle impostazioni 
 
 ## Magazzino centrale
 - Solo con l'accesso unico (nessuna password propria). Utente = vede le disponibilità e prenota; Amministratore = conferma/rifiuta, gestisce articoli, fornitori e riordino.
+- Scheda «Magazzino» (utente) / «Ordina» (amministratore): tutti gli articoli attivi per categoria, con la prima categoria già aperta; gli esauriti si vedono ma non si possono mettere nel carrello. All'invio la persona sceglie obbligatoriamente «Passo io a ritirare» o «Voglio la spedizione» (con studio o indirizzo, ricordato sul dispositivo): la scelta compare nelle Richieste, nella notifica all'amministratore e nell'esito al cliente (colonne `consegna`, `indirizzo` di `prenotazioni`).
 - Disponibile = giacenza − prenotazioni in attesa: nessuno può prenotare più di quello che c'è. Confermare scala la giacenza, rifiutare la libera.
 - Riordino: quando (giacenza + merce già ordinata) scende alla scorta minima, l'articolo entra nel carrello con la quantità per tornare al livello di carico. Dal carrello nasce un ordine per fornitore, inviato via email (Resend) o stampato. "Merce ricevuta" ricarica la giacenza. Ogni variazione resta nei Movimenti.
 - Notifiche sul telefono (Web Push) agli amministratori per ogni nuova prenotazione e al cliente per l'esito. Dati nello schema `magazzino`.
