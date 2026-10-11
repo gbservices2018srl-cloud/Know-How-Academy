@@ -82,6 +82,7 @@ label.f small{font-weight:500;color:var(--muted)}
 .pill.ok{background:var(--ok-bg);color:var(--ok)} .pill.warn{background:var(--warn-bg);color:var(--warn)} .pill.no{background:var(--danger-bg);color:var(--danger)}
 .pill.purple{background:color-mix(in srgb,var(--purple) 18%,transparent);color:var(--purple-ink)}
 .empty{padding:28px 20px;text-align:center;color:var(--muted)}
+.sped-box:not([hidden]){display:grid;gap:12px}
 .scan-box{position:relative;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:4/3;max-height:52vh}
 .scan-box video{width:100%;height:100%;object-fit:cover;display:block}
 .scan-mira{position:absolute;inset:18% 12%;border:3px solid rgba(255,255,255,.85);border-radius:14px;box-shadow:0 0 0 999px rgba(0,0,0,.28)}
@@ -360,7 +361,10 @@ function openCart() {
     <fieldset class="scelta"><legend>Come vuoi ricevere la merce?</legend>
       <label><input type="radio" name="c-cons" value="ritiro"><span>Passo io a ritirare<small>in magazzino</small></span></label>
       <label><input type="radio" name="c-cons" value="spedizione"><span>Voglio la spedizione<small>indica dove</small></span></label></fieldset>
-    <label class="f" id="c-ind-box" hidden>Dove spedire <small>Studio o indirizzo completo</small><input id="c-ind" maxlength="300" autocomplete="street-address" value="${esc(store.get('indirizzo', ''))}"></label>
+    <div id="c-ind-box" class="sped-box" hidden>
+      <label class="f">Dove spedire <small>Studio o indirizzo completo</small><input id="c-ind" maxlength="300" autocomplete="street-address" value="${esc(store.get('indirizzo', ''))}"></label>
+      <label class="f">Serve entro il <small>Almeno 72 ore dopo l'invio dell'ordine: se lo invii ora, la prima data possibile è il ${primaDataSped().split('-').reverse().join('/')}</small><input id="c-entro" type="date" min="${primaDataSped()}"></label>
+    </div>
     <label class="f">Note per il magazzino <small>Facoltative: ad esempio quando passi a ritirare o orari per la consegna</small><textarea id="c-note" maxlength="500"></textarea></label>
     <div class="msg err" role="alert"></div>
     <div class="dlg-f"><button class="btn" value="svuota" formnovalidate>Svuota</button><button class="btn primary" value="save">Invia prenotazione</button></div>`, async v => {
@@ -372,9 +376,12 @@ function openCart() {
     if (!consegna) throw new Error('Scegli se passi a ritirare o se vuoi la spedizione.');
     const indirizzo = $('#c-ind').value.trim();
     if (consegna === 'spedizione' && indirizzo.length < 5) { $('#c-ind').focus(); throw new Error('Scrivi dove spedire (studio o indirizzo).'); }
+    const serveEntro = consegna === 'spedizione' ? $('#c-entro').value : '';
+    if (consegna === 'spedizione' && !serveEntro) { $('#c-entro').focus(); throw new Error('Scrivi entro quando ti serve la spedizione.'); }
+    if (serveEntro && serveEntro < primaDataSped()) { $('#c-entro').focus(); throw new Error(`La spedizione deve essere almeno 72 ore dopo l'invio dell'ordine: la prima data possibile è il ${primaDataSped().split('-').reverse().join('/')}.`); }
     if (consegna === 'spedizione') store.set('indirizzo', indirizzo);
     try {
-      const r = await api('/api/prenotazioni', { method: 'POST', body: { righe: lines, note: $('#c-note').value, consegna, indirizzo } });
+      const r = await api('/api/prenotazioni', { method: 'POST', body: { righe: lines, note: $('#c-note').value, consegna, indirizzo, serveEntro } });
       cart = {}; store.set('cart', cart); closeDlg();
       await load(); go(isAdmin() ? 'richieste' : 'mie'); toast(`Prenotazione n. ${r.numero} inviata`);
     } catch (err) { await load().catch(() => {}); throw err; }
@@ -386,8 +393,9 @@ document.addEventListener('change', e => {
   box.hidden = !sped; if (sped && !$('#c-ind').value) $('#c-ind').focus();
   const m = dlgf.querySelector('.msg.err'); if (m) m.textContent = '';
 });
+const primaDataSped = () => new Date(Date.now() + 72 * 3600e3).toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' });
 const consegnaHtml = p => !p.consegna ? '' : p.consegna === 'spedizione'
-  ? `<div class="note"><b>🚚 Spedizione a:</b> ${esc(p.indirizzo)}</div>` : `<div class="note"><b>🏬 Ritiro in magazzino</b></div>`;
+  ? `<div class="note"><b>🚚 Spedizione a:</b> ${esc(p.indirizzo)}${p.serveEntro ? `<br><b>Serve entro il ${esc(p.serveEntro.split('-').reverse().join('/'))}</b>` : ''}</div>` : `<div class="note"><b>🏬 Ritiro in magazzino</b></div>`;
 const STATO = { in_attesa: ['In attesa', 'warn'], confermata: ['Confermata', 'ok'], rifiutata: ['Rifiutata', 'no'], annullata: ['Annullata', ''] };
 function righeHtml(p, withCheck) {
   return `<div class="req-lines">${p.righe.map(r => {

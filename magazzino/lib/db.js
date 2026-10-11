@@ -172,6 +172,7 @@ async function migrate() {
     -- come vuole ricevere la merce chi prenota: ritiro in magazzino oppure spedizione (con indirizzo)
     alter table prenotazioni add column if not exists consegna text not null default '';
     alter table prenotazioni add column if not exists indirizzo text not null default '';
+    alter table prenotazioni add column if not exists serve_entro date; -- spedizione: data entro cui serve la merce (almeno 72 ore dopo l'ordine)
     -- scansione: codice GTIN dell'articolo (dal codice a barre) e lotto/scadenza di ogni carico
     alter table articoli add column if not exists gtin text not null default '';
     alter table articoli add column if not exists produttore text not null default '';

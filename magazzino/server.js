@@ -89,7 +89,7 @@ async function prenotazioni(where, params) {
     ${where} order by p.creata_il desc limit 200`, params);
   return rows.map(p => ({ id: p.id, numero: p.numero, stato: p.stato, note: p.note, motivo: p.motivo, creataIl: p.creata_il,
     gestitaIl: p.gestita_il, gestitaDa: p.gestita_nome, utente: p.utente_nome, utenteEmail: p.utente_email, utenteFigura: p.utente_figura || '',
-    utenteId: p.utente_id, consegna: p.consegna || '', indirizzo: p.indirizzo || '', righe: p.righe }));
+    utenteId: p.utente_id, consegna: p.consegna || '', indirizzo: p.indirizzo || '', serveEntro: p.serve_entro || null, righe: p.righe }));
 }
 
 /* ---------- stato dell'app ---------- */
@@ -114,6 +114,9 @@ app.get('/api/state', needUser, wrap(async (req, res) => {
 }));
 
 /* ---------- prenotazioni (clienti) ---------- */
+// Spedizione: almeno 72 ore di anticipo → prima data possibile = il giorno (ora italiana) fra 72 ore
+const primaDataSpedizione = () => new Date(Date.now() + 72 * 3600e3).toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' });
+app.get('/api/spedizione/prima-data', needUser, (req, res) => res.json({ data: primaDataSpedizione() }));
 app.post('/api/prenotazioni', needUser, wrap(async (req, res) => {
   const righe = (Array.isArray(req.body.righe) ? req.body.righe : [])
     .map(r => ({ articoloId: str(r.articoloId, 64), quantita: int(r.quantita, 0, 100000) }))
@@ -125,6 +128,13 @@ app.post('/api/prenotazioni', needUser, wrap(async (req, res) => {
   if (!consegna) return bad(res, 400, 'Scegli se passi a ritirare o se vuoi la spedizione.');
   const indirizzo = consegna === 'spedizione' ? str(req.body.indirizzo, 300) : '';
   if (consegna === 'spedizione' && indirizzo.length < 5) return bad(res, 400, 'Scrivi dove spedire (studio o indirizzo).');
+  let serveEntro = null;
+  if (consegna === 'spedizione') {
+    serveEntro = /^\d{4}-\d{2}-\d{2}$/.test(str(req.body.serveEntro, 10)) ? str(req.body.serveEntro, 10) : '';
+    if (!serveEntro) return bad(res, 400, 'Scrivi entro quando ti serve la spedizione.');
+    const minima = primaDataSpedizione();
+    if (serveEntro < minima) return bad(res, 400, `La spedizione deve essere almeno 72 ore dopo l'invio dell'ordine: la prima data possibile è il ${minima.split('-').reverse().join('/')}.`);
+  }
   const id = db.newId();
   const numero = await db.tx(async qq => {
     // blocca le righe degli articoli: due prenotazioni contemporanee non possono superare la giacenza
@@ -139,8 +149,8 @@ app.post('/api/prenotazioni', needUser, wrap(async (req, res) => {
       if (r.quantita > disp) throw fail(409, `«${a.nome}»: ne restano solo ${Math.max(0, disp)} ${a.unita}: correggi la quantità.`);
       r.nome = a.nome; r.unita = a.unita;
     }
-    const { rows } = await qq('insert into prenotazioni (id, utente_id, note, consegna, indirizzo) values ($1,$2,$3,$4,$5) returning numero',
-      [id, req.user.id, str(req.body.note, 500), consegna, indirizzo]);
+    const { rows } = await qq('insert into prenotazioni (id, utente_id, note, consegna, indirizzo, serve_entro) values ($1,$2,$3,$4,$5,$6) returning numero',
+      [id, req.user.id, str(req.body.note, 500), consegna, indirizzo, serveEntro]);
     for (const r of righe) {
       await qq('insert into prenotazione_righe (id, prenotazione_id, articolo_id, nome, unita, quantita) values ($1,$2,$3,$4,$5,$6)',
         [db.newId(), id, r.articoloId, r.nome, r.unita, r.quantita]);
@@ -148,7 +158,7 @@ app.post('/api/prenotazioni', needUser, wrap(async (req, res) => {
     return rows[0].numero;
   });
   avvisaAdmin({ title: `Nuova prenotazione n. ${numero}`,
-    body: `${req.user.name}: ${righe.length} ${righe.length === 1 ? 'articolo' : 'articoli'} · ${consegna === 'spedizione' ? 'da spedire a ' + indirizzo : 'passa a ritirare'}. Tocca per confermare o rifiutare.`,
+    body: `${req.user.name}: ${righe.length} ${righe.length === 1 ? 'articolo' : 'articoli'} · ${consegna === 'spedizione' ? `da spedire a ${indirizzo} entro il ${serveEntro.split('-').reverse().join('/')}` : 'passa a ritirare'}. Tocca per confermare o rifiutare.`,
     url: '/?vista=richieste', tag: 'prenotazione-' + id });
   res.json({ ok: true, id, numero });
 }));
@@ -178,7 +188,7 @@ app.post('/api/prenotazioni/:id/conferma', needAdmin, wrap(async (req, res) => {
     return p;
   });
   push.sendToUsers([p.uid], { title: `Prenotazione n. ${p.numero} confermata`,
-    body: p.consegna === 'spedizione' ? `Il magazzino ha confermato: la merce verrà spedita a ${p.indirizzo}.`
+    body: p.consegna === 'spedizione' ? `Il magazzino ha confermato: la merce verrà spedita a ${p.indirizzo}${p.serve_entro ? ' entro il ' + String(p.serve_entro).split('-').reverse().join('/') : ''}.`
       : p.consegna === 'ritiro' ? 'Il magazzino ha confermato: puoi passare a ritirare.' : 'Il magazzino ha confermato la tua richiesta.',
     url: '/?vista=mie', tag: 'esito-' + p.id }).catch(() => {});
   res.json({ ok: true });
