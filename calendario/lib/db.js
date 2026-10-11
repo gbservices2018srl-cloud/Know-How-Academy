@@ -113,6 +113,13 @@ async function migrate() {
       primary key (event_id, category_id)
     );
     alter table users add column if not exists sso_id text unique;
+    -- persone invitate una per una (oltre o al posto delle categorie)
+    create table if not exists event_users (
+      event_id text not null references events(id) on delete cascade,
+      user_id text not null references users(id) on delete cascade,
+      primary key (event_id, user_id)
+    );
+    create index if not exists event_users_user_idx on event_users(user_id);
   `);
 }
 

@@ -175,22 +175,25 @@ const isTime = s => /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
 const EVENT_COLS = `e.id, e.title, e.type_id, e.location_id, e.location_note, e.start_date, e.end_date, e.all_day,
   to_char(e.start_time, 'HH24:MI') as start_time, to_char(e.end_time, 'HH24:MI') as end_time,
   e.description, e.link, e.all_staff, e.rsvp,
-  coalesce((select array_agg(category_id) from event_categories ec where ec.event_id = e.id), '{}') as categories`;
+  coalesce((select array_agg(category_id) from event_categories ec where ec.event_id = e.id), '{}') as categories,
+  coalesce((select array_agg(user_id) from event_users eu where eu.event_id = e.id), '{}') as people`;
 const shape = e => ({ id: e.id, title: e.title, typeId: e.type_id, locationId: e.location_id, locationNote: e.location_note,
   start: e.start_date, end: e.end_date || e.start_date, allDay: e.all_day, startTime: e.start_time, endTime: e.end_time,
-  description: e.description, link: e.link, allStaff: e.all_staff, categories: e.categories, rsvp: e.rsvp,
+  description: e.description, link: e.link, allStaff: e.all_staff, categories: e.categories, people: e.people || [], rsvp: e.rsvp,
   ...(e.my_rsvp !== undefined ? { myRsvp: e.my_rsvp } : {}), ...(e.att ? { att: e.att } : {}) });
 
 // Chi è chiamato a rispondere a un evento: lo staff attivo che può vederlo (gli amministratori no).
 const AUDIENCE = (ev, usr) => `${usr}.active and ${usr}.role = 'staff' and (${ev}.all_staff or exists (select 1 from event_categories ec
-  join user_categories uc on uc.category_id = ec.category_id where ec.event_id = ${ev}.id and uc.user_id = ${usr}.id))`;
+  join user_categories uc on uc.category_id = ec.category_id where ec.event_id = ${ev}.id and uc.user_id = ${usr}.id)
+  or exists (select 1 from event_users eu where eu.event_id = ${ev}.id and eu.user_id = ${usr}.id))`;
 
 // Il controllo di chi vede cosa avviene qui sul server: un collaboratore non riceve mai gli eventi non suoi.
 function visibilityClause(user, params) {
   if (user.role === 'admin') return 'true';
   params.push(user.id);
   return `(e.all_staff or exists (select 1 from event_categories ec join user_categories uc on uc.category_id = ec.category_id
-    where ec.event_id = e.id and uc.user_id = $${params.length}))`;
+    where ec.event_id = e.id and uc.user_id = $${params.length})
+    or exists (select 1 from event_users eu where eu.event_id = e.id and eu.user_id = $${params.length}))`;
 }
 
 app.get('/api/events', needUser, wrap(async (req, res) => {
@@ -216,7 +219,7 @@ function eventFields(b) {
     title: str(b.title, 160), typeId: str(b.typeId, 64) || null, locationId: str(b.locationId, 64) || null,
     locationNote: str(b.locationNote, 200), start: str(b.start, 10), end: str(b.end, 10), allDay: !!b.allDay,
     startTime: str(b.startTime, 5), endTime: str(b.endTime, 5), description: str(b.description, 5000),
-    link: str(b.link, 500), allStaff: !!b.allStaff, categories: ids(b.categories), rsvp: b.rsvp !== false,
+    link: str(b.link, 500), allStaff: !!b.allStaff, categories: ids(b.categories), people: ids(b.people), rsvp: b.rsvp !== false,
   };
   if (!f.title) return 'Manca il titolo.';
   if (!isDate(f.start)) return 'Manca la data.';
@@ -229,14 +232,17 @@ function eventFields(b) {
     if (f.endTime && f.end === f.start && f.endTime <= f.startTime) return 'L\'ora di fine è prima dell\'inizio.';
   }
   if (f.link && !/^https?:\/\//i.test(f.link)) f.link = 'https://' + f.link;
-  if (!f.allStaff && !f.categories.length) return 'Scegli chi può vedere l\'evento: tutto lo staff o almeno una categoria.';
-  if (f.allStaff) f.categories = [];
+  if (!f.allStaff && !f.categories.length && !f.people.length) return 'Scegli chi può vedere l\'evento: tutto lo staff, almeno una categoria o almeno una persona.';
+  if (f.allStaff) { f.categories = []; f.people = []; }
   return f;
 }
-async function saveCategories(eventId, cats) {
+async function saveCategories(eventId, cats, people = []) {
   await db.q('delete from event_categories where event_id = $1', [eventId]);
   if (cats.length) await db.q(`insert into event_categories (event_id, category_id)
     select $1, id from categories where id = any($2) on conflict do nothing`, [eventId, cats]);
+  await db.q('delete from event_users where event_id = $1', [eventId]);
+  if (people.length) await db.q(`insert into event_users (event_id, user_id)
+    select $1, id from users where id = any($2) on conflict do nothing`, [eventId, people]);
 }
 app.post('/api/events', needAdmin, wrap(async (req, res) => {
   const f = eventFields(req.body);
@@ -245,7 +251,7 @@ app.post('/api/events', needAdmin, wrap(async (req, res) => {
   await db.q(`insert into events (id, title, type_id, location_id, location_note, start_date, end_date, all_day, start_time, end_time,
     description, link, all_staff, updated_by, rsvp) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
     [id, f.title, f.typeId, f.locationId, f.locationNote, f.start, f.end, f.allDay, f.startTime, f.endTime, f.description, f.link, f.allStaff, req.user.name, f.rsvp]);
-  await saveCategories(id, f.categories);
+  await saveCategories(id, f.categories, f.people);
   res.json({ id });
 }));
 app.put('/api/events/:id', needAdmin, wrap(async (req, res) => {
@@ -255,7 +261,7 @@ app.put('/api/events/:id', needAdmin, wrap(async (req, res) => {
     start_time=$9, end_time=$10, description=$11, link=$12, all_staff=$13, updated_by=$14, rsvp=$15, updated_at=now() where id=$1`,
     [req.params.id, f.title, f.typeId, f.locationId, f.locationNote, f.start, f.end, f.allDay, f.startTime, f.endTime, f.description, f.link, f.allStaff, req.user.name, f.rsvp]);
   if (!r.rowCount) return bad(res, 404, 'Evento non trovato.');
-  await saveCategories(req.params.id, f.categories);
+  await saveCategories(req.params.id, f.categories, f.people);
   res.json({ ok: true });
 }));
 app.delete('/api/events/:id', needAdmin, wrap(async (req, res) => {

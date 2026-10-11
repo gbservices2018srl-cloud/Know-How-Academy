@@ -97,6 +97,14 @@ button.chip:hover{border-color:color-mix(in srgb,var(--c,var(--accent)) 50%,var(
 .chip.on{background:color-mix(in srgb,var(--c,var(--accent)) 14%,var(--surface));border-color:color-mix(in srgb,var(--c,var(--accent)) 50%,transparent);color:var(--fg)}
 .chip .dot{width:8px;height:8px;border-radius:50%;background:var(--c,var(--accent))}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
+.aud-some{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.aud-some[hidden]{display:none}
+.chip .x{border:0;background:none;color:inherit;font:inherit;padding:0 0 0 2px;cursor:pointer;opacity:.7}
+.psearch{position:relative}
+.psearch input{width:100%}
+.pres{position:absolute;left:0;right:0;top:100%;z-index:5;background:var(--surface);border:1px solid var(--line);border-radius:10px;margin-top:4px;box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:260px;overflow:auto}
+.pres button{display:block;width:100%;text-align:left;border:0;background:none;padding:10px 12px;font:inherit;cursor:pointer;border-bottom:1px solid var(--line)}
+.pres button:hover,.pres button:focus{background:var(--surface-3)}
 .tag{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--c,var(--accent)) 14%,transparent);color:var(--c,var(--accent));white-space:nowrap}
 .tag.plain{background:var(--surface-3);color:var(--muted)}
 .empty{padding:28px 16px;text-align:center;color:var(--muted)}
@@ -499,7 +507,12 @@ function whenLabel(e) {
   return cap(longDate(e.start)) + (e.allDay ? ' · tutto il giorno' : ` · ${e.endTime ? e.startTime + ' – ' + e.endTime : 'ore ' + e.startTime}`);
 }
 function placeLabel(e) { const l = locOf(e.locationId); return [l?.name, e.locationNote].filter(Boolean).join(' · '); }
-function audienceLabel(e) { return e.allStaff ? 'Tutto lo staff' : e.categories.map(catName).filter(Boolean).join(', '); }
+const userName = id => S.users.find(u => u.id === id)?.name || '';
+function audienceLabel(e) {
+  if (e.allStaff) return 'Tutto lo staff';
+  const ppl = (e.people || []).map(userName).filter(Boolean);
+  return [...e.categories.map(catName).filter(Boolean), ...(ppl.length > 3 ? [`${ppl.slice(0, 3).join(', ')} e altri ${ppl.length - 3}`] : ppl)].join(', ') || 'Persone invitate';
+}
 
 function evCard(e, { withDate = false, day = null } = {}) {
   const t = typeOf(e.typeId), place = placeLabel(e);
@@ -883,8 +896,8 @@ async function loadAttendance(sheet, e, open = '') {
 function openForm(e, date) {
   const isNew = !e?.id;
   const v = e || { title: '', typeId: S.types[0]?.id || '', locationId: '', locationNote: '', start: date || today(), end: date || today(),
-    allDay: false, startTime: '09:00', endTime: '13:00', description: '', link: '', allStaff: true, categories: [], rsvp: true };
-  const cats = new Set(v.categories);
+    allDay: false, startTime: '09:00', endTime: '13:00', description: '', link: '', allStaff: true, categories: [], people: [], rsvp: true };
+  const cats = new Set(v.categories), people = new Set(v.people || []);
   const sheet = openDialog(`
     ${head(isNew ? 'Nuovo evento' : 'Modifica evento')}
     <form class="sh-body" id="evf" novalidate>
@@ -912,8 +925,15 @@ function openForm(e, date) {
         <label class="field"><span>Ora di fine</span><input type="time" name="endTime" value="${v.endTime || ''}" step="300"></label>
       </div>
       <div class="field"><span>Chi può vederlo</span>
-        <div class="seg" style="align-self:flex-start"><button type="button" data-aud="all" class="${v.allStaff ? 'on' : ''}">Tutto lo staff</button><button type="button" data-aud="some" class="${v.allStaff ? '' : 'on'}">Solo alcune categorie</button></div>
-        <div class="chips" id="cats" style="margin-top:4px" ${v.allStaff ? 'hidden' : ''}>${S.categories.map(c => `<button type="button" class="chip ${cats.has(c.id) ? 'on' : ''}" data-cat="${c.id}">${esc(c.name)}</button>`).join('')}</div>
+        <div class="seg" style="align-self:flex-start"><button type="button" data-aud="all" class="${v.allStaff ? 'on' : ''}">Tutto lo staff</button><button type="button" data-aud="some" class="${v.allStaff ? '' : 'on'}">Categorie o persone</button></div>
+        <div id="aud-some" class="aud-some" ${v.allStaff ? 'hidden' : ''}>
+          <div class="sub" style="font-size:13px;font-weight:600">Categorie</div>
+          <div class="chips" id="cats">${S.categories.map(c => `<button type="button" class="chip ${cats.has(c.id) ? 'on' : ''}" data-cat="${c.id}">${esc(c.name)}</button>`).join('')}</div>
+          <div class="sub" style="font-size:13px;font-weight:600;margin-top:6px">Persone singole <span class="muted" style="font-weight:500">(anche senza categoria)</span></div>
+          <div class="chips" id="ppl"></div>
+          <div class="psearch"><input id="psq" type="search" placeholder="🔍 Cerca per nome o cognome…" autocomplete="off" aria-label="Cerca una persona">
+            <div class="pres" id="pres" hidden></div></div>
+        </div>
         <span class="hint" id="reach"></span>
       </div>
       <label class="check"><input type="checkbox" name="rsvp" ${v.rsvp !== false ? 'checked' : ''}>Chiedi la conferma di presenza (ci sarò / non ci sarò)</label>
@@ -930,13 +950,35 @@ function openForm(e, date) {
   let allStaff = v.allStaff;
   const reach = () => {
     const staff = S.users.filter(u => u.active && u.role === 'staff');
-    const n = allStaff ? staff.length : staff.filter(u => u.categories.some(c => cats.has(c))).length;
-    $('#reach', sheet).textContent = !allStaff && !cats.size ? 'Scegli almeno una categoria.' : `Lo vedranno ${n} ${n === 1 ? 'persona' : 'persone'} dello staff, oltre agli amministratori.`;
+    const n = allStaff ? staff.length : staff.filter(u => u.categories.some(c => cats.has(c)) || people.has(u.id)).length;
+    $('#reach', sheet).textContent = !allStaff && !cats.size && !people.size ? 'Scegli almeno una categoria o una persona.' : `Lo vedranno ${n} ${n === 1 ? 'persona' : 'persone'} dello staff, oltre agli amministratori.`;
   };
-  reach();
+  // persone singole: chip con ✕ e ricerca per nome o cognome (senza accenti, anche cognome prima del nome)
+  const norm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const drawPeople = () => {
+    $('#ppl', sheet).innerHTML = [...people].map(id => { const u = S.users.find(x => x.id === id);
+      return `<span class="chip on">${esc(u ? u.name : 'Persona non più attiva')}<button type="button" class="x" data-prm="${id}" aria-label="Togli ${esc(u?.name || '')}">✕</button></span>`; }).join('');
+  };
+  const drawRes = () => {
+    const q = norm($('#psq', sheet).value).trim(), box = $('#pres', sheet);
+    if (!q) { box.hidden = true; return; }
+    const parti = q.split(/\s+/);
+    const l = S.users.filter(u => u.active && u.role === 'staff' && !people.has(u.id) && parti.every(p => norm(u.name + ' ' + (u.username || '')).includes(p)))
+      .sort((a, b) => a.name.localeCompare(b.name)).slice(0, 8);
+    box.innerHTML = l.length ? l.map(u => `<button type="button" data-padd="${u.id}"><b>${esc(u.name)}</b>${u.categories.length ? `<span class="muted"> · ${esc(u.categories.map(catName).filter(Boolean).join(', '))}</span>` : ''}</button>`).join('')
+      : '<div class="muted" style="padding:8px 10px">Nessuna persona trovata</div>';
+    box.hidden = false;
+  };
+  $('#psq', sheet).addEventListener('input', drawRes);
+  $('#psq', sheet).addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); $('#pres [data-padd]', sheet)?.click(); } });
+  drawPeople(); reach();
   sheet.addEventListener('click', ev => {
     const a = ev.target.closest('[data-aud]');
-    if (a) { allStaff = a.dataset.aud === 'all'; sheet.querySelectorAll('[data-aud]').forEach(b => b.classList.toggle('on', b === a)); $('#cats', sheet).hidden = allStaff; reach(); }
+    if (a) { allStaff = a.dataset.aud === 'all'; sheet.querySelectorAll('[data-aud]').forEach(b => b.classList.toggle('on', b === a)); $('#aud-some', sheet).hidden = allStaff; reach(); }
+    const pa = ev.target.closest('[data-padd]');
+    if (pa) { people.add(pa.dataset.padd); $('#psq', sheet).value = ''; $('#pres', sheet).hidden = true; drawPeople(); reach(); $('#psq', sheet).focus(); }
+    const pr = ev.target.closest('[data-prm]');
+    if (pr) { people.delete(pr.dataset.prm); drawPeople(); reach(); }
     const c = ev.target.closest('[data-cat]');
     if (c) { cats.has(c.dataset.cat) ? cats.delete(c.dataset.cat) : cats.add(c.dataset.cat); c.classList.toggle('on'); reach(); }
   });
@@ -966,7 +1008,7 @@ function openForm(e, date) {
   $('#save', sheet).onclick = async () => {
     const body = { title: f.title.value, typeId: f.typeId.value, locationId: f.locationId.value, locationNote: f.locationNote.value,
       start: f.start.value, end: f.end.value || f.start.value, allDay: f.allDay.checked, startTime: f.startTime.value, endTime: f.endTime.value,
-      description: f.description.value, link: f.link.value, allStaff, categories: [...cats], rsvp: f.rsvp.checked };
+      description: f.description.value, link: f.link.value, allStaff, categories: [...cats], people: [...people], rsvp: f.rsvp.checked };
     const btn = $('#save', sheet); btn.disabled = true;
     try {
       if (isNew) await api('/api/events', { method: 'POST', body }); else await api('/api/events/' + e.id, { method: 'PUT', body });
@@ -1008,7 +1050,7 @@ function drawEventRows() {
   $('#evrows').innerHTML = list.length ? `<div class="rows">${list.map(e => `<div class="row click" data-edit="${e.id}">${evDate(e)}
       <div class="grow"><div class="title">${esc(e.title)}</div>
         <div class="meta">${typeOf(e.typeId) ? `<span class="tag c-${colorOf(e)}">${esc(typeOf(e.typeId).name)}</span>` : ''}<span>${esc(e.start !== e.end ? whenLabel(e) : timeLabel(e))}</span>${placeLabel(e) ? `<span>${ic('pin', 'i hide-m')} ${esc(placeLabel(e))}</span>` : ''}</div>
-        <div class="meta" style="margin-top:6px">${e.allStaff ? '<span class="tag plain">Tutto lo staff</span>' : e.categories.map(c => `<span class="tag plain">${esc(catName(c))}</span>`).join('')}${rsvpBadge(e)}</div></div>
+        <div class="meta" style="margin-top:6px">${e.allStaff ? '<span class="tag plain">Tutto lo staff</span>' : e.categories.map(c => `<span class="tag plain">${esc(catName(c))}</span>`).join('') + ((e.people || []).length ? `<span class="tag plain">${(e.people || []).length === 1 ? esc(userName(e.people[0]) || '1 persona') : (e.people || []).length + ' persone'}</span>` : '')}${rsvpBadge(e)}</div></div>
       ${e.rsvp ? `<button class="btn sm" data-att="${e.id}">${ic('users')}<span class="hide-m">Presenze</span></button>` : ''}
       <button class="btn icon ghost" data-dupe="${e.id}" title="Duplica" aria-label="Duplica">${ic('copy')}</button>
     </div>`).join('')}</div>`
