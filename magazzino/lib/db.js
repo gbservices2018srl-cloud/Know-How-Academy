@@ -172,6 +172,12 @@ async function migrate() {
     -- come vuole ricevere la merce chi prenota: ritiro in magazzino oppure spedizione (con indirizzo)
     alter table prenotazioni add column if not exists consegna text not null default '';
     alter table prenotazioni add column if not exists indirizzo text not null default '';
+    -- scansione: codice GTIN dell'articolo (dal codice a barre) e lotto/scadenza di ogni carico
+    alter table articoli add column if not exists gtin text not null default '';
+    alter table articoli add column if not exists produttore text not null default '';
+    alter table movimenti add column if not exists lotto text not null default '';
+    alter table movimenti add column if not exists scadenza date;
+    create index if not exists articoli_gtin_idx on articoli(gtin) where gtin <> '';
   `);
   await q(`do $$ begin
     if exists (select 1 from pg_constraint where conrelid = 'prenotazione_righe'::regclass and conname = 'prenotazione_righe_articolo_id_fkey' and confdeltype <> 'n') then

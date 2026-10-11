@@ -7,6 +7,8 @@ const express = require('express');
 const db = require('./lib/db');
 const push = require('./lib/push');
 const bolla = require('./lib/bolla');
+const etichetta = require('./lib/etichetta');
+const fs = require('fs');
 const mail = require('../accessi/lib/mail');
 
 const app = express();
@@ -17,6 +19,7 @@ app.use((req, res, next) => {
   next();
 });
 app.use('/api/bolla/leggi', express.json({ limit: '28mb' })); // foto o PDF della bolla
+app.use('/api/scan/etichetta', express.json({ limit: '12mb' })); // foto dell'etichetta
 app.use(express.json({ limit: '300kb' }));
 
 const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -52,7 +55,9 @@ app.use('/api', (req, res, next) => (['GET', 'HEAD', 'DELETE'].includes(req.meth
 // Disponibile = giacenza − quantità già prenotate (in attesa di conferma).
 const ARTICOLI_SQL = `
   select a.*, coalesce(imp.q, 0)::int as impegnato, coalesce(arr.q, 0)::int as in_arrivo,
-         (a.giacenza - coalesce(imp.q, 0))::int as disponibile, f.nome as fornitore_nome
+         (a.giacenza - coalesce(imp.q, 0))::int as disponibile, f.nome as fornitore_nome,
+         (select min(m.scadenza) from movimenti m where m.articolo_id = a.id and m.delta > 0 and m.scadenza is not null
+            and m.scadenza > now() - interval '60 days')::text as scadenza_vicina
   from articoli a
   left join fornitori f on f.id = a.fornitore_id
   left join (select r.articolo_id, sum(r.quantita) q from prenotazione_righe r join prenotazioni p on p.id = r.prenotazione_id
@@ -61,17 +66,18 @@ const ARTICOLI_SQL = `
              where o.stato in ('da_inviare','inviato') group by r.articolo_id) arr on arr.articolo_id = a.id`;
 
 const shapeArticolo = (a, admin) => ({
-  id: a.id, categoriaId: a.categoria_id, nome: a.nome, codice: a.codice, unita: a.unita, note: a.note,
+  id: a.id, categoriaId: a.categoria_id, nome: a.nome, codice: a.codice, unita: a.unita, note: a.note, produttore: a.produttore || '',
   disponibile: Math.max(0, a.disponibile),
   ...(admin ? { giacenza: a.giacenza, impegnato: a.impegnato, inArrivo: a.in_arrivo, scortaMinima: a.scorta_minima,
-    livelloCarico: a.livello_carico, fornitoreId: a.fornitore_id, fornitoreNome: a.fornitore_nome, attivo: a.attivo } : {}),
+    livelloCarico: a.livello_carico, fornitoreId: a.fornitore_id, fornitoreNome: a.fornitore_nome, attivo: a.attivo, gtin: a.gtin || '',
+    scadenzaVicina: a.scadenza_vicina || null } : {}),
 });
 
-async function registraMovimento(qq, articoloId, delta, causale, riferimento, utenteId) {
+async function registraMovimento(qq, articoloId, delta, causale, riferimento, utenteId, lotto = '', scadenza = null) {
   const { rows } = await qq('update articoli set giacenza = giacenza + $2, aggiornato_il = now() where id = $1 returning giacenza', [articoloId, delta]);
   if (!rows[0]) throw fail(404, 'Articolo non trovato');
-  await qq(`insert into movimenti (id, articolo_id, delta, giacenza_dopo, causale, riferimento, utente_id) values ($1,$2,$3,$4,$5,$6,$7)`,
-    [db.newId(), articoloId, delta, rows[0].giacenza, causale, riferimento, utenteId]);
+  await qq(`insert into movimenti (id, articolo_id, delta, giacenza_dopo, causale, riferimento, utente_id, lotto, scadenza) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    [db.newId(), articoloId, delta, rows[0].giacenza, causale, riferimento, utenteId, lotto || '', scadenza || null]);
   return rows[0].giacenza;
 }
 
@@ -250,6 +256,8 @@ function datiArticolo(b, parziale) {
   if (!parziale || b.scortaMinima !== undefined) o.scorta_minima = int(b.scortaMinima) ?? 0;
   if (!parziale || b.livelloCarico !== undefined) o.livello_carico = int(b.livelloCarico) ?? 0;
   if (!parziale || b.fornitoreId !== undefined) o.fornitore_id = str(b.fornitoreId, 64) || null;
+  if (b.gtin !== undefined) o.gtin = str(b.gtin, 14).replace(/\D/g, '');
+  if (b.produttore !== undefined) o.produttore = str(b.produttore, 120);
   if (b.attivo !== undefined) o.attivo = !!b.attivo;
   return o;
 }
@@ -258,8 +266,8 @@ app.post('/api/articoli', needAdmin, wrap(async (req, res) => {
   const giacenza = int(req.body.giacenza) ?? 0;
   const id = db.newId();
   await db.tx(async qq => {
-    await qq(`insert into articoli (id, categoria_id, nome, codice, unita, note, scorta_minima, livello_carico, fornitore_id, giacenza)
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,0)`, [id, o.categoria_id, o.nome, o.codice, o.unita, o.note, o.scorta_minima, o.livello_carico, o.fornitore_id]);
+    await qq(`insert into articoli (id, categoria_id, nome, codice, unita, note, scorta_minima, livello_carico, fornitore_id, giacenza, gtin, produttore)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,$10,$11)`, [id, o.categoria_id, o.nome, o.codice, o.unita, o.note, o.scorta_minima, o.livello_carico, o.fornitore_id, o.gtin || '', o.produttore || '']);
     if (giacenza > 0) await registraMovimento(qq, id, giacenza, 'Giacenza iniziale', '', req.user.id);
   });
   res.json({ id });
@@ -287,7 +295,7 @@ app.post('/api/articoli/:id/giacenza', needAdmin, wrap(async (req, res) => {
   res.json({ giacenza: g });
 }));
 app.get('/api/articoli/:id/movimenti', needAdmin, wrap(async (req, res) => {
-  const { rows } = await db.q(`select m.delta, m.giacenza_dopo, m.causale, m.riferimento, m.creato_il, u.name as utente
+  const { rows } = await db.q(`select m.delta, m.giacenza_dopo, m.causale, m.riferimento, m.creato_il, m.lotto, m.scadenza::text as scadenza, u.name as utente
     from movimenti m left join users u on u.id = m.utente_id where m.articolo_id = $1 order by m.creato_il desc limit 100`, [req.params.id]);
   res.json({ movimenti: rows });
 }));
@@ -404,6 +412,70 @@ app.post('/api/bolla/carica', needAdmin, wrap(async (req, res) => {
     await qq('insert into bolle (id, fornitore_id, fornitore_nome, numero, data, righe, giacenza, utente_id) values ($1,$2,$3,$4,$5,$6,$7,$8)',
       [db.newId(), fid, forn?.nome || '', numero, data, righe.length, caricaGiacenza, req.user.id]);
     return { creati, caricati, fornitoreNuovo: !b.fornitoreId && !!fid };
+  });
+  res.json({ ok: true, ...out });
+}));
+
+
+/* ---------- scansione di un prodotto ---------- */
+// La fotocamera legge il codice a barre/DataMatrix nel browser (libreria ZXing servita da qui) e il testo arriva a
+// /api/scan/codice; la foto dell'etichetta va a /api/scan/etichetta (Claude legge nome, REF, lotto, scadenza);
+// /api/scan/carica crea l'articolo se è nuovo e carica la quantità con lotto e scadenza.
+const ZXING = ['umd/index.min.js', 'umd/index.js'].map(f => path.join(__dirname, '..', 'node_modules', '@zxing', 'library', f)).find(f => fs.existsSync(f));
+app.get('/vendor/zxing.js', (req, res) => ZXING ? res.sendFile(ZXING, { maxAge: '7d' }) : res.status(404).type('js').send('/* ZXing non installato */'));
+
+const cercaArticolo = async (c) => {
+  const conds = [], params = [];
+  if (c.gtin) { params.push(c.gtin.replace(/^0+/, '')); conds.push(`ltrim(a.gtin, '0') = $${params.length}`); }
+  for (const k of [c.ref, c.grezzo].filter(Boolean)) { params.push(k.toLowerCase()); conds.push(`(a.codice <> '' and lower(a.codice) = $${params.length})`); }
+  if (!conds.length) return null;
+  const { rows } = await db.q(`${ARTICOLI_SQL} where ${conds.join(' or ')} order by a.attivo desc, a.aggiornato_il desc limit 1`, params);
+  return rows[0] ? shapeArticolo(rows[0], true) : null;
+};
+app.post('/api/scan/codice', needAdmin, wrap(async (req, res) => {
+  const c = etichetta.interpreta(str(req.body.testo, 300));
+  res.json({ codice: c, articolo: await cercaArticolo(c) });
+}));
+app.post('/api/scan/etichetta', needAdmin, wrap(async (req, res) => {
+  const ora = Date.now(), l = (letture.get(req.user.id) || []).filter(t => t > ora - 3600e3);
+  if (l.length >= 80) return bad(res, 429, "Hai letto molte etichette nell'ultima ora: riprova più tardi.");
+  const files = (Array.isArray(req.body.files) ? req.body.files : []).slice(0, 2)
+    .map(f => ({ tipo: str(f.tipo, 40).toLowerCase(), dati: String(f.dati || '').replace(/^data:[^,]*,/, '') }))
+    .filter(f => f.dati && /^image\/(jpeg|png|webp)$/.test(f.tipo));
+  if (!files.length) return bad(res, 400, "Scatta la foto dell'etichetta.");
+  if (files.some(f => !/^[A-Za-z0-9+/=]+$/.test(f.dati))) return bad(res, 400, 'File non valido.');
+  l.push(ora); letture.set(req.user.id, l);
+  const codice = str(req.body.codice, 300);
+  const e = await etichetta.leggiEtichetta(files, codice);
+  const c = codice ? etichetta.interpreta(codice) : {};
+  const art = await cercaArticolo({ gtin: c.gtin || e.gtin, ref: c.ref || e.ref, grezzo: c.grezzo });
+  res.json({ etichetta: e, articolo: art });
+}));
+app.post('/api/scan/carica', needAdmin, wrap(async (req, res) => {
+  const b = req.body || {};
+  const quantita = int(b.quantita, 0, 1e6);
+  if (!quantita) return bad(res, 400, 'Scrivi la quantità da caricare.');
+  const lotto = str(b.lotto, 40), scad = str(b.scadenza, 10);
+  const scadenza = /^\d{4}-\d{2}-\d{2}$/.test(scad) ? scad : null;
+  const gtin = str(b.gtin, 14).replace(/\D/g, '');
+  const out = await db.tx(async qq => {
+    let id = str(b.articoloId, 64), nuovo = false;
+    if (id) {
+      const { rows } = await qq('select id from articoli where id = $1 for update', [id]);
+      if (!rows[0]) throw fail(400, "L'articolo non esiste più: aggiorna la pagina.");
+      // completa i dati mancanti con quelli letti
+      await qq(`update articoli set gtin = case when gtin = '' then $2 else gtin end, codice = case when codice = '' then $3 else codice end,
+        produttore = case when produttore = '' then $4 else produttore end, attivo = true, aggiornato_il = now() where id = $1`,
+        [id, gtin, str(b.codice, 60), str(b.produttore, 120)]);
+    } else {
+      const o = datiArticolo({ ...b, scortaMinima: 0, livelloCarico: 0 }, false);
+      id = db.newId(); nuovo = true;
+      await qq(`insert into articoli (id, categoria_id, nome, codice, unita, note, scorta_minima, livello_carico, fornitore_id, giacenza, gtin, produttore)
+        values ($1,$2,$3,$4,$5,$6,0,0,$7,0,$8,$9)`, [id, o.categoria_id, o.nome, o.codice, o.unita, o.note, o.fornitore_id, gtin, str(b.produttore, 120)]);
+    }
+    const g = await registraMovimento(qq, id, quantita, 'Carico da scansione', lotto ? `Lotto ${lotto}${scadenza ? ' · scad. ' + scadenza.split('-').reverse().join('/') : ''}` : '',
+      req.user.id, lotto, scadenza);
+    return { id, nuovo, giacenza: g };
   });
   res.json({ ok: true, ...out });
 }));
