@@ -169,6 +169,7 @@ app.get('/api/state', needUser, wrap(async (req, res) => {
   res.json(out);
 }));
 
+const ACC = require('../accessi/lib/store').SCHEMA; // schema dell'accesso unico (centro notifiche)
 /* ---------- eventi ---------- */
 const isDate = s => /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s + 'T00:00:00Z'));
 const isTime = s => /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
@@ -367,7 +368,9 @@ app.get('/api/events/:id/attendance', needAdmin, wrap(async (req, res) => {
   const { rows } = await db.q(`select u.id, u.name, u.username, r.status,
       to_char(r.updated_at at time zone 'Europe/Rome', 'YYYY-MM-DD HH24:MI') as answered_at,
       coalesce((select array_agg(category_id) from user_categories where user_id = u.id), '{}') as categories,
-      exists (select 1 from push_subs s where s.user_id = u.id) as has_push
+      (exists (select 1 from push_subs s where s.user_id = u.id)
+        or exists (select 1 from ${ACC}.notif_subs ns where ns.user_id = u.sso_id
+          and coalesce((select attiva from ${ACC}.notif_prefs np where np.user_id = u.sso_id and np.app = 'calendario'), true))) as has_push
     from events e join users u on ${AUDIENCE('e', 'u')} left join rsvp r on r.event_id = e.id and r.user_id = u.id
     where e.id = $1 order by u.name`, [req.params.id]);
   const { rows: rem } = await db.q(`select to_char(sent_at at time zone 'Europe/Rome', 'YYYY-MM-DD HH24:MI') as sent_at, recipients, sent_by

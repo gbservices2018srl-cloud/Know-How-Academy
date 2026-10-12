@@ -5,6 +5,7 @@ const path = require('path');
 const express = require('express');
 const store = require('./lib/store');
 const mail = require('./lib/mail');
+const notifiche = require('./lib/notifiche');
 
 const PROD = process.env.NODE_ENV === 'production';
 const COOKIE = 'ag_sso';
@@ -693,6 +694,76 @@ app.post('/api/sso/ticket', wrap(async (req, res) => {
   res.json(t);
 }));
 
+
+/* ---------- centro notifiche (una sola iscrizione per tutte le app) ---------- */
+const str = (v, n) => String(v ?? '').trim().slice(0, n);
+// Le app tra cui scegliere: quelle che mandano notifiche e a cui la persona ha accesso
+const appNotificabili = req => Object.keys(notifiche.APP_NOTIFICHE).filter(k => req.user.owner || req.apps?.[k]);
+app.get('/api/notifiche', needUser, wrap(async (req, res) => {
+  const k = await notifiche.chiavi();
+  const { rows: pr } = await store.q('select app, attiva from notif_prefs where user_id = $1', [req.user.id]);
+  const { rows: dev } = await store.q('select count(*)::int n from notif_subs where user_id = $1', [req.user.id]);
+  const p = Object.fromEntries(pr.map(r => [r.app, r.attiva]));
+  res.json({ chiave: k.publicKey, dispositivi: dev[0].n,
+    app: appNotificabili(req).map(a => ({ key: a, nome: notifiche.APP_NOTIFICHE[a], attiva: p[a] !== false })) });
+}));
+app.post('/api/notifiche/iscrivi', needUser, wrap(async (req, res) => {
+  const s = req.body.subscription || {};
+  const endpoint = str(s.endpoint, 1000), p256dh = str(s.keys?.p256dh, 200), auth = str(s.keys?.auth, 100);
+  if (!/^https:\/\//.test(endpoint) || !p256dh || !auth) return bad(res, 400, 'Iscrizione non valida.');
+  await store.q(`insert into notif_subs (endpoint, user_id, p256dh, auth, device) values ($1,$2,$3,$4,$5)
+    on conflict (endpoint) do update set user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth, device = excluded.device`,
+    [endpoint, req.user.id, p256dh, auth, str(req.get('user-agent'), 300)]);
+  res.json({ ok: true });
+}));
+app.post('/api/notifiche/disiscrivi', needUser, wrap(async (req, res) => {
+  await store.q('delete from notif_subs where endpoint = $1 and user_id = $2', [str(req.body.endpoint, 1000), req.user.id]);
+  res.json({ ok: true });
+}));
+app.put('/api/notifiche/preferenze', needUser, wrap(async (req, res) => {
+  const a = str(req.body.app, 30);
+  if (!appNotificabili(req).includes(a)) return bad(res, 400, 'App non valida.');
+  await store.q(`insert into notif_prefs (user_id, app, attiva) values ($1,$2,$3)
+    on conflict (user_id, app) do update set attiva = excluded.attiva`, [req.user.id, a, req.body.attiva !== false]);
+  res.json({ ok: true });
+}));
+app.post('/api/notifiche/prova', needUser, wrap(async (req, res) => {
+  const a = appNotificabili(req)[0];
+  if (!a) return res.json({ ok: false });
+  // la prova passa senza guardare gli interruttori: serve a vedere se il dispositivo riceve
+  const k = await notifiche.chiavi();
+  const { rows } = await store.q('select endpoint, p256dh, auth from notif_subs where user_id = $1', [req.user.id]);
+  const webpush = require('web-push');
+  let ok = 0;
+  for (const s of rows) {
+    try {
+      await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+        JSON.stringify({ title: 'Notifiche attive', body: 'Da ora ricevi qui gli avvisi delle app To Smile che hai scelto.', url: PUBLIC_URL() + '/' }),
+        { TTL: 3600, urgency: 'high', vapidDetails: { subject: 'https://appgestione.it', publicKey: k.publicKey, privateKey: k.privateKey } });
+      ok++;
+    } catch (e) { if (e.statusCode === 404 || e.statusCode === 410) await store.q('delete from notif_subs where endpoint = $1', [s.endpoint]).catch(() => {}); }
+  }
+  res.json({ ok: ok > 0, dispositivi: ok });
+}));
+// Le app su altri servizi (Nuovalab, Ticket) mandano qui gli avvisi: chiave NOTIFY_KEY, persone per id dell'accesso unico o email.
+function needNotifyKey(req, res, next) {
+  const key = process.env.NOTIFY_KEY || '';
+  const given = String(req.get('authorization') || '').replace(/^Bearer\s+/i, '');
+  const crypto = require('crypto');
+  const ok = key.length >= 24 && given.length === key.length && crypto.timingSafeEqual(Buffer.from(given), Buffer.from(key));
+  return ok ? next() : bad(res, 401, 'Chiave non valida');
+}
+app.post('/api/notifiche/invia', needNotifyKey, wrap(async (req, res) => {
+  const a = str(req.body.app, 30);
+  if (!notifiche.APP_NOTIFICHE[a]) return bad(res, 400, 'App non valida.');
+  const ids = (Array.isArray(req.body.utenti) ? req.body.utenti : []).slice(0, 500).map(x => str(x, 64)).filter(Boolean);
+  const emails = (Array.isArray(req.body.email) ? req.body.email : []).slice(0, 500).map(x => str(x, 200).toLowerCase()).filter(Boolean);
+  if (emails.length) ids.push(...(await store.q('select id from users where lower(email) = any($1)', [emails])).rows.map(r => r.id));
+  const r = await notifiche.notifica(ids, a, { title: str(req.body.title, 120), body: str(req.body.body, 300), url: str(req.body.url, 500), tag: str(req.body.tag, 80) });
+  console.log(`Notifiche: ${a} «${str(req.body.title, 60)}» a ${new Set(ids).size} persone, raggiunte ${r.raggiunti.size}`);
+  res.json({ ok: true, raggiunti: r.raggiunti.size });
+}));
+
 /* ---------- pagine ---------- */
 const PUB = path.join(__dirname, 'public');
 const sendPage = file => (req, res) => { res.set('Cache-Control', 'no-store'); res.sendFile(path.join(PUB, file)); };
@@ -707,6 +778,9 @@ app.get('/admin', (req, res) => {
   sendPage('admin.html')(req, res);
 });
 app.get('/privacy', sendPage('privacy.html'));
+// App installabile (schermata Home) + service worker che riceve le notifiche di tutte le app
+app.get('/sw.js', (req, res) => { res.set({ 'Cache-Control': 'no-cache', 'Service-Worker-Allowed': '/' }); res.type('js').sendFile(path.join(PUB, 'sw.js')); });
+app.get('/manifest.webmanifest', (req, res) => { res.set('Cache-Control', 'no-cache'); res.type('application/manifest+json').sendFile(path.join(PUB, 'manifest.webmanifest')); });
 app.use('/static', express.static(path.join(PUB, 'static'), { maxAge: '7d' }));
 app.get('/favicon.ico', (req, res) => res.redirect('/static/icon.svg'));
 // Vecchi indirizzi della pagina dei riquadri
@@ -725,6 +799,7 @@ app.use((err, req, res, next) => {
 
 async function start() {
   await store.migrate();
+  await notifiche.migrate();
   await store.ensureOwner();
 }
 

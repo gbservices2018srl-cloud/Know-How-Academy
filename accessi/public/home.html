@@ -11,6 +11,11 @@
 <link rel="stylesheet" href="/static/accessi.css?v=3">
 <link rel="icon" href="/static/icon.svg">
 <meta name="theme-color" content="#4CAAAA">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="To Smile">
 <style>
 /* Layout: barra con logo e account, titolo, poi i riquadri delle app a cui l'utente ha accesso */
 .wrap{max-width:1000px;margin:0 auto;display:flex;flex-direction:column;gap:34px}
@@ -43,6 +48,18 @@ dialog form{padding:22px;display:flex;flex-direction:column;gap:14px}
 .row{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
 footer{color:var(--muted);font-size:13.5px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;border-top:1px solid var(--line);padding-top:18px}
 footer b{color:var(--fg);font-weight:600}
+.notif{padding:20px 22px;display:flex;flex-direction:column;gap:12px}
+.notif-h{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.notif-h h2{font-size:19px;display:flex;align-items:center;gap:8px}
+.notif p{margin:0;color:var(--muted);font-size:14.5px}
+.sw-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
+.sw{display:flex;justify-content:space-between;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-weight:600;font-size:14.5px;cursor:pointer}
+.sw input{appearance:none;-webkit-appearance:none;padding:0;border:0;margin:0;min-height:0;width:44px;height:26px;border-radius:13px;background:var(--line);position:relative;cursor:pointer;flex:none;transition:background .15s}
+.sw input::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .15s}
+.sw input:checked{background:var(--teal)}
+.sw input:checked::after{left:21px}
+.sw input:focus-visible{outline:3px solid var(--teal);outline-offset:2px}
+.passi{margin:0;padding-left:20px;color:var(--fg);font-size:14.5px;display:flex;flex-direction:column;gap:4px}
 @media (max-width:640px){.grid{grid-template-columns:1fr}.who .name{width:100%;text-align:right;margin:0}}
 @media (prefers-reduced-motion:reduce){.app{transition:none}.app:hover{transform:none}}
 </style>
@@ -58,6 +75,7 @@ footer b{color:var(--fg);font-weight:600}
     <div class="rule" aria-hidden="true"></div>
     <p>Scegli l'applicazione: entri direttamente, senza un'altra password.</p>
   </header>
+  <section class="card notif" id="notif" hidden aria-labelledby="notif-t"></section>
   <main class="grid" id="grid" aria-live="polite"></main>
   <footer><span><b>To Smile</b> · Persone, salute, sorrisi</span><span>Problemi di accesso? Apri un ticket di assistenza.</span></footer>
 </div>
@@ -120,6 +138,76 @@ function toast(t) { const d = document.createElement('div'); d.className = 'toas
     : `<div class="card empty" style="grid-column:1/-1"><h2>Nessuna app assegnata, per ora</h2><p class="muted" style="margin:0">Il tuo accesso è attivo, ma l'amministratore non ti ha ancora abilitato ad alcuna app. Appena lo farà, le troverai qui.</p></div>`;
   $('#pw-open')?.addEventListener('click', () => { $('#pw-err').textContent = ''; $('#pwf').reset(); $('#pw-user').value = u.email; $('#pwd').showModal(); });
 })();
+
+
+/* ---------- notifiche: una sola attivazione per tutte le app, interruttori per app ---------- */
+const NT = { stato: 'controllo', sw: null, sub: null, dati: null };
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const b64 = s => { const p = '='.repeat((4 - s.length % 4) % 4); const r = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from([...r].map(c => c.charCodeAt(0))); };
+async function api(path, method = 'GET', body) {
+  const r = await fetch(path, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined, credentials: 'same-origin' });
+  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Operazione non riuscita'); return j;
+}
+async function notifInit() {
+  try { NT.dati = await api('/api/notifiche'); } catch { return; }
+  if (!NT.dati.app.length) return;
+  if (!('serviceWorker' in navigator)) NT.stato = isIOS && !standalone ? 'ios' : 'no';
+  else {
+    try { NT.sw = await navigator.serviceWorker.register('/sw.js'); await navigator.serviceWorker.ready; } catch { NT.stato = 'no'; }
+    if (NT.stato !== 'no') {
+      if (!('PushManager' in window) || !('Notification' in window)) NT.stato = isIOS && !standalone ? 'ios' : 'no';
+      else {
+        NT.sub = await NT.sw.pushManager.getSubscription();
+        if (Notification.permission === 'denied') NT.stato = 'bloccate';
+        else if (NT.sub && Notification.permission === 'granted') { NT.stato = 'on'; api('/api/notifiche/iscrivi', 'POST', { subscription: NT.sub.toJSON() }).catch(() => {}); }
+        else NT.stato = 'off';
+      }
+    }
+  }
+  notifRender();
+}
+function notifRender() {
+  const box = $('#notif'); box.hidden = false;
+  const d = NT.dati;
+  const testa = {
+    on: ['🔔 Notifiche attive su questo dispositivo', 'Ricevi gli avvisi anche con il telefono bloccato. Scegli da quali app:'],
+    off: ['🔔 Notifiche', 'Attivale una volta sola qui: ricevi gli avvisi di tutte le app che scegli, anche a telefono chiuso.'],
+    bloccate: ['🔕 Notifiche bloccate', 'Le hai bloccate per appgestione.it: riattivale dalle impostazioni del browser (lucchetto accanto all\'indirizzo → Notifiche → Consenti), poi ricarica la pagina.'],
+    ios: ['🔔 Notifiche su iPhone', 'Su iPhone le notifiche arrivano solo se To Smile è nella schermata Home:'],
+    no: ['🔔 Notifiche', 'Questo browser non riceve notifiche. Su Android usa Chrome; su computer Chrome, Edge, Firefox o Safari.'],
+  }[NT.stato] || ['🔔 Notifiche', ''];
+  box.innerHTML = `<div class="notif-h"><h2 id="notif-t">${testa[0]}</h2>
+      ${NT.stato === 'off' ? '<button class="btn primary" id="nt-on">Attiva notifiche</button>' : ''}
+      ${NT.stato === 'on' ? '<div class="row" style="justify-content:flex-start"><button class="btn small" id="nt-prova">Prova</button><button class="btn small" id="nt-off">Disattiva qui</button></div>' : ''}</div>
+    <p>${testa[1]}</p>
+    ${NT.stato === 'ios' ? `<ol class="passi"><li>Tocca il pulsante <b>Condividi</b> di Safari (il quadrato con la freccia).</li><li>Scegli <b>Aggiungi alla schermata Home</b> e conferma.</li><li>Apri <b>To Smile</b> dalla schermata Home e tocca <b>Attiva notifiche</b>.</li></ol><p style="font-size:13px">Serve iOS 16.4 o successivo.</p>` : ''}
+    ${['on', 'off'].includes(NT.stato) ? `<div class="sw-list">${d.app.map(a => `<label class="sw">${esc(a.nome)}<input type="checkbox" role="switch" data-app="${esc(a.key)}" ${a.attiva ? 'checked' : ''} aria-label="Notifiche di ${esc(a.nome)}"></label>`).join('')}</div>
+      <p style="font-size:13px">Gli interruttori valgono per tutti i tuoi dispositivi.${d.dispositivi > 1 ? ` Hai le notifiche attive su ${d.dispositivi} dispositivi.` : ''}</p>` : ''}`;
+  $('#nt-on')?.addEventListener('click', notifAttiva);
+  $('#nt-off')?.addEventListener('click', notifDisattiva);
+  $('#nt-prova')?.addEventListener('click', async () => { try { const r = await api('/api/notifiche/prova', 'POST', {}); toast(r.ok ? 'Inviata: deve arrivarti tra pochi secondi' : 'Questo dispositivo non risulta raggiungibile: disattiva e riattiva'); } catch (e) { toast(e.message); } });
+  box.querySelectorAll('[data-app]').forEach(i => i.addEventListener('change', async () => {
+    try { await api('/api/notifiche/preferenze', 'PUT', { app: i.dataset.app, attiva: i.checked }); const a = d.app.find(x => x.key === i.dataset.app); if (a) a.attiva = i.checked; toast(i.checked ? 'Notifiche attivate per questa app' : 'Notifiche spente per questa app'); }
+    catch (e) { i.checked = !i.checked; toast(e.message); }
+  }));
+}
+async function notifAttiva() {
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { NT.stato = perm === 'denied' ? 'bloccate' : 'off'; notifRender(); return toast('Notifiche non attivate'); }
+    NT.sub = await NT.sw.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(NT.dati.chiave) });
+    await api('/api/notifiche/iscrivi', 'POST', { subscription: NT.sub.toJSON() });
+    NT.dati.dispositivi++; NT.stato = 'on'; notifRender();
+    const t = await api('/api/notifiche/prova', 'POST', {});
+    toast(t.ok ? 'Notifiche attive: ti è arrivata una prova' : 'Notifiche attivate');
+  } catch (e) { toast('Non sono riuscito ad attivare le notifiche: ' + e.message); }
+}
+async function notifDisattiva() {
+  try { if (NT.sub) { await api('/api/notifiche/disiscrivi', 'POST', { endpoint: NT.sub.endpoint }); await NT.sub.unsubscribe(); } } catch {}
+  NT.sub = null; NT.stato = 'off'; NT.dati.dispositivi = Math.max(0, NT.dati.dispositivi - 1); notifRender(); toast('Notifiche disattivate su questo dispositivo');
+}
+notifInit();
 
 $('#pwf').addEventListener('submit', async e => {
   if (e.submitter?.value !== 'save') return;

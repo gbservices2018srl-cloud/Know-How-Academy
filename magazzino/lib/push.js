@@ -26,9 +26,19 @@ async function publicKey() { return (await init()).publicKey; }
 // Invia a tutti i dispositivi delle persone indicate. Restituisce l'insieme delle persone raggiunte su almeno un dispositivo.
 async function sendToUsers(userIds, payload) {
   await init();
-  const reached = new Set();
+  let reached = new Set();
   if (!userIds.length) return reached;
-  const { rows } = await db.q('select endpoint, user_id, p256dh, auth from push_subs where user_id = any($1)', [userIds]);
+  // Prima il centro notifiche unico di appgestione.it (interruttori per app): chi ha attivato lì le notifiche
+  // non riceve più dalle iscrizioni vecchie di questa app, così niente doppioni.
+  let restanti = userIds;
+  try {
+    const { rows: m } = await db.q('select id, sso_id from users where id = any($1)', [userIds]);
+    const r = await require('../../accessi/lib/notifiche').ponte('magazzino', m.map(x => ({ id: x.id, sso: x.sso_id })), payload);
+    reached = r.raggiuntiLocali;
+    restanti = userIds.filter(id => r.restanti.includes(id) || !m.some(x => x.id === id));
+  } catch (e) { console.warn('Notifiche, centro unico non raggiunto:', e.message); }
+  if (!restanti.length) return reached;
+  const { rows } = await db.q('select endpoint, user_id, p256dh, auth from push_subs where user_id = any($1)', [restanti]);
   const body = JSON.stringify(payload);
   await Promise.all(rows.map(async s => {
     try {
