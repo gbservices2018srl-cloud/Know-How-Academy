@@ -111,3 +111,8 @@ Le impostazioni del Calendario possono avere il prefisso `CAL_` (`CAL_ADMIN_USER
 - La conversazione "principale" gestisce **Protocolli, Calendario eventi**, la pagina con i riquadri, i DNS su Aruba, le impostazioni Render condivise e il database.
 - Gli indirizzi restano sottodomini (non percorsi tipo `appgestione.it/nomeapp`); l'area amministratori di ogni app resta su `/admin`.
 - Prima di ogni modifica: `git pull`.
+
+## Nuovalab: rifiuto di un lavoro
+- Dashboard del laboratorio → «✕ Rifiuta lavoro» con motivo obbligatorio: `stato_lab = 'rifiutato'`, `motivo_rifiuto`, `rifiutato_il`, `rifiuto_visto = false` (tabella `lavorazioni` su Supabase). Il lavoro sparisce dalla dashboard del laboratorio e non entra nel consuntivo.
+- Lo studio lo vede in «I miei lavori» in rosso con motivo e «OK, ho visto»; finché non lo segna visto ha il banner rosso, il numero accanto a «I miei lavori», il suono e la notifica del browser (controllo ogni 15 secondi mentre l'app è aperta). Il medico lo vede come «Rifiutato dal laboratorio».
+- Le notifiche push a app chiusa in Nuovalab non sono attive: il pulsante «Attiva notifiche» c'è ma mancano la tabella `push_subscriptions`, la funzione `send-push` e la chiave VAPID.
