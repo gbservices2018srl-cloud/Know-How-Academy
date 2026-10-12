@@ -116,3 +116,11 @@ Le impostazioni del Calendario possono avere il prefisso `CAL_` (`CAL_ADMIN_USER
 - Dashboard del laboratorio → «✕ Rifiuta lavoro» con motivo obbligatorio: `stato_lab = 'rifiutato'`, `motivo_rifiuto`, `rifiutato_il`, `rifiuto_visto = false` (tabella `lavorazioni` su Supabase). Il lavoro sparisce dalla dashboard del laboratorio e non entra nel consuntivo.
 - Lo studio lo vede in «I miei lavori» in rosso con motivo e «OK, ho visto»; finché non lo segna visto ha il banner rosso, il numero accanto a «I miei lavori», il suono e la notifica del browser (controllo ogni 15 secondi mentre l'app è aperta). Il medico lo vede come «Rifiutato dal laboratorio».
 - Le notifiche push a app chiusa in Nuovalab non sono attive: il pulsante «Attiva notifiche» c'è ma mancano la tabella `push_subscriptions`, la funzione `send-push` e la chiave VAPID.
+
+## Centro notifiche unico (appgestione.it)
+- La pagina con i riquadri è anche l'app installabile «To Smile» (`/manifest.webmanifest`, `/sw.js`). La persona attiva le notifiche una sola volta e sceglie con gli interruttori da quali app riceverle (valgono per tutti i suoi dispositivi). Codice: `accessi/lib/notifiche.js`; tabelle `notif_subs`, `notif_prefs`, `notif_settings` (chiavi VAPID) nello schema `accessi`.
+- Calendario, Turni e Magazzino: `lib/push.js` di ciascuna passa prima dal centro (`ponte`); chi ha un dispositivo iscritto al centro non riceve più dalle iscrizioni vecchie dell'app (niente doppioni); chi non l'ha ancora fatto continua a riceverle come prima.
+- Nuovalab e Ticket: trigger nei database Supabase (`tosmile_trg_*`) chiamano `POST https://appgestione.it/api/notifiche/invia` con pg_net; la chiave è `NOTIFY_KEY` su Render e `tosmile_notify_key` nel Vault di Supabase (stesso valore). Mai nomi dei pazienti nelle notifiche.
+  - Nuovalab: nuovo lavoro (al laboratorio, o allo studio se lo inserisce il laboratorio), rifiutato, in consegna, in ritardo, consegna confermata/riprogrammata (allo studio), segnalazione problematico (al laboratorio), nuovi messaggi (alla controparte).
+  - Ticket: nuovo ticket (super_admin e responsabili dell'azienda), preso in carico e risolto (a chi l'ha aperto e agli utenti dello studio).
+- iPhone: servono iOS 16.4+ e To Smile aggiunta alla schermata Home e aperta da lì.
