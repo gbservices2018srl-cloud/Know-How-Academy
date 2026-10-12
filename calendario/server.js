@@ -244,6 +244,42 @@ async function saveCategories(eventId, cats, people = []) {
   if (people.length) await db.q(`insert into event_users (event_id, user_id)
     select $1, id from users where id = any($2) on conflict do nothing`, [eventId, people]);
 }
+
+async function avvisaNuovi(eventId, vecchi) {
+  try {
+    const { rows } = await db.q(`select u.id from events e join users u on ${AUDIENCE('e', 'u')} where e.id = $1 and not (u.id = any($2))
+      and coalesce(e.end_date, e.start_date) >= (now() at time zone 'Europe/Rome')::date`, [eventId, vecchi]);
+    if (!rows.length) return;
+    const { rows: evs } = await db.q(`select ${EVENT_COLS} from events e where e.id = $1`, [eventId]);
+    const ev = evs[0];
+    const r = await push.sendToUsers(rows.map(x => x.id), { title: `Nuovo evento: ${ev.title}`, body: `${quando(ev)}.${ev.rsvp ? ' Conferma se ci sarai.' : ''}`,
+      url: `/?event=${ev.id}`, tag: 'evento-' + ev.id });
+    console.log(`Calendario: avviso ai nuovi invitati di «${ev.title}»: ${rows.length} persone, raggiunte ${r.size}`);
+  } catch (e) { console.warn('Calendario, avviso nuovi invitati:', e.message); }
+}
+// Avviso automatico sul telefono/computer a chi può vedere l'evento: quando viene creato e quando cambiano data, ora o luogo.
+// (Gli eventi già passati non si avvisano.) Gira dopo la risposta, così il salvataggio resta veloce.
+const quando = ev => {
+  const w = new Intl.DateTimeFormat('it-IT', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(ev.start_date + 'T12:00:00Z'))
+    + (ev.all_day ? '' : ` alle ${ev.start_time}`);
+  return w.charAt(0).toUpperCase() + w.slice(1);
+};
+async function avvisaPubblico(eventId, tipo) {
+  try {
+    const { rows: evs } = await db.q(`select ${EVENT_COLS}, l.name as luogo from events e left join locations l on l.id = e.location_id
+      where e.id = $1 and coalesce(e.end_date, e.start_date) >= (now() at time zone 'Europe/Rome')::date`, [eventId]);
+    const ev = evs[0]; if (!ev) return;
+    const { rows: people } = await db.q(`select u.id from events e join users u on ${AUDIENCE('e', 'u')} where e.id = $1`, [eventId]);
+    if (!people.length) return;
+    const luogo = [ev.luogo, ev.location_note].filter(Boolean).join(' · ');
+    const r = await push.sendToUsers(people.map(p => p.id), {
+      title: `${tipo === 'nuovo' ? 'Nuovo evento' : 'Evento modificato'}: ${ev.title}`,
+      body: `${quando(ev)}${luogo ? ' · ' + luogo : ''}.${ev.rsvp ? ' Conferma se ci sarai.' : ''}`,
+      url: `/?event=${ev.id}`, tag: 'evento-' + ev.id,
+    });
+    console.log(`Calendario: avviso "${tipo}" per «${ev.title}» a ${people.length} persone, raggiunte ${r.size}`);
+  } catch (e) { console.warn('Calendario, avviso evento:', e.message); }
+}
 app.post('/api/events', needAdmin, wrap(async (req, res) => {
   const f = eventFields(req.body);
   if (typeof f === 'string') return bad(res, 400, f);
@@ -253,16 +289,24 @@ app.post('/api/events', needAdmin, wrap(async (req, res) => {
     [id, f.title, f.typeId, f.locationId, f.locationNote, f.start, f.end, f.allDay, f.startTime, f.endTime, f.description, f.link, f.allStaff, req.user.name, f.rsvp]);
   await saveCategories(id, f.categories, f.people);
   res.json({ id });
+  avvisaPubblico(id, 'nuovo');
 }));
 app.put('/api/events/:id', needAdmin, wrap(async (req, res) => {
   const f = eventFields(req.body);
   if (typeof f === 'string') return bad(res, 400, f);
+  const { rows: prima } = await db.q(`select ${EVENT_COLS} from events e where e.id = $1`, [req.params.id]);
   const r = await db.q(`update events set title=$2, type_id=$3, location_id=$4, location_note=$5, start_date=$6, end_date=$7, all_day=$8,
     start_time=$9, end_time=$10, description=$11, link=$12, all_staff=$13, updated_by=$14, rsvp=$15, updated_at=now() where id=$1`,
     [req.params.id, f.title, f.typeId, f.locationId, f.locationNote, f.start, f.end, f.allDay, f.startTime, f.endTime, f.description, f.link, f.allStaff, req.user.name, f.rsvp]);
   if (!r.rowCount) return bad(res, 404, 'Evento non trovato.');
+  const vecchiPubblico = prima[0] ? (await db.q(`select u.id from events e join users u on ${AUDIENCE('e', 'u')} where e.id = $1`, [req.params.id])).rows.map(r => r.id) : [];
   await saveCategories(req.params.id, f.categories, f.people);
   res.json({ ok: true });
+  // cambiano data, ora o luogo → avviso a tutti; si aggiungono persone o categorie → avviso solo ai nuovi
+  const p = prima[0];
+  if (p && (p.start_date !== f.start || (p.end_date || p.start_date) !== f.end || p.all_day !== f.allDay || (p.start_time || null) !== (f.startTime || null)
+    || (p.location_id || null) !== (f.locationId || null) || (p.location_note || '') !== (f.locationNote || ''))) avvisaPubblico(req.params.id, 'modificato');
+  else if (p) avvisaNuovi(req.params.id, vecchiPubblico);
 }));
 app.delete('/api/events/:id', needAdmin, wrap(async (req, res) => {
   await db.q('delete from events where id = $1', [req.params.id]);

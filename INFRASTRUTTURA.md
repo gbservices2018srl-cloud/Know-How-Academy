@@ -73,6 +73,7 @@ Protocolli e Calendario: `ADMIN_USERNAME` / `ADMIN_PASSWORD` nelle impostazioni 
 - Sedi del gruppo: si gestiscono solo nel pannello (Persone/Sedi → Sedi): nome, sigla (2-3 lettere), indirizzo, società, riuniti, email. "Aggiorna le app" (e ogni salvataggio) le manda a Turni e Calendario (evento `sedi`) e a Nuovalab e Ticket (biglietto "sedi" della funzione `sso`). Ogni app le collega con `central_id`/`centrale` e le blocca in modifica. Nuovalab crea una sede nuova solo se ha l'email; Ticket usa la società come azienda. Le sedi disattivate escono dai Turni futuri, nelle altre app restano per lo storico.
 - Gestione finanziaria: i clienti esterni che pagano con Stripe continuano a registrarsi ed entrare direttamente su finanza.appgestione.it, senza passare dall'accesso unico.
 
+- Calendario, notifiche: avviso automatico a chi vede l'evento quando viene creato, quando cambiano data/ora/luogo, e ai soli nuovi invitati quando si aggiungono persone o categorie (mai per eventi passati); più il «Promemoria» manuale dell'amministratore. Nei log: «Calendario: avviso … a N persone, raggiunte M».
 - Calendario, chi vede un evento: tutto lo staff, oppure categorie e/o persone singole scelte cercando per nome o cognome (tabella `event_users`); le persone invitate così vedono l'evento, ricevono i promemoria e contano nelle presenze come quelle delle categorie.
 
 ## Magazzino centrale
