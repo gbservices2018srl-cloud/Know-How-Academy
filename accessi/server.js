@@ -292,7 +292,7 @@ app.post('/api/register', wrap(async (req, res) => {
   if (figura === 'Medico' && !albo.dati.alboNumero) return bad(res, 400, "Per i medici servono provincia e numero di iscrizione all'albo.");
   if (!store.validEmail(email)) return bad(res, 400, "Inserisci un'email valida.");
   if (password.length < 8) return bad(res, 400, 'La password deve avere almeno 8 caratteri.');
-  if (!b.privacy) return bad(res, 400, "Per registrarti devi accettare l'informativa privacy.");
+  if (!b.privacy) return bad(res, 400, "Per registrarti devi confermare di aver letto la Privacy Policy e accettare i Termini e condizioni.");
   if (await store.findByEmail(email)) return bad(res, 400, 'Esiste già un account con questa email. Se non ricordi la password usa «Password dimenticata».');
   if (await cfUsato(cf)) return bad(res, 400, 'Esiste già un account con questo codice fiscale. Se non ricordi la password usa «Password dimenticata».');
   if (limited('reg|' + req.ip, 100, 60)) return bad(res, 429, 'Troppe registrazioni da questa connessione nell\'ultima ora. Riprova più tardi oppure usa i dati mobili del telefono.');
@@ -777,7 +777,10 @@ app.get('/admin', (req, res) => {
   if (!isAdmin(req)) return res.redirect('/');
   sendPage('admin.html')(req, res);
 });
-app.get('/privacy', sendPage('privacy.html'));
+// Documenti legali ufficiali (revisionati dal DPO), pubblici: li collegano tutte le app
+app.get(['/privacy', '/privacy-policy'], sendPage('privacy.html'));
+app.get(['/cookie', '/cookie-policy'], sendPage('cookie.html'));
+app.get(['/termini', '/termini-condizioni', '/termini-e-condizioni'], sendPage('termini.html'));
 // App installabile (schermata Home) + service worker che riceve le notifiche di tutte le app
 app.get('/sw.js', (req, res) => { res.set({ 'Cache-Control': 'no-cache', 'Service-Worker-Allowed': '/' }); res.type('js').sendFile(path.join(PUB, 'sw.js')); });
 app.get('/manifest.webmanifest', (req, res) => { res.set('Cache-Control', 'no-cache'); res.type('application/manifest+json').sendFile(path.join(PUB, 'manifest.webmanifest')); });

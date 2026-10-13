@@ -40,7 +40,7 @@ footer{color:var(--muted);font-size:13px;text-align:center}
     <p id="lead"></p>
   </header>
   <main class="card" id="card"></main>
-  <footer>Un solo accesso per tutte le app To Smile · <a href="/privacy">Privacy</a></footer>
+  <footer>Un solo accesso per tutte le app To Smile · <a href="/privacy">Privacy Policy</a> · <a href="/cookie">Cookie Policy</a> · <a href="/termini">Termini e condizioni</a></footer>
 </div>
 <script>
 const $ = s => document.querySelector(s);
@@ -109,7 +109,7 @@ const views = {
       </div>
       <label class="field" for="email">Email<input id="email" type="email" autocomplete="email" inputmode="email" required maxlength="160"></label>
       ${pwField('password', 'Password', 'new-password', 'Almeno 8 caratteri. Sarà la stessa per tutte le app.')}
-      <label class="check"><input type="checkbox" id="privacy" required><span>Ho letto l'<a href="/privacy" target="_blank" rel="noopener">informativa privacy</a> e acconsento al trattamento dei miei dati per la gestione degli accessi.</span></label>
+      <label class="check"><input type="checkbox" id="privacy" required><span>Ho letto la <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a> e la <a href="/cookie" target="_blank" rel="noopener">Cookie Policy</a> e accetto i <a href="/termini" target="_blank" rel="noopener">Termini e condizioni d’uso</a>.</span></label>
       <div class="msg err" id="err" role="alert"></div>
       <button class="btn primary" type="submit">Invia la richiesta</button>
       <div class="links"><a href="${withNext('/accedi')}">Hai già un account? <b>Accedi</b></a></div>
@@ -129,7 +129,7 @@ const views = {
       if (!body.figura) return $('#err').textContent = 'Scegli la tua figura professionale.';
       if (med && (!/^[A-Za-z]{2}$/.test(body.alboProvincia.trim()) || !body.alboNumero.trim())) return $('#err').textContent = "Scrivi provincia (2 lettere) e numero di iscrizione all'albo.";
       if (body.password.length < 8) return $('#err').textContent = 'La password deve avere almeno 8 caratteri.';
-      if (!body.privacy) return $('#err').textContent = "Per registrarti devi accettare l'informativa privacy.";
+      if (!body.privacy) return $('#err').textContent = "Per registrarti devi confermare di aver letto la Privacy Policy e accettare i Termini e condizioni.";
       busy(f, true);
       try {
         await post('/api/register', body);
