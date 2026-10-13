@@ -21,6 +21,7 @@ for k, (titolo, desc) in DOC.items():
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>{html.escape(titolo)} · appgestione.it</title>
 <meta name="description" content="{html.escape(desc)}">
+<link rel="stylesheet" href="/fonts/tosmile.css?f=fira-sans:600,700,800|figtree:400,500,600,700">
 <link rel="stylesheet" href="/static/accessi.css?v=3">
 <link rel="icon" href="/static/icon.svg">
 <style>

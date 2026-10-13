@@ -12,6 +12,12 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@fontsource/bricolage-grotesque": "^5.0.0",
+    "@fontsource/figtree": "^5.0.0",
+    "@fontsource/fira-sans": "^5.0.0",
+    "@fontsource/fredoka": "^5.0.0",
+    "@fontsource/nunito-sans": "^5.0.0",
+    "@fontsource/poppins": "^5.0.0",
     "@zxing/library": "^0.21.0",
     "bcryptjs": "^2.4.3",
     "connect-pg-simple": "^10.0.0",

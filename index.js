@@ -40,6 +40,8 @@ function route(req) {
   if (await require('./lib/trasloco').eseguiSeServe()) { console.log('Trasloco completato: riavvio per caricare i dati copiati.'); process.exit(1); }
   http.createServer((req, res) => {
     if (req.url === '/healthz') { res.writeHead(200); return res.end('ok'); }
+    // caratteri tipografici dai nostri server (niente Google Fonts), per tutte le app e i sottodomini
+    if (require('./lib/caratteri').gestisci(req, res)) return;
     // MANUTENZIONE=true: durante il trasloco nessuno può scrivere nel vecchio server (così non si perde niente)
     if (process.env.MANUTENZIONE === 'true') {
       res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8', 'Retry-After': '600', 'Cache-Control': 'no-store' });
