@@ -124,3 +124,8 @@ Le impostazioni del Calendario possono avere il prefisso `CAL_` (`CAL_ADMIN_USER
   - Nuovalab: nuovo lavoro (al laboratorio, o allo studio se lo inserisce il laboratorio), rifiutato, in consegna, in ritardo, consegna confermata/riprogrammata (allo studio), segnalazione problematico (al laboratorio), nuovi messaggi (alla controparte).
   - Ticket: nuovo ticket (super_admin e responsabili dell'azienda), preso in carico e risolto (a chi l'ha aperto e agli utenti dello studio).
 - iPhone: servono iOS 16.4+ e To Smile aggiunta alla schermata Home e aperta da lì.
+
+## Documenti legali e caratteri
+- Privacy Policy, Cookie Policy, Termini e condizioni (revisionati dal DPO): `appgestione.it/privacy`, `/cookie`, `/termini`, pubblici. Testi in `accessi/legal/*.frag.html` (convertiti dai .docx ufficiali, da NON modificare a mano); le pagine si rigenerano con `python3 accessi/legal/genera.py`. Collegati da accesso/registrazione, pagina app, Protocolli (menu profilo), Calendario, Magazzino, Turni, Nuovalab, Ticket, Gestione finanziaria.
+- Caratteri tipografici: niente Google Fonts. `lib/caratteri.js` serve `/fonts/tosmile.css?f=famiglia:pesi|…` e i file dai pacchetti `@fontsource/*` (installati da Render), con CORS aperto: Ticket e Gestione finanziaria li caricano da `https://appgestione.it/fonts/…`.
+- Fornitori extra UE da indicare al DPO: Anthropic (lettura AI di bolle, etichette, buste paga, regole turni) e Google Gemini (assistente «Chiedi ai protocolli», `lib/ai.js`).
