@@ -36,6 +36,11 @@ function route(req) {
   await calendario.start();
   await magazzino.start();
   await turni.start();
+  { // quali fornitori esterni sono attivi (solo i nomi, mai le chiavi): serve per l'elenco dei fornitori nella privacy
+    const ai = require('./lib/ai'), p = ai.providerInfo(), e = ai.embedInfo();
+    console.log(`Fornitori esterni attivi: assistente Protocolli = ${p.ok ? p.provider + ' (' + p.model + ')' : 'nessuno'}, ricerca per significato = ${e.ok ? e.provider : 'nessuna'}, `
+      + `Claude (Magazzino/Turni) = ${process.env.ANTHROPIC_API_KEY ? 'sì' : 'no'}, email Resend = ${process.env.RESEND_API_KEY ? 'sì' : 'no'}`);
+  }
   // Trasloco del database (solo sul servizio nuovo, con COPIA_DA): copia tutto e poi riparte con i dati copiati
   if (await require('./lib/trasloco').eseguiSeServe()) { console.log('Trasloco completato: riavvio per caricare i dati copiati.'); process.exit(1); }
   http.createServer((req, res) => {
