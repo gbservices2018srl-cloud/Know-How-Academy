@@ -5,6 +5,7 @@ import pathlib, html
 QUI = pathlib.Path(__file__).parent
 PUB = QUI.parent / 'public'
 PUBBLICATO = '13 ottobre 2026'
+FORNITORI_AGGIORNATI = '14 ottobre 2026'
 DOC = {
   'privacy': ('Privacy Policy', 'Come vengono trattati i dati personali su appgestione.it.'),
   'cookie':  ('Cookie Policy', 'Cookie e tecnologie analoghe usati da appgestione.it.'),
@@ -13,6 +14,14 @@ DOC = {
 LINK = [('privacy', 'Privacy Policy'), ('cookie', 'Cookie Policy'), ('termini', 'Termini e condizioni')]
 for k, (titolo, desc) in DOC.items():
     corpo = (QUI / f'{k}.frag.html').read_text(encoding='utf-8')
+    # Elenco dei fornitori: integrazione separata dal testo revisionato dal DPO (si aggiorna da sola qui)
+    extra = ''
+    if k == 'privacy' and (QUI / 'privacy-fornitori.frag.html').exists():
+        extra = f'''  <section class="doc integrazione">
+{(QUI / 'privacy-fornitori.frag.html').read_text(encoding='utf-8')}
+  <p class="meta" style="border:0;padding:0">Elenco dei fornitori aggiornato al {FORNITORI_AGGIORNATI}.</p>
+  </section>
+'''
     altri = ' · '.join(f'<a href="/{x}">{n}</a>' for x, n in LINK if x != k)
     pagina = f'''<!doctype html>
 <html lang="it">
@@ -30,6 +39,11 @@ for k, (titolo, desc) in DOC.items():
 .doc p,.doc li{{color:var(--fg);line-height:1.6;margin:6px 0 0}}
 .nav-legal{{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:14.5px}}
 .nav-legal a{{color:var(--teal-ink);font-weight:600}}
+.tab-wrap{{overflow-x:auto;margin-top:10px}}
+.tab-fornitori{{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}}
+.tab-fornitori th,.tab-fornitori td{{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}}
+.tab-fornitori th{{background:var(--surface-2,#F2F2EC);font-weight:700}}
+.integrazione{{border-top:2px solid var(--line);padding-top:6px}}
 .meta{{color:var(--muted);font-size:14px;border-top:1px solid var(--line);padding-top:14px;margin-top:10px}}
 @media print{{.nav-legal,.no-print{{display:none}}}}
 </style>
@@ -43,6 +57,7 @@ for k, (titolo, desc) in DOC.items():
 {corpo}
   </article>
   <p class="meta">Documento ufficiale revisionato dal DPO · Ultimo aggiornamento: {PUBBLICATO}</p>
+{extra}
   <nav class="nav-legal" aria-label="Documenti legali">{altri} · <a href="/">Torna alle app</a> · <a href="javascript:print()">Stampa</a></nav>
 </div>
 </body>

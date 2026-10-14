@@ -14,6 +14,11 @@
 .doc p,.doc li{color:var(--fg);line-height:1.6;margin:6px 0 0}
 .nav-legal{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:14.5px}
 .nav-legal a{color:var(--teal-ink);font-weight:600}
+.tab-wrap{overflow-x:auto;margin-top:10px}
+.tab-fornitori{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+.tab-fornitori th,.tab-fornitori td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+.tab-fornitori th{background:var(--surface-2,#F2F2EC);font-weight:700}
+.integrazione{border-top:2px solid var(--line);padding-top:6px}
 .meta{color:var(--muted);font-size:14px;border-top:1px solid var(--line);padding-top:14px;margin-top:10px}
 @media print{.nav-legal,.no-print{display:none}}
 </style>
@@ -51,6 +56,25 @@
 
   </article>
   <p class="meta">Documento ufficiale revisionato dal DPO · Ultimo aggiornamento: 13 ottobre 2026</p>
+  <section class="doc integrazione">
+<h2 id="fornitori">Elenco dei fornitori tecnici</h2>
+<p>Ad integrazione dei punti 6 e 7, si riportano i fornitori tecnici utilizzati dalla piattaforma, il servizio svolto, i dati coinvolti e il luogo in cui i dati sono conservati o elaborati. Le garanzie per gli eventuali trasferimenti fuori dallo Spazio Economico Europeo sono indicate nella documentazione contrattuale di ciascun fornitore.</p>
+<div class="tab-wrap"><table class="tab-fornitori">
+<thead><tr><th>Fornitore</th><th>Servizio</th><th>Dati coinvolti</th><th>Luogo dei dati</th></tr></thead>
+<tbody>
+<tr><td>Render Services, Inc. (USA)</td><td>Hosting delle applicazioni e dei database di accesso unico, Protocolli, Calendario, Magazzino e Turni</td><td>Tutti i dati di queste applicazioni</td><td>Server a Francoforte (Germania)</td></tr>
+<tr><td>Render Services, Inc. (USA)</td><td>Hosting della Gestione finanziaria</td><td>Dati contabili e finanziari e account della Gestione finanziaria</td><td>Server negli Stati Uniti (Oregon)</td></tr>
+<tr><td>Supabase, Inc. (USA)</td><td>Database e archivio file di Nuovalab e Ticket assistenza</td><td>Dati di Nuovalab (pratiche, pazienti, allegati, messaggi) e dei ticket</td><td>Nuovalab: Francoforte (Germania); Ticket: Irlanda</td></tr>
+<tr><td>Anthropic, PBC (USA)</td><td>Lettura automatica di documenti con intelligenza artificiale (Claude), su richiesta dell'amministratore</td><td>Magazzino: bolle di consegna dei fornitori e foto delle etichette dei prodotti. Turni: testo dei cedolini per rilevare i residui di ferie, ROL ed ex festività; testo delle regole dei turni scritte dall'amministratore</td><td>Elaborazione negli Stati Uniti</td></tr>
+<tr><td>Resend, Inc. (USA)</td><td>Invio delle email di servizio</td><td>Indirizzo email, nome e contenuto del messaggio (es. attivazione dell'account, reimpostazione della password, ordini ai fornitori, avvisi e ricevute delle buste paga)</td><td>Elaborazione negli Stati Uniti</td></tr>
+<tr><td>Stripe</td><td>Pagamento degli abbonamenti della Gestione finanziaria</td><td>Dati di pagamento e di fatturazione dell'azienda abbonata</td><td>Secondo la documentazione di Stripe</td></tr>
+<tr><td>Servizi di notifica di browser e sistemi operativi (Apple, Google, Microsoft, Mozilla)</td><td>Consegna delle notifiche sul telefono o sul computer, solo se attivate dall'utente</td><td>Il contenuto è cifrato e non leggibile dal servizio, che vede solo l'indirizzo tecnico del dispositivo e l'orario; le notifiche non contengono nomi di pazienti</td><td>Secondo il servizio del dispositivo usato</td></tr>
+</tbody></table></div>
+<p>La piattaforma non utilizza strumenti di analisi statistica, pubblicità o profilazione. I caratteri tipografici sono serviti dai server della piattaforma e non da servizi esterni.</p>
+
+  <p class="meta" style="border:0;padding:0">Elenco dei fornitori aggiornato al 14 ottobre 2026.</p>
+  </section>
+
   <nav class="nav-legal" aria-label="Documenti legali"><a href="/cookie">Cookie Policy</a> · <a href="/termini">Termini e condizioni</a> · <a href="/">Torna alle app</a> · <a href="javascript:print()">Stampa</a></nav>
 </div>
 </body>
