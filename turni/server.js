@@ -549,7 +549,7 @@ app.post('/api/buste/carica', needAdmin, upload.single('file'), wrap(async (req,
       const c = buste.cifra(g.buf), id = db.newId();
       await qq(`insert into buste (id, staff_id, tipo, mese, file, iv, tag, impronta, pagine, origine) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
         [id, g.staffId, tipo, mese, c.file, c.iv, c.tag, buste.impronta(g.buf), g.pagine.length, origine]);
-      nuove.push({ id, testo: g.testo });
+      nuove.push({ id, testo: g.testo, togli: daTogliere(staffById(cfg, g.staffId)) });
     }
     for (const s of r.sospese) {
       const c = buste.cifra(s.buf);
@@ -560,6 +560,8 @@ app.post('/api/buste/carica', needAdmin, upload.single('file'), wrap(async (req,
   res.json({ pagine: r.pagine, abbinate: r.gruppi.length - doppi.length, sospese: r.sospese.length, doppi, leggoResidui: tipo === 'busta' && !!process.env.ANTHROPIC_API_KEY && nuove.length > 0 });
   if (tipo === 'busta') leggiResidui(nuove); // residui di ferie e permessi: si leggono dopo, senza far aspettare
 }));
+// Nome, cognome, codice fiscale ed email del dipendente: si cancellano dal testo prima della lettura automatica
+const daTogliere = e => e ? [e.nome, e.cognome, e.name, e.cf, e.codiceFiscale, e.email].filter(Boolean).flatMap(x => String(x).split(/[\s@.]+/)).filter(x => x.length >= 3) : [];
 // Residui dal testo dei cedolini (in sottofondo); si salvano nella busta
 function leggiResidui(lista) {
   if (!process.env.ANTHROPIC_API_KEY || !lista.length) return;
@@ -574,7 +576,7 @@ app.post('/api/buste/:id/residui', needAdmin, wrap(async (req, res) => {
     if (!process.env.ANTHROPIC_API_KEY) return bad(res, 400, "La lettura automatica non è attiva: manca ANTHROPIC_API_KEY su Render.");
     const testo = (await buste.testoPagine(buste.decifra(rows[0]))).join('\n');
     let s;
-    try { s = await saldiCedolino.leggi(testo); } catch (e) { return bad(res, 502, 'Lettura non riuscita, riprova tra poco.'); }
+    try { s = await saldiCedolino.leggi(testo, daTogliere(staffById(await caricaConfig(), rows[0].staff_id))); } catch (e) { return bad(res, 502, 'Lettura non riuscita, riprova tra poco.'); }
     if (!s || s.vuoto && !s.ferie.residuo && /testo leggibile/.test(s.dubbi?.[0] || '')) return bad(res, 400, 'In questa busta non c\'è testo da leggere (è una scansione?): scrivi i residui a mano.');
     await db.q('update buste set saldi = $2 where id = $1', [rows[0].id, JSON.stringify(s)]);
     return res.json({ saldi: s });
