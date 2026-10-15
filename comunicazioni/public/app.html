@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#4CAAAA">
-<title>Comunicazioni · To Smile</title>
+<title>Comunicazioni ed eventi · To Smile</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -112,6 +112,20 @@ mark{background:color-mix(in srgb,var(--brand-yellow) 75%,transparent);color:inh
 .bar i{display:block;height:100%;background:var(--accent);border-radius:99px}
 .bar i.full{background:var(--ok)}
 
+/* pagina d'ingresso: due grandi pulsanti */
+.homebtn{border:0;background:none;padding:0;font:inherit;color:inherit;cursor:pointer}
+.hello{font:800 28px/1.15 var(--f-display);margin:6px 0 4px;letter-spacing:-.01em}
+.bigs{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:18px}
+.big{position:relative;display:flex;flex-direction:column;gap:14px;text-align:left;text-decoration:none;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:24px;min-height:220px;box-shadow:var(--shadow);overflow:hidden;transition:transform .15s,border-color .15s}
+.big:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--bc) 55%,var(--line))}
+.big::before{content:"";position:absolute;left:0;top:0;right:0;height:6px;background:var(--bc)}
+.big .bi{width:64px;height:64px;border-radius:18px;display:grid;place-items:center;background:color-mix(in srgb,var(--bc) 16%,var(--surface));color:var(--bc)}
+.big .bi svg{width:34px;height:34px;stroke-width:1.7}
+.big h2{margin:0;font:800 26px/1.1 var(--f-display)}
+.big p{margin:0;color:var(--muted);font-size:15px}
+.big .st{margin-top:auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.big .go{font-weight:700;color:var(--bc);white-space:nowrap}
+@media (prefers-reduced-motion:reduce){.big{transition:none}.big:hover{transform:none}}
 /* banner notifiche */
 .banner{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;margin-bottom:14px;background:var(--purple-soft);border:1px solid color-mix(in srgb,var(--brand-purple) 30%,transparent);flex-wrap:wrap}
 .banner>svg{width:22px;height:22px;color:var(--brand-purple);flex:none}
@@ -205,7 +219,7 @@ footer{max-width:1000px;margin:0 auto;padding:0 16px 30px;font-size:12.5px;color
   <div class="brand">
     <img class="logo" src="/logo.png" alt="To Smile" width="543" height="162">
     <span class="sep"></span>
-    <h1>Comunicazioni</h1>
+    <h1><button class="homebtn" data-go="home">Comunicazioni ed eventi</button></h1>
   </div>
   <nav class="tabs" id="tabs" aria-label="Sezioni"></nav>
   <div class="spacer"></div>
@@ -240,6 +254,8 @@ const I = {
   apps: '<rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/>',
   out: '<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>',
   trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+  megafono: '<path d="M3 11l18-8v18l-18-8z"/><path d="M7 12v6a2 2 0 0 0 4 0v-4"/>',
+  cal: '<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4M8 14.5h3M8 17.5h6"/>',
 };
 const ic = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${I[n]}</svg>`;
 let toastT;
@@ -274,7 +290,7 @@ const iniziali = n => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).
 
 /* ============ stato ============ */
 const S = {
-  me: null, notif: null, links: null,
+  me: null, notif: null, links: null, eventi: null,
   view: 'ricevute',            // ricevute | inviate | nuova | leggi | gestisci
   id: null, persona: null,     // comunicazione aperta (e conversazione da aprire, per l'amministratore)
   q: { ricevute: '', inviate: '' },
@@ -289,15 +305,16 @@ const S = {
 function renderTop() {
   const nuove = (S.ricevute || []).filter(m => !m.letto_il || m.risposte_nuove).length;
   const domande = (S.inviate || []).reduce((n, m) => n + (m.domande_nuove || 0), 0);
-  const tabs = [['ricevute', 'inbox', S.me.admin ? 'Ricevute' : 'Le mie comunicazioni', nuove]];
+  const tabs = [['home', 'back', 'Inizio', 0], ['ricevute', 'inbox', S.me.admin ? 'Ricevute' : 'Le mie comunicazioni', nuove]];
   if (S.me.admin) tabs.push(['inviate', 'send', 'Inviate', domande], ['nuova', 'plus', 'Nuova comunicazione', 0]);
   const attiva = { leggi: 'ricevute', gestisci: 'inviate' }[S.view] || S.view;
+  $('#tabs').hidden = S.view === 'home';
   $('#tabs').innerHTML = tabs.map(([k, i, l, n]) => `<button class="tab ${attiva === k ? 'on' : ''}" data-tab="${k}" ${attiva === k ? 'aria-current="page"' : ''}>${ic(i)}${l}${n ? ` <span class="badge" aria-label="${n} da vedere">${n}</span>` : ''}</button>`).join('');
   $('#who').innerHTML = `<span class="av ${S.me.admin ? 'admin' : ''}">${esc(iniziali(S.me.name))}</span><b>${esc(S.me.name)}</b>`;
   $('#menu').innerHTML = `<a role="menuitem" href="${esc(S.links?.home || 'https://appgestione.it')}">${ic('apps')}Le mie app</a>
     <a role="menuitem" href="${esc(S.links?.home || 'https://appgestione.it')}/#notif">${ic('bell')}Notifiche sul telefono</a>
     <button role="menuitem" data-a="esci">${ic('out')}Esci</button>`;
-  document.title = (nuove ? `(${nuove}) ` : '') + 'Comunicazioni · To Smile';
+  document.title = (nuove ? `(${nuove}) ` : '') + 'Comunicazioni ed eventi · To Smile';
 }
 $('#tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) go(b.dataset.tab); });
 $('#who').addEventListener('click', () => { const m = $('#menu'); m.hidden = !m.hidden; $('#who').setAttribute('aria-expanded', String(!m.hidden)); });
@@ -331,6 +348,7 @@ function go(view, id = null, persona = null) {
 }
 async function load() {
   try {
+    if (S.view === 'home') S.ricevute = (await api('GET', '/api/ricevute')).messaggi;
     if (S.view === 'ricevute') S.ricevute = (await api('GET', '/api/ricevute?q=' + encodeURIComponent(S.q.ricevute))).messaggi;
     if (S.view === 'inviate') S.inviate = (await api('GET', '/api/inviate?q=' + encodeURIComponent(S.q.inviate))).messaggi;
     if (S.view === 'nuova' && !S.dest) S.dest = await api('GET', '/api/destinatari');
@@ -355,10 +373,34 @@ async function contatori() {
 
 function render() {
   renderTop();
-  const v = { ricevute: vRicevute, inviate: vInviate, nuova: vNuova, leggi: vLeggi, gestisci: vGestisci }[S.view];
+  const v = { home: vHome, ricevute: vRicevute, inviate: vInviate, nuova: vNuova, leggi: vLeggi, gestisci: vGestisci }[S.view];
   $('#main').innerHTML = v();
   if (S.view === 'leggi' && S.chatJump) { S.chatJump = false; $('#chat')?.scrollIntoView({ block: 'start' }); }
   if (S.view === 'gestisci' && S.persona) document.getElementById('conv-' + S.persona)?.scrollIntoView({ block: 'center' });
+}
+
+/* ============ pagina d'ingresso ============ */
+function vHome() {
+  const list = S.ricevute || [];
+  const nuove = list.filter(m => !m.letto_il).length, daConf = list.filter(m => m.conferma && !m.confermato_il).length, risp = list.filter(m => m.risposte_nuove).length;
+  const stato = [nuove ? `<span class="tag todo">${nuove === 1 ? '1 da leggere' : nuove + ' da leggere'}</span>` : '',
+    daConf ? `<span class="tag todo">${daConf === 1 ? '1 da confermare' : daConf + ' da confermare'}</span>` : '',
+    risp ? `<span class="tag q">${risp === 1 ? '1 risposta nuova' : risp + ' risposte nuove'}</span>` : ''].join('') || '<span class="tag ok">Sei in pari</span>';
+  return `${bannerNotifiche()}
+  <div class="hello">Ciao ${esc((S.me.name || '').split(' ')[0])}</div>
+  <div class="muted">Cosa vuoi aprire?</div>
+  <div class="bigs">
+    <button class="big" style="--bc:var(--accent)" data-go="ricevute">
+      <span class="bi">${ic('megafono')}</span>
+      <span><h2>Comunicazioni</h2><p>Le comunicazioni dell'azienda: leggile, conferma la lettura e chiedi chiarimenti.</p></span>
+      <span class="st"><span>${stato}</span><span class="go">Apri →</span></span>
+    </button>
+    ${S.eventi ? `<a class="big" style="--bc:var(--brand-purple)" href="${esc(S.eventi)}">
+      <span class="bi">${ic('cal')}</span>
+      <span><h2>Eventi</h2><p>Formazione, riunioni ed eventi aziendali: vedi il calendario e conferma se ci sarai.</p></span>
+      <span class="st"><span class="tag plain">Calendario aziendale</span><span class="go">Apri →</span></span>
+    </a>` : ''}
+  </div>`;
 }
 
 /* ============ ricevute ============ */
@@ -620,13 +662,14 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && S.
 (async () => {
   try {
     const st = await api('GET', '/api/stato');
-    Object.assign(S, { me: st.me, notif: st.notifiche, links: st.links });
+    Object.assign(S, { me: st.me, notif: st.notifiche, links: st.links, eventi: st.eventi });
   } catch (e) { $('#main').innerHTML = `<div class="empty"><b>${esc(e.message)}</b></div>`; return; }
   const u = new URLSearchParams(location.search), m = u.get('m'), p = u.get('persona');
   S.chatJump = location.hash === '#chat';
   if (m && p && S.me.admin) return go('gestisci', m, p);
   if (m) return go('leggi', m);
-  go('ricevute');
+  if (u.get('v') === 'comunicazioni') return go('ricevute');
+  go('home');
 })();
 </script>
 </body>

@@ -4,7 +4,8 @@
 //   calendario.appgestione.it               → Calendario eventi
 //   magazzino.appgestione.it                → Magazzino centrale
 //   turni.appgestione.it                    → Turni (planning, assenze, buste paga)
-//   comunicazioni.appgestione.it            → Comunicazioni aziendali
+//   comunicazioni.appgestione.it            → Comunicazioni ed eventi aziendali
+//   documenti.appgestione.it                → Documenti di studio
 //   tutto il resto (protocolli.…, onrender) → Protocolli
 // Altri indirizzi si possono aggiungere con ACCESSI_HOSTS e CALENDARIO_HOSTS (separati da virgola).
 const http = require('http');
@@ -14,6 +15,7 @@ const calendario = require('./calendario/server');
 const magazzino = require('./magazzino/server');
 const turni = require('./turni/server');
 const comunicazioni = require('./comunicazioni/server');
+const documenti = require('./documenti/server');
 
 const PORT = process.env.PORT || 3000;
 const hosts = (list, extra) => new Set([...list, ...(process.env[extra] || '').split(',').map(h => h.trim().toLowerCase()).filter(Boolean)]);
@@ -22,6 +24,7 @@ const calHosts = hosts(['calendario.appgestione.it'], 'CALENDARIO_HOSTS');
 const magHosts = hosts(['magazzino.appgestione.it'], 'MAGAZZINO_HOSTS');
 const turHosts = hosts(['turni.appgestione.it'], 'TURNI_HOSTS');
 const comHosts = hosts(['comunicazioni.appgestione.it'], 'COMUNICAZIONI_HOSTS');
+const docHosts = hosts(['documenti.appgestione.it'], 'DOCUMENTI_HOSTS');
 const hostOf = req => String(req.headers.host || '').split(':')[0].toLowerCase();
 
 function route(req) {
@@ -31,6 +34,7 @@ function route(req) {
   if (magHosts.has(h) || h.startsWith('magazzino.')) return magazzino.app;
   if (turHosts.has(h) || h.startsWith('turni.')) return turni.app;
   if (comHosts.has(h) || h.startsWith('comunicazioni.')) return comunicazioni.app;
+  if (docHosts.has(h) || h.startsWith('documenti.')) return documenti.app;
   return protocolli.app;
 }
 
@@ -41,6 +45,7 @@ function route(req) {
   await magazzino.start();
   await turni.start();
   await comunicazioni.start();
+  await documenti.start();
   { // quali fornitori esterni sono attivi (solo i nomi, mai le chiavi): serve per l'elenco dei fornitori nella privacy
     const ai = require('./lib/ai'), p = ai.providerInfo(), e = ai.embedInfo();
     console.log(`Fornitori esterni attivi: assistente Protocolli = ${p.ok ? p.provider + ' (' + p.model + ')' : 'nessuno'}, ricerca per significato = ${e.ok ? e.provider : 'nessuna'}, `
@@ -63,6 +68,6 @@ function route(req) {
     // www.appgestione.it → appgestione.it (un solo indirizzo, così il cookie dell'accesso è sempre lo stesso)
     if (hostOf(req) === 'www.appgestione.it') { res.writeHead(301, { Location: 'https://appgestione.it' + req.url }); return res.end(); }
     route(req)(req, res);
-  }).listen(PORT, () => console.log(`Accesso unico, Protocolli, Calendario, Magazzino, Turni e Comunicazioni attivi sulla porta ${PORT}` +
+  }).listen(PORT, () => console.log(`Accesso unico, Protocolli, Calendario, Magazzino, Turni, Comunicazioni e Documenti attivi sulla porta ${PORT}` +
     (process.env.SSO_ATTIVO === 'true' ? ' (accesso unico acceso)' : ' (accesso unico spento: SSO_ATTIVO non è true)')));
 })().catch(e => { console.error('Avvio non riuscito:', e); process.exit(1); });

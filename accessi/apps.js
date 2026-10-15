@@ -29,6 +29,7 @@ module.exports = [
   { key: 'protocolli', name: 'Protocolli', url: 'https://protocolli.appgestione.it', color: 'teal',
     desc: 'Il flusso di lavoro dello studio con protocolli, procedure e assistente.' },
   { key: 'calendario', name: 'Calendario eventi', url: 'https://calendario.appgestione.it', color: 'purple',
+    dentro: 'comunicazioni', // si apre dal pulsante "Eventi" di Comunicazioni ed eventi aziendali (niente riquadro a parte)
     desc: 'Formazione, riunioni ed eventi aziendali per lo staff.' },
   { key: 'magazzino', name: 'Magazzino centrale', url: 'https://magazzino.appgestione.it', color: 'yellow',
     desc: 'Disponibilità degli articoli, prenotazioni e riordino ai fornitori.' },
@@ -41,11 +42,14 @@ module.exports = [
       { key: 'admin_no', label: 'Amministratore, non in turno', role: 'admin' },
     ],
     desc: 'Planning delle sedi, ferie e permessi, sostituzioni e buste paga.' },
-  { key: 'comunicazioni', name: 'Comunicazioni', url: 'https://comunicazioni.appgestione.it', color: 'purple',
+  { key: 'comunicazioni', name: 'Comunicazioni ed eventi aziendali', url: 'https://comunicazioni.appgestione.it', color: 'purple',
     // chi entra in Turni o Calendario (il personale) riceve da solo l'accesso come Utente, una volta sola:
     // dal pannello si può poi togliere o cambiare in Amministratore (chi scrive le comunicazioni)
     auto: ['turni', 'calendario'],
-    desc: 'Comunicazioni aziendali: leggi, conferma la lettura e chiedi chiarimenti.' },
+    desc: 'Comunicazioni con conferma di lettura ed eventi aziendali: formazione, riunioni, appuntamenti.' },
+  { key: 'documenti', name: 'Documenti di studio', url: 'https://documenti.appgestione.it', color: 'teal',
+    auto: ['turni', 'calendario'],
+    desc: 'Procedure, moduli e regolamenti dello studio, sempre aggiornati.' },
   { key: 'accessi', name: 'Gestione accessi', url: '/admin', color: 'grey', adminOnly: true,
     desc: 'Approva le registrazioni e decide chi entra in quali app.' },
 ];

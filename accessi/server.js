@@ -106,7 +106,8 @@ function limited(key, max, minutes) {
 }
 setInterval(() => { const now = Date.now(); for (const [k, a] of hits) if (!a.some(t => now - t < 3600e3)) hits.delete(k); }, 600e3).unref();
 
-const appsForUser = apps => APPS.filter(a => apps[a.key]).map(a => ({ key: a.key, name: a.name, url: a.url, link: a.sso ? `/sso/${a.key}` : a.url,
+// un'app "dentro" un'altra (Calendario dentro Comunicazioni ed eventi) non ha un suo riquadro se la persona ha anche l'altra
+const appsForUser = apps => APPS.filter(a => apps[a.key] && !(a.dentro && apps[a.dentro])).map(a => ({ key: a.key, name: a.name, url: a.url, link: a.sso ? `/sso/${a.key}` : a.url,
   color: a.color, desc: a.desc, role: apps[a.key] }));
 
 // App su Supabase (Nuovalab, Ticket): quando qualcuno viene disattivato, eliminato o perde l'accesso,

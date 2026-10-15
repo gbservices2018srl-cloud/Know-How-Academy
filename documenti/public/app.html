@@ -1,0 +1,617 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#4CAAAA">
+<title>Documenti di studio · To Smile</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="To Smile Documenti">
+<link rel="stylesheet" href="/fonts/tosmile.css?f=fira-sans:400,500,600,700,800">
+<style>
+
+/* Colori e caratteri To Smile (gli stessi di Calendario e Turni), con tema scuro automatico */
+:root{
+  --bg:#EFF5F5; --dot:#D3E2E2; --surface:#FFFFFF; --surface-2:#F5F9F9; --surface-3:#EAF1F1; --fg:#1F2A2B; --muted:#5E6B6C;
+  --line:#DCE7E7; --line-2:#E8F0F0; --accent:#2B8384; --accent-soft:#DCEFEF; --accent-fg:#FFFFFF;
+  --brand-teal:#4CAAAA; --brand-purple:#8C6898; --brand-yellow:#E8E564; --purple-soft:#EFE7F2;
+  --danger:#B42318; --danger-soft:#FBE3E0; --ok:#1F7A4D; --ok-soft:#DDF1E6; --warn:#8A4A12; --warn-soft:#FBEBDD;
+  --shadow:0 1px 2px rgba(20,48,48,.05),0 8px 28px rgba(20,48,48,.09);
+  --f-display:"Fira Sans",system-ui,sans-serif; --f-body:"Fira Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#101818; --dot:#1E2B2B; --surface:#172121; --surface-2:#1D2929; --surface-3:#223030; --fg:#E7F0F0; --muted:#9FB0B0;
+  --line:#2A3939; --line-2:#223030; --accent:#62C3C3; --accent-soft:#163536; --accent-fg:#062222;
+  --brand-teal:#62C3C3; --brand-purple:#B597C2; --purple-soft:#2E2433;
+  --danger:#FF8A7A; --danger-soft:#3A1D1A; --ok:#6FD39C; --ok-soft:#173326; --warn:#F0B07A; --warn-soft:#3A2817;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35); color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:var(--bg);background-image:radial-gradient(var(--dot) 1.2px,transparent 1.3px);background-size:22px 22px;background-attachment:fixed;
+  color:var(--fg);font:15px/1.5 var(--f-body);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+svg.i{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+[hidden]{display:none!important}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* barra in alto */
+.top{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px max(16px,env(safe-area-inset-left));
+  background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);box-shadow:inset 0 -3px 0 -1px color-mix(in srgb,var(--brand-yellow) 70%,transparent)}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand .logo{height:40px;width:auto;flex:none;display:block}
+.brand .sep{width:1px;height:26px;background:var(--line);flex:none}
+.brand h1{font:600 16px/1.1 var(--f-display);margin:0;white-space:nowrap;color:var(--muted)}
+.tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;min-width:0;padding:2px}
+.tabs::-webkit-scrollbar{display:none}
+.tab{display:inline-flex;align-items:center;gap:7px;border:1px solid transparent;background:none;padding:7px 13px;border-radius:999px;white-space:nowrap;color:var(--muted);font-weight:600;font-size:14px;min-height:40px}
+.tab:hover{background:var(--surface-2)}
+.tab.on{background:var(--accent-soft);color:var(--fg);border-color:color-mix(in srgb,var(--accent) 30%,transparent)}
+.badge{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--brand-purple);color:#fff;font-size:12px;font-weight:800}
+.spacer{flex:1}
+.who{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:3px 12px 3px 3px;font-size:13px;line-height:1.15;flex:none;min-height:40px}
+.who b{font-weight:700;max-width:18ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.av{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:12px;background:var(--accent-soft);color:var(--accent);flex:none}
+.av.admin{background:var(--brand-purple);color:#fff}
+.menuwrap{position:relative}
+.menu{position:absolute;right:0;top:calc(100% + 6px);min-width:220px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:6px;z-index:30}
+.menu a,.menu button{display:flex;align-items:center;gap:10px;width:100%;border:none;background:none;padding:10px;border-radius:8px;text-align:left;font-weight:500;color:inherit;text-decoration:none}
+.menu a:hover,.menu button:hover{background:var(--surface-2)}
+
+/* comuni */
+main{max-width:1000px;margin:0 auto;padding:20px max(16px,env(safe-area-inset-left)) max(48px,env(safe-area-inset-bottom))}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--line);background:var(--surface);padding:9px 15px;border-radius:10px;font-weight:600;font-size:14.5px;white-space:nowrap;text-decoration:none;color:inherit;min-height:42px}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.primary:hover{filter:brightness(1.06);background:var(--accent)}
+.btn.big{min-height:52px;font-size:16px;width:100%}
+.btn.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,transparent)}
+.btn.danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 35%,transparent)}
+.btn.danger.armed{background:var(--danger);color:#fff;border-color:var(--danger)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.sm{padding:6px 11px;font-size:13.5px;min-height:36px}
+.link{border:0;background:none;color:var(--accent);font-weight:600;padding:8px 0;min-height:40px;display:inline-flex;align-items:center;gap:4px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}
+.muted{color:var(--muted)}
+h2.view{font:700 26px/1.15 var(--f-display);letter-spacing:-.015em;margin:0}
+.head{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.head p{margin:4px 0 0;color:var(--muted)}
+.empty{padding:34px 16px;text-align:center;color:var(--muted)}
+.empty b{display:block;color:var(--fg);font-size:16px;margin-bottom:4px}
+.tag{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.tag.imp{background:var(--danger-soft);color:var(--danger)}
+.tag.ok{background:var(--ok-soft);color:var(--ok)}
+.tag.todo{background:var(--warn-soft);color:var(--warn)}
+.tag.no{background:var(--danger-soft);color:var(--danger)}
+.tag.plain{background:var(--surface-3);color:var(--muted)}
+.tag.q{background:var(--purple-soft);color:var(--brand-purple)}
+mark{background:color-mix(in srgb,var(--brand-yellow) 75%,transparent);color:inherit;border-radius:3px;padding:0 1px}
+
+.search{position:relative;flex:1 1 260px;max-width:420px}
+.search input{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:10px 12px 10px 38px;min-height:44px}
+.search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted)}
+
+
+/* elenchi e cartelle */
+.list{display:flex;flex-direction:column;gap:10px}
+.item{display:flex;gap:14px;align-items:center;text-align:left;width:100%;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 16px;color:inherit}
+.item:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.item .body{flex:1;min-width:0}
+.item .t{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.item .t b{font-size:16px;font-weight:700}
+.item .t time{font-size:13px;color:var(--muted);white-space:nowrap}
+.item .pre{font-size:14px;color:var(--muted);margin-top:2px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.item .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;align-items:center}
+.dico{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;flex:none}
+.dico svg{width:22px;height:22px}
+.c0{background:#DCEFEF;color:#1d5f60}.c1{background:#EFE7F2;color:#5b3a68}.c2{background:#FBEBDD;color:#7a3f0f}.c3{background:#E3EAF6;color:#2c4a7a}.c4{background:#F4F3C9;color:#5c5a12}.c5{background:#FBE3E0;color:#8a2018}
+@media (prefers-color-scheme:dark){.c0,.c1,.c2,.c3,.c4,.c5{filter:brightness(.8) saturate(1.2)}}
+.folders{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-bottom:22px}
+.folder{display:flex;flex-direction:column;gap:12px;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;color:inherit;min-height:118px}
+.folder:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.folder b{display:block;font-size:16px}
+.folder span.n{font-size:13px;color:var(--muted)}
+.gtitle{font-size:12.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:6px 0 8px}
+.crumb{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.crumb b{font-size:18px}
+.inline{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:14px;margin-bottom:14px}
+.inline input{flex:1 1 220px;border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:10px 12px;min-height:44px}
+.badge-new{background:var(--accent-soft);color:var(--accent)}
+
+/* caricamento */
+.modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin-bottom:14px}
+.mode{display:flex;gap:12px;align-items:flex-start;text-align:left;background:var(--surface);border:2px solid var(--line);border-radius:14px;padding:14px 16px;color:inherit}
+.mode.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,var(--surface))}
+.mode .dot{width:20px;height:20px;border-radius:50%;border:2px solid var(--muted);flex:none;margin-top:2px;display:grid;place-items:center}
+.mode.on .dot{border-color:var(--accent)}.mode.on .dot::after{content:"";width:10px;height:10px;border-radius:50%;background:var(--accent)}
+.mode b{display:block}.mode span.d{font-size:14px;color:var(--muted)}
+.drop{border:2px dashed color-mix(in srgb,var(--accent) 45%,var(--line));border-radius:16px;background:var(--surface-2);padding:30px 18px;text-align:center;display:block;cursor:pointer}
+.drop.over{background:var(--accent-soft)}
+.drop svg{width:40px;height:40px;color:var(--accent)}
+.spin{width:38px;height:38px;border-radius:50%;border:4px solid var(--accent-soft);border-top-color:var(--accent);margin:0 auto 14px;animation:giro 1s linear infinite}
+@keyframes giro{to{transform:rotate(360deg)}}
+.fieldrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.fieldrow select{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 12px;min-height:44px}
+
+/* editor */
+.edit{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start}
+.edit .paper{flex:999 1 540px;min-width:0;padding:22px 24px}
+.edit .side{flex:1 1 320px;min-width:0;padding:18px;display:flex;flex-direction:column;gap:14px;position:sticky;top:76px}
+.blk{width:100%;border:1px dashed transparent;border-radius:8px;padding:6px 8px;background:transparent;resize:vertical;line-height:1.55}
+.blk:hover{border-color:var(--line)}
+.blk:focus{outline:none;border:1px solid var(--accent);background:var(--surface-2)}
+.blk.title{font:800 26px/1.2 var(--f-display)}
+.blk.h{font-size:18px;font-weight:700;color:var(--accent)}
+.row{display:flex;gap:4px;align-items:flex-start;position:relative}
+.row .tools{display:flex;gap:2px;opacity:.35}
+.row:hover .tools,.row:focus-within .tools{opacity:1}
+.tools button{border:0;background:none;width:30px;height:32px;border-radius:6px;color:var(--muted);display:grid;place-items:center}
+.tools button:hover{background:var(--surface-3);color:var(--fg)}
+.tools svg{width:16px;height:16px}
+.bullet{padding-top:8px;color:var(--accent);font-weight:800;min-width:18px;text-align:right}
+.tblwrap{overflow-x:auto;flex:1;min-width:0}
+table.tbl{border-collapse:collapse;width:100%;font-size:15px;margin:6px 0 14px}
+.tbl th,.tbl td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+.tbl th{background:var(--surface-3);font-weight:700}
+.tbl.ed td{padding:0}
+.tbl.ed input{width:100%;min-width:90px;border:0;background:transparent;padding:8px 10px}
+.tbl.ed tr:first-child input{font-weight:700;background:var(--surface-3)}
+.addbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px solid var(--line-2)}
+.side h3{margin:0 0 8px;font-size:15px}
+.side select{width:100%;border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:9px 12px;min-height:44px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.gchip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 12px;font-size:13.5px;font-weight:600;min-height:38px;color:var(--fg)}
+.gchip small{color:var(--muted);margin-left:3px}
+.gchip.on{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}.gchip.on small{color:inherit;opacity:.85}
+.psearch{position:relative;margin-top:8px}
+.psearch input{width:100%;border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:9px 12px;min-height:44px}
+.pres{position:absolute;left:0;right:0;top:100%;z-index:5;background:var(--surface);border:1px solid var(--line);border-radius:10px;margin-top:4px;box-shadow:var(--shadow);max-height:240px;overflow:auto}
+.pres button{display:block;width:100%;text-align:left;border:0;background:none;padding:10px 12px;border-bottom:1px solid var(--line-2);min-height:44px}
+.pres button:hover{background:var(--surface-3)}
+.pchip{display:inline-flex;align-items:center;gap:4px;background:var(--accent-soft);border-radius:999px;padding:4px 4px 4px 11px;font-size:13.5px;font-weight:600}
+.pchip button{border:0;background:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:var(--muted)}
+.check{display:flex;gap:10px;align-items:center;min-height:44px;font-size:15px;cursor:pointer}
+.check input{width:20px;height:20px;accent-color:var(--accent)}
+.note{font-size:13px;color:var(--muted)}
+.summary{background:var(--surface-2);border-radius:10px;padding:10px 12px;font-size:14px;margin-top:10px}
+.warnbox{background:var(--warn-soft);color:var(--warn);border-radius:12px;padding:11px 14px;font-weight:600;font-size:14px;margin-bottom:12px}
+
+/* lettura */
+.doc{max-width:780px;margin:4px auto 0;padding:34px 38px;position:relative;overflow:hidden}
+.doc .meta{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center}
+.doc h1{font:800 30px/1.15 var(--f-display);margin:14px 0 8px;letter-spacing:-.01em}
+.doc .bar{height:3px;width:56px;background:var(--brand-yellow);border-radius:3px;margin-bottom:18px}
+.doc h2{font-size:19px;font-weight:700;color:var(--accent);margin:24px 0 6px}
+.doc p{font-size:16px;line-height:1.65;margin:0 0 12px;white-space:pre-line;overflow-wrap:anywhere}
+.doc .li{display:flex;gap:10px;font-size:16px;line-height:1.6;margin:0 0 6px 4px}
+.doc .li>span:first-child{color:var(--accent);font-weight:800;min-width:18px;text-align:right}
+.doc img.fig{max-width:100%;height:auto;border-radius:10px;margin:8px 0 14px;display:block}
+.doc .foot{border-top:1px solid var(--line-2);margin-top:26px;padding-top:16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.lock{display:inline-flex;gap:8px;align-items:center;font-size:14px;font-weight:600;color:var(--brand-purple);background:var(--purple-soft);border-radius:10px;padding:10px 14px}
+.lock svg{width:18px;height:18px}
+.wm{position:absolute;inset:0;pointer-events:none;overflow:hidden;opacity:.06;font-weight:800;font-size:22px;color:var(--fg);display:flex;flex-wrap:wrap;gap:60px 80px;padding:30px;transform:rotate(-24deg) scale(1.4);user-select:none}
+.pages{display:flex;flex-direction:column;gap:12px;align-items:center}
+.pages canvas{max-width:100%;height:auto;box-shadow:0 2px 12px rgba(0,0,0,.12);border-radius:4px;background:#fff}
+.nocopy{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+
+.toast{position:fixed;left:50%;bottom:max(20px,env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:11px 16px;border-radius:12px;font-weight:600;font-size:14px;z-index:100;box-shadow:var(--shadow);max-width:min(92vw,560px);text-align:center}
+footer{max-width:1000px;margin:0 auto;padding:0 16px 30px;font-size:12.5px;color:var(--muted);text-align:center}
+@media (max-width:640px){
+  .brand .logo{height:32px}.brand .sep{height:22px}.brand h1{font-size:14px}
+  .who{padding:3px}.who b{display:none}
+  .doc{padding:24px 20px}.doc h1{font-size:25px}
+  .edit .side{position:static}
+}
+@media print{
+  .top,footer,.link,.foot,.toast,.adminbar,.banner{display:none!important}
+  body{background:#fff!important}
+  main{padding:0!important;max-width:none!important}
+  .doc{box-shadow:none!important;border:0!important;padding:0!important;max-width:none!important}
+  .doc::before{content:"To Smile · Documenti di studio";display:block;font-size:11px;color:#5E6B6C;margin-bottom:6px}
+  body.blocca-stampa *{display:none!important}
+  body.blocca-stampa::after{content:"Questo documento si consulta solo nell'app Documenti di studio.";display:block;font:16px sans-serif;padding:40px}
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <img class="logo" src="/logo.png" alt="To Smile" width="543" height="162">
+    <span class="sep"></span>
+    <h1>Documenti di studio</h1>
+  </div>
+  <div class="spacer"></div>
+  <div class="menuwrap">
+    <button class="who" id="who" aria-haspopup="menu" aria-expanded="false"></button>
+    <div class="menu" id="menu" role="menu" hidden></div>
+  </div>
+</header>
+<main id="main"><div class="empty">Caricamento…</div></main>
+<footer>
+  <a href="https://appgestione.it/privacy" target="_blank" rel="noopener" style="color:inherit">Privacy Policy</a> ·
+  <a href="https://appgestione.it/cookie" target="_blank" rel="noopener" style="color:inherit">Cookie Policy</a> ·
+  <a href="https://appgestione.it/termini" target="_blank" rel="noopener" style="color:inherit">Termini e condizioni</a>
+</footer>
+<div class="toast" id="toast" role="status" hidden></div>
+<input type="file" id="imgpick" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const I = {
+  doc: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>',
+  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  up: '<path d="M12 19V5M6 11l6-6 6 6"/>', down: '<path d="M12 5v14M6 13l6 6 6-6"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>',
+  upload: '<path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v4h16v-4"/>', dl: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+  lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>', back: '<path d="M15 5l-7 7 7 7"/>',
+  search: '<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>', bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
+  apps: '<rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/>',
+  out: '<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>', edit: '<path d="M4 20h4L19 9l-4-4L4 16v4z"/>', trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>', eye: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+};
+const ic = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${I[n]}</svg>`;
+let toastT;
+function toast(t, ms = 3500) { const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => el.hidden = true, ms); }
+async function api(method, url, body, isForm) {
+  const r = await fetch(url, { method, credentials: 'same-origin', headers: body && !isForm ? { 'Content-Type': 'application/json' } : {}, body: isForm ? body : body ? JSON.stringify(body) : undefined });
+  if (r.status === 401) { location.reload(); throw new Error('Accesso scaduto'); }
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'Errore, riprova.');
+  return d;
+}
+const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+const data = iso => { if (!iso) return ''; const d = new Date(iso); return `${d.getDate()} ${MESI[d.getMonth()]} ${d.getFullYear()}`; };
+function hl(text, q) { const t = esc(text); if (!q) return t; const re = new RegExp(esc(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'); return t.replace(re, m => `<mark>${m}</mark>`); }
+const ricco = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(https?:\/\/[^\s<)]+)/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
+const iniziali = n => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0]).join('').toUpperCase();
+
+/* ============ stato ============ */
+const S = { me: null, ai: false, notif: null, links: null, cats: [], docs: null, view: 'lib', cat: null, q: '', cur: null,
+  draft: null, dest: null, pq: '', modo: 'pagina', caricando: false, nuovaCat: false, rinomina: false, nomeCat: '', avviso: '', err: '' };
+const colore = catId => 'c' + Math.max(0, S.cats.findIndex(c => c.id === catId)) % 6;
+
+/* ============ barra in alto ============ */
+function renderTop() {
+  $('#who').innerHTML = `<span class="av ${S.me.admin ? 'admin' : ''}">${esc(iniziali(S.me.name))}</span><b>${esc(S.me.name)}</b>`;
+  const home = esc(S.links?.home || 'https://appgestione.it');
+  $('#menu').innerHTML = `<a role="menuitem" href="${home}">${ic('apps')}Le mie app</a><a role="menuitem" href="${home}/#notif">${ic('bell')}Notifiche sul telefono</a>
+    <button role="menuitem" data-a="esci">${ic('out')}Esci</button>`;
+}
+$('#who').addEventListener('click', () => { const m = $('#menu'); m.hidden = !m.hidden; $('#who').setAttribute('aria-expanded', String(!m.hidden)); });
+document.addEventListener('click', e => { if (!e.target.closest('.menuwrap')) { $('#menu').hidden = true; $('#who').setAttribute('aria-expanded', 'false'); } });
+
+/* ============ navigazione ============ */
+function go(view, extra = {}) {
+  Object.assign(S, { view, err: '', avviso: '' }, extra);
+  const u = new URL(location.href);
+  u.search = (view === 'read' || view === 'edit') && S.cur ? `?d=${encodeURIComponent(S.cur.id)}` : S.cat && view === 'lib' ? `?c=${encodeURIComponent(S.cat)}` : '';
+  history.replaceState(null, '', u);
+  document.body.classList.remove('blocca-stampa');
+  window.scrollTo(0, 0);
+  render();
+}
+async function caricaLista() {
+  const [c, d] = await Promise.all([api('GET', '/api/categorie'),
+    api('GET', '/api/documenti?q=' + encodeURIComponent(S.q) + (S.cat ? '&categoria=' + encodeURIComponent(S.cat) : ''))]);
+  S.cats = c.categorie; S.docs = d.documenti;
+}
+async function apriDoc(id, modifica) {
+  try {
+    S.cur = await api('GET', '/api/documenti/' + encodeURIComponent(id));
+    if (modifica && S.me.admin) { await preparaEditor(); return go('edit'); }
+    go('read');
+  } catch (e) { toast(e.message); go('lib'); }
+}
+async function preparaEditor() {
+  if (!S.dest) S.dest = await api('GET', '/api/destinatari');
+  if (!S.cats.length) S.cats = (await api('GET', '/api/categorie')).categorie;
+  const c = S.cur;
+  S.draft = { titolo: c.titolo, categoria: c.categoriaId, blocchi: JSON.parse(JSON.stringify(c.blocchi || [])), gruppi: [...(c.gruppi || [])],
+    persone: [...(c.persone || [])], scaricabile: c.scaricabile, notifica: c.notifica, bozza: c.bozza, tipo: c.tipo };
+}
+
+function render() {
+  renderTop();
+  const v = { lib: vLib, upload: vUpload, edit: vEdit, read: vRead }[S.view];
+  $('#main').innerHTML = v();
+  if (S.view === 'read' && S.cur?.tipo === 'originale') mostraPdf();
+  if (S.view === 'edit' && S.draft?.tipo === 'originale') mostraPdf();
+}
+
+/* ============ libreria ============ */
+function bannerNotifiche() {
+  const n = S.notif; if (!n || S.me.admin) return '';
+  const home = esc(S.links?.home || 'https://appgestione.it');
+  if (!n.dispositivi) return `<div class="banner">${ic('bell')}<div class="grow"><b>Attiva le notifiche</b>Così sai subito quando c'è un documento nuovo o aggiornato per te.</div><a class="btn primary" href="${home}/#notif">Attiva le notifiche</a></div>`;
+  return '';
+}
+function riga(d) {
+  const tags = [`<span class="tag plain">${esc(d.categoria || 'Senza categoria')}</span>`];
+  if (S.me.admin) {
+    tags.push(d.bozza ? '<span class="tag todo">Bozza, non visibile</span>' : `<span class="tag q">Visibile a: ${esc(d.a_chi)}</span>`);
+  } else if (d.nuovo) tags.push(`<span class="tag badge-new">${d.versione > 1 ? 'Aggiornato' : 'Nuovo'}</span>`);
+  if (d.tipo === 'originale') tags.push('<span class="tag plain">Impaginazione originale</span>');
+  if (!d.scaricabile) tags.push(`<span class="tag plain">${ic('lock')}Non scaricabile</span>`);
+  return `<button class="item" data-doc="${esc(d.id)}"><span class="dico ${colore(d.categoria_id)}">${ic('doc')}</span>
+    <div class="body"><div class="t"><b>${hl(d.titolo, S.q)}</b><time>${esc(data(d.aggiornato_il))}</time></div>
+    ${S.q && d.anteprima ? `<div class="pre">${hl(d.anteprima, S.q)}</div>` : ''}
+    <div class="tags">${tags.join('')}</div></div></button>`;
+}
+function vLib() {
+  if (!S.docs) return '<div class="empty">Caricamento…</div>';
+  const cat = S.cats.find(c => c.id === S.cat);
+  const cartelle = !S.cat && !S.q;
+  const cats = S.me.admin ? S.cats : S.cats.filter(c => c.n > 0);
+  let h = bannerNotifiche() + `<div class="head"><div style="flex:1 1 260px"><h2 class="view">${S.me.admin ? 'Documenti di studio' : 'I documenti per te'}</h2>
+    <p>${S.me.admin ? 'Crea le categorie, carica i documenti e scegli chi li vede.' : 'Leggili qui; quelli scaricabili li salvi in PDF.'}</p></div>
+    ${S.me.admin ? `<button class="btn primary" data-a="carica">${ic('upload')}Carica documento</button>` : ''}</div>`;
+  if (cat) h += `<div class="crumb"><button class="link" data-a="tutte">${ic('back')}Tutte le categorie</button><span class="muted">/</span><b>${esc(cat.nome)}</b>
+    ${S.me.admin ? `<span class="spacer"></span><button class="btn sm" data-a="rinomina">${ic('edit')}Rinomina</button><button class="btn sm danger" data-a="elimina-cat">${ic('trash')}Elimina categoria</button>` : ''}</div>
+    ${S.rinomina ? `<div class="card inline"><label class="sr" for="nomecat">Nuovo nome</label><input id="nomecat" data-nomecat value="${esc(S.nomeCat)}" maxlength="80"><button class="btn primary" data-a="salva-nome">Salva</button><button class="btn" data-a="annulla-cat">Annulla</button></div>` : ''}`;
+  h += `<div class="head" style="margin-bottom:12px"><label class="search"><span class="sr">Cerca nei documenti</span>${ic('search')}
+    <input type="search" data-q value="${esc(S.q)}" placeholder="Cerca per parola o frase…" autocomplete="off"></label>
+    ${S.me.admin && cartelle ? `<button class="btn" data-a="nuova-cat">${ic('plus')}Nuova categoria</button>` : ''}</div>`;
+  if (S.nuovaCat) h += `<div class="card inline"><label for="nomecat" style="font-weight:600">Nome della nuova categoria</label>
+    <input id="nomecat" data-nomecat value="${esc(S.nomeCat)}" maxlength="80" placeholder="Es. Formazione, Sicurezza sul lavoro…"><button class="btn primary" data-a="crea-cat">Crea</button><button class="btn" data-a="annulla-cat">Annulla</button></div>`;
+  if (cartelle) {
+    h += `<div class="gtitle">Categorie</div><div class="folders">${cats.map(c => `<button class="folder" data-cat="${esc(c.id)}">
+      <span class="dico ${colore(c.id)}">${ic('folder')}</span><span><b>${esc(c.nome)}</b><span class="n">${c.n === 1 ? '1 documento' : c.n + ' documenti'}</span></span></button>`).join('')
+      || '<div class="muted">Nessuna categoria con documenti per te, per ora.</div>'}</div>`;
+    h += `<div class="gtitle">${S.me.admin ? 'Ultimi documenti' : 'Ultimi documenti per te'}</div>`;
+  }
+  const lista = cartelle ? S.docs.slice(0, 10) : S.docs;
+  h += `<div class="list">${lista.length ? lista.map(riga).join('') : `<div class="card empty">${S.q ? `<b>Nessun documento contiene «${esc(S.q)}»</b>Prova con un'altra parola.` : cat ? '<b>Nessun documento in questa categoria</b>' + (S.me.admin ? 'Caricalo con «Carica documento».' : '') : '<b>Nessun documento, per ora</b>'}</div>`}</div>`;
+  return h;
+}
+
+/* ============ caricamento ============ */
+function vUpload() {
+  if (S.caricando) return `<div class="card empty" style="padding:40px"><div class="spin"></div><b>Sto trasformando «${esc(S.caricando)}»…</b>
+    ${S.modo === 'pagina' ? 'Riconosco titoli, paragrafi, elenchi e tabelle. Con i PDF può volerci fino a un minuto.' : 'Preparo le pagine.'}</div>`;
+  const cats = S.cats.map(c => `<option value="${esc(c.id)}" ${c.id === (S.upCat || S.cat) ? 'selected' : ''}>${esc(c.nome)}</option>`).join('');
+  return `<button class="link" data-a="tutte-o-cat">${ic('back')}Torna ai documenti</button>
+  <div class="head"><div><h2 class="view">Carica un documento</h2><p>PDF o Word (.docx), fino a 25 MB.</p></div></div>
+  <div class="modes" role="radiogroup" aria-label="Come trasformarlo">
+    <button class="mode ${S.modo === 'pagina' ? 'on' : ''}" role="radio" aria-checked="${S.modo === 'pagina'}" data-modo="pagina"><span class="dot"></span><span>
+      <b>Trasforma in pagina dell'app <span class="tag badge-new" style="margin-left:4px">consigliato</span></b>
+      <span class="d">Tiene titoli, paragrafi, elenchi, tabelle, grassetti e immagini (dai Word) e li impagina nello stile To Smile: si legge bene anche sul telefono e si corregge qui.${S.ai ? ' I PDF, anche scansionati, li legge l\'AI.' : ''}</span></span></button>
+    <button class="mode ${S.modo === 'originale' ? 'on' : ''}" role="radio" aria-checked="${S.modo === 'originale'}" data-modo="originale"><span class="dot"></span><span>
+      <b>Mantieni l'impaginazione originale</b>
+      <span class="d">Solo PDF. Per moduli e documenti ufficiali dove conta l'aspetto esatto: si vedono pagina per pagina, in sola lettura. Per cambiarli si carica una nuova versione.</span></span></button>
+  </div>
+  <div class="fieldrow"><label for="up-cat" style="font-weight:700">Categoria</label><select id="up-cat" data-upcat>${cats}</select></div>
+  ${S.err ? `<div class="warnbox" role="alert">${esc(S.err)}</div>` : ''}
+  <label class="drop" id="drop"><input type="file" id="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" class="sr">
+    ${ic('upload')}<div style="font-weight:700;font-size:17px;margin-top:6px">Trascina qui il file oppure tocca per sceglierlo</div>
+    <div class="muted" style="font-size:14px">Il file originale ${S.modo === 'pagina' ? 'non viene conservato: resta la pagina dell\'app' : 'viene conservato e mostrato così com\'è'}.</div></label>`;
+}
+async function inviaFile(f) {
+  if (!f) return;
+  const fd = new FormData(); fd.append('file', f); fd.append('modo', S.modo); fd.append('categoria', $('#up-cat')?.value || S.cat || '');
+  S.caricando = f.name; S.err = ''; render();
+  try {
+    const r = await api('POST', '/api/carica', fd, true);
+    S.caricando = false;
+    S.cur = await api('GET', '/api/documenti/' + r.id);
+    await preparaEditor();
+    go('edit'); if (r.avviso) { S.avviso = r.avviso; render(); }
+  } catch (e) { S.caricando = false; S.err = e.message; render(); }
+}
+
+/* ============ editor ============ */
+function bloccoEd(b, i, n) {
+  const tools = `<span class="tools">${i ? `<button data-mv="${i}" data-dir="-1" aria-label="Sposta su">${ic('up')}</button>` : ''}${i < n - 1 ? `<button data-mv="${i}" data-dir="1" aria-label="Sposta giù">${ic('down')}</button>` : ''}<button data-rm="${i}" aria-label="Togli">${ic('x')}</button></span>`;
+  if (b.t === 'h') return `<div class="row"><input class="blk h" data-b="${i}" value="${esc(b.x)}" aria-label="Titolo di sezione">${tools}</div>`;
+  if (b.t === 'p') return `<div class="row"><textarea class="blk" data-b="${i}" rows="${Math.max(2, Math.ceil(b.x.length / 85))}" aria-label="Paragrafo">${esc(b.x)}</textarea>${tools}</div>`;
+  if (b.t === 'li') { const num = b.n ? (S.draft.blocchi.slice(0, i + 1).reverse().findIndex(x => !(x.t === 'li' && x.n)) + 0 || 0) : 0;
+    let k = 0; for (let j = i; j >= 0 && S.draft.blocchi[j].t === 'li' && S.draft.blocchi[j].n; j--) k++;
+    return `<div class="row"><span class="bullet">${b.n ? k + '.' : '•'}</span><input class="blk" data-b="${i}" value="${esc(b.x)}" aria-label="Punto dell'elenco">${tools}</div>`; }
+  if (b.t === 't') return `<div class="row"><div class="tblwrap"><table class="tbl ed"><tbody>${b.rows.map((r, ri) => `<tr>${r.map((c, ci) => `<td><input data-cell="${i}:${ri}:${ci}" value="${esc(c)}" aria-label="Cella riga ${ri + 1} colonna ${ci + 1}"></td>`).join('')}</tr>`).join('')}</tbody></table>
+    <div style="display:flex;gap:6px;margin:-6px 0 10px"><button class="btn sm" data-addrow="${i}">+ Riga</button><button class="btn sm" data-addcol="${i}">+ Colonna</button>${b.rows.length > 1 ? `<button class="btn sm" data-delrow="${i}">− Riga</button>` : ''}${b.rows[0].length > 1 ? `<button class="btn sm" data-delcol="${i}">− Colonna</button>` : ''}</div></div>${tools}</div>`;
+  if (b.t === 'img') return `<div class="row"><img class="fig" src="/api/immagini/${esc(b.id)}" alt="" style="max-width:100%;border-radius:10px;margin:6px 0">${tools}</div>`;
+  return '';
+}
+function vEdit() {
+  const d = S.draft, c = S.cur; if (!d) return '<div class="empty">Caricamento…</div>';
+  const gr = S.dest.gruppi;
+  const chip = g => `<button class="gchip ${d.gruppi.includes(g.id) ? 'on' : ''}" data-gruppo="${esc(g.id)}" aria-pressed="${d.gruppi.includes(g.id)}">${esc(g.label)}<small>${g.n}</small></button>`;
+  const chi = S.dest.persone.filter(p => d.persone.includes(p.id) || d.gruppi.some(k => k === 'tutti' || (k.startsWith('figura:') && p.figura === k.slice(7)) || (k.startsWith('sede:') && p.sedi.includes(k.slice(5)))));
+  return `<div class="adminbar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="link" data-a="tutte-o-cat">${ic('back')}Torna ai documenti</button></div>
+  ${S.avviso ? `<div class="warnbox" role="status">${esc(S.avviso)}</div>` : ''}
+  <div class="edit">
+    <section class="card paper" aria-label="Contenuto">
+      <div class="note" style="margin-bottom:8px">${esc(c.origine || '')}${d.bozza ? ' · <b>bozza</b>, nessuno la vede finché non la pubblichi' : c.aggiornatoDa ? ' · ultima modifica di ' + esc(c.aggiornatoDa) : ''}</div>
+      <label class="sr" for="ed-t">Titolo del documento</label>
+      <input id="ed-t" class="blk title" data-titolo value="${esc(d.titolo)}" maxlength="160">
+      <div style="height:1px;background:var(--line-2);margin:10px 0"></div>
+      ${d.tipo === 'originale' ? '<div class="note" style="margin-bottom:10px">Documento con impaginazione originale: si vede così com\'è. Per cambiarlo carica una nuova versione e elimina questa.</div><div class="pages" id="pages"><div class="spin"></div></div>'
+        : `${d.blocchi.map((b, i) => bloccoEd(b, i, d.blocchi.length)).join('') || '<div class="muted">Pagina vuota: aggiungi un titolo o un paragrafo qui sotto.</div>'}
+      <div class="addbar"><button class="btn sm" data-add="h">+ Titolo</button><button class="btn sm" data-add="p">+ Paragrafo</button><button class="btn sm" data-add="li">+ Punto elenco</button>
+        <button class="btn sm" data-add="n">+ Punto numerato</button><button class="btn sm" data-add="t">+ Tabella</button><button class="btn sm" data-add="img">+ Immagine</button></div>
+      <div class="note" style="margin-top:8px">Per il grassetto scrivi il testo tra due asterischi: **così**.</div>`}
+    </section>
+    <aside class="card side" aria-label="Impostazioni">
+      <div><h3>Categoria</h3><select data-cat-ed aria-label="Categoria">${S.cats.map(x => `<option value="${esc(x.id)}" ${x.id === d.categoria ? 'selected' : ''}>${esc(x.nome)}</option>`).join('')}</select></div>
+      <div><h3>Chi lo vede</h3>
+        <div class="chips">${chip(gr[0])}${gr.filter(g => g.tipo === 'figura').map(chip).join('')}</div>
+        ${gr.some(g => g.tipo === 'sede') ? `<div class="chips" style="margin-top:6px">${gr.filter(g => g.tipo === 'sede').map(chip).join('')}</div>` : ''}
+        <div class="psearch"><label class="sr" for="pq">Aggiungi una persona</label><input id="pq" type="search" data-pq value="${esc(S.pq)}" placeholder="Aggiungi una persona per nome o cognome" autocomplete="off"><div class="pres" id="pres" hidden></div></div>
+        ${d.persone.length ? `<div class="chips" style="margin-top:8px">${d.persone.map(id => { const p = S.dest.persone.find(x => x.id === id); return `<span class="pchip">${esc(p?.nome || '?')}<button data-togli="${esc(id)}" aria-label="Togli ${esc(p?.nome || '')}">${ic('x')}</button></span>`; }).join('')}</div>` : ''}
+        <div class="summary">${chi.length ? `Lo vedranno <b>${chi.length}</b> ${chi.length === 1 ? 'persona' : 'persone'}.` : 'Ancora nessuno: scegli Tutti, un gruppo o delle persone.'}</div></div>
+      <div style="border-top:1px solid var(--line-2);padding-top:10px">
+        <label class="check"><input type="checkbox" data-flag="scaricabile" ${d.scaricabile ? 'checked' : ''}> Il dipendente può scaricarlo in PDF</label>
+        <div class="note">${d.scaricabile ? 'Lo legge nell\'app e lo scarica o stampa in PDF, ma non può modificarlo.' : 'Lo legge solo dentro l\'app: niente pulsante per scaricarlo né stampa, con il suo nome in filigrana.'}</div>
+        <label class="check"><input type="checkbox" data-flag="notifica" ${d.notifica ? 'checked' : ''}> Avvisa con una notifica quando lo pubblico o lo aggiorno</label></div>
+      ${S.err ? `<div class="warnbox" role="alert">${esc(S.err)}</div>` : ''}
+      <button class="btn primary big" data-a="pubblica">${d.bozza ? 'Pubblica il documento' : 'Salva le modifiche'}</button>
+      ${d.bozza ? '<button class="btn" data-a="bozza">Salva come bozza</button>' : ''}
+      <button class="btn" data-a="anteprima">${ic('eye')}Vedi come lo vede il dipendente</button>
+      <button class="btn danger sm" data-a="elimina">${ic('trash')}Elimina documento</button>
+    </aside>
+  </div>`;
+}
+function risultatiPersone() {
+  const box = $('#pres'); if (!box) return;
+  const q = S.pq.trim().toLowerCase();
+  const res = q.length < 2 ? [] : S.dest.persone.filter(p => !S.draft.persone.includes(p.id) && p.nome.toLowerCase().includes(q)).slice(0, 8);
+  box.hidden = q.length < 2;
+  box.innerHTML = res.length ? res.map(p => `<button data-aggiungi="${esc(p.id)}"><b>${esc(p.nome)}</b> <span class="muted">${esc([p.figuraNome, p.sedi.join(', ')].filter(Boolean).join(' · '))}</span></button>`).join('') : '<div class="muted" style="padding:10px 12px">Nessuna persona trovata.</div>';
+}
+async function salva(pubblica, bozza) {
+  const d = S.draft;
+  const r = await api('PUT', '/api/documenti/' + S.cur.id, { titolo: d.titolo, categoria: d.categoria, blocchi: d.blocchi, gruppi: d.gruppi, persone: d.persone,
+    scaricabile: d.scaricabile, notifica: d.notifica, pubblica: !!pubblica, bozza: !!bozza });
+  return r;
+}
+
+/* ============ lettura ============ */
+function bloccoLe(b, i, list) {
+  if (b.t === 'h') return `<h2>${ricco(b.x)}</h2>`;
+  if (b.t === 'p') return b.x.trim() ? `<p>${ricco(b.x)}</p>` : '';
+  if (b.t === 'li') { let k = 0; for (let j = i; j >= 0 && list[j].t === 'li' && list[j].n; j--) k++; return `<div class="li"><span aria-hidden="true">${b.n ? k + '.' : '•'}</span><span>${ricco(b.x)}</span></div>`; }
+  if (b.t === 't') return `<div style="overflow-x:auto"><table class="tbl"><thead><tr>${b.rows[0].map(c => `<th>${ricco(c)}</th>`).join('')}</tr></thead><tbody>${b.rows.slice(1).map(r => `<tr>${r.map(c => `<td>${ricco(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  if (b.t === 'img') return `<img class="fig" src="/api/immagini/${esc(b.id)}" alt="">`;
+  return '';
+}
+function vRead() {
+  const c = S.cur; if (!c) return '<div class="empty">Caricamento…</div>';
+  const anteprima = S.anteprima && S.me.admin;
+  const d = anteprima ? { ...c, titolo: S.draft.titolo, blocchi: S.draft.blocchi, scaricabile: S.draft.scaricabile } : c;
+  if (!d.scaricabile) document.body.classList.add('blocca-stampa');
+  const wm = !d.scaricabile ? `<div class="wm" aria-hidden="true">${Array(40).fill(esc(S.me.name)).map(x => `<span>${x}</span>`).join('')}</div>` : '';
+  return `<div class="adminbar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between">
+    ${anteprima ? `<button class="link" data-a="torna-editor">${ic('back')}Torna alla modifica</button><span class="tag q">Anteprima: così lo vede un dipendente</span>`
+      : `<button class="link" data-a="tutte-o-cat">${ic('back')}Torna ai documenti</button>${S.me.admin ? `<button class="btn sm" data-a="modifica">${ic('edit')}Modifica</button>` : ''}`}</div>
+  <article class="card doc ${d.scaricabile ? '' : 'nocopy'}">${wm}
+    <div class="meta"><span class="tag plain">${esc(c.categoria)}</span><span class="note">${c.pubblicatoIl ? 'Aggiornato il ' + esc(data(c.aggiornatoIl)) : 'Bozza'}</span></div>
+    <h1>${esc(d.titolo)}</h1><div class="bar"></div>
+    ${d.tipo === 'originale' ? '<div class="pages" id="pages"><div class="spin"></div></div>' : d.blocchi.map(bloccoLe).join('')}
+    <div class="foot"><span class="note">Documento ufficiale To Smile · sola lettura</span>
+      ${d.scaricabile ? (d.tipo === 'originale' ? `<a class="btn primary" href="/api/documenti/${esc(c.id)}/originale?scarica=1">${ic('dl')}Scarica PDF</a>`
+        : `<button class="btn primary" data-a="stampa">${ic('dl')}Scarica PDF</button>`)
+        : `<span class="lock">${ic('lock')}Solo consultazione nell'app</span>`}</div>
+  </article>`;
+}
+let pdfjs = null;
+async function mostraPdf() {
+  const box = $('#pages'); if (!box) return;
+  try {
+    if (!pdfjs) { pdfjs = await import('/vendor/pdf.min.mjs'); pdfjs.GlobalWorkerOptions.workerSrc = '/vendor/pdf.worker.min.mjs'; }
+    const doc = await pdfjs.getDocument({ url: `/api/documenti/${S.cur.id}/originale`, withCredentials: true }).promise;
+    box.innerHTML = '';
+    const w = Math.min(box.clientWidth || 700, 900), dpr = Math.min(window.devicePixelRatio || 1, 2);
+    for (let i = 1; i <= doc.numPages; i++) {
+      const p = await doc.getPage(i), v0 = p.getViewport({ scale: 1 }), sc = w / v0.width, v = p.getViewport({ scale: sc * dpr });
+      const cv = document.createElement('canvas'); cv.width = v.width; cv.height = v.height; cv.style.width = w + 'px';
+      cv.setAttribute('aria-label', `Pagina ${i} di ${doc.numPages}`); cv.setAttribute('role', 'img');
+      box.append(cv);
+      await p.render({ canvasContext: cv.getContext('2d'), viewport: v }).promise;
+      if (!$('#pages')) return;
+    }
+  } catch (e) { box.innerHTML = `<div class="warnbox">Non riesco a mostrare il PDF (${esc(e.message)}). ${S.cur.scaricabile ? 'Puoi scaricarlo qui sotto.' : ''}</div>`; }
+}
+
+/* ============ eventi ============ */
+let qT;
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.matches('[data-q]')) { S.q = t.value; clearTimeout(qT); qT = setTimeout(async () => { try { await caricaLista(); } catch {} const pos = t.selectionStart; render(); const n = $('[data-q]'); n.focus(); try { n.setSelectionRange(pos, pos); } catch {} }, 300); }
+  if (t.matches('[data-nomecat]')) S.nomeCat = t.value;
+  if (!S.draft) return;
+  if (t.matches('[data-titolo]')) S.draft.titolo = t.value;
+  if (t.dataset.b !== undefined) S.draft.blocchi[+t.dataset.b].x = t.value;
+  if (t.dataset.cell) { const [i, r, c] = t.dataset.cell.split(':').map(Number); S.draft.blocchi[i].rows[r][c] = t.value; }
+  if (t.matches('[data-pq]')) { S.pq = t.value; risultatiPersone(); }
+});
+document.addEventListener('change', async e => {
+  const t = e.target;
+  if (t.id === 'file') return inviaFile(t.files[0]);
+  if (t.id === 'imgpick') {
+    const f = t.files[0]; t.value = ''; if (!f) return;
+    const fd = new FormData(); fd.append('file', f);
+    try { const r = await api('POST', `/api/documenti/${S.cur.id}/immagine`, fd, true); S.draft.blocchi.push({ t: 'img', id: r.id }); render(); } catch (x) { toast(x.message); }
+    return;
+  }
+  if (t.matches('[data-upcat]')) S.upCat = t.value;
+  if (!S.draft) return;
+  if (t.matches('[data-cat-ed]')) S.draft.categoria = t.value;
+  if (t.dataset.flag) { S.draft[t.dataset.flag] = t.checked; render(); }
+});
+document.addEventListener('dragover', e => { const d = e.target.closest('#drop'); if (d) { e.preventDefault(); d.classList.add('over'); } });
+document.addEventListener('dragleave', e => { const d = e.target.closest('#drop'); if (d) d.classList.remove('over'); });
+document.addEventListener('drop', e => { const d = e.target.closest('#drop'); if (d) { e.preventDefault(); inviaFile(e.dataTransfer.files[0]); } });
+
+document.addEventListener('click', async e => {
+  const b = e.target.closest('button,a[data-a]'); if (!b) return;
+  const D = S.draft;
+  try {
+    if (b.dataset.doc) return apriDoc(b.dataset.doc, false);
+    if (b.dataset.cat) { S.cat = b.dataset.cat; S.q = ''; S.docs = null; render(); await caricaLista(); return go('lib'); }
+    if (b.dataset.modo) { S.modo = b.dataset.modo; S.err = ''; return render(); }
+    if (D) {
+      if (b.dataset.gruppo) { const k = b.dataset.gruppo; D.gruppi = D.gruppi.includes(k) ? D.gruppi.filter(x => x !== k) : [...D.gruppi, k]; return render(); }
+      if (b.dataset.aggiungi) { D.persone.push(b.dataset.aggiungi); S.pq = ''; render(); $('#pq')?.focus(); return; }
+      if (b.dataset.togli) { D.persone = D.persone.filter(x => x !== b.dataset.togli); return render(); }
+      if (b.dataset.mv) { const i = +b.dataset.mv, j = i + +b.dataset.dir; [D.blocchi[i], D.blocchi[j]] = [D.blocchi[j], D.blocchi[i]]; return render(); }
+      if (b.dataset.rm) { D.blocchi.splice(+b.dataset.rm, 1); return render(); }
+      if (b.dataset.add) {
+        const k = b.dataset.add;
+        if (k === 'img') return $('#imgpick').click();
+        D.blocchi.push(k === 'h' ? { t: 'h', x: 'Nuovo titolo' } : k === 'li' ? { t: 'li', x: '' } : k === 'n' ? { t: 'li', x: '', n: true } : k === 't' ? { t: 't', rows: [['Colonna 1', 'Colonna 2'], ['', '']] } : { t: 'p', x: '' });
+        render(); const last = [...document.querySelectorAll('[data-b],[data-cell]')].pop(); last?.focus(); return;
+      }
+      for (const [k, fn] of [['addrow', t => t.rows.push(t.rows[0].map(() => ''))], ['addcol', t => t.rows.forEach(r => r.push(''))], ['delrow', t => t.rows.pop()], ['delcol', t => t.rows.forEach(r => r.pop())]])
+        if (b.dataset[k] !== undefined) { fn(D.blocchi[+b.dataset[k]]); return render(); }
+    }
+    const a = b.dataset.a; if (!a) return;
+    if (a === 'esci') { const r = await api('POST', '/api/esci').catch(() => ({})); location.href = r.url || 'https://appgestione.it'; }
+    if (a === 'carica') { S.upCat = S.cat; return go('upload'); }
+    if (a === 'tutte') { S.cat = null; S.q = ''; S.rinomina = false; await caricaLista(); return go('lib'); }
+    if (a === 'tutte-o-cat') { S.draft = null; S.anteprima = false; await caricaLista(); return go('lib'); }
+    if (a === 'nuova-cat') { S.nuovaCat = true; S.nomeCat = ''; render(); return $('#nomecat')?.focus(); }
+    if (a === 'annulla-cat') { S.nuovaCat = false; S.rinomina = false; return render(); }
+    if (a === 'crea-cat') { const r = await api('POST', '/api/categorie', { nome: S.nomeCat }); S.nuovaCat = false; S.cat = r.id; await caricaLista(); toast('Categoria creata: ora carica i documenti qui dentro.'); return go('lib'); }
+    if (a === 'rinomina') { S.rinomina = true; S.nomeCat = S.cats.find(c => c.id === S.cat)?.nome || ''; render(); return $('#nomecat')?.focus(); }
+    if (a === 'salva-nome') { await api('PUT', '/api/categorie/' + S.cat, { nome: S.nomeCat }); S.rinomina = false; await caricaLista(); toast('Categoria rinominata.'); return render(); }
+    if (a === 'elimina-cat') { await api('DELETE', '/api/categorie/' + S.cat); S.cat = null; await caricaLista(); toast('Categoria eliminata.'); return go('lib'); }
+    if (a === 'modifica') { await preparaEditor(); return go('edit'); }
+    if (a === 'anteprima') { S.anteprima = true; return go('read'); }
+    if (a === 'torna-editor') { S.anteprima = false; return go('edit'); }
+    if (a === 'stampa') { window.print(); return; }
+    if (a === 'bozza') { b.disabled = true; await salva(false, true); toast('Bozza salvata: nessuno la vede finché non la pubblichi.'); S.cur = await api('GET', '/api/documenti/' + S.cur.id); return; }
+    if (a === 'pubblica') {
+      b.disabled = true; S.err = '';
+      try {
+        const r = await salva(true);
+        toast(`${D.bozza ? 'Pubblicato' : 'Salvato'}: lo vedono ${r.persone} ${r.persone === 1 ? 'persona' : 'persone'}${r.notificato ? `, notifica arrivata a ${r.raggiunti}` : ''}.`, 6000);
+        S.cur = await api('GET', '/api/documenti/' + S.cur.id); S.draft = null; S.anteprima = false; return go('read');
+      } catch (x) { S.err = x.message; render(); return; }
+    }
+    if (a === 'elimina') {
+      if (!b.classList.contains('armed')) { b.classList.add('armed'); b.innerHTML = ic('trash') + 'Tocca di nuovo per eliminarlo'; setTimeout(() => { if (b.isConnected) { b.classList.remove('armed'); b.innerHTML = ic('trash') + 'Elimina documento'; } }, 4000); return; }
+      await api('DELETE', '/api/documenti/' + S.cur.id); toast('Documento eliminato.'); S.draft = null; await caricaLista(); return go('lib');
+    }
+  } catch (x) { b.disabled = false; toast(x.message); }
+});
+// documenti non scaricabili: niente menu del tasto destro e niente copia
+document.addEventListener('contextmenu', e => { if (e.target.closest('.nocopy')) e.preventDefault(); });
+document.addEventListener('copy', e => { if (document.querySelector('.nocopy') && !e.target.closest?.('input,textarea')) e.preventDefault(); });
+
+/* ============ avvio ============ */
+(async () => {
+  try { const st = await api('GET', '/api/stato'); Object.assign(S, { me: st.me, ai: st.ai, notif: st.notifiche, links: st.links }); }
+  catch (e) { $('#main').innerHTML = `<div class="empty"><b>${esc(e.message)}</b></div>`; return; }
+  const u = new URLSearchParams(location.search);
+  if (u.get('c')) S.cat = u.get('c');
+  try { await caricaLista(); } catch (e) { toast(e.message); }
+  if (u.get('d')) return apriDoc(u.get('d'), false);
+  go('lib');
+})();
+</script>
+</body>
+</html>

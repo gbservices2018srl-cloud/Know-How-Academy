@@ -133,10 +133,21 @@ Le impostazioni del Calendario possono avere il prefisso `CAL_` (`CAL_ADMIN_USER
 - Fornitori extra UE da indicare al DPO: Anthropic (lettura AI di bolle, etichette, buste paga, regole turni) e Google Gemini (assistente «Chiedi ai protocolli», `lib/ai.js`).
 
 
-## Comunicazioni aziendali (15 ottobre 2026)
+## Comunicazioni ed eventi aziendali (15 ottobre 2026)
 App nuova nello stesso servizio `appgestione-eu`: indirizzo **comunicazioni.appgestione.it** (serve il dominio personalizzato su Render e il CNAME su Aruba, come per le altre app). Codice in `comunicazioni/` (server.js, lib/db.js, public/app.html), dati nello schema `comunicazioni` del database `appgestione-db-eu` (tabelle messaggi, destinatari, chat, solleciti).
 - Si entra solo con l'accesso unico. **Amministratore** (dal pannello Gestione accessi) = scrive le comunicazioni, vede letture/conferme, sollecita, risponde; **Utente** = riceve, conferma la lettura, chiede chiarimenti in una chat privata con chi ha inviato.
 - Destinatari: Tutti, per figura (figura dell'accesso unico), per sede (sedi in cui la persona lavora nei Turni), singole persone. L'elenco dei destinatari viene "fotografato" all'invio.
 - Ricerca per parola o frase su oggetto e testo (ricevute e inviate).
 - Notifiche dal centro notifiche unico (`APP_NOTIFICHE.comunicazioni`, interruttore "Comunicazioni" su appgestione.it): nuova comunicazione, sollecito, domanda (va a chi ha inviato), risposta (va alla persona).
 - Accesso automatico (`apps.js → auto`): chi ha Turni o Calendario riceve una volta sola anche Comunicazioni come Utente (tabella `accessi.app_auto`); se l'amministratore lo toglie non ritorna.
+
+- **Comunicazioni ed eventi aziendali**: l'app si apre su una pagina con due pulsanti, *Comunicazioni* e *Eventi*; Eventi apre il Calendario (calendario.appgestione.it, dati e permessi invariati), che ha in alto il pulsante per tornare indietro. Nella pagina delle app il riquadro del Calendario non compare per chi ha anche Comunicazioni (`apps.js → dentro: 'comunicazioni'`).
+
+## Documenti di studio (15 ottobre 2026)
+App nuova nello stesso servizio: **documenti.appgestione.it** (serve dominio personalizzato su Render + CNAME su Aruba). Codice in `documenti/`, dati nello schema `documenti` (categorie, documenti, originali, immagini, viste). Persone e gruppi condivisi in `lib/gruppo.js`.
+- Amministratore (dal pannello): crea/rinomina/elimina le categorie (solo se vuote), carica PDF o Word (.docx, max 25 MB).
+  - *Pagina dell'app* (consigliato): Word con mammoth (titoli, elenchi, tabelle, grassetti, immagini); PDF con Claude se c'è `ANTHROPIC_API_KEY` (anche scansioni, fino a 60 pagine; modello `DOC_AI_MODEL`, altrimenti `TURNI_AI_MODEL`), altrimenti dal testo del PDF. Il file originale non si conserva. La pagina si corregge nell'app (blocchi: titolo, paragrafo con **grassetto**, elenchi, tabelle, immagini).
+  - *Impaginazione originale* (solo PDF): il PDF resta nel database e si mostra pagina per pagina con pdf.js (`pdfjs-dist`, servito da /vendor).
+  - Sceglie chi lo vede (tutti, figura, sede da Turni, singole persone), se è scaricabile e se avvisare con una notifica. Bozza finché non si pubblica; ogni modifica pubblicata è una nuova versione ("Aggiornato" per chi l'aveva già letto).
+- Dipendente: vede solo i documenti per lui, cerca per parola o frase, legge; se scaricabile salva in PDF (stampa del browser per le pagine, file originale per i PDF originali). Se non scaricabile: niente pulsante, stampa bloccata, filigrana con il suo nome, niente copia.
+- Accesso automatico come per Comunicazioni (chi ha Turni o Calendario). Notifiche dal centro unico (interruttore "Documenti di studio").

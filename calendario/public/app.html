@@ -57,6 +57,9 @@ svg.i{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-widt
   background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);box-shadow:inset 0 -3px 0 -1px color-mix(in srgb,var(--brand-yellow) 70%,transparent)}
 .brand{display:flex;align-items:center;gap:10px;min-width:0}
 .brand .logo{height:40px;width:auto;flex:none;display:block}
+.back-com{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;color:var(--muted);flex:none;border:1px solid var(--line);background:var(--surface-2)}
+.back-com:hover{color:var(--fg);background:var(--surface-3)}
+.back-com svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .brand .sep{width:1px;height:26px;background:var(--line);flex:none}
 .brand h1{font:600 16px/1.1 var(--f-display);margin:0;white-space:nowrap;color:var(--muted)}
 .tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;min-width:0;flex:0 1 auto;padding:2px}
@@ -339,6 +342,7 @@ dialog::backdrop{background:rgba(10,30,30,.45);backdrop-filter:blur(2px)}
 <body>
 <header class="top">
   <div class="brand">
+    <a class="back-com" href="https://comunicazioni.appgestione.it/" aria-label="Torna a Comunicazioni ed eventi" title="Comunicazioni ed eventi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></a>
     <img class="logo" src="/logo.png" alt="To Smile" width="543" height="162">
     <span class="sep"></span>
     <h1>Calendario eventi</h1>
