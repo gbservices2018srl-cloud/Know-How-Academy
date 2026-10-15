@@ -32,6 +32,9 @@ header p{margin:0;color:var(--muted);font-size:17px;max-width:58ch}
 .icon{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;background:color-mix(in srgb,var(--c) 18%,transparent);color:var(--ink)}
 .icon svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 .app h2{font-size:22px}
+.app .brandlogo{display:flex;align-items:center;background:#fff;border-radius:12px;padding:8px 12px;align-self:flex-start;max-width:100%}
+.app .brandlogo img{height:54px;width:auto;max-width:100%;display:block}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .app p{margin:0;color:var(--muted);font-size:15px}
 .app .go{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:6px;font-size:13.5px;color:var(--muted)}
 .app .go span:last-child{font-weight:700;color:var(--ink);white-space:nowrap}
@@ -102,6 +105,8 @@ const ICONS = {
   comunicazioni: '<path d="M3 11l18-8v18l-18-8z"/><path d="M7 12v6a2 2 0 0 0 4 0v-4"/>',
   accessi: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><path d="M16 11l2 2 4-4"/>',
 };
+// App con il loro logo sul riquadro (al posto dell'icona e del nome)
+const LOGHI = { laboratorio: '/static/logo-nuovalab.png' };
 function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.append(d); setTimeout(() => d.remove(), 3000); }
 
 (async () => {
@@ -129,8 +134,9 @@ function toast(t) { const d = document.createElement('div'); d.className = 'toas
     history.replaceState(null, '', '/');
   }
   $('#grid').innerHTML = apps.length ? apps.map(a => `<a class="app ${esc(a.color)}" href="${esc(a.link || a.url)}">
-      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[a.key] || ''}</svg></span>
-      <h2>${esc(a.name)}</h2>
+      ${LOGHI[a.key] ? `<span class="brandlogo"><img src="${LOGHI[a.key]}" alt="" width="546" height="152"></span><h2 class="sr">${esc(a.name)}</h2>`
+        : `<span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[a.key] || ''}</svg></span>
+      <h2>${esc(a.name)}</h2>`}
       <p>${esc(a.desc)}</p>
       <div class="go"><span>${a.role === 'admin' ? '<span class="role">Amministratore</span>' : esc(a.url.replace('https://', ''))}</span><span>Apri →</span></div>
     </a>`).join('')
