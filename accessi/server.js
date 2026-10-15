@@ -174,6 +174,7 @@ async function syncIn(u, key, oldEmail) {
 }
 async function provisiona(u, keys, opts = {}) {
   if (!u || u.status !== 'active' || u.owner) return [];
+  await store.accessiAutomatici(u.id).catch(e => console.warn('Accessi automatici:', e.message));
   const apps = await store.appsOf(u), lv = await store.livelliOf(u.id);
   const avvisi = [];
   for (const k of keys || Object.keys(apps)) {
@@ -804,6 +805,7 @@ async function start() {
   await store.migrate();
   await notifiche.migrate();
   await store.ensureOwner();
+  await store.accessiAutomatici().catch(e => console.warn('Accessi automatici:', e.message));
 }
 
 // Per le app che girano nello stesso servizio (Protocolli, Calendario)

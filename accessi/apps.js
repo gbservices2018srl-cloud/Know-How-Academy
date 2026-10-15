@@ -41,6 +41,11 @@ module.exports = [
       { key: 'admin_no', label: 'Amministratore, non in turno', role: 'admin' },
     ],
     desc: 'Planning delle sedi, ferie e permessi, sostituzioni e buste paga.' },
+  { key: 'comunicazioni', name: 'Comunicazioni', url: 'https://comunicazioni.appgestione.it', color: 'purple',
+    // chi entra in Turni o Calendario (il personale) riceve da solo l'accesso come Utente, una volta sola:
+    // dal pannello si può poi togliere o cambiare in Amministratore (chi scrive le comunicazioni)
+    auto: ['turni', 'calendario'],
+    desc: 'Comunicazioni aziendali: leggi, conferma la lettura e chiedi chiarimenti.' },
   { key: 'accessi', name: 'Gestione accessi', url: '/admin', color: 'grey', adminOnly: true,
     desc: 'Approva le registrazioni e decide chi entra in quali app.' },
 ];

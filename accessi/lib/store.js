@@ -94,6 +94,12 @@ async function migrate() {
     alter table user_apps add column if not exists enti jsonb; -- più studi: [{ id, nome }], il primo è anche in "ente"
     alter table sso_tickets drop constraint if exists sso_tickets_purpose_check;
     alter table sso_tickets add constraint sso_tickets_purpose_check check (purpose in ('login','revoke','catalog','sync','sedi'));`);
+  await q(`create table if not exists app_auto (
+      user_id text not null references users(id) on delete cascade,
+      app text not null,
+      dato_il timestamptz not null default now(),
+      primary key (user_id, app)
+    );`);
   // Sedi del gruppo: si gestiscono qui e vengono copiate in Turni, Calendario, Ticket e Nuovalab
   await q(`create table if not exists sedi (
       id text primary key,
@@ -177,6 +183,21 @@ async function livelliOf(userId) {
   const { rows } = await q('select app, livello, ente, ente_nome, enti from user_apps where user_id = $1 and livello is not null', [userId]);
   return Object.fromEntries(rows.map(r => [r.app, { livello: r.livello, ente: r.ente, enteNome: r.ente_nome,
     enti: Array.isArray(r.enti) && r.enti.length ? r.enti : r.ente ? [{ id: r.ente, nome: r.ente_nome }] : [] }]));
+}
+// App date in automatico (apps.js → auto): chi ha una delle app indicate riceve anche questa come Utente,
+// una volta sola (app_auto ricorda che è già stato fatto, così se l'amministratore la toglie non ritorna).
+async function accessiAutomatici(userId = null) {
+  for (const a of APPS.filter(x => x.auto?.length)) {
+    const p = [a.key, a.auto]; if (userId) p.push(userId);
+    const { rows } = await q(`select u.id from users u where u.status = 'active' and not u.owner ${userId ? 'and u.id = $3' : ''}
+      and exists (select 1 from user_apps x where x.user_id = u.id and x.app = any($2))
+      and not exists (select 1 from app_auto z where z.user_id = u.id and z.app = $1)`, p);
+    for (const r of rows) {
+      await q('insert into app_auto (user_id, app) values ($1,$2) on conflict do nothing', [r.id, a.key]);
+      await q(`insert into user_apps (user_id, app, role) values ($1,$2,'user') on conflict (user_id, app) do nothing`, [r.id, a.key]);
+    }
+    if (!userId && rows.length) console.log(`Accesso automatico a «${a.name}» dato a ${rows.length} persone`);
+  }
 }
 async function appsOf(user) {
   if (user.owner) return Object.fromEntries(APP_KEYS.map(k => [k, 'admin']));
@@ -355,6 +376,7 @@ async function peekPasswordLink(token) {
 }
 
 module.exports = {
+  accessiAutomatici,
   pool, q, SCHEMA, APPS, APP_KEYS, events, migrate, ensureOwner,
   cleanEmail, validEmail, cleanName, cleanDate, cleanFigura, FIGURE, cleanCf, validCf, cleanProv, cleanAlbo, appsOf, publicUser, getUser, findByEmail, createUser, setPassword,
   setAppRole, livelliOf, deleteUser, usersWithApp, logoutEverywhere, createSession, endSession, check, verify,

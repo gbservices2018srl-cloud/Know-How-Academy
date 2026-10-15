@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#4CAAAA">
+<title>Comunicazioni · To Smile</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="To Smile Comunicazioni">
+<link rel="stylesheet" href="/fonts/tosmile.css?f=fira-sans:400,500,600,700,800">
+<style>
+/* Colori e caratteri To Smile (gli stessi di Calendario e Turni), con tema scuro automatico */
+:root{
+  --bg:#EFF5F5; --dot:#D3E2E2; --surface:#FFFFFF; --surface-2:#F5F9F9; --surface-3:#EAF1F1; --fg:#1F2A2B; --muted:#5E6B6C;
+  --line:#DCE7E7; --line-2:#E8F0F0; --accent:#2B8384; --accent-soft:#DCEFEF; --accent-fg:#FFFFFF;
+  --brand-teal:#4CAAAA; --brand-purple:#8C6898; --brand-yellow:#E8E564; --purple-soft:#EFE7F2;
+  --danger:#B42318; --danger-soft:#FBE3E0; --ok:#1F7A4D; --ok-soft:#DDF1E6; --warn:#8A4A12; --warn-soft:#FBEBDD;
+  --shadow:0 1px 2px rgba(20,48,48,.05),0 8px 28px rgba(20,48,48,.09);
+  --f-display:"Fira Sans",system-ui,sans-serif; --f-body:"Fira Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#101818; --dot:#1E2B2B; --surface:#172121; --surface-2:#1D2929; --surface-3:#223030; --fg:#E7F0F0; --muted:#9FB0B0;
+  --line:#2A3939; --line-2:#223030; --accent:#62C3C3; --accent-soft:#163536; --accent-fg:#062222;
+  --brand-teal:#62C3C3; --brand-purple:#B597C2; --purple-soft:#2E2433;
+  --danger:#FF8A7A; --danger-soft:#3A1D1A; --ok:#6FD39C; --ok-soft:#173326; --warn:#F0B07A; --warn-soft:#3A2817;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35); color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:var(--bg);background-image:radial-gradient(var(--dot) 1.2px,transparent 1.3px);background-size:22px 22px;background-attachment:fixed;
+  color:var(--fg);font:15px/1.5 var(--f-body);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+svg.i{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+[hidden]{display:none!important}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* barra in alto */
+.top{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px max(16px,env(safe-area-inset-left));
+  background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);box-shadow:inset 0 -3px 0 -1px color-mix(in srgb,var(--brand-yellow) 70%,transparent)}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand .logo{height:40px;width:auto;flex:none;display:block}
+.brand .sep{width:1px;height:26px;background:var(--line);flex:none}
+.brand h1{font:600 16px/1.1 var(--f-display);margin:0;white-space:nowrap;color:var(--muted)}
+.tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;min-width:0;padding:2px}
+.tabs::-webkit-scrollbar{display:none}
+.tab{display:inline-flex;align-items:center;gap:7px;border:1px solid transparent;background:none;padding:7px 13px;border-radius:999px;white-space:nowrap;color:var(--muted);font-weight:600;font-size:14px;min-height:40px}
+.tab:hover{background:var(--surface-2)}
+.tab.on{background:var(--accent-soft);color:var(--fg);border-color:color-mix(in srgb,var(--accent) 30%,transparent)}
+.badge{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--brand-purple);color:#fff;font-size:12px;font-weight:800}
+.spacer{flex:1}
+.who{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:3px 12px 3px 3px;font-size:13px;line-height:1.15;flex:none;min-height:40px}
+.who b{font-weight:700;max-width:18ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.av{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:12px;background:var(--accent-soft);color:var(--accent);flex:none}
+.av.admin{background:var(--brand-purple);color:#fff}
+.menuwrap{position:relative}
+.menu{position:absolute;right:0;top:calc(100% + 6px);min-width:220px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:6px;z-index:30}
+.menu a,.menu button{display:flex;align-items:center;gap:10px;width:100%;border:none;background:none;padding:10px;border-radius:8px;text-align:left;font-weight:500;color:inherit;text-decoration:none}
+.menu a:hover,.menu button:hover{background:var(--surface-2)}
+
+/* comuni */
+main{max-width:1000px;margin:0 auto;padding:20px max(16px,env(safe-area-inset-left)) max(48px,env(safe-area-inset-bottom))}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--line);background:var(--surface);padding:9px 15px;border-radius:10px;font-weight:600;font-size:14.5px;white-space:nowrap;text-decoration:none;color:inherit;min-height:42px}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.primary:hover{filter:brightness(1.06);background:var(--accent)}
+.btn.big{min-height:52px;font-size:16px;width:100%}
+.btn.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,transparent)}
+.btn.danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 35%,transparent)}
+.btn.danger.armed{background:var(--danger);color:#fff;border-color:var(--danger)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.sm{padding:6px 11px;font-size:13.5px;min-height:36px}
+.link{border:0;background:none;color:var(--accent);font-weight:600;padding:8px 0;min-height:40px;display:inline-flex;align-items:center;gap:4px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}
+.muted{color:var(--muted)}
+h2.view{font:700 26px/1.15 var(--f-display);letter-spacing:-.015em;margin:0}
+.head{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.head p{margin:4px 0 0;color:var(--muted)}
+.empty{padding:34px 16px;text-align:center;color:var(--muted)}
+.empty b{display:block;color:var(--fg);font-size:16px;margin-bottom:4px}
+.tag{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.tag.imp{background:var(--danger-soft);color:var(--danger)}
+.tag.ok{background:var(--ok-soft);color:var(--ok)}
+.tag.todo{background:var(--warn-soft);color:var(--warn)}
+.tag.no{background:var(--danger-soft);color:var(--danger)}
+.tag.plain{background:var(--surface-3);color:var(--muted)}
+.tag.q{background:var(--purple-soft);color:var(--brand-purple)}
+mark{background:color-mix(in srgb,var(--brand-yellow) 75%,transparent);color:inherit;border-radius:3px;padding:0 1px}
+
+.search{position:relative;flex:1 1 260px;max-width:420px}
+.search input{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:10px 12px 10px 38px;min-height:44px}
+.search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted)}
+
+/* elenchi */
+.list{display:flex;flex-direction:column;gap:10px}
+.item{display:flex;gap:12px;align-items:flex-start;text-align:left;width:100%;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 16px;color:inherit}
+.item:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.item .dot{width:10px;height:10px;border-radius:50%;margin-top:7px;flex:none;background:transparent}
+.item.nuova .dot{background:var(--accent)}
+.item .body{flex:1;min-width:0}
+.item .t{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.item .t b{font-size:16px;font-weight:600}
+.item.nuova .t b{font-weight:800}
+.item .t time{font-size:13px;color:var(--muted);white-space:nowrap}
+.item .pre{font-size:14px;color:var(--muted);margin-top:2px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.item .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center}
+.bar{flex:1 1 180px;height:9px;background:var(--surface-3);border-radius:99px;overflow:hidden;min-width:120px}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:99px}
+.bar i.full{background:var(--ok)}
+
+/* banner notifiche */
+.banner{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;margin-bottom:14px;background:var(--purple-soft);border:1px solid color-mix(in srgb,var(--brand-purple) 30%,transparent);flex-wrap:wrap}
+.banner>svg{width:22px;height:22px;color:var(--brand-purple);flex:none}
+.banner .grow{flex:1 1 240px;min-width:0;font-size:14px}
+.banner b{display:block}
+
+/* lettura */
+.msg{padding:20px}
+.msg h2{font:800 24px/1.2 var(--f-display);margin:8px 0 4px;letter-spacing:-.01em}
+.msg .meta{font-size:14px;color:var(--muted)}
+.msg .text{margin-top:14px;font-size:16px;line-height:1.6;white-space:pre-line;overflow-wrap:anywhere}
+.done{background:var(--ok-soft);color:var(--ok);border-radius:12px;padding:12px 14px;font-weight:600;display:flex;gap:8px;align-items:center}
+.actions{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+
+/* chat */
+.chat{padding:16px}
+.chat h3{margin:0;font-size:17px}
+.bubbles{display:flex;flex-direction:column;gap:6px;margin:12px 0}
+.bub{max-width:85%;padding:9px 12px;border-radius:14px;font-size:15px;line-height:1.45;white-space:pre-line;overflow-wrap:anywhere;background:var(--surface-3)}
+.bub.me{align-self:flex-end;background:var(--accent);color:var(--accent-fg);border-bottom-right-radius:4px}
+.bub.them{align-self:flex-start;border-bottom-left-radius:4px}
+.bub small{display:block;font-size:11.5px;opacity:.8;margin-top:3px}
+.write{display:flex;gap:8px;align-items:flex-end}
+.write textarea{flex:1;min-width:0;border:1px solid var(--line);background:var(--surface-2);border-radius:12px;padding:10px 12px;resize:vertical;min-height:46px;max-height:200px}
+
+/* dettaglio amministratore */
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}
+.stat{padding:14px}
+.stat b{display:block;font:800 28px/1 var(--f-display)}
+.stat span{font-size:13.5px;color:var(--muted)}
+.cols{display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;align-items:flex-start}
+.cols>.card{flex:1 1 380px;min-width:0;padding:16px}
+.cols h3{margin:0;font-size:17px}
+.rowhead{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:8px}
+.filters{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 4px}
+.fchip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:13px;font-weight:600;color:var(--muted);min-height:34px}
+.fchip.on{background:var(--accent-soft);color:var(--fg);border-color:color-mix(in srgb,var(--accent) 40%,transparent)}
+.person{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--line-2)}
+.person .n{font-weight:600}
+.person small{display:block;color:var(--muted);font-size:12.5px}
+.person .r{text-align:right}
+.nodev{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--warn);margin-top:3px}
+.nodev svg{width:14px;height:14px}
+.conv{border:1px solid var(--line);border-radius:14px;padding:12px;margin-top:10px}
+.conv .who2{display:flex;justify-content:space-between;align-items:center;gap:8px;font-weight:700}
+
+/* nuova */
+.form{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start}
+.form>.card{padding:18px;min-width:0}
+.form .main{flex:999 1 480px}
+.form .side{flex:1 1 330px}
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.field>span,.field>label{font-size:13.5px;font-weight:700;color:var(--muted)}
+.field input,.field textarea{border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:10px 12px;width:100%;min-width:0;min-height:44px}
+.field textarea{resize:vertical;min-height:170px;line-height:1.5}
+.check{display:flex;gap:10px;align-items:center;min-height:44px;font-size:15px;cursor:pointer}
+.check input{width:20px;height:20px;accent-color:var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.gchip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 13px;font-size:14px;font-weight:600;min-height:40px;color:var(--fg)}
+.gchip small{color:var(--muted);font-weight:600;margin-left:3px}
+.gchip.on{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.gchip.on small{color:inherit;opacity:.85}
+.gtitle{font-size:12.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:12px 0 6px}
+.psearch{position:relative}
+.pres{position:absolute;left:0;right:0;top:100%;z-index:5;background:var(--surface);border:1px solid var(--line);border-radius:10px;margin-top:4px;box-shadow:var(--shadow);max-height:260px;overflow:auto}
+.pres button{display:block;width:100%;text-align:left;border:0;background:none;padding:10px 12px;border-bottom:1px solid var(--line-2);min-height:44px}
+.pres button:hover,.pres button:focus{background:var(--surface-3)}
+.pchip{display:inline-flex;align-items:center;gap:6px;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);border-radius:999px;padding:5px 6px 5px 12px;font-size:14px;font-weight:600}
+.pchip button{border:0;background:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;color:var(--muted)}
+.pchip button:hover{background:var(--surface)}
+.summary{background:var(--surface-2);border-radius:12px;padding:12px;font-size:15px;margin:12px 0}
+.summary details{margin-top:6px;font-size:13.5px;color:var(--muted)}
+.err{color:var(--danger);font-weight:600;font-size:14px;margin:6px 0}
+
+.toast{position:fixed;left:50%;bottom:max(20px,env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:11px 16px;border-radius:12px;font-weight:600;font-size:14px;z-index:100;box-shadow:var(--shadow);max-width:min(92vw,560px);text-align:center}
+footer{max-width:1000px;margin:0 auto;padding:0 16px 30px;font-size:12.5px;color:var(--muted);text-align:center}
+@media (max-width:640px){
+  .brand .sep,.brand h1{display:none}
+  .top{gap:8px 10px;padding-top:8px;padding-bottom:6px}
+  .brand .logo{height:34px}
+  .tabs{order:3;flex:1 1 100%}
+  .tab{padding:6px 11px;font-size:13.5px}
+  .who{padding:3px}.who b{display:none}
+  .stats{gap:6px}.stat{padding:10px}.stat b{font-size:22px}
+  h2.view{font-size:22px}
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <img class="logo" src="/logo.png" alt="To Smile" width="543" height="162">
+    <span class="sep"></span>
+    <h1>Comunicazioni</h1>
+  </div>
+  <nav class="tabs" id="tabs" aria-label="Sezioni"></nav>
+  <div class="spacer"></div>
+  <div class="menuwrap">
+    <button class="who" id="who" aria-haspopup="menu" aria-expanded="false"></button>
+    <div class="menu" id="menu" role="menu" hidden></div>
+  </div>
+</header>
+<main id="main"><div class="empty">Caricamento…</div></main>
+<footer>
+  <a href="https://appgestione.it/privacy" target="_blank" rel="noopener" style="color:inherit">Privacy Policy</a> ·
+  <a href="https://appgestione.it/cookie" target="_blank" rel="noopener" style="color:inherit">Cookie Policy</a> ·
+  <a href="https://appgestione.it/termini" target="_blank" rel="noopener" style="color:inherit">Termini e condizioni</a>
+</footer>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+/* ============ utilità ============ */
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const I = {
+  inbox: '<path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5 5h14l2 8v6H3v-6z"/>',
+  send: '<path d="M21 3 10 14"/><path d="M21 3l-7 18-4-7-7-4z"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  search: '<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>',
+  bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
+  belloff: '<path d="M6 16V11a6 6 0 0 1 9.5-4.9M18 11v5l1.5 2H8"/><path d="M10 20a2 2 0 0 0 4 0M3 3l18 18"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  chat: '<path d="M4 5h16v11H9l-5 4z"/>',
+  back: '<path d="M15 5l-7 7 7 7"/>',
+  x: '<path d="M6 6l12 12M18 6 6 18"/>',
+  apps: '<rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/>',
+  out: '<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>',
+  trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+};
+const ic = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${I[n]}</svg>`;
+let toastT;
+function toast(t, ms = 3200) { const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => el.hidden = true, ms); }
+async function api(method, url, body) {
+  const r = await fetch(url, { method, credentials: 'same-origin', headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+  if (r.status === 401) { location.reload(); throw new Error('Accesso scaduto'); }
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'Errore, riprova.');
+  return d;
+}
+const MESI = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
+function quando(iso) {
+  if (!iso) return '';
+  const d = new Date(iso), now = new Date();
+  const hm = d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  const giorno = x => x.toDateString();
+  if (giorno(d) === giorno(now)) return 'oggi ' + hm;
+  const ieri = new Date(now); ieri.setDate(now.getDate() - 1);
+  if (giorno(d) === giorno(ieri)) return 'ieri ' + hm;
+  return `${d.getDate()} ${MESI[d.getMonth()]}${d.getFullYear() !== now.getFullYear() ? ' ' + d.getFullYear() : ''} ${hm}`;
+}
+// evidenzia la parola o frase cercata
+function hl(text, q) {
+  const t = esc(text); if (!q) return t;
+  const re = new RegExp(esc(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+  return t.replace(re, m => `<mark>${m}</mark>`);
+}
+// testo della comunicazione: a capo e indirizzi web cliccabili
+const testoHtml = (s, q) => hl(s, q).replace(/(https?:\/\/[^\s<]+)/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
+const iniziali = n => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0]).join('').toUpperCase();
+
+/* ============ stato ============ */
+const S = {
+  me: null, notif: null, links: null,
+  view: 'ricevute',            // ricevute | inviate | nuova | leggi | gestisci
+  id: null, persona: null,     // comunicazione aperta (e conversazione da aprire, per l'amministratore)
+  q: { ricevute: '', inviate: '' },
+  ricevute: null, inviate: null, cur: null,
+  dest: null,                  // persone e gruppi (per scrivere)
+  draft: { titolo: '', testo: '', importante: false, conferma: true, gruppi: [], persone: [] },
+  pq: '', drafts: {},          // ricerca persone, bozze delle risposte in chat
+  filtro: 'tutti', sending: false, err: '',
+};
+
+/* ============ barra in alto ============ */
+function renderTop() {
+  const nuove = (S.ricevute || []).filter(m => !m.letto_il || m.risposte_nuove).length;
+  const domande = (S.inviate || []).reduce((n, m) => n + (m.domande_nuove || 0), 0);
+  const tabs = [['ricevute', 'inbox', S.me.admin ? 'Ricevute' : 'Le mie comunicazioni', nuove]];
+  if (S.me.admin) tabs.push(['inviate', 'send', 'Inviate', domande], ['nuova', 'plus', 'Nuova comunicazione', 0]);
+  const attiva = { leggi: 'ricevute', gestisci: 'inviate' }[S.view] || S.view;
+  $('#tabs').innerHTML = tabs.map(([k, i, l, n]) => `<button class="tab ${attiva === k ? 'on' : ''}" data-tab="${k}" ${attiva === k ? 'aria-current="page"' : ''}>${ic(i)}${l}${n ? ` <span class="badge" aria-label="${n} da vedere">${n}</span>` : ''}</button>`).join('');
+  $('#who').innerHTML = `<span class="av ${S.me.admin ? 'admin' : ''}">${esc(iniziali(S.me.name))}</span><b>${esc(S.me.name)}</b>`;
+  $('#menu').innerHTML = `<a role="menuitem" href="${esc(S.links?.home || 'https://appgestione.it')}">${ic('apps')}Le mie app</a>
+    <a role="menuitem" href="${esc(S.links?.home || 'https://appgestione.it')}/#notif">${ic('bell')}Notifiche sul telefono</a>
+    <button role="menuitem" data-a="esci">${ic('out')}Esci</button>`;
+  document.title = (nuove ? `(${nuove}) ` : '') + 'Comunicazioni · To Smile';
+}
+$('#tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) go(b.dataset.tab); });
+$('#who').addEventListener('click', () => { const m = $('#menu'); m.hidden = !m.hidden; $('#who').setAttribute('aria-expanded', String(!m.hidden)); });
+document.addEventListener('click', e => { if (!e.target.closest('.menuwrap')) { $('#menu').hidden = true; $('#who').setAttribute('aria-expanded', 'false'); } });
+$('#menu').addEventListener('click', async e => {
+  if (e.target.closest('[data-a="esci"]')) { const r = await api('POST', '/api/esci').catch(() => ({})); location.href = r.url || 'https://appgestione.it'; }
+});
+
+function bannerNotifiche() {
+  const n = S.notif; if (!n) return '';
+  const home = esc(S.links?.home || 'https://appgestione.it');
+  if (!n.dispositivi) return `<div class="banner">${ic('bell')}<div class="grow"><b>Attiva le notifiche per ricevere subito le comunicazioni</b>
+    Si attivano una volta sola dalla pagina con le tue app su appgestione.it (su iPhone prima aggiungila alla schermata Home).</div>
+    <a class="btn primary" href="${home}/#notif">Attiva le notifiche</a></div>`;
+  if (!n.attiva) return `<div class="banner">${ic('belloff')}<div class="grow"><b>Le notifiche delle Comunicazioni sono spente</b>
+    Riaccendile dalla pagina con le tue app, così non perdi le comunicazioni importanti.</div>
+    <a class="btn primary" href="${home}/#notif">Riaccendi</a></div>`;
+  return '';
+}
+
+/* ============ navigazione ============ */
+function go(view, id = null, persona = null) {
+  Object.assign(S, { view, id, persona, err: '' });
+  if (view !== 'leggi' && view !== 'gestisci') S.cur = null;
+  const u = new URL(location.href);
+  u.search = id ? `?m=${encodeURIComponent(id)}${persona ? '&persona=' + encodeURIComponent(persona) : ''}` : '';
+  u.hash = '';
+  history.replaceState(null, '', u);
+  window.scrollTo(0, 0);
+  load();
+}
+async function load() {
+  try {
+    if (S.view === 'ricevute') S.ricevute = (await api('GET', '/api/ricevute?q=' + encodeURIComponent(S.q.ricevute))).messaggi;
+    if (S.view === 'inviate') S.inviate = (await api('GET', '/api/inviate?q=' + encodeURIComponent(S.q.inviate))).messaggi;
+    if (S.view === 'nuova' && !S.dest) S.dest = await api('GET', '/api/destinatari');
+    if (S.view === 'leggi') S.cur = await api('GET', `/api/messaggi/${encodeURIComponent(S.id)}`);
+    if (S.view === 'gestisci') S.cur = await api('GET', `/api/messaggi/${encodeURIComponent(S.id)}?vista=admin`);
+  } catch (e) {
+    if (S.view === 'leggi' && S.me.admin) return go('gestisci', S.id, S.persona);
+    $('#main').innerHTML = `<div class="empty"><b>${esc(e.message)}</b><button class="btn" data-go="ricevute">Torna alle comunicazioni</button></div>`;
+    return;
+  }
+  render();
+  contatori();
+}
+// contatori nelle schede (anche quando si è in un'altra vista)
+async function contatori() {
+  try {
+    if (S.view !== 'ricevute') S.ricevute = (await api('GET', '/api/ricevute')).messaggi;
+    if (S.me.admin && S.view !== 'inviate') S.inviate = (await api('GET', '/api/inviate')).messaggi;
+  } catch {}
+  renderTop();
+}
+
+function render() {
+  renderTop();
+  const v = { ricevute: vRicevute, inviate: vInviate, nuova: vNuova, leggi: vLeggi, gestisci: vGestisci }[S.view];
+  $('#main').innerHTML = v();
+  if (S.view === 'leggi' && S.chatJump) { S.chatJump = false; $('#chat')?.scrollIntoView({ block: 'start' }); }
+  if (S.view === 'gestisci' && S.persona) document.getElementById('conv-' + S.persona)?.scrollIntoView({ block: 'center' });
+}
+
+/* ============ ricevute ============ */
+function cercaBox(k, ph) {
+  return `<label class="search"><span class="sr">Cerca nelle comunicazioni</span>${ic('search')}
+    <input type="search" data-search="${k}" value="${esc(S.q[k])}" placeholder="${ph}" autocomplete="off"></label>`;
+}
+function vRicevute() {
+  const list = S.ricevute || [], q = S.q.ricevute;
+  const da = list.filter(m => m.conferma && !m.confermato_il).length;
+  return `${bannerNotifiche()}
+  <div class="head"><div style="flex:1 1 260px"><h2 class="view">${S.me.admin ? 'Comunicazioni ricevute' : 'Le tue comunicazioni'}</h2>
+    <p>${da ? `${da === 1 ? 'Una comunicazione aspetta' : da + ' comunicazioni aspettano'} la tua conferma di lettura.` : 'Sei in pari: nessuna conferma in sospeso.'}</p></div>
+    ${cercaBox('ricevute', 'Cerca per parola o frase…')}</div>
+  <div class="list">${list.length ? list.map(m => {
+    const nuova = !m.letto_il;
+    const stato = m.confermato_il ? '<span class="tag ok">' + ic('check') + 'Confermata</span>'
+      : m.conferma ? '<span class="tag todo">Da confermare</span>' : (m.letto_il ? '<span class="tag plain">Letta</span>' : '');
+    return `<button class="item ${nuova ? 'nuova' : ''}" data-open="${esc(m.id)}">
+      <span class="dot" aria-hidden="true"></span>
+      <div class="body"><div class="t"><b>${hl(m.titolo, q)}</b><time>${esc(quando(m.creato_il))}</time></div>
+        <div class="pre">${hl(m.anteprima, q)}</div>
+        <div class="tags">${nuova ? '<span class="sr">Non ancora letta.</span>' : ''}${m.importante ? '<span class="tag imp">Importante</span>' : ''}${stato}
+          <span class="tag plain">Da ${esc(m.autore_nome)}</span>
+          ${m.risposte_nuove ? `<span class="tag q">${ic('chat')}Nuova risposta</span>` : ''}</div></div></button>`;
+  }).join('') : `<div class="empty card">${q ? `<b>Nessuna comunicazione contiene «${esc(q)}»</b>Prova con un'altra parola.` : '<b>Nessuna comunicazione</b>Quando ne arriva una la trovi qui, con una notifica sul telefono.'}</div>`}</div>`;
+}
+
+/* ============ lettura (destinatario) ============ */
+function bolle(list, mio) {
+  return list.map(c => { const me = mio(c);
+    return `<div class="bub ${me ? 'me' : 'them'}">${esc(c.testo)}<small>${me ? 'Tu' : esc(c.autore_nome || c.autore)} · ${esc(quando(c.creato_il || c.creatoIl))}</small></div>`; }).join('');
+}
+function vLeggi() {
+  const m = S.cur; if (!m) return '<div class="empty">Caricamento…</div>';
+  const key = 'p:' + m.id;
+  return `<button class="link" data-go="ricevute">${ic('back')}Le comunicazioni</button>
+  <article class="card msg">
+    ${m.importante ? '<span class="tag imp">Importante</span>' : ''}
+    <h2>${esc(m.titolo)}</h2>
+    <div class="meta">Da ${esc(m.autore)} · ${esc(quando(m.creatoIl))}</div>
+    <div class="text">${testoHtml(m.testo)}</div>
+  </article>
+  <div class="actions">
+    ${m.confermatoIl ? `<div class="done">${ic('check')}Hai confermato la lettura ${esc(quando(m.confermatoIl))}</div>`
+      : m.conferma ? `<button class="btn primary big" data-a="conferma">${ic('check')}Confermo di averla ricevuta e letta</button>` : ''}
+  </div>
+  <section class="card chat" id="chat" style="margin-top:14px" aria-labelledby="chat-t">
+    <h3 id="chat-t">${ic('chat')} Hai bisogno di chiarimenti?</h3>
+    <div class="muted" style="font-size:14px">Scrivi a ${esc(m.autore)}: la conversazione è privata, la vedete solo tu e chi gestisce le comunicazioni.</div>
+    <div class="bubbles">${bolle(m.chat, c => !c.da_admin)}</div>
+    <div class="write"><label class="sr" for="w-${esc(m.id)}">Scrivi la tua domanda</label>
+      <textarea id="w-${esc(m.id)}" data-draft="${esc(key)}" rows="2" placeholder="Scrivi la tua domanda…">${esc(S.drafts[key] || '')}</textarea>
+      <button class="btn primary" data-a="chat-persona">${ic('send')}Invia</button></div>
+  </section>`;
+}
+
+/* ============ inviate (amministratore) ============ */
+function vInviate() {
+  const list = S.inviate || [], q = S.q.inviate;
+  return `<div class="head"><div style="flex:1 1 260px"><h2 class="view">Comunicazioni inviate</h2>
+    <p>Chi le ha lette e confermate, chi no e chi ha fatto domande.</p></div>
+    ${cercaBox('inviate', 'Cerca per parola o frase…')}
+    <button class="btn primary" data-go="nuova">${ic('plus')}Nuova comunicazione</button></div>
+  <div class="list">${list.length ? list.map(m => {
+    const base = m.conferma ? m.confermate : m.lette, pct = m.totale ? Math.round(base / m.totale * 100) : 0;
+    return `<button class="item" data-gestisci="${esc(m.id)}"><div class="body">
+      <div class="t"><b>${m.importante ? '<span class="tag imp" style="margin-right:6px">Importante</span>' : ''}${hl(m.titolo, q)}</b><time>${esc(quando(m.creato_il))}</time></div>
+      <div class="pre">A: ${esc(m.a_chi)} · da ${esc(m.autore_nome)}</div>
+      <div class="tags"><span class="bar" aria-hidden="true"><i class="${pct === 100 ? 'full' : ''}" style="width:${pct}%"></i></span>
+        <b style="font-size:14px">${base} su ${m.totale} ${m.conferma ? 'confermate' : 'lette'}</b>
+        ${m.domande_nuove ? `<span class="tag q">${ic('chat')}${m.domande_nuove === 1 ? '1 domanda nuova' : m.domande_nuove + ' domande nuove'}</span>`
+          : m.conversazioni ? `<span class="tag plain">${m.conversazioni === 1 ? '1 conversazione' : m.conversazioni + ' conversazioni'}</span>` : ''}</div>
+      ${q ? `<div class="pre" style="margin-top:6px">${hl(m.anteprima, q)}</div>` : ''}</div></button>`;
+  }).join('') : `<div class="empty card">${q ? `<b>Nessuna comunicazione contiene «${esc(q)}»</b>Prova con un'altra parola.` : '<b>Non hai ancora inviato comunicazioni</b>Scrivi la prima con «Nuova comunicazione».'}</div>`}</div>`;
+}
+
+/* ============ dettaglio (amministratore) ============ */
+function vGestisci() {
+  const m = S.cur; if (!m) return '<div class="empty">Caricamento…</div>';
+  const d = m.destinatari;
+  const conf = d.filter(x => x.confermatoIl), lette = d.filter(x => x.lettoIl && !x.confermatoIl), mai = d.filter(x => !x.lettoIl);
+  const mancano = m.conferma ? d.length - conf.length : mai.length;
+  const filtri = [['tutti', 'Tutti', d.length], ...(m.conferma ? [['conf', 'Confermata', conf.length]] : []), ['lette', m.conferma ? 'Letta, non confermata' : 'Letta', lette.length], ['mai', 'Non aperta', mai.length], ['nodev', 'Senza notifiche', d.filter(x => !x.notifiche).length]];
+  const vis = d.filter(x => ({ tutti: true, conf: !!x.confermatoIl, lette: x.lettoIl && !x.confermatoIl, mai: !x.lettoIl, nodev: !x.notifiche })[S.filtro]);
+  const sol = m.solleciti?.[0];
+  return `<button class="link" data-go="inviate">${ic('back')}Comunicazioni inviate</button>
+  <article class="card msg">
+    ${m.importante ? '<span class="tag imp">Importante</span>' : ''}
+    <h2>${esc(m.titolo)}</h2>
+    <div class="meta">Inviata da ${esc(m.autore)} · ${esc(quando(m.creatoIl))} · a ${esc(m.aChi)}${m.conferma ? '' : ' · senza conferma di lettura'}</div>
+    <div class="text">${testoHtml(m.testo)}</div>
+  </article>
+  <div class="stats">
+    ${m.conferma ? `<div class="card stat"><b style="color:var(--ok)">${conf.length}</b><span>Confermate</span></div>` : ''}
+    <div class="card stat"><b style="color:var(--warn)">${lette.length}</b><span>${m.conferma ? 'Lette, non confermate' : 'Lette'}</span></div>
+    <div class="card stat"><b style="color:var(--danger)">${mai.length}</b><span>Non ancora aperte</span></div>
+    ${m.conferma ? '' : `<div class="card stat"><b>${d.length}</b><span>Destinatari</span></div>`}
+  </div>
+  <div class="cols">
+    <section class="card" aria-labelledby="dest-t">
+      <div class="rowhead"><h3 id="dest-t">Destinatari</h3>
+        ${mancano ? `<button class="btn warn sm" data-a="sollecita">${ic('bell')}Sollecita ${mancano === 1 ? 'chi manca' : 'i ' + mancano + ' che mancano'}</button>` : '<span class="tag ok">Tutti a posto</span>'}</div>
+      ${sol ? `<div class="muted" style="font-size:13px">Ultimo sollecito ${esc(quando(sol.inviato_il))} da ${esc(sol.da)}: ${sol.raggiunte} su ${sol.persone} raggiunte.</div>` : ''}
+      <div class="filters" role="group" aria-label="Filtra i destinatari">${filtri.map(([k, l, n]) => `<button class="fchip ${S.filtro === k ? 'on' : ''}" data-filtro="${k}" aria-pressed="${S.filtro === k}">${l} · ${n}</button>`).join('')}</div>
+      ${vis.map(x => {
+        const st = x.confermatoIl ? `<span class="tag ok">Confermata</span><small>${esc(quando(x.confermatoIl))}</small>`
+          : x.lettoIl ? `<span class="tag todo">${m.conferma ? 'Letta, non confermata' : 'Letta'}</span><small>${esc(quando(x.lettoIl))}</small>`
+          : '<span class="tag no">Non ancora aperta</span>';
+        return `<div class="person"><div><div class="n">${esc(x.nome)}</div><small>${esc([x.figura, x.sedi].filter(Boolean).join(' · '))}</small>
+          ${x.notifiche ? '' : `<span class="nodev">${ic('belloff')}notifiche non attive</span>`}</div><div class="r">${st}</div></div>`;
+      }).join('') || '<div class="muted" style="padding:10px 0">Nessuno in questo gruppo.</div>'}
+    </section>
+    <section class="card" aria-labelledby="conv-t">
+      <h3 id="conv-t">Richieste di chiarimento</h3>
+      ${m.conversazioni.length ? m.conversazioni.map(c => {
+        const key = 'a:' + m.id + ':' + c.personaId;
+        return `<div class="conv" id="conv-${esc(c.personaId)}"><div class="who2"><span>${esc(c.nome)}</span>${c.nuove ? `<span class="tag q">${c.nuove === 1 ? 'nuova' : c.nuove + ' nuove'}</span>` : ''}</div>
+          <div class="bubbles">${c.messaggi.map(x => `<div class="bub ${x.daAdmin ? 'me' : 'them'}">${esc(x.testo)}<small>${esc(x.daAdmin ? x.autore : c.nome)} · ${esc(quando(x.creatoIl))}</small></div>`).join('')}</div>
+          <div class="write"><label class="sr" for="r-${esc(c.personaId)}">Rispondi a ${esc(c.nome)}</label>
+            <textarea id="r-${esc(c.personaId)}" data-draft="${esc(key)}" rows="2" placeholder="Rispondi a ${esc(c.nome)}…">${esc(S.drafts[key] || '')}</textarea>
+            <button class="btn primary" data-a="chat-admin" data-persona="${esc(c.personaId)}">${ic('send')}Invia</button></div></div>`;
+      }).join('') : '<div class="muted" style="margin-top:8px">Nessuna domanda per ora. Se qualcuno scrive, ti arriva una notifica.</div>'}
+    </section>
+  </div>
+  <div style="margin-top:22px;display:flex;justify-content:flex-end">
+    <button class="btn danger sm" data-a="elimina">${ic('trash')}Elimina comunicazione</button>
+  </div>`;
+}
+
+/* ============ nuova comunicazione ============ */
+function destinatariScelti() {
+  if (!S.dest) return [];
+  const g = S.draft.gruppi, p = S.draft.persone;
+  return S.dest.persone.filter(x => x.id !== S.me.id && (p.includes(x.id) || g.some(k => k === 'tutti' || (k.startsWith('figura:') && x.figura === k.slice(7)) || (k.startsWith('sede:') && x.sedi.includes(k.slice(5))))));
+}
+function vNuova() {
+  if (!S.dest) return '<div class="empty">Caricamento…</div>';
+  const d = S.draft, gr = S.dest.gruppi;
+  const chip = g => `<button class="gchip ${d.gruppi.includes(g.id) ? 'on' : ''}" data-gruppo="${esc(g.id)}" aria-pressed="${d.gruppi.includes(g.id)}">${esc(g.label)}<small>${g.n}</small></button>`;
+  const sel = destinatariScelti(), senza = sel.filter(x => !x.notifiche);
+  return `<div class="head"><div><h2 class="view">Nuova comunicazione</h2><p>Arriva subito con una notifica sul telefono di chi la riceve.</p></div></div>
+  <div class="form">
+    <section class="card main" aria-label="Testo">
+      <div class="field"><label for="n-titolo">Oggetto</label><input id="n-titolo" data-d="titolo" maxlength="160" value="${esc(d.titolo)}" placeholder="Es. Nuovo orario della segreteria"></div>
+      <div class="field"><label for="n-testo">Testo</label><textarea id="n-testo" data-d="testo" maxlength="10000" placeholder="Scrivi qui la comunicazione…">${esc(d.testo)}</textarea></div>
+      <label class="check"><input type="checkbox" data-d="conferma" ${d.conferma ? 'checked' : ''}> Chiedi la conferma di lettura</label>
+      <label class="check"><input type="checkbox" data-d="importante" ${d.importante ? 'checked' : ''}> Segna come importante</label>
+    </section>
+    <section class="card side" aria-labelledby="n-chi">
+      <h3 id="n-chi" style="margin:0 0 4px;font-size:17px">A chi la mandi</h3>
+      <div class="chips">${chip(gr[0])}</div>
+      ${gr.some(g => g.tipo === 'figura') ? `<div class="gtitle">Per figura</div><div class="chips">${gr.filter(g => g.tipo === 'figura').map(chip).join('')}</div>` : ''}
+      ${gr.some(g => g.tipo === 'sede') ? `<div class="gtitle">Per sede</div><div class="chips">${gr.filter(g => g.tipo === 'sede').map(chip).join('')}</div>` : ''}
+      <div class="gtitle">Singole persone</div>
+      <div class="psearch"><label class="sr" for="n-pq">Cerca una persona per nome o cognome</label>
+        <div class="field" style="margin:0"><input id="n-pq" type="search" data-pq value="${esc(S.pq)}" placeholder="Cerca per nome o cognome" autocomplete="off"></div>
+        <div class="pres" id="pres" hidden></div></div>
+      ${d.persone.length ? `<div class="chips" style="margin-top:8px">${d.persone.map(id => { const p = S.dest.persone.find(x => x.id === id);
+        return `<span class="pchip">${esc(p?.nome || '?')}<button data-togli="${esc(id)}" aria-label="Togli ${esc(p?.nome || '')}">${ic('x')}</button></span>`; }).join('')}</div>` : ''}
+      <div class="summary">Arriverà a <b>${sel.length}</b> ${sel.length === 1 ? 'persona' : 'persone'}${sel.length ? '' : ': scegli un gruppo o una persona'}.
+        ${senza.length ? `<div style="margin-top:6px;color:var(--warn);font-size:13.5px">${senza.length === 1 ? '1 persona non ha' : senza.length + ' persone non hanno'} ancora attivato le notifiche: la vedranno quando aprono l'app.</div>` : ''}
+        ${sel.length ? `<details><summary>Vedi l'elenco</summary>${sel.map(x => esc(x.nome) + (x.notifiche ? '' : ' (senza notifiche)')).join(', ')}</details>` : ''}</div>
+      ${S.err ? `<div class="err" role="alert">${esc(S.err)}</div>` : ''}
+      <button class="btn primary big" data-a="invia" ${S.sending ? 'disabled' : ''}>${ic('send')}${S.sending ? 'Invio in corso…' : 'Invia comunicazione'}</button>
+    </section>
+  </div>`;
+}
+function risultatiPersone() {
+  const box = $('#pres'); if (!box) return;
+  const q = S.pq.trim().toLowerCase();
+  const res = q.length < 2 ? [] : S.dest.persone.filter(p => p.id !== S.me.id && !S.draft.persone.includes(p.id) && p.nome.toLowerCase().includes(q)).slice(0, 8);
+  box.hidden = !q || q.length < 2;
+  box.innerHTML = res.length ? res.map(p => `<button data-aggiungi="${esc(p.id)}"><b>${esc(p.nome)}</b> <span class="muted">${esc([p.figuraNome, p.sedi.join(', ')].filter(Boolean).join(' · '))}</span></button>`).join('')
+    : '<div class="muted" style="padding:10px 12px">Nessuna persona trovata.</div>';
+}
+
+/* ============ eventi ============ */
+let cercaT;
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.dataset.search) { const k = t.dataset.search; S.q[k] = t.value; clearTimeout(cercaT); cercaT = setTimeout(async () => {
+    try { S[k] = (await api('GET', `/api/${k}?q=` + encodeURIComponent(S.q[k]))).messaggi; } catch {}
+    const pos = t.selectionStart; render(); const n = $(`[data-search="${k}"]`); n.focus(); try { n.setSelectionRange(pos, pos); } catch {} }, 300); }
+  if (t.dataset.draft) S.drafts[t.dataset.draft] = t.value;
+  if (t.dataset.d === 'titolo' || t.dataset.d === 'testo') S.draft[t.dataset.d] = t.value;
+  if (t.dataset.pq !== undefined) { S.pq = t.value; risultatiPersone(); }
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.dataset.d === 'conferma' || t.dataset.d === 'importante') S.draft[t.dataset.d] = t.checked;
+});
+document.addEventListener('click', async e => {
+  const b = e.target.closest('button,[data-go]'); if (!b) return;
+  if (b.dataset.go) return go(b.dataset.go);
+  if (b.dataset.open) return go('leggi', b.dataset.open);
+  if (b.dataset.gestisci) { S.filtro = 'tutti'; return go('gestisci', b.dataset.gestisci); }
+  if (b.dataset.filtro) { S.filtro = b.dataset.filtro; return render(); }
+  if (b.dataset.gruppo) { const g = S.draft.gruppi, k = b.dataset.gruppo; S.draft.gruppi = g.includes(k) ? g.filter(x => x !== k) : [...g, k]; S.err = ''; return render(); }
+  if (b.dataset.aggiungi) { S.draft.persone.push(b.dataset.aggiungi); S.pq = ''; S.err = ''; render(); $('#n-pq')?.focus(); return; }
+  if (b.dataset.togli) { S.draft.persone = S.draft.persone.filter(x => x !== b.dataset.togli); return render(); }
+  const a = b.dataset.a; if (!a) return;
+  try {
+    if (a === 'conferma') {
+      b.disabled = true; await api('POST', `/api/messaggi/${S.cur.id}/conferma`);
+      toast('Grazie! Conferma registrata.'); await load();
+    }
+    if (a === 'chat-persona') {
+      const key = 'p:' + S.cur.id, testo = (S.drafts[key] || '').trim(); if (!testo) return toast('Scrivi prima la domanda.');
+      b.disabled = true; await api('POST', `/api/messaggi/${S.cur.id}/chat`, { testo }); S.drafts[key] = '';
+      toast('Inviata: ti arriva una notifica quando ti rispondono.'); await load(); $('#chat')?.scrollIntoView({ block: 'end' });
+    }
+    if (a === 'chat-admin') {
+      const p = b.dataset.persona, key = 'a:' + S.cur.id + ':' + p, testo = (S.drafts[key] || '').trim(); if (!testo) return toast('Scrivi prima la risposta.');
+      b.disabled = true; await api('POST', `/api/messaggi/${S.cur.id}/chat`, { testo, persona: p }); S.drafts[key] = '';
+      S.persona = p; toast('Risposta inviata.'); await load();
+    }
+    if (a === 'sollecita') {
+      b.disabled = true; const r = await api('POST', `/api/messaggi/${S.cur.id}/sollecita`);
+      toast(r.persone ? `Promemoria arrivato a ${r.raggiunte} su ${r.persone}.${r.senzaNotifiche.length ? ' Senza notifiche: ' + r.senzaNotifiche.join(', ') : ''}` : 'Nessuno da sollecitare.', 6000);
+      await load();
+    }
+    if (a === 'elimina') {
+      if (!b.classList.contains('armed')) { b.classList.add('armed'); b.innerHTML = ic('trash') + 'Tocca di nuovo per eliminarla per tutti'; setTimeout(() => { if (b.isConnected) { b.classList.remove('armed'); b.innerHTML = ic('trash') + 'Elimina comunicazione'; } }, 4000); return; }
+      await api('DELETE', `/api/messaggi/${S.cur.id}`); toast('Comunicazione eliminata.'); go('inviate');
+    }
+    if (a === 'invia') {
+      const d = S.draft;
+      if (!d.titolo.trim()) { S.err = 'Scrivi l\'oggetto.'; return render(); }
+      if (!d.testo.trim()) { S.err = 'Scrivi il testo.'; return render(); }
+      if (!destinatariScelti().length) { S.err = 'Scegli almeno un gruppo o una persona.'; return render(); }
+      S.sending = true; S.err = ''; render();
+      try {
+        const r = await api('POST', '/api/messaggi', d);
+        S.draft = { titolo: '', testo: '', importante: false, conferma: true, gruppi: [], persone: [] };
+        toast(`Inviata a ${r.destinatari} ${r.destinatari === 1 ? 'persona' : 'persone'}: notifica arrivata a ${r.raggiunti}.${r.senzaNotifiche.length ? ' Senza notifiche: ' + r.senzaNotifiche.join(', ') : ''}`, 7000);
+        S.sending = false; S.dest = null; go('gestisci', r.id);
+      } catch (x) { S.sending = false; S.err = x.message; render(); }
+    }
+  } catch (x) { b.disabled = false; toast(x.message); }
+});
+// apre le conversazioni: le domande risultano lette
+document.addEventListener('focusin', e => {
+  const t = e.target.closest('[data-draft^="a:"]'); if (!t || !S.cur) return;
+  const p = t.id.slice(2); api('POST', `/api/messaggi/${S.cur.id}/chat-lette`, { persona: p }).catch(() => {});
+});
+
+// aggiornamento automatico ogni 30 secondi (nuove comunicazioni, conferme, messaggi), senza disturbare chi sta scrivendo
+setInterval(() => {
+  if (document.hidden || !S.me) return;
+  const a = document.activeElement;
+  if (a && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && a.type !== 'checkbox'))) return;
+  if (S.view === 'nuova') return contatori();
+  load();
+}, 30000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S.me && S.view !== 'nuova') load(); });
+
+/* ============ avvio ============ */
+(async () => {
+  try {
+    const st = await api('GET', '/api/stato');
+    Object.assign(S, { me: st.me, notif: st.notifiche, links: st.links });
+  } catch (e) { $('#main').innerHTML = `<div class="empty"><b>${esc(e.message)}</b></div>`; return; }
+  const u = new URLSearchParams(location.search), m = u.get('m'), p = u.get('persona');
+  S.chatJump = location.hash === '#chat';
+  if (m && p && S.me.admin) return go('gestisci', m, p);
+  if (m) return go('leggi', m);
+  go('ricevute');
+})();
+</script>
+</body>
+</html>

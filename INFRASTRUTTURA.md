@@ -131,3 +131,12 @@ Le impostazioni del Calendario possono avere il prefisso `CAL_` (`CAL_ADMIN_USER
 - Privacy Policy, Cookie Policy, Termini e condizioni (revisionati dal DPO): `appgestione.it/privacy`, `/cookie`, `/termini`, pubblici. Testi in `accessi/legal/*.frag.html` (convertiti dai .docx ufficiali, da NON modificare a mano); le pagine si rigenerano con `python3 accessi/legal/genera.py`. Collegati da accesso/registrazione, pagina app, Protocolli (menu profilo), Calendario, Magazzino, Turni, Nuovalab, Ticket, Gestione finanziaria.
 - Caratteri tipografici: niente Google Fonts. `lib/caratteri.js` serve `/fonts/tosmile.css?f=famiglia:pesi|…` e i file dai pacchetti `@fontsource/*` (installati da Render), con CORS aperto: Ticket e Gestione finanziaria li caricano da `https://appgestione.it/fonts/…`.
 - Fornitori extra UE da indicare al DPO: Anthropic (lettura AI di bolle, etichette, buste paga, regole turni) e Google Gemini (assistente «Chiedi ai protocolli», `lib/ai.js`).
+
+
+## Comunicazioni aziendali (15 ottobre 2026)
+App nuova nello stesso servizio `appgestione-eu`: indirizzo **comunicazioni.appgestione.it** (serve il dominio personalizzato su Render e il CNAME su Aruba, come per le altre app). Codice in `comunicazioni/` (server.js, lib/db.js, public/app.html), dati nello schema `comunicazioni` del database `appgestione-db-eu` (tabelle messaggi, destinatari, chat, solleciti).
+- Si entra solo con l'accesso unico. **Amministratore** (dal pannello Gestione accessi) = scrive le comunicazioni, vede letture/conferme, sollecita, risponde; **Utente** = riceve, conferma la lettura, chiede chiarimenti in una chat privata con chi ha inviato.
+- Destinatari: Tutti, per figura (figura dell'accesso unico), per sede (sedi in cui la persona lavora nei Turni), singole persone. L'elenco dei destinatari viene "fotografato" all'invio.
+- Ricerca per parola o frase su oggetto e testo (ricevute e inviate).
+- Notifiche dal centro notifiche unico (`APP_NOTIFICHE.comunicazioni`, interruttore "Comunicazioni" su appgestione.it): nuova comunicazione, sollecito, domanda (va a chi ha inviato), risposta (va alla persona).
+- Accesso automatico (`apps.js → auto`): chi ha Turni o Calendario riceve una volta sola anche Comunicazioni come Utente (tabella `accessi.app_auto`); se l'amministratore lo toglie non ritorna.
