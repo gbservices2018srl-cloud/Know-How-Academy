@@ -151,3 +151,8 @@ App nuova nello stesso servizio: **documenti.appgestione.it** (serve dominio per
   - Sceglie chi lo vede (tutti, figura, sede da Turni, singole persone), se è scaricabile e se avvisare con una notifica. Bozza finché non si pubblica; ogni modifica pubblicata è una nuova versione ("Aggiornato" per chi l'aveva già letto).
 - Dipendente: vede solo i documenti per lui, cerca per parola o frase, legge; se scaricabile salva in PDF (stampa del browser per le pagine, file originale per i PDF originali). Se non scaricabile: niente pulsante, stampa bloccata, filigrana con il suo nome, niente copia.
 - Accesso automatico come per Comunicazioni (chi ha Turni o Calendario). Notifiche dal centro unico (interruttore "Documenti di studio").
+
+## Gestione accessi → scheda App (16 ottobre 2026)
+- **Interruttore** per ogni app (`accessi.app_stato`): spenta = entrano solo proprietario e amministratori dell'app; gli altri vedono il riquadro grigio "Temporaneamente non disponibile" e non ricevono le notifiche di quell'app. I permessi non si toccano. Per Nuovalab e Ticket blocca l'ingresso da appgestione.it (chi è già dentro resta fino al prossimo accesso); per la Gestione finanziaria blocca solo il riquadro (ha anche il suo login).
+- **Sospendi / riattiva** a gruppi (tutti, figura, sede da Turni) o persone spuntate: `user_apps.sospesa` (il ruolo resta). Per Nuovalab e Ticket la sospensione blocca anche dentro l'app (come togliere l'accesso), la riattivazione lo ridà.
+- Ogni operazione va in `accessi.app_operazioni` con **Annulla**.

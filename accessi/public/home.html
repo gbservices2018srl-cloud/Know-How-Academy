@@ -32,6 +32,8 @@ header p{margin:0;color:var(--muted);font-size:17px;max-width:58ch}
 .icon{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;background:color-mix(in srgb,var(--c) 18%,transparent);color:var(--ink)}
 .icon svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 .app h2{font-size:22px}
+.app.off{filter:grayscale(1);opacity:.6;cursor:not-allowed}
+.app.off:hover{transform:none;box-shadow:none}
 .app .brandlogo{display:flex;align-items:center;background:#fff;border-radius:12px;padding:8px 12px;align-self:flex-start;max-width:100%}
 .app .brandlogo img{height:54px;width:auto;max-width:100%;display:block}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
@@ -130,16 +132,25 @@ function toast(t) { const d = document.createElement('div'); d.className = 'toas
   if (noaccess) {
     const names = {magazzino: 'Magazzino centrale', turni: 'Turni', finanza: 'Gestione finanziaria', laboratorio: 'Nuovalab', ticket: 'Ticket assistenza', protocolli: 'Protocolli', calendario: 'Calendario eventi', comunicazioni: 'Comunicazioni ed eventi aziendali', documenti: 'Documenti di studio'};
     const m = document.createElement('div'); m.className = 'msg warn'; m.setAttribute('role', 'status');
-    m.textContent = `Non sei abilitato all'app «${names[noaccess] || noaccess}». Se ti serve, chiedi all'amministratore di attivartela.`;
+    const spenta = me.apps.find(a => a.key === noaccess)?.spenta;
+    m.textContent = spenta ? `L'app «${names[noaccess] || noaccess}» è temporaneamente non disponibile. Riprova più tardi.`
+      : `Non sei abilitato all'app «${names[noaccess] || noaccess}». Se ti serve, chiedi all'amministratore di attivartela.`;
     $('#grid').before(m);
     history.replaceState(null, '', '/');
   }
-  $('#grid').innerHTML = apps.length ? apps.map(a => `<a class="app ${esc(a.color)}" href="${esc(a.link || a.url)}">
+  // app spenta dal pannello: per chi non ne è amministratore il riquadro è grigio e non si apre
+  const off = a => a.spenta && a.role !== 'admin';
+  $('#grid').innerHTML = apps.length ? apps.map(a => off(a) ? `<div class="app off ${esc(a.color)}" aria-disabled="true">
+      <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[a.key] || ''}</svg></span>
+      <h2>${esc(a.name)}</h2>
+      <p>${esc(a.desc)}</p>
+      <div class="go"><span class="role">Temporaneamente non disponibile</span><span></span></div>
+    </div>` : `<a class="app ${esc(a.color)}" href="${esc(a.link || a.url)}">
       ${LOGHI[a.key] ? `<span class="brandlogo"><img src="${LOGHI[a.key]}" alt="" width="546" height="152"></span><h2 class="sr">${esc(a.name)}</h2>`
         : `<span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[a.key] || ''}</svg></span>
       <h2>${esc(a.name)}</h2>`}
       <p>${esc(a.desc)}</p>
-      <div class="go"><span>${a.role === 'admin' ? '<span class="role">Amministratore</span>' : esc(a.url.replace('https://', ''))}</span><span>Apri →</span></div>
+      <div class="go"><span>${a.role === 'admin' ? '<span class="role">Amministratore</span>' + (a.spenta ? ' <span class="role">Spenta per gli altri</span>' : '') : esc(a.url.replace('https://', ''))}</span><span>Apri →</span></div>
     </a>`).join('')
     : `<div class="card empty" style="grid-column:1/-1"><h2>Nessuna app assegnata, per ora</h2><p class="muted" style="margin:0">Il tuo accesso è attivo, ma l'amministratore non ti ha ancora abilitato ad alcuna app. Appena lo farà, le troverai qui.</p></div>`;
   $('#pw-open')?.addEventListener('click', () => { $('#pw-err').textContent = ''; $('#pwf').reset(); $('#pw-user').value = u.email; $('#pwd').showModal(); });

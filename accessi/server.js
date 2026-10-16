@@ -107,8 +107,9 @@ function limited(key, max, minutes) {
 setInterval(() => { const now = Date.now(); for (const [k, a] of hits) if (!a.some(t => now - t < 3600e3)) hits.delete(k); }, 600e3).unref();
 
 // un'app "dentro" un'altra (Calendario dentro Comunicazioni ed eventi) non ha un suo riquadro se la persona ha anche l'altra
-const appsForUser = apps => APPS.filter(a => apps[a.key] && !(a.dentro && apps[a.dentro])).map(a => ({ key: a.key, name: a.name, url: a.url, link: a.sso ? `/sso/${a.key}` : a.url,
-  color: a.color, desc: a.desc, role: apps[a.key] }));
+// spente: app spente dal pannello (la persona vede il riquadro grigio, l'amministratore dell'app la usa normalmente)
+const appsForUser = (apps, spente = new Set()) => APPS.filter(a => apps[a.key] && !(a.dentro && apps[a.dentro])).map(a => ({ key: a.key, name: a.name, url: a.url, link: a.sso ? `/sso/${a.key}` : a.url,
+  color: a.color, desc: a.desc, role: apps[a.key], ...(spente.has(a.key) ? { spenta: true } : {}) }));
 
 // App su Supabase (Nuovalab, Ticket): quando qualcuno viene disattivato, eliminato o perde l'accesso,
 // la funzione "sso" di quell'app blocca il suo accesso anche lì.
@@ -231,9 +232,9 @@ async function leggiPermesso(a, v, u, persona) {
 const fullName = u => `${u.first_name} ${u.last_name}`.trim() || u.email;
 
 /* ---------- accesso ---------- */
-app.get('/api/me', needUser, (req, res) => {
-  res.json({ user: store.publicUser(req.user), apps: appsForUser(req.apps), admin: isAdmin(req), mail: mail.enabled() });
-});
+app.get('/api/me', needUser, wrap(async (req, res) => {
+  res.json({ user: store.publicUser(req.user), apps: appsForUser(req.apps, await store.appSpente()), admin: isAdmin(req), mail: mail.enabled() });
+}));
 
 app.post('/api/login', wrap(async (req, res) => {
   const email = store.cleanEmail(req.body.email), password = String(req.body.password || '').trim();
@@ -385,9 +386,10 @@ app.post('/api/me/password', needUser, wrap(async (req, res) => {
 /* ---------- pannello amministratore ---------- */
 app.get('/api/admin/users', needAdmin, wrap(async (req, res) => {
   const { rows: users } = await store.q('select * from users order by (status = \'pending\') desc, owner desc, last_name, first_name');
-  const { rows: ua } = await store.q('select user_id, app, role, livello, ente, ente_nome, enti from user_apps');
-  const by = {}, lv = {};
+  const { rows: ua } = await store.q('select user_id, app, role, livello, ente, ente_nome, enti, sospesa from user_apps');
+  const by = {}, lv = {}, sosp = {};
   for (const r of ua) {
+    if (r.sospesa) (sosp[r.user_id] ||= []).push(r.app);
     (by[r.user_id] ||= {})[r.app] = r.role;
     if (r.livello) (lv[r.user_id] ||= {})[r.app] = { livello: r.livello, ente: r.ente, enteNome: r.ente_nome,
       enti: Array.isArray(r.enti) && r.enti.length ? r.enti : r.ente ? [{ id: r.ente, nome: r.ente_nome }] : [] };
@@ -398,7 +400,7 @@ app.get('/api/admin/users', needAdmin, wrap(async (req, res) => {
     figure: store.FIGURE,
     livelli: lv,
     mail: mail.enabled(),
-    users: users.map(u => store.publicUser(u, u.owner ? Object.fromEntries(store.APP_KEYS.map(k => [k, 'admin'])) : (by[u.id] || {}))),
+    users: users.map(u => ({ ...store.publicUser(u, u.owner ? Object.fromEntries(store.APP_KEYS.map(k => [k, 'admin'])) : (by[u.id] || {})), sospese: sosp[u.id] || [] })),
   });
 }));
 
@@ -518,6 +520,80 @@ app.put('/api/admin/users/:id/apps/:app', needAdmin, wrap(async (req, res) => {
   if (!role) revokeIn(u, [a.key]); else if (u.status === 'active') avvisi = await provisiona(u, [a.key]);
   res.json({ apps: await store.appsOf(u), livelli: await store.livelliOf(u.id), avvisi });
 }));
+/* ---------- app: spegnere per tutti, sospendere a gruppi o persone, storico con Annulla ---------- */
+const APP_GESTIBILI = () => APPS.filter(a => a.key !== 'accessi');
+async function registra(req, app, azione, chi, ids, dettaglio = {}) {
+  const id = require('crypto').randomUUID();
+  await store.q('insert into app_operazioni (id, app, azione, chi, persone, dettaglio, da) values ($1,$2,$3,$4,$5,$6,$7)',
+    [id, app, azione, chi, ids.length, JSON.stringify({ ids, ...dettaglio }), `${req.user.first_name} ${req.user.last_name}`.trim() || req.user.email]);
+  return id;
+}
+// sospende o riattiva il permesso di alcune persone in un'app (il ruolo resta: si riprende com'era)
+async function cambiaSospensione(app, ids, sospendi) {
+  const { rows } = await store.q(`update user_apps ua set sospesa = $3 from users u where ua.user_id = u.id and ua.app = $1 and ua.user_id = any($2)
+    and ua.sospesa <> $3 and not u.owner returning ua.user_id`, [app, ids, sospendi]);
+  const fatti = rows.map(r => r.user_id);
+  const a = APPS.find(x => x.key === app);
+  for (const id of fatti) {
+    const u = await store.getUser(id); if (!u) continue;
+    // Nuovalab e Ticket: l'accesso si blocca (o si ridà) anche dentro l'app; le altre app lo leggono da qui
+    if (a?.sso) { if (sospendi) revokeIn(u, [app]); else if (u.status === 'active') provisiona(u, [app]).catch(() => {}); }
+  }
+  return fatti;
+}
+app.get('/api/admin/app', needAdmin, wrap(async (req, res) => {
+  const { rows: st } = await store.q('select app, spenta, cambiata_il, cambiata_da from app_stato');
+  const { rows: conta } = await store.q(`select ua.app, count(*) filter (where not ua.sospesa)::int as attivi, count(*) filter (where ua.sospesa)::int as sospesi
+    from user_apps ua join users u on u.id = ua.user_id and u.status = 'active' group by ua.app`);
+  const { rows: op } = await store.q(`select id, quando, app, azione, chi, persone, da, annullata from app_operazioni order by quando desc limit 30`);
+  res.json({
+    apps: APP_GESTIBILI().map(a => { const s = st.find(x => x.app === a.key), c = conta.find(x => x.app === a.key);
+      return { key: a.key, name: a.name, color: a.color, spenta: !!s?.spenta, cambiataIl: s?.cambiata_il || null, cambiataDa: s?.cambiata_da || '',
+        attivi: c?.attivi || 0, sospesi: c?.sospesi || 0 }; }),
+    operazioni: op,
+  });
+}));
+// persone con un permesso nell'app (attivo o sospeso), con figura e sedi per scegliere i gruppi
+app.get('/api/admin/app/:app/persone', needAdmin, wrap(async (req, res) => {
+  const a = APP_GESTIBILI().find(x => x.key === req.params.app); if (!a) return bad(res, 404, 'App sconosciuta');
+  const { rows } = await store.q(`select u.id, u.first_name, u.last_name, u.email, u.figura, ua.role, ua.sospesa from user_apps ua join users u on u.id = ua.user_id
+    where ua.app = $1 and u.status = 'active' and not u.owner order by u.last_name, u.first_name`, [a.key]);
+  const sedi = await require('../lib/gruppo').sediPerPersona();
+  res.json({ persone: rows.map(r => ({ id: r.id, nome: `${r.first_name} ${r.last_name}`.trim() || r.email, figura: r.figura || '', sedi: sedi.get(r.id) || [],
+    ruolo: r.role, sospesa: r.sospesa, io: r.id === req.user.id })), figure: store.FIGURE });
+}));
+app.put('/api/admin/app/:app/stato', needAdmin, wrap(async (req, res) => {
+  const a = APP_GESTIBILI().find(x => x.key === req.params.app); if (!a) return bad(res, 404, 'App sconosciuta');
+  const spenta = !!req.body.spenta, da = `${req.user.first_name} ${req.user.last_name}`.trim() || req.user.email;
+  await store.q(`insert into app_stato (app, spenta, cambiata_il, cambiata_da) values ($1,$2,now(),$3)
+    on conflict (app) do update set spenta = excluded.spenta, cambiata_il = now(), cambiata_da = excluded.cambiata_da`, [a.key, spenta, da]);
+  store.appSpenteAggiorna();
+  const op = await registra(req, a.key, spenta ? 'spegni' : 'accendi', 'Tutti tranne gli amministratori', []);
+  res.json({ ok: true, operazione: op });
+}));
+app.post('/api/admin/app/:app/sospensioni', needAdmin, wrap(async (req, res) => {
+  const a = APP_GESTIBILI().find(x => x.key === req.params.app); if (!a) return bad(res, 404, 'App sconosciuta');
+  const sospendi = req.body.azione === 'sospendi';
+  const ids = (Array.isArray(req.body.ids) ? req.body.ids : []).slice(0, 2000).map(x => String(x).slice(0, 64));
+  if (!ids.length) return bad(res, 400, 'Scegli almeno una persona.');
+  const fatti = await cambiaSospensione(a.key, ids, sospendi);
+  if (!fatti.length) return res.json({ persone: 0 });
+  const op = await registra(req, a.key, sospendi ? 'sospendi' : 'riattiva', String(req.body.chi || '').slice(0, 200), fatti);
+  res.json({ persone: fatti.length, operazione: op });
+}));
+app.post('/api/admin/operazioni/:id/annulla', needAdmin, wrap(async (req, res) => {
+  const { rows } = await store.q('select * from app_operazioni where id = $1', [req.params.id]);
+  const o = rows[0]; if (!o) return bad(res, 404, 'Operazione non trovata');
+  if (o.annullata) return bad(res, 400, 'Questa operazione è già stata annullata.');
+  if (o.azione === 'spegni' || o.azione === 'accendi') {
+    await store.q(`insert into app_stato (app, spenta, cambiata_il, cambiata_da) values ($1,$2,now(),$3)
+      on conflict (app) do update set spenta = excluded.spenta, cambiata_il = now(), cambiata_da = excluded.cambiata_da`, [o.app, o.azione === 'accendi', 'annullamento']);
+    store.appSpenteAggiorna();
+  } else await cambiaSospensione(o.app, o.dettaglio.ids || [], o.azione === 'riattiva');
+  await store.q('update app_operazioni set annullata = true where id = $1', [o.id]);
+  res.json({ ok: true });
+}));
+
 /* ---------- sedi del gruppo ---------- */
 // Si gestiscono qui e vengono copiate nelle app: Turni e Calendario (in questo servizio, evento "sedi"),
 // Ticket e Nuovalab (funzione "sso" con un biglietto "sedi"). Le app non le modificano: le ricevono.
@@ -684,6 +760,7 @@ app.get('/sso/:app', wrap(async (req, res) => {
   if (!req.user) return res.redirect('/accedi?next=' + encodeURIComponent(req.originalUrl));
   const role = req.apps[a.key];
   if (!role) return res.redirect('/?noaccess=' + a.key);
+  if (role !== 'admin' && !req.user.owner && (await store.appSpente()).has(a.key)) return res.redirect('/?noaccess=' + a.key);
   const ticket = await store.createTicket(req.user, a.key, 'login', role);
   res.set('Cache-Control', 'no-store');
   res.redirect(`${a.sso}?ticket=${encodeURIComponent(ticket)}`);

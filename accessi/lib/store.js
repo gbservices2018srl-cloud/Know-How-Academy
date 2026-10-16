@@ -94,6 +94,14 @@ async function migrate() {
     alter table user_apps add column if not exists enti jsonb; -- più studi: [{ id, nome }], il primo è anche in "ente"
     alter table sso_tickets drop constraint if exists sso_tickets_purpose_check;
     alter table sso_tickets add constraint sso_tickets_purpose_check check (purpose in ('login','revoke','catalog','sync','sedi'));`);
+  // Sospensioni (il permesso resta, ma non vale finché non si riattiva), app spente per tutti tranne gli amministratori, storico
+  await q(`alter table user_apps add column if not exists sospesa boolean not null default false;
+    create table if not exists app_stato (app text primary key, spenta boolean not null default false, cambiata_il timestamptz, cambiata_da text);
+    create table if not exists app_operazioni (
+      id text primary key, quando timestamptz not null default now(), app text not null, azione text not null,
+      chi text not null default '', persone int not null default 0, dettaglio jsonb not null default '{}',
+      da text not null default '', annullata boolean not null default false
+    );`);
   await q(`create table if not exists app_auto (
       user_id text not null references users(id) on delete cascade,
       app text not null,
@@ -201,9 +209,19 @@ async function accessiAutomatici(userId = null) {
 }
 async function appsOf(user) {
   if (user.owner) return Object.fromEntries(APP_KEYS.map(k => [k, 'admin']));
-  const { rows } = await q('select app, role from user_apps where user_id = $1', [user.id]);
+  const { rows } = await q('select app, role from user_apps where user_id = $1 and not sospesa', [user.id]);
   return Object.fromEntries(rows.filter(r => APP_KEYS.includes(r.app)).map(r => [r.app, r.role]));
 }
+// App spente (per tutti tranne gli amministratori dell'app): letto dal database al massimo ogni 15 secondi
+let SPENTE = null;
+async function appSpente() {
+  if (!SPENTE || Date.now() - SPENTE.t > 15000) {
+    const { rows } = await q('select app from app_stato where spenta');
+    SPENTE = { t: Date.now(), set: new Set(rows.map(r => r.app)) };
+  }
+  return SPENTE.set;
+}
+const appSpenteAggiorna = () => { SPENTE = null; };
 
 function publicUser(u, apps) {
   return {
@@ -243,7 +261,7 @@ async function setAppRole(userId, app, role, livello = null) {
   if (role === 'user' || role === 'admin') {
     if (app === 'accessi' && role === 'user') role = 'admin';
     await q(`insert into user_apps (user_id, app, role, livello, ente, ente_nome, enti) values ($1,$2,$3,$4,$5,$6,$7)
-             on conflict (user_id, app) do update set role = excluded.role, livello = excluded.livello, ente = excluded.ente, ente_nome = excluded.ente_nome, enti = excluded.enti`,
+             on conflict (user_id, app) do update set role = excluded.role, livello = excluded.livello, ente = excluded.ente, ente_nome = excluded.ente_nome, enti = excluded.enti, sospesa = false`,
       [userId, app, role, livello?.livello || null, livello?.ente || null, livello?.enteNome || null,
        livello?.enti?.length ? JSON.stringify(livello.enti) : null]);
   } else {
@@ -294,6 +312,8 @@ async function verify(token, app) {
   if (!c) return null;
   const role = c.apps[app];
   if (!role) return { denied: true, user: publicUser(c.user) };
+  // app spenta dal pannello: entrano solo il proprietario e gli amministratori dell'app
+  if (role !== 'admin' && !c.user.owner && (await appSpente()).has(app)) return { denied: true, spenta: true, user: publicUser(c.user) };
   // pannello: è amministratore di Gestione accessi (o proprietario): può fare cose riservate anche nelle app
   return { user: { ...publicUser(c.user), pannello: !!(c.user.owner || c.apps.accessi === 'admin') }, role };
 }
@@ -302,7 +322,7 @@ async function verify(token, app) {
 async function usersWithApp(app) {
   const { rows } = await q(`select u.*, case when u.owner then 'admin' else ua.role end as app_role
     from users u left join user_apps ua on ua.user_id = u.id and ua.app = $1
-    where u.status = 'active' and (u.owner or ua.role is not null) order by u.last_name, u.first_name`, [app]);
+    where u.status = 'active' and (u.owner or (ua.role is not null and not ua.sospesa)) order by u.last_name, u.first_name`, [app]);
   return rows.map(r => ({ ...publicUser(r), role: r.app_role }));
 }
 
@@ -376,7 +396,7 @@ async function peekPasswordLink(token) {
 }
 
 module.exports = {
-  accessiAutomatici,
+  accessiAutomatici, appSpente, appSpenteAggiorna,
   pool, q, SCHEMA, APPS, APP_KEYS, events, migrate, ensureOwner,
   cleanEmail, validEmail, cleanName, cleanDate, cleanFigura, FIGURE, cleanCf, validCf, cleanProv, cleanAlbo, appsOf, publicUser, getUser, findByEmail, createUser, setPassword,
   setAppRole, livelliOf, deleteUser, usersWithApp, logoutEverywhere, createSession, endSession, check, verify,

@@ -81,6 +81,29 @@ dialog form{padding:22px;display:flex;flex-direction:column;gap:14px}
 .row{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
 .linkbox{display:flex;gap:8px}
 .linkbox input{font-size:13.5px}
+/* scheda App: interruttori e sospensioni */
+.approw{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:14px 18px;border-top:1px solid var(--line)}
+.approw:first-child{border-top:0}
+.approw b{font:700 16.5px var(--f-display)}
+.approw.spenta b{opacity:.6}
+.sw{appearance:none;border:0;cursor:pointer;display:inline-flex;align-items:center;gap:9px;font:700 14px var(--f-body);background:none;color:var(--fg);min-height:44px;padding:0 4px}
+.sw .tr{width:46px;height:26px;border-radius:999px;background:var(--ok);position:relative;transition:background .15s;flex:none}
+.sw .tr::after{content:"";position:absolute;top:3px;left:23px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .15s}
+.sw[aria-checked="false"] .tr{background:#9AA3A6}.sw[aria-checked="false"] .tr::after{left:3px}
+.wiz{padding:18px;display:flex;flex-direction:column;gap:14px;border-top:3px solid var(--teal)}
+.wiz h3{margin:0;font-size:18px}
+.wiz .step{font:800 12px var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.plist{max-height:320px;overflow:auto;border:1px solid var(--line);border-radius:12px}
+.plist label{display:flex;gap:10px;align-items:center;padding:9px 12px;border-top:1px solid var(--line);cursor:pointer;min-height:44px}
+.plist label:first-child{border-top:0}
+.plist input{width:19px;height:19px;accent-color:var(--teal)}
+.plist small{color:var(--muted)}
+.riepilogo{background:color-mix(in srgb,var(--teal) 8%,var(--surface));border-radius:12px;padding:12px 14px;font-size:14.5px}
+.oprow{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:10px 18px;border-top:1px solid var(--line);font-size:14px}
+.oprow:first-child{border-top:0}
+.oprow.ann{opacity:.55;text-decoration:line-through}
+.undo{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+@media (max-width:560px){.approw{grid-template-columns:minmax(0,1fr) auto}.approw .actions{grid-column:1/-1}}
 </style>
 </head>
 <body>
@@ -95,8 +118,9 @@ dialog form{padding:22px;display:flex;flex-direction:column;gap:14px}
     <p>Approva le registrazioni e scegli per ogni persona a quali app può entrare e con quale ruolo. Le modifiche valgono subito e si salvano da sole.</p>
   </header>
   <div class="msg warn" id="mailwarn" hidden>L'invio delle email non è ancora attivo (manca <b>RESEND_API_KEY</b> su Render): le notifiche non partono e i link per la password te li mostro qui da copiare.</div>
-  <div class="seg" role="tablist" aria-label="Sezione"><button role="tab" data-sez="persone" aria-selected="true">Persone</button><button role="tab" data-sez="sedi" aria-selected="false">Sedi</button></div>
+  <div class="seg" role="tablist" aria-label="Sezione"><button role="tab" data-sez="persone" aria-selected="true">Persone</button><button role="tab" data-sez="sedi" aria-selected="false">Sedi</button><button role="tab" data-sez="app" aria-selected="false">App</button></div>
   <section id="sediBox" hidden></section>
+  <section id="appBox" hidden></section>
   <div class="tools" id="toolsBox">
     <div class="chips" role="group" aria-label="Filtro">
       <button class="chip" data-f="pending">In attesa <span class="n" id="n-pending"></span></button>
@@ -206,8 +230,10 @@ function render() {
 function card(u, homonym) {
   const st = {pending: 'In attesa', active: 'Attivo', disabled: 'Disattivato'}[u.status];
   const selfOrOwner = u.owner || u.id === S.me;
+  const sosp = new Set(u.sospese || []);
   const apps = S.apps.map(a => {
     const role = u.apps[a.key] || '';
+    const ns = sosp.has(a.key) ? '<small style="color:var(--danger);font-weight:700">Sospesa · riattivala dalla scheda App</small>' : '';
     if (a.livelli && !u.owner) {
       const cur = lvOf(u, a), k = u.id + '|' + a.key;
       const adminKey = a.livelli.find(l => l.role === 'admin').key;
@@ -217,13 +243,13 @@ function card(u, homonym) {
         a.livelli.map(l => `<option value="${l.key}" ${l.key === sel ? 'selected' : ''}>${esc(l.label)}</option>`).join('');
       const ente = L?.ente ? enteSelect(a, L, cur?.livello === sel ? cur.ente : '', `data-ente="${a.key}" data-u="${u.id}" data-lv="${L.key}"`, cur?.enteNome) : '';
       const altri = L?.multi && cur?.livello === sel && cur.ente ? altriEnti(a, L, u, cur) : '';
-      return `<div class="ap"><label class="ap-in">${esc(a.name)}<select data-app="${a.key}" data-u="${u.id}" class="${role}">${opts}</select>${ente}</label>${altri}</div>`;
+      return `<div class="ap"><label class="ap-in">${esc(a.name)}<select data-app="${a.key}" data-u="${u.id}" class="${role}">${opts}</select>${ente}</label>${altri}${ns}</div>`;
     }
     const dis = u.owner || (u.id === S.me && a.key === 'accessi');
     const opts = a.adminOnly
       ? `<option value="">Nessun accesso</option><option value="admin" ${role ? 'selected' : ''}>Amministratore</option>`
       : `<option value="">Nessun accesso</option><option value="user" ${role === 'user' ? 'selected' : ''}>Utente</option><option value="admin" ${role === 'admin' ? 'selected' : ''}>Amministratore</option>`;
-    return `<label class="ap">${esc(a.name)}<select data-app="${a.key}" data-u="${u.id}" class="${role}" ${dis ? 'disabled' : ''}>${opts}</select></label>`;
+    return `<label class="ap">${esc(a.name)}<select data-app="${a.key}" data-u="${u.id}" class="${role}" ${dis ? 'disabled' : ''}>${opts}</select>${ns}</label>`;
   }).join('');
   let actions = '';
   if (u.status === 'pending') actions = `<button class="btn small primary" data-act="approve" data-u="${u.id}">Approva</button><button class="btn small danger" data-act="reject" data-u="${u.id}">Rifiuta</button>`;
@@ -305,8 +331,9 @@ document.addEventListener('change', async e => {
 let SEDI = null;
 function vista(sez) {
   document.querySelectorAll('[data-sez]').forEach(b => b.setAttribute('aria-selected', b.dataset.sez === sez));
-  $('#sediBox').hidden = sez !== 'sedi'; $('#toolsBox').hidden = $('#list').hidden = sez === 'sedi';
+  $('#sediBox').hidden = sez !== 'sedi'; $('#appBox').hidden = sez !== 'app'; $('#toolsBox').hidden = $('#list').hidden = sez !== 'persone';
   if (sez === 'sedi') caricaSedi();
+  if (sez === 'app') caricaApp();
 }
 async function caricaSedi() { try { SEDI = (await api('GET', '/api/admin/sedi')).sedi; } catch (e) { toast(e.message); SEDI = []; } renderSedi(); }
 function renderSedi() {
@@ -485,6 +512,98 @@ function openPassword(u) {
   });
 }
 load().catch(err => { $('#list').innerHTML = `<div class="card empty">${esc(err.message)}</div>`; });
+
+/* ---------- app: spegnere per tutti, sospendere a gruppi o persone ---------- */
+let AP = null, WZ = null, ULTIMA = null;
+const NOMI_AZ = { spegni: 'Spenta per tutti', accendi: 'Riaccesa', sospendi: 'Sospesa a', riattiva: 'Riattivata a' };
+async function caricaApp() { try { AP = await api('GET', '/api/admin/app'); } catch (e) { toast(e.message); AP = { apps: [], operazioni: [] }; } renderApp(); }
+function quando(d) { return new Date(d).toLocaleString('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); }
+function renderApp() {
+  const box = $('#appBox'); if (!AP) { box.innerHTML = '<div class="card empty">Caricamento…</div>'; return; }
+  const nome = k => AP.apps.find(a => a.key === k)?.name || k;
+  box.innerHTML = `<div class="tools"><p class="hint" style="flex:1 1 300px"><b>Interruttore</b>: spegne l'app per tutti tranne gli amministratori (i permessi restano). <b>Sospendi o riattiva</b>: toglie per un po' l'app a un gruppo o a singole persone, senza perdere il loro ruolo. Ogni operazione si può annullare.</p></div>
+    ${ULTIMA ? `<div class="msg ok undo" role="status"><span style="flex:1">${esc(ULTIMA.testo)}</span><button class="btn small" data-op-annulla="${esc(ULTIMA.id)}">Annulla</button></div>` : ''}
+    <div class="card" style="padding:0">${AP.apps.map(a => `<div class="approw ${a.spenta ? 'spenta' : ''}">
+      <div style="min-width:0"><b>${esc(a.name)}</b><div class="meta"><span>${a.attivi} ${a.attivi === 1 ? 'persona' : 'persone'}</span>${a.sospesi ? `<span style="color:var(--danger)">${a.sospesi} sospes${a.sospesi === 1 ? 'a' : 'e'}</span>` : ''}${a.spenta ? `<span>spenta ${a.cambiataIl ? 'dal ' + esc(quando(a.cambiataIl)) : ''}${a.cambiataDa ? ' da ' + esc(a.cambiataDa) : ''}</span>` : ''}</div></div>
+      <button class="sw" role="switch" aria-checked="${!a.spenta}" data-app-sw="${a.key}" aria-label="${esc(a.name)}: ${a.spenta ? 'spenta' : 'accesa'}"><span class="tr"></span>${a.spenta ? 'Spenta' : 'Accesa'}</button>
+      <div class="actions"><button class="btn small" data-app-wiz="${a.key}">Sospendi o riattiva persone</button></div>
+      ${WZ && WZ.app === a.key ? `<div style="grid-column:1/-1">${wizard()}</div>` : ''}
+    </div>`).join('')}</div>
+    <h2 style="font-size:17px;margin:6px 0 0">Ultime operazioni</h2>
+    <div class="card" style="padding:0">${AP.operazioni.length ? AP.operazioni.map(o => `<div class="oprow ${o.annullata ? 'ann' : ''}">
+      <span><b>${esc(nome(o.app))}</b> · ${esc(NOMI_AZ[o.azione] || o.azione)}${o.azione === 'sospendi' || o.azione === 'riattiva' ? ` ${esc(o.chi || '')} (${o.persone} ${o.persone === 1 ? 'persona' : 'persone'})` : ''}
+        <small class="muted"> · ${esc(quando(o.quando))} · ${esc(o.da)}${o.annullata ? ' · annullata' : ''}</small></span>
+      ${o.annullata ? '' : `<button class="btn small" data-op-annulla="${esc(o.id)}">Annulla</button>`}</div>`).join('') : '<div class="empty">Ancora nessuna operazione.</div>'}</div>`;
+}
+// passi: 1) sospendi o riattiva 2) chi (gruppi o spunte) 3) conferma
+function candidati() { return (WZ.persone || []).filter(p => !p.io && (WZ.azione === 'sospendi' ? !p.sospesa : p.sospesa)); }
+function scelti() { return candidati().filter(p => WZ.sel.has(p.id)); }
+function wizard() {
+  if (!WZ.persone) return '<div class="wiz"><div class="empty">Caricamento…</div></div>';
+  const c = candidati(), sc = scelti(), q = (WZ.q || '').toLowerCase();
+  const fig = [...new Set(c.map(p => p.figura).filter(Boolean))], sedi = [...new Set(c.flatMap(p => p.sedi))].sort();
+  const gChip = (k, l, lista) => { const tutti = lista.length && lista.every(p => WZ.sel.has(p.id));
+    return `<button class="chip" aria-pressed="${tutti}" data-wz-gruppo="${esc(k)}">${esc(l)} <span class="n">${lista.length}</span></button>`; };
+  const figNomeW = id => (WZ.figure || []).find(f => f.id === id)?.gruppo || id;
+  return `<div class="wiz">
+    <div class="step">1 · Cosa vuoi fare</div>
+    <div class="seg" role="tablist"><button role="tab" data-wz-az="sospendi" aria-selected="${WZ.azione === 'sospendi'}">Sospendi</button><button role="tab" data-wz-az="riattiva" aria-selected="${WZ.azione === 'riattiva'}">Riattiva</button></div>
+    <div class="step">2 · A chi</div>
+    ${c.length ? `<div class="chips">${gChip('tutti', 'Tutti', c)}${fig.map(f => gChip('figura:' + f, figNomeW(f), c.filter(p => p.figura === f))).join('')}${sedi.map(s => gChip('sede:' + s, 'Sede ' + s, c.filter(p => p.sedi.includes(s)))).join('')}</div>
+    <input class="search" type="search" data-wz-q value="${esc(WZ.q || '')}" placeholder="Filtra per nome" aria-label="Filtra per nome" style="max-width:340px">
+    <div class="plist">${c.filter(p => !q || p.nome.toLowerCase().includes(q)).map(p => `<label><input type="checkbox" data-wz-p="${esc(p.id)}" ${WZ.sel.has(p.id) ? 'checked' : ''}>
+      <span>${esc(p.nome)} <small>${esc([figNomeW(p.figura), p.sedi.join(', '), p.ruolo === 'admin' ? 'amministratore' : ''].filter(Boolean).join(' · '))}</small></span></label>`).join('')}</div>`
+      : `<div class="empty">${WZ.azione === 'sospendi' ? 'Nessuna persona da sospendere in questa app.' : 'Nessuna persona sospesa in questa app.'}</div>`}
+    <div class="step">3 · Conferma</div>
+    <div class="riepilogo">${sc.length ? `${WZ.azione === 'sospendi' ? 'Sospendi' : 'Riattiva'} <b>${sc.length}</b> ${sc.length === 1 ? 'persona' : 'persone'}: ${esc(sc.slice(0, 12).map(p => p.nome).join(', '))}${sc.length > 12 ? ` e altre ${sc.length - 12}` : ''}.` : 'Scegli un gruppo o spunta le persone.'}</div>
+    <div class="row" style="justify-content:flex-start"><button class="btn primary" data-wz-ok ${sc.length ? '' : 'disabled'}>${WZ.azione === 'sospendi' ? 'Sospendi' : 'Riattiva'}${sc.length ? ' ' + sc.length : ''}</button><button class="btn" data-wz-chiudi>Chiudi</button></div>
+  </div>`;
+}
+function chiDescr() {
+  const sc = scelti(), c = candidati();
+  if (sc.length === c.length) return 'tutti';
+  const g = Object.entries(WZ.gruppi || {}).filter(([k, v]) => v).map(([k]) => k === 'tutti' ? 'tutti' : k.startsWith('sede:') ? 'Sede ' + k.slice(5) : ((WZ.figure || []).find(f => f.id === k.slice(7))?.gruppo || k.slice(7)));
+  return g.length ? g.join(', ') + (sc.length ? '' : '') : sc.slice(0, 3).map(p => p.nome).join(', ') + (sc.length > 3 ? '…' : '');
+}
+document.addEventListener('input', e => { if (e.target.matches('[data-wz-q]')) { WZ.q = e.target.value; const pos = e.target.selectionStart; renderApp(); const n = $('[data-wz-q]'); n.focus(); try { n.setSelectionRange(pos, pos); } catch {} } });
+document.addEventListener('change', e => { const t = e.target; if (t.dataset.wzP) { t.checked ? WZ.sel.add(t.dataset.wzP) : WZ.sel.delete(t.dataset.wzP); renderApp(); } });
+document.addEventListener('click', async e => {
+  const t = e.target.closest('[data-app-sw],[data-app-wiz],[data-wz-az],[data-wz-gruppo],[data-wz-ok],[data-wz-chiudi],[data-op-annulla]'); if (!t) return;
+  try {
+    if (t.dataset.appSw) {
+      const a = AP.apps.find(x => x.key === t.dataset.appSw), spegni = !a.spenta;
+      if (spegni && !confirm(`Spegnere «${a.name}» per tutti tranne gli amministratori? I permessi restano: quando la riaccendi torna tutto come prima.`)) return;
+      const r = await api('PUT', `/api/admin/app/${a.key}/stato`, { spenta: spegni });
+      ULTIMA = { id: r.operazione, testo: `${a.name}: ${spegni ? 'spenta per tutti tranne gli amministratori' : 'riaccesa'}.` };
+      return caricaApp();
+    }
+    if (t.dataset.appWiz) {
+      if (WZ && WZ.app === t.dataset.appWiz) { WZ = null; return renderApp(); }
+      WZ = { app: t.dataset.appWiz, azione: 'sospendi', sel: new Set(), gruppi: {}, q: '' }; renderApp();
+      const r = await api('GET', `/api/admin/app/${WZ.app}/persone`); WZ.persone = r.persone; WZ.figure = r.figure; return renderApp();
+    }
+    if (t.dataset.wzAz) { WZ.azione = t.dataset.wzAz; WZ.sel = new Set(); WZ.gruppi = {}; return renderApp(); }
+    if (t.dataset.wzGruppo) {
+      const k = t.dataset.wzGruppo, c = candidati();
+      const lista = k === 'tutti' ? c : k.startsWith('sede:') ? c.filter(p => p.sedi.includes(k.slice(5))) : c.filter(p => p.figura === k.slice(7));
+      const tutti = lista.every(p => WZ.sel.has(p.id));
+      lista.forEach(p => tutti ? WZ.sel.delete(p.id) : WZ.sel.add(p.id)); WZ.gruppi[k] = !tutti;
+      return renderApp();
+    }
+    if (t.hasAttribute('data-wz-chiudi')) { WZ = null; return renderApp(); }
+    if (t.hasAttribute('data-wz-ok')) {
+      const sc = scelti(), a = AP.apps.find(x => x.key === WZ.app), chi = chiDescr();
+      t.disabled = true;
+      const r = await api('POST', `/api/admin/app/${WZ.app}/sospensioni`, { azione: WZ.azione, ids: sc.map(p => p.id), chi });
+      ULTIMA = r.operazione ? { id: r.operazione, testo: `${a.name}: ${WZ.azione === 'sospendi' ? 'sospesa' : 'riattivata'} a ${r.persone} ${r.persone === 1 ? 'persona' : 'persone'}.` } : null;
+      WZ = null; toast(r.persone ? 'Fatto' : 'Nessun cambiamento'); return caricaApp();
+    }
+    if (t.dataset.opAnnulla) {
+      t.disabled = true; await api('POST', `/api/admin/operazioni/${t.dataset.opAnnulla}/annulla`, {});
+      if (ULTIMA?.id === t.dataset.opAnnulla) ULTIMA = null; toast('Operazione annullata'); return caricaApp();
+    }
+  } catch (err) { t.disabled = false; toast(err.message); }
+});
 </script>
 </body>
 </html>

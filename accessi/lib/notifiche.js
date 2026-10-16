@@ -69,7 +69,8 @@ async function notifica(userIds, app, payload) {
     join users u on u.id = s.user_id and u.status = 'active'
     left join notif_prefs p on p.user_id = s.user_id and p.app = $2
     where s.user_id = any($1) and coalesce(p.attiva, true)
-      and (u.owner or exists (select 1 from user_apps a where a.user_id = s.user_id and a.app = $2))`, [ids, app]);
+      and (u.owner or exists (select 1 from user_apps a where a.user_id = s.user_id and a.app = $2 and not a.sospesa
+        and (a.role = 'admin' or not exists (select 1 from app_stato st where st.app = $2 and st.spenta))))`, [ids, app]);
   const base = APP_URL(app);
   const url = payload.url && /^https?:\/\//.test(payload.url) ? payload.url : base + (payload.url || '/');
   const body = JSON.stringify({ title: payload.title || APP_NOTIFICHE[app], body: payload.body || '', url, tag: payload.tag ? `${app}-${payload.tag}` : undefined, app });
