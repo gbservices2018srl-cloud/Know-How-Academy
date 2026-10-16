@@ -28,7 +28,7 @@ module.exports = [
     desc: "Richieste di supporto tra gli studi e l'amministrazione." },
   { key: 'protocolli', name: 'Protocolli', url: 'https://protocolli.appgestione.it', color: 'teal',
     desc: 'Il flusso di lavoro dello studio con protocolli, procedure e assistente.' },
-  { key: 'calendario', name: 'Calendario eventi', url: 'https://calendario.appgestione.it', color: 'purple',
+  { key: 'calendario', name: 'Eventi aziendali', url: 'https://calendario.appgestione.it', color: 'purple',
     dentro: 'comunicazioni', // si apre dal pulsante "Eventi" di Comunicazioni ed eventi aziendali (niente riquadro a parte)
     desc: 'Formazione, riunioni ed eventi aziendali per lo staff.' },
   { key: 'magazzino', name: 'Magazzino centrale', url: 'https://magazzino.appgestione.it', color: 'yellow',
