@@ -181,7 +181,7 @@ const EVENT_COLS = `e.id, e.title, e.type_id, e.location_id, e.location_note, e.
 const shape = e => ({ id: e.id, title: e.title, typeId: e.type_id, locationId: e.location_id, locationNote: e.location_note,
   start: e.start_date, end: e.end_date || e.start_date, allDay: e.all_day, startTime: e.start_time, endTime: e.end_time,
   description: e.description, link: e.link, allStaff: e.all_staff, categories: e.categories, people: e.people || [], rsvp: e.rsvp,
-  ...(e.my_rsvp !== undefined ? { myRsvp: e.my_rsvp } : {}), ...(e.att ? { att: e.att } : {}) });
+  ...(e.my_rsvp !== undefined ? { myRsvp: e.my_rsvp } : {}), ...(e.my_prima ? { myPrima: e.my_prima } : {}), ...(e.att ? { att: e.att } : {}) });
 
 // Chi è chiamato a rispondere a un evento: lo staff attivo che può vederlo (gli amministratori no).
 const AUDIENCE = (ev, usr) => `${usr}.active and ${usr}.role = 'staff' and (${ev}.all_staff or exists (select 1 from event_categories ec
@@ -203,10 +203,11 @@ app.get('/api/events', needUser, wrap(async (req, res) => {
   const params = [from, to];
   const vis = visibilityClause(req.user, params);
   let extra = '';
-  if (req.user.role === 'admin') extra = `, case when e.rsvp then (select json_build_object('total', count(*), 'yes', count(*) filter (where r.status = 'yes'),
-      'no', count(*) filter (where r.status = 'no')) from users u left join rsvp r on r.event_id = e.id and r.user_id = u.id
+  if (req.user.role === 'admin') extra = `, case when e.rsvp then (select json_build_object('total', count(*), 'yes', count(*) filter (where r.status = 'yes' and not r.da_riconfermare),
+      'no', count(*) filter (where r.status = 'no' and not r.da_riconfermare)) from users u left join rsvp r on r.event_id = e.id and r.user_id = u.id
       where ${AUDIENCE('e', 'u')}) end as att`;
-  else { params.push(req.user.id); extra = `, (select status from rsvp where event_id = e.id and user_id = $${params.length}) as my_rsvp`; }
+  else { params.push(req.user.id); extra = `, (select case when da_riconfermare then null else status end from rsvp where event_id = e.id and user_id = $${params.length}) as my_rsvp,
+    (select case when da_riconfermare then status end from rsvp where event_id = e.id and user_id = $${params.length}) as my_prima`; }
   const { rows } = await db.q(`select ${EVENT_COLS}${extra} from events e
     where e.start_date <= $2 and coalesce(e.end_date, e.start_date) >= $1 and ${vis}
     order by e.start_date, e.all_day desc, e.start_time nulls first, e.title limit 2000`, params);
@@ -281,6 +282,33 @@ async function avvisaPubblico(eventId, tipo) {
     console.log(`Calendario: avviso "${tipo}" per «${ev.title}» a ${people.length} persone, raggiunte ${r.size}`);
   } catch (e) { console.warn('Calendario, avviso evento:', e.message); }
 }
+// Evento spostato di giorno o di orario: chi aveva già risposto (ci sarò / non ci sarò) deve confermare di nuovo.
+// La risposta vecchia resta salvata (la vede l'amministratore) ma non conta più finché la persona non risponde ancora.
+async function avvisaSpostato(eventId) {
+  try {
+    const { rows: evs } = await db.q(`select ${EVENT_COLS}, l.name as luogo from events e left join locations l on l.id = e.location_id
+      where e.id = $1 and coalesce(e.end_date, e.start_date) >= (now() at time zone 'Europe/Rome')::date`, [eventId]);
+    const ev = evs[0]; if (!ev) return;
+    let risposto = [];
+    if (ev.rsvp) risposto = (await db.q(`update rsvp set da_riconfermare = true where event_id = $1 returning user_id, status`, [eventId])).rows;
+    const { rows: people } = await db.q(`select u.id from events e join users u on ${AUDIENCE('e', 'u')} where e.id = $1`, [eventId]);
+    const ids = new Set(people.map(p => p.id));
+    const luogo = [ev.luogo, ev.location_note].filter(Boolean).join(' · ');
+    const dove = `${quando(ev)}${ev.all_day || !ev.end_time ? '' : '–' + ev.end_time}${luogo ? ' · ' + luogo : ''}`;
+    const base = { url: `/?event=${ev.id}`, tag: 'evento-' + ev.id };
+    let n = 0;
+    for (const st of ['yes', 'no']) {
+      const chi = risposto.filter(r => r.status === st && ids.has(r.user_id)).map(r => r.user_id);
+      if (!chi.length) continue;
+      const r = await push.sendToUsers(chi, { ...base, title: `Evento spostato: ${ev.title}`,
+        body: `Ora è ${dove}. Avevi risposto «${st === 'yes' ? 'ci sarò' : 'non ci sarò'}»: conferma di nuovo se ci sarai.` });
+      n += r.size;
+    }
+    const altri = people.map(p => p.id).filter(id => !risposto.some(r => r.user_id === id));
+    if (altri.length) await push.sendToUsers(altri, { ...base, title: `Evento spostato: ${ev.title}`, body: `Ora è ${dove}.${ev.rsvp ? ' Conferma se ci sarai.' : ''}` });
+    console.log(`Calendario: «${ev.title}» spostato. Risposte da riconfermare: ${risposto.length} (avvisate ${n}); altri avvisati: ${altri.length}`);
+  } catch (e) { console.warn('Calendario, avviso evento spostato:', e.message); }
+}
 app.post('/api/events', needAdmin, wrap(async (req, res) => {
   const f = eventFields(req.body);
   if (typeof f === 'string') return bad(res, 400, f);
@@ -305,8 +333,10 @@ app.put('/api/events/:id', needAdmin, wrap(async (req, res) => {
   res.json({ ok: true });
   // cambiano data, ora o luogo → avviso a tutti; si aggiungono persone o categorie → avviso solo ai nuovi
   const p = prima[0];
-  if (p && (p.start_date !== f.start || (p.end_date || p.start_date) !== f.end || p.all_day !== f.allDay || (p.start_time || null) !== (f.startTime || null)
-    || (p.location_id || null) !== (f.locationId || null) || (p.location_note || '') !== (f.locationNote || ''))) avvisaPubblico(req.params.id, 'modificato');
+  const spostato = p && (p.start_date !== f.start || (p.end_date || p.start_date) !== f.end || p.all_day !== f.allDay
+    || (p.start_time || null) !== (f.startTime || null) || (p.end_time || null) !== (f.endTime || null));
+  if (spostato) avvisaSpostato(req.params.id);
+  else if (p && ((p.location_id || null) !== (f.locationId || null) || (p.location_note || '') !== (f.locationNote || ''))) avvisaPubblico(req.params.id, 'modificato');
   else if (p) avvisaNuovi(req.params.id, vecchiPubblico);
 }));
 app.delete('/api/events/:id', needAdmin, wrap(async (req, res) => {
@@ -359,13 +389,14 @@ app.post('/api/events/:id/rsvp', needUser, wrap(async (req, res) => {
   if (!e.rsvp) return bad(res, 400, 'Per questo evento non serve la conferma.');
   if (e.last_day < todayRome()) return bad(res, 400, 'L\'evento è già passato.');
   if (status) await db.q(`insert into rsvp (event_id, user_id, status) values ($1,$2,$3)
-    on conflict (event_id, user_id) do update set status = excluded.status, updated_at = now()`, [req.params.id, req.user.id, status]);
+    on conflict (event_id, user_id) do update set status = excluded.status, da_riconfermare = false, updated_at = now()`, [req.params.id, req.user.id, status]);
   else await db.q('delete from rsvp where event_id = $1 and user_id = $2', [req.params.id, req.user.id]);
   res.json({ ok: true });
 }));
 // Elenco nominativo: chi ha confermato, chi no, chi non ha ancora risposto.
 app.get('/api/events/:id/attendance', needAdmin, wrap(async (req, res) => {
-  const { rows } = await db.q(`select u.id, u.name, u.username, r.status,
+  const { rows } = await db.q(`select u.id, u.name, u.username, case when r.da_riconfermare then null else r.status end as status,
+      case when r.da_riconfermare then r.status end as prima,
       to_char(r.updated_at at time zone 'Europe/Rome', 'YYYY-MM-DD HH24:MI') as answered_at,
       coalesce((select array_agg(category_id) from user_categories where user_id = u.id), '{}') as categories,
       (exists (select 1 from push_subs s where s.user_id = u.id)
@@ -375,7 +406,7 @@ app.get('/api/events/:id/attendance', needAdmin, wrap(async (req, res) => {
     where e.id = $1 order by u.name`, [req.params.id]);
   const { rows: rem } = await db.q(`select to_char(sent_at at time zone 'Europe/Rome', 'YYYY-MM-DD HH24:MI') as sent_at, recipients, sent_by
     from reminders where event_id = $1 order by sent_at desc limit 5`, [req.params.id]);
-  res.json({ people: rows.map(r => ({ id: r.id, name: r.name, username: r.username, status: r.status || null, answeredAt: r.answered_at,
+  res.json({ people: rows.map(r => ({ id: r.id, name: r.name, username: r.username, status: r.status || null, prima: r.prima || null, answeredAt: r.prima ? null : r.answered_at,
     categories: r.categories, hasPush: r.has_push })), reminders: rem.map(r => ({ sentAt: r.sent_at, recipients: r.recipients, by: r.sent_by })) });
 }));
 // Promemoria: notifica sul telefono/computer di chi non ha ancora risposto (o delle persone scelte).
@@ -386,7 +417,7 @@ app.post('/api/events/:id/remind', needAdmin, wrap(async (req, res) => {
   const only = ids(req.body.userIds);
   const { rows: people } = await db.q(`select u.id, u.name from events e join users u on ${AUDIENCE('e', 'u')}
     left join rsvp r on r.event_id = e.id and r.user_id = u.id
-    where e.id = $1 and ${only.length ? 'u.id = any($2)' : 'r.status is null'}`, only.length ? [ev.id, only] : [ev.id]);
+    where e.id = $1 and ${only.length ? 'u.id = any($2)' : '(r.status is null or r.da_riconfermare)'}`, only.length ? [ev.id, only] : [ev.id]);
   if (!people.length) return res.json({ sent: 0, reached: [], unreachable: [] });
   const dt = new Date(ev.start_date + 'T12:00:00Z');
   const when = new Intl.DateTimeFormat('it-IT', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).format(dt)

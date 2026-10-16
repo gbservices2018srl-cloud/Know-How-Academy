@@ -83,6 +83,8 @@ async function migrate() {
       updated_at timestamptz not null default now(),
       primary key (event_id, user_id)
     );
+    -- l'evento è stato spostato dopo la risposta: la risposta vecchia resta in "status" ma va confermata di nuovo
+    alter table rsvp add column if not exists da_riconfermare boolean not null default false;
     create table if not exists push_subs (
       endpoint text primary key,
       user_id text not null references users(id) on delete cascade,

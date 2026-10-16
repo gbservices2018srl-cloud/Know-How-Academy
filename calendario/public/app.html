@@ -486,7 +486,7 @@ function rsvpBadge(e) {
   }
   if (e.myRsvp === 'yes') return `<span class="st yes">${ic('check')}Ci sarai</span>`;
   if (e.myRsvp === 'no') return `<span class="st no">${ic('x')}Non ci sarai</span>`;
-  return isPast(e) ? '' : `<span class="st wait">${ic('help')}Da confermare</span>`;
+  return isPast(e) ? '' : `<span class="st wait">${ic('help')}${e.myPrima ? 'Spostato: riconferma' : 'Da confermare'}</span>`;
 }
 const sortEv = (a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : 0) || (b.allDay - a.allDay) || String(a.startTime || '').localeCompare(String(b.startTime || '')) || a.title.localeCompare(b.title);
 function shown(e) {
@@ -818,6 +818,7 @@ function openEvent(id) {
 function rsvpBox(e) {
   const past = isPast(e);
   const msg = past ? (e.myRsvp ? `Avevi risposto: <b>${e.myRsvp === 'yes' ? 'ci sarò' : 'non ci sarò'}</b>.` : 'Evento concluso.')
+    : !e.myRsvp && e.myPrima ? `<b>L'evento è stato spostato.</b> Avevi risposto «${e.myPrima === 'yes' ? 'ci sarò' : 'non ci sarò'}»: conferma di nuovo se ci sarai.`
     : e.myRsvp ? `Hai risposto <b>${e.myRsvp === 'yes' ? 'ci sarò' : 'non ci sarò'}</b>. Puoi cambiare idea fino al giorno dell'evento.` : '<b>Ci sarai?</b> Conferma la tua presenza.';
   return `<div class="rsvp-box" id="rsvp"><p>${msg}</p>${past ? '' : `<div class="rsvp">
     <button class="yes ${e.myRsvp === 'yes' ? 'on' : ''}" data-rsvp="yes">${ic('check')}Ci sarò</button>
@@ -868,7 +869,7 @@ async function loadAttendance(sheet, e, open = '') {
   const fmtDT = s => s ? `${fmt(s.slice(0, 10), { day: 'numeric', month: 'short' })} alle ${s.slice(11)}` : '';
   const person = (p, k) => `<div class="pr"><span class="av">${esc((p.name || p.username).split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase())}</span>
     <div class="grow"><div class="nm">${esc(p.name)}</div><div class="sub">${p.categories.map(c => `<span class="tag plain">${esc(catName(c))}</span>`).join('')}
-      ${p.answeredAt ? `<span>${esc(fmtDT(p.answeredAt))}</span>` : ''}${p.hasPush ? '' : `<span class="nodev" title="Non ha attivato le notifiche">${ic('bell')}notifiche non attive</span>`}</div></div>
+      ${p.prima ? `<span>evento spostato: aveva detto «${p.prima === 'yes' ? 'ci sarò' : 'non ci sarò'}»</span>` : ''}${p.answeredAt ? `<span>${esc(fmtDT(p.answeredAt))}</span>` : ''}${p.hasPush ? '' : `<span class="nodev" title="Non ha attivato le notifiche">${ic('bell')}notifiche non attive</span>`}</div></div>
     ${k === 'wait' && !isPast(e) && p.hasPush ? `<button class="btn icon ghost" data-remind-one="${p.id}" title="Manda promemoria a ${esc(p.name)}" aria-label="Manda promemoria a ${esc(p.name)}">${ic('bell')}</button>` : ''}</div>`;
   const draw = sel => {
     box.innerHTML = `<div class="kv" style="align-items:center">${ic('users')}<b>Presenze</b><span class="muted" style="font-size:13px">· ${P.length} ${P.length === 1 ? 'persona invitata' : 'persone invitate'}</span></div>
@@ -1016,7 +1017,9 @@ function openForm(e, date) {
       if (isNew) await api('/api/events', { method: 'POST', body }); else await api('/api/events/' + e.id, { method: 'PUT', body });
       closeDialog(); await reloadEvents();
       if (S.view === 'cal') { S.sel = body.start; const d = parse(body.start); S.cursor = new Date(d.getFullYear(), d.getMonth(), 1); }
-      render(); toast(isNew ? 'Evento creato' : 'Modifiche salvate');
+      const spostato = !isNew && (e.start !== body.start || e.end !== body.end || !!e.allDay !== body.allDay
+        || (!body.allDay && ((e.startTime || '') !== body.startTime || (e.endTime || '') !== body.endTime)));
+      render(); toast(isNew ? 'Evento creato' : spostato && body.rsvp ? 'Evento spostato: chi aveva risposto riceve l\'avviso e deve confermare di nuovo' : 'Modifiche salvate');
     } catch (x) { err(x.message); btn.disabled = false; }
   };
   if (!isNew) armed($('#del', sheet), async () => {
