@@ -30,6 +30,7 @@ module.exports = [
     desc: 'Il flusso di lavoro dello studio con protocolli, procedure e assistente.' },
   { key: 'calendario', name: 'Eventi aziendali', url: 'https://calendario.appgestione.it', color: 'purple',
     dentro: 'comunicazioni', // si apre dal pulsante "Eventi" di Comunicazioni ed eventi aziendali (niente riquadro a parte)
+    segue: 'comunicazioni',  // non è più un'app a sé: permesso, ruolo, sospensione, interruttore e notifiche sono quelli di Comunicazioni ed eventi
     desc: 'Formazione, riunioni ed eventi aziendali per lo staff.' },
   { key: 'magazzino', name: 'Magazzino centrale', url: 'https://magazzino.appgestione.it', color: 'yellow',
     desc: 'Disponibilità degli articoli, prenotazioni e riordino ai fornitori.' },

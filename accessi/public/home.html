@@ -128,7 +128,8 @@ function toast(t) { const d = document.createElement('div'); d.className = 'toas
     ${u.owner ? '' : '<button class="btn small" id="pw-open">Cambia password</button>'}
     <a class="btn small" href="/esci">Esci</a>`;
   const apps = me.apps.filter(a => a.key !== 'accessi');
-  const noaccess = new URLSearchParams(location.search).get('noaccess');
+  let noaccess = new URLSearchParams(location.search).get('noaccess');
+  if (noaccess === 'calendario') noaccess = 'comunicazioni'; // Eventi fa parte di Comunicazioni ed eventi
   if (noaccess) {
     const names = {magazzino: 'Magazzino centrale', turni: 'Turni', finanza: 'Gestione finanziaria', laboratorio: 'Nuovalab', ticket: 'Ticket assistenza', protocolli: 'Protocolli', calendario: 'Eventi aziendali', comunicazioni: 'Comunicazioni ed eventi aziendali', documenti: 'Documenti di studio'};
     const m = document.createElement('div'); m.className = 'msg warn'; m.setAttribute('role', 'status');

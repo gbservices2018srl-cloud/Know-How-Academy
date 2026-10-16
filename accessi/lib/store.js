@@ -206,6 +206,26 @@ async function accessiAutomatici(userId = null) {
     }
     if (!userId && rows.length) console.log(`Accesso automatico a «${a.name}» dato a ${rows.length} persone`);
   }
+  await allineaSeguaci();
+}
+// App che "seguono" un'altra (Eventi aziendali segue Comunicazioni ed eventi): stesso permesso e stesso ruolo, copiati qui.
+const capo = app => APPS.find(a => a.key === app)?.segue || app;
+async function allineaSeguaci() {
+  for (const a of APPS.filter(x => x.segue)) {
+    await q(`insert into user_apps (user_id, app, role, sospesa) select user_id, $1, role, sospesa from user_apps where app = $2
+      on conflict (user_id, app) do update set role = excluded.role, sospesa = excluded.sospesa`, [a.key, a.segue]);
+    await q(`delete from user_apps c where c.app = $1 and not exists (select 1 from user_apps x where x.user_id = c.user_id and x.app = $2)`, [a.key, a.segue]);
+  }
+}
+// Una volta, all'avvio: chi aveva l'app che ora segue un'altra non perde nulla (riceve quella principale, con il ruolo più alto dei due)
+async function fondiSeguaci() {
+  for (const a of APPS.filter(x => x.segue)) {
+    await q(`insert into user_apps (user_id, app, role) select user_id, $2, role from user_apps where app = $1 and not sospesa
+      on conflict (user_id, app) do update set role = case when user_apps.role = 'admin' or excluded.role = 'admin' then 'admin' else 'user' end
+      where not exists (select 1 from app_auto z where z.user_id = user_apps.user_id and z.app = 'fusione:' || $1)`, [a.key, a.segue]);
+    await q(`insert into app_auto (user_id, app) select user_id, 'fusione:' || $1 from user_apps where app = $1 on conflict do nothing`, [a.key]);
+  }
+  await allineaSeguaci();
 }
 async function appsOf(user) {
   if (user.owner) return Object.fromEntries(APP_KEYS.map(k => [k, 'admin']));
@@ -267,6 +287,7 @@ async function setAppRole(userId, app, role, livello = null) {
   } else {
     await q('delete from user_apps where user_id = $1 and app = $2', [userId, app]);
   }
+  if (APPS.some(a => a.segue === app)) await allineaSeguaci();
 }
 
 async function deleteUser(userId) {
@@ -313,7 +334,7 @@ async function verify(token, app) {
   const role = c.apps[app];
   if (!role) return { denied: true, user: publicUser(c.user) };
   // app spenta dal pannello: entrano solo il proprietario e gli amministratori dell'app
-  if (role !== 'admin' && !c.user.owner && (await appSpente()).has(app)) return { denied: true, spenta: true, user: publicUser(c.user) };
+  if (role !== 'admin' && !c.user.owner && ((await appSpente()).has(app) || (await appSpente()).has(capo(app)))) return { denied: true, spenta: true, user: publicUser(c.user) };
   // pannello: è amministratore di Gestione accessi (o proprietario): può fare cose riservate anche nelle app
   return { user: { ...publicUser(c.user), pannello: !!(c.user.owner || c.apps.accessi === 'admin') }, role };
 }
@@ -396,7 +417,7 @@ async function peekPasswordLink(token) {
 }
 
 module.exports = {
-  accessiAutomatici, appSpente, appSpenteAggiorna,
+  accessiAutomatici, allineaSeguaci, fondiSeguaci, capo, appSpente, appSpenteAggiorna,
   pool, q, SCHEMA, APPS, APP_KEYS, events, migrate, ensureOwner,
   cleanEmail, validEmail, cleanName, cleanDate, cleanFigura, FIGURE, cleanCf, validCf, cleanProv, cleanAlbo, appsOf, publicUser, getUser, findByEmail, createUser, setPassword,
   setAppRole, livelliOf, deleteUser, usersWithApp, logoutEverywhere, createSession, endSession, check, verify,

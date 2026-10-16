@@ -11,7 +11,7 @@ const q = (t, p) => store.q(t, p);
 // App che possono mandare notifiche (chiave = quella dei permessi)
 const APP_NOTIFICHE = {
   calendario: 'Eventi aziendali', turni: 'Turni', magazzino: 'Magazzino centrale',
-  laboratorio: 'Nuovalab', ticket: 'Ticket assistenza', comunicazioni: 'Comunicazioni', documenti: 'Documenti di studio',
+  laboratorio: 'Nuovalab', ticket: 'Ticket assistenza', comunicazioni: 'Comunicazioni ed eventi', documenti: 'Documenti di studio',
 };
 
 async function migrate() {
@@ -67,10 +67,10 @@ async function notifica(userIds, app, payload) {
   const gestiti = await conIscrizione(ids);
   const { rows } = await q(`select s.endpoint, s.user_id, s.p256dh, s.auth from notif_subs s
     join users u on u.id = s.user_id and u.status = 'active'
-    left join notif_prefs p on p.user_id = s.user_id and p.app = $2
+    left join notif_prefs p on p.user_id = s.user_id and p.app = $3
     where s.user_id = any($1) and coalesce(p.attiva, true)
       and (u.owner or exists (select 1 from user_apps a where a.user_id = s.user_id and a.app = $2 and not a.sospesa
-        and (a.role = 'admin' or not exists (select 1 from app_stato st where st.app = $2 and st.spenta))))`, [ids, app]);
+        and (a.role = 'admin' or not exists (select 1 from app_stato st where st.app in ($2, $3) and st.spenta))))`, [ids, app, store.capo(app)]);
   const base = APP_URL(app);
   const url = payload.url && /^https?:\/\//.test(payload.url) ? payload.url : base + (payload.url || '/');
   const body = JSON.stringify({ title: payload.title || APP_NOTIFICHE[app], body: payload.body || '', url, tag: payload.tag ? `${app}-${payload.tag}` : undefined, app });

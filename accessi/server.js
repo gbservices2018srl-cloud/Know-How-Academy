@@ -396,7 +396,7 @@ app.get('/api/admin/users', needAdmin, wrap(async (req, res) => {
   }
   res.json({
     me: req.user.id,
-    apps: APPS.map(a => ({ key: a.key, name: a.name, adminOnly: !!a.adminOnly, livelli: a.livelli || null })),
+    apps: APPS.filter(a => !a.segue).map(a => ({ key: a.key, name: a.name, adminOnly: !!a.adminOnly, livelli: a.livelli || null })),
     figure: store.FIGURE,
     livelli: lv,
     mail: mail.enabled(),
@@ -521,7 +521,7 @@ app.put('/api/admin/users/:id/apps/:app', needAdmin, wrap(async (req, res) => {
   res.json({ apps: await store.appsOf(u), livelli: await store.livelliOf(u.id), avvisi });
 }));
 /* ---------- app: spegnere per tutti, sospendere a gruppi o persone, storico con Annulla ---------- */
-const APP_GESTIBILI = () => APPS.filter(a => a.key !== 'accessi');
+const APP_GESTIBILI = () => APPS.filter(a => a.key !== 'accessi' && !a.segue);
 async function registra(req, app, azione, chi, ids, dettaglio = {}) {
   const id = require('crypto').randomUUID();
   await store.q('insert into app_operazioni (id, app, azione, chi, persone, dettaglio, da) values ($1,$2,$3,$4,$5,$6,$7)',
@@ -533,6 +533,7 @@ async function cambiaSospensione(app, ids, sospendi) {
   const { rows } = await store.q(`update user_apps ua set sospesa = $3 from users u where ua.user_id = u.id and ua.app = $1 and ua.user_id = any($2)
     and ua.sospesa <> $3 and not u.owner returning ua.user_id`, [app, ids, sospendi]);
   const fatti = rows.map(r => r.user_id);
+  if (APPS.some(x => x.segue === app)) await store.allineaSeguaci();
   const a = APPS.find(x => x.key === app);
   for (const id of fatti) {
     const u = await store.getUser(id); if (!u) continue;
@@ -777,7 +778,8 @@ app.post('/api/sso/ticket', wrap(async (req, res) => {
 /* ---------- centro notifiche (una sola iscrizione per tutte le app) ---------- */
 const str = (v, n) => String(v ?? '').trim().slice(0, n);
 // Le app tra cui scegliere: quelle che mandano notifiche e a cui la persona ha accesso
-const appNotificabili = req => Object.keys(notifiche.APP_NOTIFICHE).filter(k => req.user.owner || req.apps?.[k]);
+// le app che seguono un'altra (Eventi aziendali) non hanno un interruttore a parte: vale quello di Comunicazioni ed eventi
+const appNotificabili = req => Object.keys(notifiche.APP_NOTIFICHE).filter(k => !APPS.find(a => a.key === k)?.segue && (req.user.owner || req.apps?.[k]));
 app.get('/api/notifiche', needUser, wrap(async (req, res) => {
   const k = await notifiche.chiavi();
   const { rows: pr } = await store.q('select app, attiva from notif_prefs where user_id = $1', [req.user.id]);
@@ -883,6 +885,7 @@ async function start() {
   await store.migrate();
   await notifiche.migrate();
   await store.ensureOwner();
+  await store.fondiSeguaci().catch(e => console.warn('Unione delle app:', e.message));
   await store.accessiAutomatici().catch(e => console.warn('Accessi automatici:', e.message));
 }
 
