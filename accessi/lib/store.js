@@ -239,7 +239,8 @@ let SPENTE = null;
 async function appSpente() {
   if (!SPENTE || Date.now() - SPENTE.t > 15000) {
     const { rows } = await q('select app from app_stato where spenta');
-    SPENTE = { t: Date.now(), set: new Set(rows.map(r => r.app)) };
+    // le app unite a un'altra (Eventi dentro Comunicazioni) seguono l'interruttore di quella: un loro vecchio "spenta" non conta più
+    SPENTE = { t: Date.now(), set: new Set(rows.map(r => r.app).filter(a => !APPS.find(x => x.key === a)?.segue)) };
   }
   return SPENTE.set;
 }
@@ -334,9 +335,12 @@ async function verify(token, app) {
   const c = await check(token);
   if (!c) return null;
   const role = c.apps[app];
-  if (!role) return { denied: true, user: publicUser(c.user) };
+  if (!role) { console.log(`Accesso unico: ${c.user.id} senza permesso per «${app}»`); return { denied: true, user: publicUser(c.user) }; }
   // app spenta dal pannello: entrano solo il proprietario e gli amministratori dell'app
-  if (role !== 'admin' && !c.user.owner && ((await appSpente()).has(app) || (await appSpente()).has(capo(app)))) return { denied: true, spenta: true, user: publicUser(c.user) };
+  if (role !== 'admin' && !c.user.owner && ((await appSpente()).has(app) || (await appSpente()).has(capo(app)))) {
+    console.log(`Accesso unico: ${c.user.id} fermato su «${app}» (app spenta dal pannello)`);
+    return { denied: true, spenta: true, user: publicUser(c.user) };
+  }
   // pannello: è amministratore di Gestione accessi (o proprietario): può fare cose riservate anche nelle app
   return { user: { ...publicUser(c.user), pannello: !!(c.user.owner || c.apps.accessi === 'admin') }, role };
 }
