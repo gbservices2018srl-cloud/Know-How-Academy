@@ -196,9 +196,11 @@ async function livelliOf(userId) {
 // una volta sola (app_auto ricorda che è già stato fatto, così se l'amministratore la toglie non ritorna).
 async function accessiAutomatici(userId = null) {
   for (const a of APPS.filter(x => x.auto?.length)) {
-    const p = [a.key, a.auto]; if (userId) p.push(userId);
+    // auto: 'tutti' = ogni persona attiva; altrimenti chi ha una delle app indicate
+    const tutti = a.auto === 'tutti';
+    const p = [a.key, tutti ? [] : a.auto]; if (userId) p.push(userId);
     const { rows } = await q(`select u.id from users u where u.status = 'active' and not u.owner ${userId ? 'and u.id = $3' : ''}
-      and exists (select 1 from user_apps x where x.user_id = u.id and x.app = any($2))
+      and ($2::text[] = '{}' or exists (select 1 from user_apps x where x.user_id = u.id and x.app = any($2)))
       and not exists (select 1 from app_auto z where z.user_id = u.id and z.app = $1)`, p);
     for (const r of rows) {
       await q('insert into app_auto (user_id, app) values ($1,$2) on conflict do nothing', [r.id, a.key]);

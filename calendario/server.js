@@ -40,13 +40,13 @@ const sso = require('../accessi/collega')({ app: 'calendario', toLocal: localPro
 async function localProfile(c, role, touch = true) {
   const r = role === 'admin' ? 'admin' : 'staff';
   const name = `${c.firstName} ${c.lastName}`.trim() || c.email;
-  const cols = 'id, username, name, role, from_env, last_login';
+  const cols = 'id, username, name, role, from_env, last_login, active';
   let { rows } = await db.q(`select ${cols} from users where sso_id = $1`, [c.id]);
   if (!rows[0]) ({ rows } = await db.q(`update users set sso_id = $1 where username = $2 and sso_id is null returning ${cols}`, [c.id, c.email]));
   if (!rows[0]) ({ rows } = await db.q(`insert into users (id, username, name, role, password_hash, sso_id) values ($1,$2,$3,$4,'!sso',$5)
     on conflict (username) do update set sso_id = excluded.sso_id returning ${cols}`, [db.newId(), c.email, name, r, c.id]));
   const u = rows[0];
-  if (u.name !== name || u.role !== r) await db.q('update users set name = $2, role = $3, active = true where id = $1', [u.id, name, r]);
+  if (u.name !== name || u.role !== r || !u.active) await db.q('update users set name = $2, role = $3, active = true where id = $1', [u.id, name, r]);
   if (u.username !== c.email) await db.q('update users set username = $2 where id = $1', [u.id, c.email]).catch(() => {});
   if (touch && (!u.last_login || Date.now() - new Date(u.last_login) > 3600e3)) await db.q('update users set last_login = now() where id = $1', [u.id]);
   await figuraInCategoria(u.id, c.figura);
@@ -633,6 +633,19 @@ async function start() {
   await db.seedIfEmpty();
   await db.categorieFigura();
   await push.init().catch(e => console.warn('Notifiche non attive:', e.message));
+  if (sso.enabled()) { await allineaProfili(); setInterval(allineaProfili, 10 * 60e3).unref(); }
+}
+// Chi ha l'accesso (anche dato in automatico, senza aver mai aperto il Calendario) deve esserci tra le persone dell'app:
+// solo così vede gli eventi della sua figura e riceve gli avvisi. Chi ha perso l'accesso viene disattivato.
+async function allineaProfili() {
+  try {
+    const store = require('../accessi/lib/store');
+    const lista = await sso.usersWithApp();
+    for (const u of lista) if (!u.owner) await localProfile(store.publicUser(u), u.app_role, false);
+    const ok = lista.map(u => u.id);
+    const r = await db.q(`update users set active = false where sso_id is not null and active and not from_env and not (sso_id = any($1))`, [ok]);
+    console.log(`Calendario: profili allineati con l'accesso unico (${lista.length} persone${r.rowCount ? `, ${r.rowCount} senza più accesso disattivate` : ''})`);
+  } catch (e) { console.warn('Calendario, allineamento profili:', e.message); }
 }
 module.exports = { app, start };
 

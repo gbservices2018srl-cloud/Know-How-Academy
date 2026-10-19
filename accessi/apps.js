@@ -44,9 +44,9 @@ module.exports = [
     ],
     desc: 'Planning delle sedi, ferie e permessi, sostituzioni e buste paga.' },
   { key: 'comunicazioni', name: 'Comunicazioni ed eventi aziendali', url: 'https://comunicazioni.appgestione.it', color: 'purple',
-    // chi entra in Turni o Calendario (il personale) riceve da solo l'accesso come Utente, una volta sola:
+    // ogni persona attiva riceve da sola l'accesso come Utente, una volta sola (anche chi viene approvato dopo):
     // dal pannello si può poi togliere o cambiare in Amministratore (chi scrive le comunicazioni)
-    auto: ['turni', 'calendario'],
+    auto: 'tutti',
     desc: 'Comunicazioni con conferma di lettura ed eventi aziendali: formazione, riunioni, appuntamenti.' },
   { key: 'documenti', name: 'Documenti di studio', url: 'https://documenti.appgestione.it', color: 'teal',
     auto: ['turni', 'calendario'],
