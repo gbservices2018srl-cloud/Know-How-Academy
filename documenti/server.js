@@ -124,11 +124,11 @@ app.get('/api/documenti/:id', needUser, wrap(async (req, res) => {
   if (!d) return bad(res, 404, 'Documento non trovato.');
   if (!d.bozza) await db.q(`insert into viste (documento_id, user_id, versione) values ($1,$2,$3)
     on conflict (documento_id, user_id) do update set versione = excluded.versione, visto_il = now()`, [d.id, req.user.id, d.versione]);
-  const { rows: o } = await db.q('select nome, pagine from originali where documento_id = $1', [d.id]);
+  const { rows: o } = await db.q('select nome, pagine, mime from originali where documento_id = $1', [d.id]);
   const { rows: c } = await db.q('select nome from categorie where id = $1', [d.categoria_id]);
   const out = { id: d.id, titolo: d.titolo, categoriaId: d.categoria_id, categoria: c[0]?.nome || '', tipo: d.tipo, blocchi: d.blocchi,
     scaricabile: d.scaricabile, aggiornatoIl: d.aggiornato_il, pubblicatoIl: d.pubblicato_il, versione: d.versione,
-    originale: o[0] ? { nome: o[0].nome, pagine: o[0].pagine } : null };
+    originale: o[0] ? { nome: o[0].nome, pagine: o[0].pagine, word: o[0].mime !== 'application/pdf' } : null };
   if (req.user.admin) Object.assign(out, { bozza: d.bozza, notifica: d.notifica, gruppi: d.vis_gruppi, persone: d.vis_persone, origine: d.origine, aggiornatoDa: d.aggiornato_da });
   res.json(out);
 }));
@@ -141,6 +141,7 @@ app.get('/api/documenti/:id/originale', needUser, wrap(async (req, res) => {
   if (!rows[0]) return bad(res, 404, 'Nessun file originale.');
   const scarica = req.query.scarica === '1';
   if (scarica && !d.scaricabile && !req.user.admin) return bad(res, 403, 'Questo documento non si può scaricare.');
+  if (scarica && rows[0].mime !== 'application/pdf') return bad(res, 400, 'I Word si salvano in PDF dall\'app, con il pulsante «Scarica PDF».');
   const nome = (d.titolo.normalize('NFD').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-').slice(0, 80) || 'documento') + '.pdf';
   res.set({ 'Content-Type': rows[0].mime, 'Cache-Control': 'private, no-store',
     'Content-Disposition': `${scarica ? 'attachment' : 'inline'}; filename="${nome}"` });
@@ -171,6 +172,18 @@ async function conLogo(dati) {
 }
 
 /* ---------- caricamento (amministratore) ---------- */
+// Impaginazione originale: PDF o Word conservati così come sono, in sola lettura (il testo serve solo alla ricerca)
+async function salvaOriginale(id, buffer, nome, isPdf) {
+  const oggi = new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Rome' });
+  let testo = '', pagine = 0;
+  if (isPdf) ({ testo, pagine } = await conv.testoPdf(buffer).catch(() => ({ testo: '', pagine: 0 })));
+  else { try { testo = (await require('mammoth').extractRawText({ buffer })).value || ''; } catch { testo = ''; } }
+  await db.q(`insert into originali (documento_id, nome, mime, dati, pagine) values ($1,$2,$3,$4,$5)
+    on conflict (documento_id) do update set nome = excluded.nome, mime = excluded.mime, dati = excluded.dati, pagine = excluded.pagine`,
+    [id, nome, isPdf ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', buffer, pagine]);
+  await db.q('update documenti set testo = $2 where id = $1', [id, testo.replace(/\s+/g, ' ').slice(0, 200000)]);
+  return `Da «${nome}» · ${oggi} · impaginazione originale${isPdf ? (pagine ? `, ${pagine} ${pagine === 1 ? 'pagina' : 'pagine'}` : '') : ', Word'}`;
+}
 const salvaImmagineIn = docId => async (dati, mime) => {
   const id = db.newId();
   await db.q('insert into immagini (id, documento_id, mime, dati) values ($1,$2,$3,$4)', [id, docId, mime, Buffer.from(dati)]);
@@ -185,7 +198,6 @@ app.post('/api/carica', needAdmin, upload.single('file'), wrap(async (req, res) 
   const isDocx = ext === 'docx' && f.buffer.slice(0, 2).toString() === 'PK';
   if (!isPdf && !isDocx) return bad(res, 400, ext === 'doc' ? 'I vecchi file .doc non si leggono: aprilo in Word e salvalo come .docx o PDF.' : 'Carica un PDF o un file Word (.docx).');
   const modo = req.body.modo === 'originale' ? 'originale' : 'pagina';
-  if (modo === 'originale' && !isPdf) return bad(res, 400, 'L\'impaginazione originale si tiene solo per i PDF: salva il Word come PDF e ricaricalo, oppure scegli «Trasforma in pagina dell\'app».');
   const { rows: cats } = await db.q('select id from categorie where id = $1', [str(req.body.categoria, 80)]);
   let categoria = cats[0]?.id || null;
   if (!categoria) categoria = (await db.q('select id from categorie order by ordine limit 1')).rows[0]?.id || null;
@@ -197,10 +209,7 @@ app.post('/api/carica', needAdmin, upload.single('file'), wrap(async (req, res) 
     let titolo = titoloFile, blocchi = [], origine, avviso = '';
     const oggi = new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Rome' });
     if (modo === 'originale') {
-      const { testo, pagine } = await conv.testoPdf(f.buffer).catch(() => ({ testo: '', pagine: 0 }));
-      await db.q('insert into originali (documento_id, nome, mime, dati, pagine) values ($1,$2,$3,$4,$5)', [id, nome, 'application/pdf', f.buffer, pagine]);
-      await db.q('update documenti set testo = $2 where id = $1', [id, testo.replace(/\s+/g, ' ').slice(0, 200000)]);
-      origine = `Da «${nome}» · ${oggi} · impaginazione originale${pagine ? `, ${pagine} ${pagine === 1 ? 'pagina' : 'pagine'}` : ''}`;
+      origine = await salvaOriginale(id, f.buffer, nome, isPdf);
     } else if (isDocx) {
       blocchi = await conv.daWord(f.buffer, salvaImmagineIn(id));
       const h = blocchi.find(b => b.t === 'h'); if (h && blocchi.indexOf(h) <= 1) { titolo = h.x.slice(0, 160); blocchi = blocchi.filter(b => b !== h); }
@@ -223,6 +232,31 @@ app.post('/api/carica', needAdmin, upload.single('file'), wrap(async (req, res) 
     await db.q('delete from documenti where id = $1', [id]).catch(() => {});
     bad(res, 400, 'Non sono riuscito a leggere il file. È un PDF o un Word valido? Se è protetto da password, toglila e riprova.');
   }
+}));
+// Nuova versione del file (solo impaginazione originale): stessa scheda, stessa visibilità; chi lo vede riceve l'avviso
+app.post('/api/documenti/:id/nuova-versione', needAdmin, upload.single('file'), wrap(async (req, res) => {
+  const d = await caricaDoc(req.params.id);
+  if (!d) return bad(res, 404, 'Documento non trovato.');
+  if (d.tipo !== 'originale') return bad(res, 400, 'Questo documento si corregge direttamente nell\'app.');
+  const f = req.file; if (!f) return bad(res, 400, 'Scegli un file.');
+  const nome = str(f.originalname, 200), ext = (nome.match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase();
+  const isPdf = ext === 'pdf' || f.buffer.slice(0, 5).toString() === '%PDF-', isDocx = ext === 'docx' && f.buffer.slice(0, 2).toString() === 'PK';
+  if (!isPdf && !isDocx) return bad(res, 400, ext === 'doc' ? 'I vecchi file .doc non si leggono: aprilo in Word e salvalo come .docx.' : 'Carica un PDF o un file Word (.docx).');
+  const origine = await salvaOriginale(d.id, f.buffer, nome, isPdf);
+  await db.q(`update documenti set origine = $2, aggiornato_il = now(), aggiornato_da = $3,
+    versione = versione + case when bozza then 0 else 1 end, pubblicato_il = case when bozza then pubblicato_il else now() end where id = $1`, [d.id, origine, req.user.name]);
+  let persone = 0, raggiunti = 0;
+  if (!d.bozza) {
+    const chi = gruppo.risolvi(await G.persone(), d.vis_gruppi, d.vis_persone).filter(p => p.id !== req.user.id);
+    persone = chi.length;
+    if (d.notifica && chi.length) {
+      try { raggiunti = (await notifiche.notifica(chi.map(p => p.id), 'documenti', { title: `Documento aggiornato: ${d.titolo}`,
+        body: 'È stata pubblicata una nuova versione: aprila per leggere le modifiche.', url: `/?d=${d.id}`, tag: 'doc-' + d.id })).raggiunti.size; }
+      catch (e) { console.warn('Documenti, notifica non inviata:', e.message); }
+    }
+    console.log(`Documenti: «${d.titolo}» nuova versione del file per ${persone} persone, notifica arrivata a ${raggiunti}`);
+  }
+  res.json({ ok: true, bozza: d.bozza, persone, raggiunti });
 }));
 // Immagine aggiunta a mano nella pagina
 app.post('/api/documenti/:id/immagine', needAdmin, upload.single('file'), wrap(async (req, res) => {
@@ -295,6 +329,15 @@ for (const f of ['logo.png', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.p
 const PDFJS = (() => { try { return path.dirname(require.resolve('pdfjs-dist/package.json')); } catch { return null; } })();
 app.get(['/vendor/pdf.min.mjs', '/vendor/pdf.worker.min.mjs'], (req, res) => {
   const f = PDFJS && path.join(PDFJS, 'legacy', 'build', path.basename(req.path));
+  if (!f || !fs.existsSync(f)) return res.status(404).end();
+  res.set({ 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'public, max-age=604800' });
+  res.sendFile(f);
+});
+// Visore dei Word con impaginazione originale (docx-preview + jszip, dai pacchetti installati)
+const VENDOR = { 'docx-preview.min.js': ['docx-preview', 'dist/docx-preview.min.js'], 'jszip.min.js': ['jszip', 'dist/jszip.min.js'] };
+app.get(['/vendor/docx-preview.min.js', '/vendor/jszip.min.js'], (req, res) => {
+  const [pkg, file] = VENDOR[path.basename(req.path)];
+  let f = null; try { f = path.join(path.dirname(require.resolve(pkg + '/package.json')), file); } catch {}
   if (!f || !fs.existsSync(f)) return res.status(404).end();
   res.set({ 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'public, max-age=604800' });
   res.sendFile(f);
