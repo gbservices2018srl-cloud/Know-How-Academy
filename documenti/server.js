@@ -334,11 +334,20 @@ app.get(['/vendor/pdf.min.mjs', '/vendor/pdf.worker.min.mjs'], (req, res) => {
   res.sendFile(f);
 });
 // Visore dei Word con impaginazione originale (docx-preview + jszip, dai pacchetti installati)
-const VENDOR = { 'docx-preview.min.js': ['docx-preview', 'dist/docx-preview.min.js'], 'jszip.min.js': ['jszip', 'dist/jszip.min.js'] };
+// (si cerca il file in più posti: alcuni pacchetti non lasciano risolvere package.json)
+const VENDOR = { 'docx-preview.min.js': ['docx-preview', ['dist/docx-preview.min.js', 'dist/docx-preview.js']], 'jszip.min.js': ['jszip', ['dist/jszip.min.js', 'dist/jszip.js']] };
+function trovaVendor(pkg, files) {
+  const dirs = [path.join(__dirname, '..', 'node_modules', pkg), path.join(process.cwd(), 'node_modules', pkg)];
+  try { dirs.push(path.dirname(require.resolve(pkg + '/package.json'))); } catch {}
+  try { let d = path.dirname(require.resolve(pkg)); while (d.length > 1 && path.basename(d) !== pkg) d = path.dirname(d); dirs.push(d); } catch {}
+  for (const d of dirs) for (const f of files) { const p = path.join(d, f); if (fs.existsSync(p)) return p; }
+  console.warn(`Documenti: file del visore non trovato (${pkg}); cercato in ${dirs.join(', ')}`);
+  return null;
+}
 app.get(['/vendor/docx-preview.min.js', '/vendor/jszip.min.js'], (req, res) => {
-  const [pkg, file] = VENDOR[path.basename(req.path)];
-  let f = null; try { f = path.join(path.dirname(require.resolve(pkg + '/package.json')), file); } catch {}
-  if (!f || !fs.existsSync(f)) return res.status(404).end();
+  const [pkg, files] = VENDOR[path.basename(req.path)];
+  const f = trovaVendor(pkg, files);
+  if (!f) return res.status(404).end();
   res.set({ 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'public, max-age=604800' });
   res.sendFile(f);
 });
