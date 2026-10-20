@@ -290,5 +290,16 @@ app.use((err, req, res, next) => {
   bad(res, 500, 'Errore del server. Riprova.');
 });
 
-async function start() { await db.migrate(); }
+async function start() { await db.migrate(); setTimeout(riepilogoVisibilita, 20000).unref?.(); }
+// Nel registro, all'avvio: chi vede cosa (solo titoli e numeri), per capire perché qualcuno non vede un documento
+async function riepilogoVisibilita() {
+  try {
+    const people = await G.persone();
+    const { rows } = await db.q('select titolo, bozza, vis_gruppi, vis_persone from documenti order by aggiornato_il desc limit 40');
+    const store = require('../accessi/lib/store');
+    const { rows: tot } = await store.q(`select count(*)::int n, count(*) filter (where coalesce(figura,'') = '')::int senza_figura from users where status = 'active' and not owner`);
+    console.log(`Documenti: ${people.length} persone con l'app (su ${tot[0].n} attive, ${tot[0].senza_figura} senza figura), ${rows.length} documenti`);
+    for (const d of rows) console.log(`Documenti: «${d.titolo}» ${d.bozza ? 'BOZZA (non pubblicato)' : 'pubblicato'} · a: ${gruppo.etichetta(people, d.vis_gruppi, d.vis_persone) || 'nessuno'} · lo vedono ${d.bozza ? 0 : gruppo.risolvi(people, d.vis_gruppi, d.vis_persone).length} persone`);
+  } catch (e) { console.warn('Documenti, riepilogo:', e.message); }
+}
 module.exports = { app, start };
