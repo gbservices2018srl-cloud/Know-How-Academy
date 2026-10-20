@@ -128,6 +128,7 @@ dialog form{padding:22px;display:flex;flex-direction:column;gap:14px}
       <button class="chip" data-f="disabled">Disattivati <span class="n" id="n-disabled"></span></button>
       <button class="chip" data-f="all">Tutti <span class="n" id="n-all"></span></button>
     </div>
+    <select id="fruolo" class="search" aria-label="Filtra per ruolo" style="flex:0 1 220px"><option value="">Tutti i ruoli</option></select>
     <input class="search" id="q" type="search" placeholder="Cerca nome o email" aria-label="Cerca">
     <span class="grow"></span>
     <button class="btn primary" id="add">+ Nuovo utente</button>
@@ -215,7 +216,12 @@ function render() {
   counts();
   document.querySelectorAll('.chip').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === filter));
   const q = $('#q').value.trim().toLowerCase();
-  const rows = S.users.filter(u => (filter === 'all' || u.status === filter) &&
+  // filtro per ruolo (figura professionale): i numeri accanto contano le persone dello stato scelto
+  const fr = $('#fruolo'), frv = fr.value, nelloStato = S.users.filter(u => filter === 'all' || u.status === filter);
+  fr.innerHTML = `<option value="">Tutti i ruoli (${nelloStato.length})</option>` + (S.figure || []).map(f => { const n = nelloStato.filter(u => u.figura === f.id).length;
+    return `<option value="${esc(f.id)}">${esc(f.nome)} (${n})</option>`; }).join('') + `<option value="-">Ruolo da scegliere (${nelloStato.filter(u => !u.figura).length})</option>`;
+  fr.value = frv;
+  const rows = nelloStato.filter(u => (!frv || (frv === '-' ? !u.figura : u.figura === frv)) &&
     (!q || `${u.firstName} ${u.lastName} ${u.email}`.toLowerCase().includes(q)));
   if (!rows.length) {
     $('#list').className = 'list';
@@ -424,6 +430,7 @@ document.addEventListener('click', async e => {
   } catch (err) { b.disabled = false; toast(err.message); }
 });
 $('#q').addEventListener('input', render);
+$('#fruolo').addEventListener('change', () => { aperti.clear(); render(); });
 
 /* ---------- finestre ---------- */
 const dlg = $('#dlg'), dlgf = $('#dlgf');

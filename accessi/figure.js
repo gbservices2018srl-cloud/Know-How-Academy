@@ -8,5 +8,8 @@ module.exports = [
   { id: 'RAP', nome: 'RAP', gruppo: 'RAP' },
   { id: 'RUL', nome: 'RUL', gruppo: 'RUL' },
   { id: 'Extrambulatoriale', nome: 'Extrambulatoriale', gruppo: 'Extrambulatoriali' },
+  { id: 'Manager', nome: 'Manager', gruppo: 'Manager' },
+  { id: 'MiddleManager', nome: 'Middle manager', gruppo: 'Middle manager' },
+  { id: 'OperationExtra', nome: 'Operation extra-ambulatoriale', gruppo: 'Operation extra-ambulatoriale' },
   { id: 'Altro', nome: 'Altro', gruppo: 'Altro' },
 ];
