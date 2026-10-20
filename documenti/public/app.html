@@ -207,12 +207,21 @@ footer{max-width:1000px;margin:0 auto;padding:0 16px 30px;font-size:12.5px;color
   .doc{padding:24px 20px}.doc h1{font-size:25px}
   .edit .side{position:static}
 }
+.stampa-wrap,.stampa-wrap>thead,.stampa-wrap>tbody,.stampa-wrap tr,.stampa-wrap td{display:block}
+.stampa-testa{display:none}
 @media print{
   .top,footer,.link,.foot,.toast,.adminbar,.banner{display:none!important}
   body{background:#fff!important}
   main{padding:0!important;max-width:none!important}
   .doc{box-shadow:none!important;border:0!important;padding:0!important;max-width:none!important}
-  .doc::before{content:"To Smile · Documenti di studio";display:block;font-size:11px;color:#5E6B6C;margin-bottom:6px}
+  .stampa-wrap{display:table!important;width:100%;border-collapse:collapse}
+  .stampa-wrap>thead{display:table-header-group!important}
+  .stampa-wrap>tbody{display:table-row-group!important}
+  .stampa-wrap tr{display:table-row!important}.stampa-wrap td{display:table-cell!important;padding:0}
+  .stampa-testa{display:flex!important;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid #d9dfdf;padding:0 0 8px;margin-bottom:14px}
+  .stampa-testa img{height:13mm;width:auto}
+  .stampa-testa span{font-size:10px;color:#5E6B6C}
+  @page{margin:12mm 14mm 14mm}
   body.blocca-stampa *{display:none!important}
   body.blocca-stampa::after{content:"Questo documento si consulta solo nell'app Documenti di studio.";display:block;font:16px sans-serif;padding:40px}
 }
@@ -487,6 +496,7 @@ function vRead() {
   return `<div class="adminbar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between">
     ${anteprima ? `<button class="link" data-a="torna-editor">${ic('back')}Torna alla modifica</button><span class="tag q">Anteprima: così lo vede un dipendente</span>`
       : `<button class="link" data-a="tutte-o-cat">${ic('back')}Torna ai documenti</button>${S.me.admin ? `<button class="btn sm" data-a="modifica">${ic('edit')}Modifica</button>` : ''}`}</div>
+  <table class="stampa-wrap" role="presentation"><thead><tr><td><div class="stampa-testa"><img src="/logo.png" alt="To Smile" width="543" height="162"><span>Documenti di studio · ${esc(d.titolo)}</span></div></td></tr></thead><tbody><tr><td>
   <article class="card doc ${d.scaricabile ? '' : 'nocopy'}">${wm}
     <div class="meta"><span class="tag plain">${esc(c.categoria)}</span><span class="note">${c.pubblicatoIl ? 'Aggiornato il ' + esc(data(c.aggiornatoIl)) : 'Bozza'}</span></div>
     <h1>${esc(d.titolo)}</h1><div class="bar"></div>
@@ -495,7 +505,7 @@ function vRead() {
       ${d.scaricabile ? (d.tipo === 'originale' ? `<a class="btn primary" href="/api/documenti/${esc(c.id)}/originale?scarica=1">${ic('dl')}Scarica PDF</a>`
         : `<button class="btn primary" data-a="stampa">${ic('dl')}Scarica PDF</button>`)
         : `<span class="lock">${ic('lock')}Solo consultazione nell'app</span>`}</div>
-  </article>`;
+  </article></td></tr></tbody></table>`;
 }
 let pdfjs = null;
 async function mostraPdf() {

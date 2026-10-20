@@ -144,7 +144,8 @@ app.get('/api/documenti/:id/originale', needUser, wrap(async (req, res) => {
   const nome = (d.titolo.normalize('NFD').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-').slice(0, 80) || 'documento') + '.pdf';
   res.set({ 'Content-Type': rows[0].mime, 'Cache-Control': 'private, no-store',
     'Content-Disposition': `${scarica ? 'attachment' : 'inline'}; filename="${nome}"` });
-  res.send(rows[0].dati);
+  // il PDF scaricato porta il logo To Smile in ogni pagina (nell'app si vede l'originale com'è)
+  res.send(scarica ? await conLogo(rows[0].dati) : rows[0].dati);
 }));
 app.get('/api/immagini/:id', needUser, wrap(async (req, res) => {
   const { rows } = await db.q('select documento_id, mime, dati from immagini where id = $1', [str(req.params.id, 40)]);
@@ -152,6 +153,22 @@ app.get('/api/immagini/:id', needUser, wrap(async (req, res) => {
   res.set({ 'Content-Type': rows[0].mime, 'Cache-Control': 'private, max-age=86400' });
   res.send(rows[0].dati);
 }));
+
+// Logo To Smile in alto a destra, nel margine di ogni pagina. Se qualcosa non va, si scarica il PDF originale.
+const LOGO_PNG = fs.readFileSync(path.join(__dirname, 'public', 'logo.png'));
+async function conLogo(dati) {
+  try {
+    const { PDFDocument } = require('pdf-lib');
+    const pdf = await PDFDocument.load(dati, { ignoreEncryption: true });
+    const logo = await pdf.embedPng(LOGO_PNG);
+    for (const pg of pdf.getPages()) {
+      const { width, height } = pg.getSize();
+      const w = Math.min(84, width * 0.16), h = w * logo.height / logo.width, m = Math.max(12, Math.min(22, width * 0.03));
+      pg.drawImage(logo, { x: width - w - m, y: height - h - m * 0.7, width: w, height: h });
+    }
+    return Buffer.from(await pdf.save());
+  } catch (e) { console.warn('Documenti, logo sul PDF non aggiunto:', e.message); return dati; }
+}
 
 /* ---------- caricamento (amministratore) ---------- */
 const salvaImmagineIn = docId => async (dati, mime) => {
