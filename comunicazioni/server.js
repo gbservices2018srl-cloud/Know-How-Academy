@@ -145,6 +145,7 @@ const ARCHIVIATA = `(not exists (select 1 from destinatari d where d.messaggio_i
     and exists (select 1 from destinatari d where d.messaggio_id = m.id))`;
 app.get('/api/inviate', needAdmin, wrap(async (req, res) => {
   const archivio = req.query.archivio === '1';
+  const cerca = !!str(req.query.q, 120); // la ricerca guarda sia tra quelle in corso sia tra le archiviate
   const params = [];
   const f = filtroRicerca(req.query.q, params);
   // filtro per ruolo: solo le comunicazioni arrivate a quel ruolo, con i conteggi di quel ruolo
@@ -158,9 +159,10 @@ app.get('/api/inviate', needAdmin, wrap(async (req, res) => {
       (select count(*)::int from destinatari d where d.messaggio_id = m.id and not d.cc and d.letto_il is not null and ${fr}) as lette,
       (select count(*)::int from destinatari d where d.messaggio_id = m.id and not d.cc and d.confermato_il is not null and ${fr}) as confermate,
       (select count(distinct c.persona_id)::int from chat c where c.messaggio_id = m.id) as conversazioni,
-      (select count(*)::int from chat c where c.messaggio_id = m.id and not c.da_admin and not c.letto) as domande_nuove
+      (select count(*)::int from chat c where c.messaggio_id = m.id and not c.da_admin and not c.letto) as domande_nuove,
+      ${ARCHIVIATA} as archiviata
     from messaggi m where ${f} ${ruolo ? `and exists (select 1 from destinatari d where d.messaggio_id = m.id and ${fr})` : ''}
-      and ${archivio ? '' : 'not'} ${ARCHIVIATA} order by m.creato_il desc limit 300`, params);
+      ${cerca ? '' : `and ${archivio ? '' : 'not'} ${ARCHIVIATA}`} order by m.creato_il desc limit 300`, params);
   // quante sono nell'altra sezione (per il numero sul pulsante)
   const { rows: n } = await db.q(`select count(*)::int n from messaggi m where ${archivio ? 'not' : ''} ${ARCHIVIATA}`);
   res.json({ messaggi: rows, altre: n[0].n });

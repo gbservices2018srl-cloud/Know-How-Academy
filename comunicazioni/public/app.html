@@ -473,7 +473,8 @@ function vInviate() {
   const list = S.inviate || [], q = S.q.inviate;
   return `<div class="head"><div style="flex:1 1 260px"><h2 class="view">${S.archivio ? 'Comunicazioni archiviate' : 'Comunicazioni inviate'}</h2>
     <p>${S.archivio ? 'Confermate da tutti e senza domande in sospeso. Se arriva una domanda o un nuovo destinatario, tornano tra quelle in corso.' : 'Chi le ha lette e confermate, chi no e chi ha fatto domande. Quelle completate passano da sole in «Archiviate».'}</p>
-    <div class="filters" role="group" aria-label="Sezione" style="margin-top:8px">
+    ${q ? '<p style="margin-top:6px;font-size:13.5px"><b>Ricerca in tutte le comunicazioni</b>, sia in corso sia archiviate.</p>' : ''}
+    <div class="filters" role="group" aria-label="Sezione" style="margin-top:8px;${q ? 'display:none' : ''}">
       <button class="fchip ${S.archivio ? '' : 'on'}" data-archivio="0" aria-pressed="${!S.archivio}">In corso${S.archivio ? ` · ${S.altre ?? ''}` : ` · ${list.length}`}</button>
       <button class="fchip ${S.archivio ? 'on' : ''}" data-archivio="1" aria-pressed="${!!S.archivio}">Archiviate${S.archivio ? ` · ${list.length}` : ` · ${S.altre ?? ''}`}</button></div></div>
     ${cercaBox('inviate', 'Cerca per parola o frase…')}
@@ -483,7 +484,7 @@ function vInviate() {
   <div class="list">${list.length ? list.map(m => {
     const base = m.conferma ? m.confermate : m.lette, pct = m.totale ? Math.round(base / m.totale * 100) : 0;
     return `<button class="item" data-gestisci="${esc(m.id)}"><div class="body">
-      <div class="t"><b>${m.importante ? '<span class="tag imp" style="margin-right:6px">Importante</span>' : ''}${hl(m.titolo, q)}</b><time>${esc(quando(m.creato_il))}</time></div>
+      <div class="t"><b>${m.importante ? '<span class="tag imp" style="margin-right:6px">Importante</span>' : ''}${q && m.archiviata ? '<span class="tag plain" style="margin-right:6px">Archiviata</span>' : ''}${hl(m.titolo, q)}</b><time>${esc(quando(m.creato_il))}</time></div>
       <div class="pre">A: ${esc(m.a_chi)} · da ${esc(m.autore_nome)}</div>
       <div class="tags"><span class="bar" aria-hidden="true"><i class="${pct === 100 ? 'full' : ''}" style="width:${pct}%"></i></span>
         <b style="font-size:14px">${base} su ${m.totale} ${m.conferma ? 'confermate' : 'lette'}${S.ruolo ? ' · ' + esc((S.figure.find(f => f.id === S.ruolo) || {}).nome || '') : ''}</b>
