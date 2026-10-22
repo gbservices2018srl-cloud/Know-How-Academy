@@ -179,7 +179,7 @@ mark{background:color-mix(in srgb,var(--brand-yellow) 75%,transparent);color:inh
 .form .side{flex:1 1 330px}
 .field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
 .field>span,.field>label{font-size:13.5px;font-weight:700;color:var(--muted)}
-.field input,.field textarea{border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:10px 12px;width:100%;min-width:0;min-height:44px}
+.field input,.field textarea,.field select{border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:10px 12px;width:100%;min-width:0;min-height:44px}
 .field textarea{resize:vertical;min-height:170px;line-height:1.5}
 .check{display:flex;gap:10px;align-items:center;min-height:44px;font-size:15px;cursor:pointer}
 .check input{width:20px;height:20px;accent-color:var(--accent)}
@@ -297,7 +297,7 @@ const S = {
   q: { ricevute: '', inviate: '' },
   ricevute: null, inviate: null, cur: null,
   dest: null,                  // persone e gruppi (per scrivere)
-  draft: { titolo: '', testo: '', importante: false, conferma: true, retroattiva: false, gruppi: [], persone: [] },
+  draft: { titolo: '', testo: '', importante: false, conferma: true, retroattiva: false, gruppi: [], persone: [], cc: { gruppi: [], persone: [] } },
   pq: '', drafts: {},          // ricerca persone, bozze delle risposte in chat
   filtro: 'tutti', sending: false, err: '',
 };
@@ -341,6 +341,7 @@ function go(view, id = null, persona = null) {
   Object.assign(S, { view, id, persona, err: '' });
   if (view !== 'leggi' && view !== 'gestisci' && view !== 'modifica') S.cur = null;
   if (view !== 'modifica') S.edit = null;
+  if (view !== 'gestisci') S.ruoloDet = '';
   const u = new URL(location.href);
   u.search = id ? `?m=${encodeURIComponent(id)}${persona ? '&persona=' + encodeURIComponent(persona) : ''}` : '';
   u.hash = '';
@@ -352,12 +353,12 @@ async function load() {
   try {
     if (S.view === 'home') S.ricevute = (await api('GET', '/api/ricevute')).messaggi;
     if (S.view === 'ricevute') S.ricevute = (await api('GET', '/api/ricevute?q=' + encodeURIComponent(S.q.ricevute))).messaggi;
-    if (S.view === 'inviate') S.inviate = (await api('GET', '/api/inviate?q=' + encodeURIComponent(S.q.inviate))).messaggi;
-    if (S.view === 'nuova' && !S.dest) S.dest = await api('GET', '/api/destinatari');
+    if (S.view === 'inviate') S.inviate = (await api('GET', '/api/inviate?q=' + encodeURIComponent(S.q.inviate) + '&ruolo=' + encodeURIComponent(S.ruolo || ''))).messaggi;
+    if ((S.view === 'nuova' || S.view === 'modifica') && !S.dest) S.dest = await api('GET', '/api/destinatari');
     if (S.view === 'leggi') S.cur = await api('GET', `/api/messaggi/${encodeURIComponent(S.id)}`);
     if (S.view === 'gestisci') S.cur = await api('GET', `/api/messaggi/${encodeURIComponent(S.id)}?vista=admin`);
     if (S.view === 'modifica' && !S.edit) { S.cur = await api('GET', `/api/messaggi/${encodeURIComponent(S.id)}?vista=admin`);
-      S.edit = { titolo: S.cur.titolo, testo: S.cur.testo, importante: S.cur.importante, conferma: S.cur.conferma, retroattiva: !!S.cur.retroattiva }; }
+      S.edit = { titolo: S.cur.titolo, testo: S.cur.testo, importante: S.cur.importante, conferma: S.cur.conferma, retroattiva: !!S.cur.retroattiva, cc: { gruppi: [], persone: [] } }; }
   } catch (e) {
     if (S.view === 'leggi' && S.me.admin) return go('gestisci', S.id, S.persona);
     $('#main').innerHTML = `<div class="empty"><b>${esc(e.message)}</b><button class="btn" data-go="ricevute">Torna alle comunicazioni</button></div>`;
@@ -386,7 +387,7 @@ function render() {
 /* ============ pagina d'ingresso ============ */
 function vHome() {
   const list = S.ricevute || [];
-  const nuove = list.filter(m => !m.letto_il).length, daConf = list.filter(m => m.conferma && !m.confermato_il).length, risp = list.filter(m => m.risposte_nuove).length;
+  const nuove = list.filter(m => !m.letto_il).length, daConf = list.filter(m => m.conferma && !m.cc && !m.confermato_il).length, risp = list.filter(m => m.risposte_nuove).length;
   const stato = [nuove ? `<span class="tag todo">${nuove === 1 ? '1 da leggere' : nuove + ' da leggere'}</span>` : '',
     daConf ? `<span class="tag todo">${daConf === 1 ? '1 da confermare' : daConf + ' da confermare'}</span>` : '',
     risp ? `<span class="tag q">${risp === 1 ? '1 risposta nuova' : risp + ' risposte nuove'}</span>` : ''].join('') || '<span class="tag ok">Sei in pari</span>';
@@ -414,7 +415,7 @@ function cercaBox(k, ph) {
 }
 function vRicevute() {
   const list = S.ricevute || [], q = S.q.ricevute;
-  const da = list.filter(m => m.conferma && !m.confermato_il).length;
+  const da = list.filter(m => m.conferma && !m.cc && !m.confermato_il).length;
   return `${bannerNotifiche()}
   <div class="head"><div style="flex:1 1 260px"><h2 class="view">${S.me.admin ? 'Comunicazioni ricevute' : 'Le tue comunicazioni'}</h2>
     <p>${da ? `${da === 1 ? 'Una comunicazione aspetta' : da + ' comunicazioni aspettano'} la tua conferma di lettura.` : 'Sei in pari: nessuna conferma in sospeso.'}</p></div>
@@ -423,6 +424,7 @@ function vRicevute() {
     const nuova = !m.letto_il;
     const stato = m.confermato_il ? '<span class="tag ok">' + ic('check') + 'Confermata</span>'
       : m.rivedere ? '<span class="tag imp">Modificata: da rivedere</span>'
+      : m.cc ? '<span class="tag plain">In copia</span>'
       : m.conferma ? '<span class="tag todo">Da confermare</span>' : (m.letto_il ? '<span class="tag plain">Letta</span>' : '');
     return `<button class="item ${nuova ? 'nuova' : ''}" data-open="${esc(m.id)}">
       <span class="dot" aria-hidden="true"></span>
@@ -447,6 +449,7 @@ function vLeggi() {
     ${m.importante ? '<span class="tag imp">Importante</span>' : ''}
     <h2>${esc(m.titolo)}</h2>
     <div class="meta">Da ${esc(m.autore)} · ${esc(quando(m.creatoIl))}${m.modificatoIl ? ` · <b>modificata ${esc(quando(m.modificatoIl))}</b>` : ''}</div>
+ ${m.cc ? '<div class="muted" style="margin:8px 0 0;font-size:14px"><b>Sei in copia</b>: la ricevi per conoscenza, non serve confermare la lettura.</div>' : ''}
     ${m.rivedere ? `<div class="err" role="status" style="margin:10px 0 0">${ic('edit')}Questa comunicazione è stata <b>modificata</b>: rileggila${m.conferma ? ' e conferma di averla vista' : ''}. Se ti serve qualche informazione in più, scrivi qui sotto.</div>` : ''}
     <div class="text">${testoHtml(m.testo)}</div>
   </article>
@@ -470,6 +473,8 @@ function vInviate() {
   return `<div class="head"><div style="flex:1 1 260px"><h2 class="view">Comunicazioni inviate</h2>
     <p>Chi le ha lette e confermate, chi no e chi ha fatto domande.</p></div>
     ${cercaBox('inviate', 'Cerca per parola o frase…')}
+    <div class="field" style="margin:0;flex:0 1 220px"><label class="sr" for="f-ruolo">Filtra per ruolo</label>
+      <select id="f-ruolo" data-ruolo><option value="">Tutti i ruoli</option>${(S.figure || []).map(f => `<option value="${esc(f.id)}" ${S.ruolo === f.id ? 'selected' : ''}>${esc(f.nome)}</option>`).join('')}</select></div>
     <button class="btn primary" data-go="nuova">${ic('plus')}Nuova comunicazione</button></div>
   <div class="list">${list.length ? list.map(m => {
     const base = m.conferma ? m.confermate : m.lette, pct = m.totale ? Math.round(base / m.totale * 100) : 0;
@@ -477,7 +482,8 @@ function vInviate() {
       <div class="t"><b>${m.importante ? '<span class="tag imp" style="margin-right:6px">Importante</span>' : ''}${hl(m.titolo, q)}</b><time>${esc(quando(m.creato_il))}</time></div>
       <div class="pre">A: ${esc(m.a_chi)} · da ${esc(m.autore_nome)}</div>
       <div class="tags"><span class="bar" aria-hidden="true"><i class="${pct === 100 ? 'full' : ''}" style="width:${pct}%"></i></span>
-        <b style="font-size:14px">${base} su ${m.totale} ${m.conferma ? 'confermate' : 'lette'}</b>
+        <b style="font-size:14px">${base} su ${m.totale} ${m.conferma ? 'confermate' : 'lette'}${S.ruolo ? ' · ' + esc((S.figure.find(f => f.id === S.ruolo) || {}).nome || '') : ''}</b>
+        ${m.in_cc ? `<span class="tag plain">+ ${m.in_cc} in copia</span>` : ''}
         ${m.domande_nuove ? `<span class="tag q">${ic('chat')}${m.domande_nuove === 1 ? '1 domanda nuova' : m.domande_nuove + ' domande nuove'}</span>`
           : m.conversazioni ? `<span class="tag plain">${m.conversazioni === 1 ? '1 conversazione' : m.conversazioni + ' conversazioni'}</span>` : ''}</div>
       ${q ? `<div class="pre" style="margin-top:6px">${hl(m.anteprima, q)}</div>` : ''}</div></button>`;
@@ -487,11 +493,13 @@ function vInviate() {
 /* ============ dettaglio (amministratore) ============ */
 function vGestisci() {
   const m = S.cur; if (!m) return '<div class="empty">Caricamento…</div>';
-  const d = m.destinatari;
+  const tuttiD = m.destinatari.filter(x => !S.ruoloDet || x.figuraId === S.ruoloDet);
+  const d = tuttiD.filter(x => !x.cc), cc = tuttiD.filter(x => x.cc); // chi è in copia non conta per letture e conferme
   const conf = d.filter(x => x.confermatoIl), lette = d.filter(x => x.lettoIl && !x.confermatoIl), mai = d.filter(x => !x.lettoIl);
   const mancano = m.conferma ? d.length - conf.length : mai.length;
-  const filtri = [['tutti', 'Tutti', d.length], ...(m.conferma ? [['conf', 'Confermata', conf.length]] : []), ['lette', m.conferma ? 'Letta, non confermata' : 'Letta', lette.length], ['mai', 'Non aperta', mai.length], ['nodev', 'Senza notifiche', d.filter(x => !x.notifiche).length]];
-  const vis = d.filter(x => ({ tutti: true, conf: !!x.confermatoIl, lette: x.lettoIl && !x.confermatoIl, mai: !x.lettoIl, nodev: !x.notifiche })[S.filtro]);
+  const filtri = [['tutti', 'Tutti', d.length], ...(m.conferma ? [['conf', 'Confermata', conf.length]] : []), ['lette', m.conferma ? 'Letta, non confermata' : 'Letta', lette.length], ['mai', 'Non aperta', mai.length], ['nodev', 'Senza notifiche', tuttiD.filter(x => !x.notifiche).length], ...(cc.length ? [['cc', 'In copia', cc.length]] : [])];
+  const vis = (S.filtro === 'cc' || S.filtro === 'nodev' ? tuttiD : d).filter(x => ({ tutti: true, conf: !!x.confermatoIl, lette: x.lettoIl && !x.confermatoIl, mai: !x.lettoIl, nodev: !x.notifiche, cc: x.cc })[S.filtro]);
+  const ruoliPresenti = (S.figure || []).filter(f => m.destinatari.some(x => x.figuraId === f.id));
   const sol = m.solleciti?.[0];
   return `<button class="link" data-go="inviate">${ic('back')}Comunicazioni inviate</button>
   <article class="card msg">
@@ -512,13 +520,16 @@ function vGestisci() {
       <div class="rowhead"><h3 id="dest-t">Destinatari</h3>
         ${mancano ? `<button class="btn warn sm" data-a="sollecita">${ic('bell')}Sollecita ${mancano === 1 ? 'chi manca' : 'i ' + mancano + ' che mancano'}</button>` : '<span class="tag ok">Tutti a posto</span>'}</div>
       ${sol ? `<div class="muted" style="font-size:13px">Ultimo sollecito ${esc(quando(sol.inviato_il))} da ${esc(sol.da)}: ${sol.raggiunte} su ${sol.persone} raggiunte.</div>` : ''}
+      ${ruoliPresenti.length > 1 ? `<div class="field" style="margin:6px 0"><label class="sr" for="f-ruolo-det">Ruolo</label><select id="f-ruolo-det" data-ruolodet><option value="">Tutti i ruoli</option>${ruoliPresenti.map(f => `<option value="${esc(f.id)}" ${S.ruoloDet === f.id ? 'selected' : ''}>${esc(f.nome)}</option>`).join('')}</select></div>` : ''}
       <div class="filters" role="group" aria-label="Filtra i destinatari">${filtri.map(([k, l, n]) => `<button class="fchip ${S.filtro === k ? 'on' : ''}" data-filtro="${k}" aria-pressed="${S.filtro === k}">${l} · ${n}</button>`).join('')}</div>
       ${vis.map(x => {
-        const st = x.confermatoIl ? `<span class="tag ok">Confermata</span><small>${esc(quando(x.confermatoIl))}</small>`
+        const st = x.cc ? `<span class="tag plain">In copia</span><small>${x.lettoIl ? 'aperta ' + esc(quando(x.lettoIl)) : 'non ancora aperta'}</small>`
+          : x.confermatoIl ? `<span class="tag ok">Confermata</span><small>${esc(quando(x.confermatoIl))}</small>`
           : x.lettoIl ? `<span class="tag todo">${m.conferma ? 'Letta, non confermata' : 'Letta'}</span><small>${esc(quando(x.lettoIl))}</small>`
           : '<span class="tag no">Non ancora aperta</span>';
         return `<div class="person"><div><div class="n">${esc(x.nome)}</div><small>${esc([x.figura, x.sedi, x.aggiuntoDopo ? 'arrivata dopo (retroattiva)' : ''].filter(Boolean).join(' · '))}</small>
-          ${x.notifiche ? '' : `<span class="nodev">${ic('belloff')}notifiche non attive</span>`}</div><div class="r">${st}</div></div>`;
+          ${x.notifiche ? '' : `<span class="nodev">${ic('belloff')}notifiche non attive</span>`}</div><div class="r">${st}
+          <button class="link" style="font-size:12.5px;margin-top:2px" data-cc="${esc(x.id)}" data-ccv="${x.cc ? '0' : '1'}">${x.cc ? 'Togli dalla copia' : 'Metti in copia'}</button></div></div>`;
       }).join('') || '<div class="muted" style="padding:10px 0">Nessuno in questo gruppo.</div>'}
     </section>
     <section class="card" aria-labelledby="conv-t">
@@ -554,6 +565,11 @@ function vModifica() {
       <div class="muted" style="font-size:13px;margin:-4px 0 0 30px">La riceve anche chi entra dopo nei gruppi scelti. Se la attivi ora, arriva subito a chi oggi è nei gruppi e non l'aveva ricevuta.</div>
     </section>
     <section class="card side">
+      <h3 style="margin:0 0 4px;font-size:17px">Aggiungi in copia (CC)</h3>
+      <div class="muted" style="font-size:13px;margin-bottom:6px">La ricevono per conoscenza, senza conferma. Chi è già tra i destinatari resta com'è${S.dest ? '' : ''}.</div>
+      ${S.dest ? pickerHtml(d.cc) : '<div class="muted">Caricamento…</div>'}
+      ${(() => { const n = S.dest ? scegli(d.cc.gruppi, d.cc.persone, (m.destinatari || []).map(x => x.id)).length : 0; return n ? `<div class="summary">Riceveranno in copia <b>${n}</b> ${n === 1 ? 'persona nuova' : 'persone nuove'}.</div>` : ''; })()}
+      <div style="height:1px;background:var(--line);margin:14px 0"></div>
       <h3 style="margin:0 0 6px;font-size:17px">Cosa succede quando salvi</h3>
       <p class="muted" style="font-size:14px;margin:0 0 12px">Se cambi l'oggetto o il testo, tutti i ${m.destinatari?.length || ''} destinatari ricevono la notifica «Comunicazione modificata»: la conferma torna da fare e dovranno indicare di averla vista oppure chiedere chiarimenti nella chat. Le conversazioni restano.</p>
       ${S.err ? `<div class="err" role="alert">${esc(S.err)}</div>` : ''}
@@ -568,11 +584,29 @@ function destinatariScelti() {
   const g = S.draft.gruppi, p = S.draft.persone;
   return S.dest.persone.filter(x => x.id !== S.me.id && (p.includes(x.id) || g.some(k => k === 'tutti' || (k.startsWith('figura:') && x.figura === k.slice(7)) || (k.startsWith('sede:') && x.sedi.includes(k.slice(5))))));
 }
+// lista su cui si sta scegliendo: destinatari, in copia (nuova) o copia da aggiungere (modifica)
+function bersaglio() { return S.view === 'modifica' ? S.edit.cc : (S.ccMode ? S.draft.cc : S.draft); }
+function scegli(g, p, escludi = []) {
+  if (!S.dest) return [];
+  return S.dest.persone.filter(x => x.id !== S.me.id && !escludi.includes(x.id) && (p.includes(x.id) || g.some(k => k === 'tutti' || (k.startsWith('figura:') && x.figura === k.slice(7)) || (k.startsWith('sede:') && x.sedi.includes(k.slice(5))))));
+}
+function pickerHtml(t) {
+  const gr = S.dest.gruppi;
+  const chip = g => `<button class="gchip ${t.gruppi.includes(g.id) ? 'on' : ''}" data-gruppo="${esc(g.id)}" aria-pressed="${t.gruppi.includes(g.id)}">${esc(g.label)}<small>${g.n}</small></button>`;
+  return `<div class="chips">${chip(gr[0])}</div>
+      ${gr.some(g => g.tipo === 'figura') ? `<div class="gtitle">Per figura</div><div class="chips">${gr.filter(g => g.tipo === 'figura').map(chip).join('')}</div>` : ''}
+      ${gr.some(g => g.tipo === 'sede') ? `<div class="gtitle">Per sede</div><div class="chips">${gr.filter(g => g.tipo === 'sede').map(chip).join('')}</div>` : ''}
+      <div class="gtitle">Singole persone</div>
+      <div class="psearch"><label class="sr" for="n-pq">Cerca una persona per nome o cognome</label>
+        <div class="field" style="margin:0"><input id="n-pq" type="search" data-pq value="${esc(S.pq)}" placeholder="Cerca per nome o cognome" autocomplete="off"></div>
+        <div class="pres" id="pres" hidden></div></div>
+      ${t.persone.length ? `<div class="chips" style="margin-top:8px">${t.persone.map(id => { const p = S.dest.persone.find(x => x.id === id);
+        return `<span class="pchip">${esc(p?.nome || '?')}<button data-togli="${esc(id)}" aria-label="Togli ${esc(p?.nome || '')}">${ic('x')}</button></span>`; }).join('')}</div>` : ''}`;
+}
 function vNuova() {
   if (!S.dest) return '<div class="empty">Caricamento…</div>';
-  const d = S.draft, gr = S.dest.gruppi;
-  const chip = g => `<button class="gchip ${d.gruppi.includes(g.id) ? 'on' : ''}" data-gruppo="${esc(g.id)}" aria-pressed="${d.gruppi.includes(g.id)}">${esc(g.label)}<small>${g.n}</small></button>`;
-  const sel = destinatariScelti(), senza = sel.filter(x => !x.notifiche);
+  const d = S.draft;
+  const sel = destinatariScelti(), inCc = scegli(d.cc.gruppi, d.cc.persone, sel.map(x => x.id)), senza = [...sel, ...inCc].filter(x => !x.notifiche);
   return `<div class="head"><div><h2 class="view">Nuova comunicazione</h2><p>Arriva subito con una notifica sul telefono di chi la riceve.</p></div></div>
   <div class="form">
     <section class="card main" aria-label="Testo">
@@ -585,18 +619,14 @@ function vNuova() {
     </section>
     <section class="card side" aria-labelledby="n-chi">
       <h3 id="n-chi" style="margin:0 0 4px;font-size:17px">A chi la mandi</h3>
-      <div class="chips">${chip(gr[0])}</div>
-      ${gr.some(g => g.tipo === 'figura') ? `<div class="gtitle">Per figura</div><div class="chips">${gr.filter(g => g.tipo === 'figura').map(chip).join('')}</div>` : ''}
-      ${gr.some(g => g.tipo === 'sede') ? `<div class="gtitle">Per sede</div><div class="chips">${gr.filter(g => g.tipo === 'sede').map(chip).join('')}</div>` : ''}
-      <div class="gtitle">Singole persone</div>
-      <div class="psearch"><label class="sr" for="n-pq">Cerca una persona per nome o cognome</label>
-        <div class="field" style="margin:0"><input id="n-pq" type="search" data-pq value="${esc(S.pq)}" placeholder="Cerca per nome o cognome" autocomplete="off"></div>
-        <div class="pres" id="pres" hidden></div></div>
-      ${d.persone.length ? `<div class="chips" style="margin-top:8px">${d.persone.map(id => { const p = S.dest.persone.find(x => x.id === id);
-        return `<span class="pchip">${esc(p?.nome || '?')}<button data-togli="${esc(id)}" aria-label="Togli ${esc(p?.nome || '')}">${ic('x')}</button></span>`; }).join('')}</div>` : ''}
-      <div class="summary">Arriverà a <b>${sel.length}</b> ${sel.length === 1 ? 'persona' : 'persone'}${sel.length ? '' : ': scegli un gruppo o una persona'}.
+      <div class="filters" role="group" aria-label="Destinatari o in copia" style="margin:4px 0 8px">
+        <button class="fchip ${S.ccMode ? '' : 'on'}" data-ccmode="0" aria-pressed="${!S.ccMode}">Destinatari · ${sel.length}</button>
+        <button class="fchip ${S.ccMode ? 'on' : ''}" data-ccmode="1" aria-pressed="${!!S.ccMode}">In copia (CC) · ${inCc.length}</button></div>
+      ${S.ccMode ? '<div class="muted" style="font-size:13px;margin-bottom:6px">Chi è in copia la riceve per conoscenza: non deve confermare la lettura e non viene sollecitato.</div>' : ''}
+      ${pickerHtml(S.ccMode ? d.cc : d)}
+      <div class="summary">Arriverà a <b>${sel.length}</b> ${sel.length === 1 ? 'persona' : 'persone'}${inCc.length ? ` + <b>${inCc.length}</b> in copia` : ''}${sel.length || inCc.length ? '' : ': scegli un gruppo o una persona'}.
         ${senza.length ? `<div style="margin-top:6px;color:var(--warn);font-size:13.5px">${senza.length === 1 ? '1 persona non ha' : senza.length + ' persone non hanno'} ancora attivato le notifiche: la vedranno quando aprono l'app.</div>` : ''}
-        ${sel.length ? `<details><summary>Vedi l'elenco</summary>${sel.map(x => esc(x.nome) + (x.notifiche ? '' : ' (senza notifiche)')).join(', ')}</details>` : ''}</div>
+        ${sel.length || inCc.length ? `<details><summary>Vedi l'elenco</summary>${sel.map(x => esc(x.nome) + (x.notifiche ? '' : ' (senza notifiche)')).join(', ')}${inCc.length ? `<div style="margin-top:6px"><b>In copia:</b> ${inCc.map(x => esc(x.nome)).join(', ')}</div>` : ''}</details>` : ''}</div>
       ${S.err ? `<div class="err" role="alert">${esc(S.err)}</div>` : ''}
       <button class="btn primary big" data-a="invia" ${S.sending ? 'disabled' : ''}>${ic('send')}${S.sending ? 'Invio in corso…' : 'Invia comunicazione'}</button>
     </section>
@@ -605,7 +635,7 @@ function vNuova() {
 function risultatiPersone() {
   const box = $('#pres'); if (!box) return;
   const q = S.pq.trim().toLowerCase();
-  const res = q.length < 2 ? [] : S.dest.persone.filter(p => p.id !== S.me.id && !S.draft.persone.includes(p.id) && p.nome.toLowerCase().includes(q)).slice(0, 8);
+  const res = q.length < 2 ? [] : S.dest.persone.filter(p => p.id !== S.me.id && !bersaglio().persone.includes(p.id) && p.nome.toLowerCase().includes(q)).slice(0, 8);
   box.hidden = !q || q.length < 2;
   box.innerHTML = res.length ? res.map(p => `<button data-aggiungi="${esc(p.id)}"><b>${esc(p.nome)}</b> <span class="muted">${esc([p.figuraNome, p.sedi.join(', ')].filter(Boolean).join(' · '))}</span></button>`).join('')
     : '<div class="muted" style="padding:10px 12px">Nessuna persona trovata.</div>';
@@ -626,6 +656,8 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => {
   const t = e.target;
   if (['conferma', 'importante', 'retroattiva'].includes(t.dataset.d)) S.draft[t.dataset.d] = t.checked;
+  if (t.dataset.ruolo !== undefined) { S.ruolo = t.value; load(); }
+  if (t.dataset.ruolodet !== undefined) { S.ruoloDet = t.value; render(); }
   if (t.dataset.e && S.edit) S.edit[t.dataset.e] = t.type === 'checkbox' ? t.checked : t.value;
 });
 document.addEventListener('click', async e => {
@@ -634,9 +666,11 @@ document.addEventListener('click', async e => {
   if (b.dataset.open) return go('leggi', b.dataset.open);
   if (b.dataset.gestisci) { S.filtro = 'tutti'; return go('gestisci', b.dataset.gestisci); }
   if (b.dataset.filtro) { S.filtro = b.dataset.filtro; return render(); }
-  if (b.dataset.gruppo) { const g = S.draft.gruppi, k = b.dataset.gruppo; S.draft.gruppi = g.includes(k) ? g.filter(x => x !== k) : [...g, k]; S.err = ''; return render(); }
-  if (b.dataset.aggiungi) { S.draft.persone.push(b.dataset.aggiungi); S.pq = ''; S.err = ''; render(); $('#n-pq')?.focus(); return; }
-  if (b.dataset.togli) { S.draft.persone = S.draft.persone.filter(x => x !== b.dataset.togli); return render(); }
+  if (b.dataset.ccmode) { S.ccMode = b.dataset.ccmode === '1'; S.pq = ''; return render(); }
+  if (b.dataset.gruppo) { const t = bersaglio(), g = t.gruppi, k = b.dataset.gruppo; t.gruppi = g.includes(k) ? g.filter(x => x !== k) : [...g, k]; S.err = ''; return render(); }
+  if (b.dataset.aggiungi) { bersaglio().persone.push(b.dataset.aggiungi); S.pq = ''; S.err = ''; render(); $('#n-pq')?.focus(); return; }
+  if (b.dataset.togli) { const t = bersaglio(); t.persone = t.persone.filter(x => x !== b.dataset.togli); return render(); }
+  if (b.dataset.cc) { try { await api('POST', `/api/messaggi/${S.cur.id}/cc`, { persona: b.dataset.cc, cc: b.dataset.ccv === '1' }); toast(b.dataset.ccv === '1' ? 'Messa in copia: non serve più la sua conferma.' : 'Tolta dalla copia: ora deve confermare.'); await load(); } catch (x) { toast(x.message); } return; }
   const a = b.dataset.a; if (!a) return;
   try {
     if (a === 'conferma') {
@@ -668,8 +702,8 @@ document.addEventListener('click', async e => {
       try {
         const r = await api('PUT', `/api/messaggi/${S.id}`, d);
         S.sending = false;
-        toast(r.cambiato ? `Modificata: avvisate ${r.persone} persone, notifica arrivata a ${r.raggiunti}.${r.aggiunti ? ` Arrivata anche a ${r.aggiunti} nuove persone (retroattiva).` : ''}`
-          : `Salvata.${r.aggiunti ? ` Arrivata a ${r.aggiunti} nuove persone (retroattiva).` : ''}`, 7000);
+        const extra = `${r.aggiunti ? ` Arrivata anche a ${r.aggiunti} nuove persone (retroattiva).` : ''}${r.nuoviCc ? ` Aggiunte ${r.nuoviCc} persone in copia.` : ''}`;
+        toast(r.cambiato ? `Modificata: avvisate ${r.persone} persone, notifica arrivata a ${r.raggiunti}.${extra}` : `Salvata.${extra}`, 7000);
         return go('gestisci', S.id);
       } catch (x) { S.sending = false; S.err = x.message; return render(); }
     }
@@ -681,12 +715,13 @@ document.addEventListener('click', async e => {
       const d = S.draft;
       if (!d.titolo.trim()) { S.err = 'Scrivi l\'oggetto.'; return render(); }
       if (!d.testo.trim()) { S.err = 'Scrivi il testo.'; return render(); }
-      if (!destinatariScelti().length) { S.err = 'Scegli almeno un gruppo o una persona.'; return render(); }
+      if (!destinatariScelti().length && !scegli(d.cc.gruppi, d.cc.persone).length) { S.err = 'Scegli almeno un gruppo o una persona.'; return render(); }
       S.sending = true; S.err = ''; render();
       try {
         const r = await api('POST', '/api/messaggi', d);
-        S.draft = { titolo: '', testo: '', importante: false, conferma: true, retroattiva: false, gruppi: [], persone: [] };
-        toast(`Inviata a ${r.destinatari} ${r.destinatari === 1 ? 'persona' : 'persone'}: notifica arrivata a ${r.raggiunti}.${r.senzaNotifiche.length ? ' Senza notifiche: ' + r.senzaNotifiche.join(', ') : ''}`, 7000);
+        S.draft = { titolo: '', testo: '', importante: false, conferma: true, retroattiva: false, gruppi: [], persone: [], cc: { gruppi: [], persone: [] } };
+        S.ccMode = false;
+        toast(`Inviata a ${r.destinatari} ${r.destinatari === 1 ? 'persona' : 'persone'}${r.inCc ? ` + ${r.inCc} in copia` : ''}: notifica arrivata a ${r.raggiunti}.${r.senzaNotifiche.length ? ' Senza notifiche: ' + r.senzaNotifiche.join(', ') : ''}`, 7000);
         S.sending = false; S.dest = null; go('gestisci', r.id);
       } catch (x) { S.sending = false; S.err = x.message; render(); }
     }
@@ -712,7 +747,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && S.
 (async () => {
   try {
     const st = await api('GET', '/api/stato');
-    Object.assign(S, { me: st.me, notif: st.notifiche, links: st.links, eventi: st.eventi });
+    Object.assign(S, { me: st.me, notif: st.notifiche, links: st.links, eventi: st.eventi, figure: st.figure || [] });
   } catch (e) { $('#main').innerHTML = `<div class="empty"><b>${esc(e.message)}</b></div>`; return; }
   const u = new URLSearchParams(location.search), m = u.get('m'), p = u.get('persona');
   S.chatJump = location.hash === '#chat';

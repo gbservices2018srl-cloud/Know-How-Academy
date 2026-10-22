@@ -69,6 +69,9 @@ async function migrate() {
     alter table messaggi add column if not exists versione int not null default 1;
     alter table destinatari add column if not exists aggiunto_dopo boolean not null default false;
     alter table destinatari add column if not exists rivedere boolean not null default false;
+    -- in copia (CC): la ricevono per conoscenza, senza conferma di lettura
+    alter table destinatari add column if not exists cc boolean not null default false;
+    alter table messaggi add column if not exists cc_gruppi jsonb not null default '[]';
   `);
 }
 

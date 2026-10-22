@@ -104,7 +104,7 @@ app.get('/api/stato', needUser, wrap(async (req, res) => {
   const { rows: pr } = await db.q(`select attiva from ${ACC}.notif_prefs where user_id = $1 and app = 'comunicazioni'`, [req.user.id]);
   let eventi = null; // il pulsante Eventi apre il Calendario, se la persona ce l'ha
   try { const store = require('../accessi/lib/store'); const u = await store.getUser(req.user.id); if (u && (await store.appsOf(u)).calendario) eventi = store.APPS.find(a => a.key === 'calendario').url; } catch {}
-  res.json({ me: { id: req.user.id, name: req.user.name, admin: !!req.user.admin }, eventi,
+  res.json({ me: { id: req.user.id, name: req.user.name, admin: !!req.user.admin }, eventi, figure: FIGURE.map(f => ({ id: f.id, nome: f.gruppo })),
     notifiche: { dispositivi: dev[0].n, attiva: pr[0]?.attiva !== false }, links: sso.links() });
 }));
 
@@ -127,7 +127,7 @@ app.get('/api/ricevute', needUser, wrap(async (req, res) => {
   const params = [req.user.id];
   const f = filtroRicerca(req.query.q, params);
   const { rows } = await db.q(`select m.id, m.titolo, left(m.testo, 240) as anteprima, m.importante, m.conferma, m.autore_nome, m.creato_il,
-      m.modificato_il, d.letto_il, d.confermato_il, d.rivedere,
+      m.modificato_il, d.letto_il, d.confermato_il, d.rivedere, d.cc,
       (select count(*)::int from chat c where c.messaggio_id = m.id and c.persona_id = $1 and c.da_admin and not c.letto) as risposte_nuove,
       (select count(*)::int from chat c where c.messaggio_id = m.id and c.persona_id = $1) as messaggi_chat
     from messaggi m join destinatari d on d.messaggio_id = m.id and d.user_id = $1
@@ -138,14 +138,19 @@ app.get('/api/ricevute', needUser, wrap(async (req, res) => {
 app.get('/api/inviate', needAdmin, wrap(async (req, res) => {
   const params = [];
   const f = filtroRicerca(req.query.q, params);
+  // filtro per ruolo: solo le comunicazioni arrivate a quel ruolo, con i conteggi di quel ruolo
+  const ruolo = str(req.query.ruolo, 40);
+  let fr = 'true';
+  if (ruolo) { params.push(ruolo); fr = `d.figura = $${params.length}`; }
   const { rows } = await db.q(`select m.id, m.titolo, left(m.testo, 240) as anteprima, m.importante, m.conferma, m.autore_nome, m.autore_id, m.a_chi, m.creato_il,
       m.retroattiva, m.modificato_il,
-      (select count(*)::int from destinatari d where d.messaggio_id = m.id) as totale,
-      (select count(*)::int from destinatari d where d.messaggio_id = m.id and d.letto_il is not null) as lette,
-      (select count(*)::int from destinatari d where d.messaggio_id = m.id and d.confermato_il is not null) as confermate,
+      (select count(*)::int from destinatari d where d.messaggio_id = m.id and not d.cc and ${fr}) as totale,
+      (select count(*)::int from destinatari d where d.messaggio_id = m.id and d.cc and ${fr}) as in_cc,
+      (select count(*)::int from destinatari d where d.messaggio_id = m.id and not d.cc and d.letto_il is not null and ${fr}) as lette,
+      (select count(*)::int from destinatari d where d.messaggio_id = m.id and not d.cc and d.confermato_il is not null and ${fr}) as confermate,
       (select count(distinct c.persona_id)::int from chat c where c.messaggio_id = m.id) as conversazioni,
       (select count(*)::int from chat c where c.messaggio_id = m.id and not c.da_admin and not c.letto) as domande_nuove
-    from messaggi m where ${f} order by m.creato_il desc limit 300`, params);
+    from messaggi m where ${f} ${ruolo ? `and exists (select 1 from destinatari d where d.messaggio_id = m.id and ${fr})` : ''} order by m.creato_il desc limit 300`, params);
   res.json({ messaggi: rows });
 }));
 
@@ -170,12 +175,12 @@ app.get('/api/messaggi/:id', needUser, wrap(async (req, res) => {
     const d = mine[0];
     if (!d) return bad(res, 404, 'Comunicazione non trovata.');
     if (!d.letto_il) { await db.q('update destinatari set letto_il = now() where messaggio_id = $1 and user_id = $2 and letto_il is null', [m.id, req.user.id]); d.letto_il = new Date(); }
-    const rivedere = d.rivedere; // senza conferma richiesta, riaprirla basta per vedere la modifica
-    if (rivedere && !m.conferma) await db.q('update destinatari set rivedere = false where messaggio_id = $1 and user_id = $2', [m.id, req.user.id]);
+    const rivedere = d.rivedere; // senza conferma richiesta (o in copia), riaprirla basta per vedere la modifica
+    if (rivedere && (!m.conferma || d.cc)) await db.q('update destinatari set rivedere = false where messaggio_id = $1 and user_id = $2', [m.id, req.user.id]);
     await db.q('update chat set letto = true where messaggio_id = $1 and persona_id = $2 and da_admin and not letto', [m.id, req.user.id]);
-    return res.json({ ...base, lettoIl: d.letto_il, confermatoIl: d.confermato_il, rivedere, chat: await chatDi(m.id, req.user.id) });
+    return res.json({ ...base, conferma: m.conferma && !d.cc, cc: d.cc, lettoIl: d.letto_il, confermatoIl: d.confermato_il, rivedere, chat: await chatDi(m.id, req.user.id) });
   }
-  const { rows: dest } = await db.q(`select user_id, nome, figura, sedi, letto_il, confermato_il, aggiunto_dopo from destinatari where messaggio_id = $1 order by nome`, [m.id]);
+  const { rows: dest } = await db.q(`select user_id, nome, figura, sedi, letto_il, confermato_il, aggiunto_dopo, cc from destinatari where messaggio_id = $1 order by cc, nome`, [m.id]);
   const push = await conNotifiche(dest.map(d => d.user_id));
   const { rows: ch } = await db.q(`select id, persona_id, da_admin, autore_nome, testo, creato_il, letto from chat where messaggio_id = $1 order by creato_il`, [m.id]);
   const conv = new Map();
@@ -187,7 +192,7 @@ app.get('/api/messaggi/:id', needUser, wrap(async (req, res) => {
   }
   const { rows: sol } = await db.q('select inviato_il, persone, raggiunte, da from solleciti where messaggio_id = $1 order by inviato_il desc limit 5', [m.id]);
   res.json({ ...base, sonoDestinatario: !!mine[0],
-    destinatari: dest.map(d => ({ id: d.user_id, nome: d.nome, figura: FIG[d.figura]?.gruppo || '', sedi: d.sedi, lettoIl: d.letto_il, confermatoIl: d.confermato_il, notifiche: push.has(d.user_id), aggiuntoDopo: d.aggiunto_dopo })),
+    destinatari: dest.map(d => ({ id: d.user_id, nome: d.nome, figura: FIG[d.figura]?.gruppo || '', sedi: d.sedi, lettoIl: d.letto_il, confermatoIl: d.confermato_il, notifiche: push.has(d.user_id), aggiuntoDopo: d.aggiunto_dopo, cc: d.cc, figuraId: d.figura })),
     conversazioni: [...conv.values()].sort((a, b) => b.nuove - a.nuove), solleciti: sol });
 }));
 // L'amministratore ha aperto le conversazioni: le domande risultano lette
@@ -204,17 +209,21 @@ app.post('/api/messaggi', needAdmin, wrap(async (req, res) => {
   if (!testo) return bad(res, 400, 'Scrivi il testo della comunicazione.');
   const people = await persone();
   const dest = risolvi(people, gruppi, singoli).filter(p => p.id !== req.user.id);
-  if (!dest.length) return bad(res, 400, 'Scegli almeno un gruppo o una persona (oltre a te).');
+  const ccG = arr(req.body.cc?.gruppi, 50), ccP = arr(req.body.cc?.persone, 500);
+  const inCc = risolvi(people, ccG, ccP).filter(p => p.id !== req.user.id && !dest.some(x => x.id === p.id));
+  if (!dest.length && !inCc.length) return bad(res, 400, 'Scegli almeno un gruppo o una persona (oltre a te).');
   const gl = gruppiDi(people);
-  const aChi = [...gruppi.map(g => gl.find(x => x.id === g)?.label).filter(Boolean),
-    ...singoli.map(id => people.find(p => p.id === id)?.nome).filter(Boolean)].join(', ');
+  const etich = (g, s) => [...g.map(k => gl.find(x => x.id === k)?.label).filter(Boolean), ...s.map(id => people.find(p => p.id === id)?.nome).filter(Boolean)].join(', ');
+  const aChi = [etich(gruppi, singoli), inCc.length ? 'CC: ' + etich(ccG, ccP) : ''].filter(Boolean).join(' · ');
   const id = db.newId();
   const client = await db.pool.connect();
   try {
     await client.query('begin');
-    await client.query(`insert into messaggi (id, titolo, testo, importante, conferma, autore_id, autore_nome, a_chi, gruppi, retroattiva)
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, [id, titolo, testo, !!req.body.importante, req.body.conferma !== false, req.user.id, req.user.name, aChi, JSON.stringify(gruppi), !!req.body.retroattiva]);
+    await client.query(`insert into messaggi (id, titolo, testo, importante, conferma, autore_id, autore_nome, a_chi, gruppi, retroattiva, cc_gruppi)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, [id, titolo, testo, !!req.body.importante, req.body.conferma !== false, req.user.id, req.user.name, aChi, JSON.stringify(gruppi), !!req.body.retroattiva, JSON.stringify(ccG)]);
     for (const p of dest) await client.query(`insert into destinatari (messaggio_id, user_id, nome, figura, sedi) values ($1,$2,$3,$4,$5)`,
+      [id, p.id, p.nome, p.figura, p.sedi.join(', ')]);
+    for (const p of inCc) await client.query(`insert into destinatari (messaggio_id, user_id, nome, figura, sedi, cc) values ($1,$2,$3,$4,$5,true)`,
       [id, p.id, p.nome, p.figura, p.sedi.join(', ')]);
     await client.query('commit');
   } catch (e) { await client.query('rollback').catch(() => {}); throw e; } finally { client.release(); }
@@ -223,8 +232,11 @@ app.post('/api/messaggi', needAdmin, wrap(async (req, res) => {
     body: `${corto(testo)}${req.body.conferma !== false ? ' — Conferma la lettura.' : ''}`,
     url: `/?m=${id}`, tag: 'com-' + id,
   });
-  console.log(`Comunicazioni: «${titolo}» inviata a ${dest.length} persone, notifica arrivata a ${raggiunti.size}`);
-  res.json({ id, destinatari: dest.length, raggiunti: raggiunti.size, senzaNotifiche: dest.filter(p => !raggiunti.has(p.id)).map(p => p.nome) });
+  const raggiuntiCc = inCc.length ? await invia(inCc.map(p => p.id), {
+    title: `${req.body.importante ? '❗ ' : ''}In copia: ${titolo}`, body: corto(testo), url: `/?m=${id}`, tag: 'com-' + id }) : new Set();
+  console.log(`Comunicazioni: «${titolo}» inviata a ${dest.length} persone + ${inCc.length} in copia, notifica arrivata a ${raggiunti.size + raggiuntiCc.size}`);
+  const tutti = [...dest, ...inCc], rag = new Set([...raggiunti, ...raggiuntiCc]);
+  res.json({ id, destinatari: dest.length, inCc: inCc.length, raggiunti: rag.size, senzaNotifiche: tutti.filter(p => !rag.has(p.id)).map(p => p.nome) });
 }));
 
 /* ---------- modifica (amministratore): chi l'aveva letta o confermata deve rivederla ---------- */
@@ -239,36 +251,58 @@ app.put('/api/messaggi/:id', needAdmin, wrap(async (req, res) => {
   await db.q(`update messaggi set titolo = $2, testo = $3, importante = $4, conferma = $5, retroattiva = $6,
       modificato_il = case when $7 then now() else modificato_il end, versione = versione + case when $7 then 1 else 0 end where id = $1`,
     [m.id, titolo, testo, importante, conferma, retroattiva, cambiato]);
-  let persone = 0, raggiunti = 0;
+  let avvisate = 0, raggiunti = 0;
   if (cambiato) {
     const { rows } = await db.q(`update destinatari set letto_il = null, confermato_il = null, rivedere = true where messaggio_id = $1 returning user_id`, [m.id]);
-    persone = rows.length;
+    avvisate = rows.length;
     raggiunti = (await invia(rows.map(r => r.user_id), {
       title: `✏️ Comunicazione modificata: ${titolo}`,
       body: conferma ? 'È stata aggiornata: riaprila e conferma di averla vista, oppure chiedi chiarimenti.' : 'È stata aggiornata: riaprila per leggere le modifiche.',
       url: `/?m=${m.id}`, tag: 'com-' + m.id,
     })).size;
-    console.log(`Comunicazioni: «${titolo}» modificata, avvisate ${persone} persone, notifica arrivata a ${raggiunti}`);
+    console.log(`Comunicazioni: «${titolo}» modificata, avvisate ${avvisate} persone, notifica arrivata a ${raggiunti}`);
   }
   let aggiunti = 0;
   if (retroattiva && !m.retroattiva) aggiunti = await allineaRetroattive(null, true, m.id);
-  res.json({ ok: true, cambiato, persone, raggiunti, aggiunti });
+  // persone o gruppi aggiunti in copia (anche a comunicazioni già mandate)
+  const ccG = arr(req.body.cc?.gruppi, 50), ccP = arr(req.body.cc?.persone, 500);
+  let nuoviCc = 0;
+  if (ccG.length || ccP.length) {
+    const people = await persone();
+    const chi = risolvi(people, ccG, ccP).filter(p => p.id !== m.autore_id);
+    const { rows } = await db.q(`insert into destinatari (messaggio_id, user_id, nome, figura, sedi, cc)
+      select $1, x->>'id', x->>'nome', x->>'figura', x->>'sedi', true from jsonb_array_elements($2::jsonb) x
+      on conflict (messaggio_id, user_id) do nothing returning user_id`,
+      [m.id, JSON.stringify(chi.map(p => ({ id: p.id, nome: p.nome, figura: p.figura, sedi: p.sedi.join(', ') })))]);
+    nuoviCc = rows.length;
+    if (ccG.length) await db.q(`update messaggi set cc_gruppi = (select coalesce(jsonb_agg(distinct v), '[]') from jsonb_array_elements(cc_gruppi || $2::jsonb) v) where id = $1`, [m.id, JSON.stringify(ccG)]);
+    if (rows.length) {
+      const gl = gruppiDi(people);
+      const et = [...ccG.map(k => gl.find(x => x.id === k)?.label).filter(Boolean), ...ccP.map(id => people.find(p => p.id === id)?.nome).filter(Boolean)].join(', ');
+      await db.q(`update messaggi set a_chi = a_chi || $2 where id = $1`, [m.id, ' · CC: ' + et]);
+      await invia(rows.map(r => r.user_id), { title: `In copia: ${titolo}`, body: corto(testo), url: `/?m=${m.id}`, tag: 'com-' + m.id });
+    }
+  }
+  res.json({ ok: true, cambiato, persone: avvisate, raggiunti, aggiunti, nuoviCc });
 }));
 
 // Retroattive: chi oggi rientra nei gruppi scelti e non l'ha ancora ricevuta la riceve (mai tolte a nessuno).
 // soloPersona: solo per chi sta aprendo l'app (senza notifica, la vede subito); altrimenti per tutti, con un avviso.
 async function allineaRetroattive(soloPersona = null, avvisa = true, soloMessaggio = null) {
-  const { rows: msgs } = await db.q(`select id, titolo, gruppi, autore_id from messaggi where retroattiva ${soloMessaggio ? 'and id = $1' : ''}`, soloMessaggio ? [soloMessaggio] : []);
+  const { rows: msgs } = await db.q(`select id, titolo, gruppi, cc_gruppi, autore_id from messaggi where retroattiva ${soloMessaggio ? 'and id = $1' : ''}`, soloMessaggio ? [soloMessaggio] : []);
   if (!msgs.length) return 0;
   const people = await persone();
   const nuovi = new Map(); let tot = 0;
   for (const m of msgs) {
-    const chi = risolvi(people, m.gruppi || [], []).filter(p => p.id !== m.autore_id && (!soloPersona || p.id === soloPersona));
+    const princ = risolvi(people, m.gruppi || [], []);
+    const ccSet = new Set(risolvi(people, m.cc_gruppi || [], []).map(p => p.id));
+    const chi = [...princ, ...people.filter(p => ccSet.has(p.id) && !princ.some(x => x.id === p.id))]
+      .filter(p => p.id !== m.autore_id && (!soloPersona || p.id === soloPersona));
     if (!chi.length) continue;
-    const { rows } = await db.q(`insert into destinatari (messaggio_id, user_id, nome, figura, sedi, aggiunto_dopo)
-      select $1, x->>'id', x->>'nome', x->>'figura', x->>'sedi', true from jsonb_array_elements($2::jsonb) x
+    const { rows } = await db.q(`insert into destinatari (messaggio_id, user_id, nome, figura, sedi, aggiunto_dopo, cc)
+      select $1, x->>'id', x->>'nome', x->>'figura', x->>'sedi', true, (x->>'cc')::boolean from jsonb_array_elements($2::jsonb) x
       on conflict (messaggio_id, user_id) do nothing returning user_id`,
-      [m.id, JSON.stringify(chi.map(p => ({ id: p.id, nome: p.nome, figura: p.figura, sedi: p.sedi.join(', ') })))]);
+      [m.id, JSON.stringify(chi.map(p => ({ id: p.id, nome: p.nome, figura: p.figura, sedi: p.sedi.join(', '), cc: !princ.some(x => x.id === p.id) })))]);
     for (const r of rows) { if (!nuovi.has(r.user_id)) nuovi.set(r.user_id, []); nuovi.get(r.user_id).push(m); tot++; }
   }
   if (avvisa) for (const [uid, ms] of nuovi) {
@@ -282,6 +316,13 @@ async function allineaRetroattive(soloPersona = null, avvisa = true, soloMessagg
 
 app.delete('/api/messaggi/:id', needAdmin, wrap(async (req, res) => {
   await db.q('delete from messaggi where id = $1', [req.params.id]);
+  res.json({ ok: true });
+}));
+
+// Una persona passa in copia (non serve più la sua conferma) o torna tra i destinatari principali
+app.post('/api/messaggi/:id/cc', needAdmin, wrap(async (req, res) => {
+  const r = await db.q('update destinatari set cc = $3 where messaggio_id = $1 and user_id = $2', [req.params.id, str(req.body.persona, 80), !!req.body.cc]);
+  if (!r.rowCount) return bad(res, 404, 'Questa persona non è tra i destinatari.');
   res.json({ ok: true });
 }));
 
@@ -322,7 +363,7 @@ app.post('/api/messaggi/:id/chat', needUser, wrap(async (req, res) => {
 app.post('/api/messaggi/:id/sollecita', needAdmin, wrap(async (req, res) => {
   const m = await carica(req.params.id);
   if (!m) return bad(res, 404, 'Comunicazione non trovata.');
-  const { rows } = await db.q(`select user_id, nome from destinatari where messaggio_id = $1 and ${m.conferma ? 'confermato_il is null' : 'letto_il is null'}`, [m.id]);
+  const { rows } = await db.q(`select user_id, nome from destinatari where messaggio_id = $1 and not cc and ${m.conferma ? 'confermato_il is null' : 'letto_il is null'}`, [m.id]);
   if (!rows.length) return res.json({ persone: 0, raggiunte: 0, senzaNotifiche: [] });
   const r = await invia(rows.map(x => x.user_id), {
     title: `Promemoria: ${m.titolo}`,
