@@ -420,7 +420,7 @@ const S = {
   me: null, categories: [], types: [], locations: [], users: [],
   view: 'cal', mode: store.get('mode', 'month'),
   cursor: (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })(),
-  sel: today(), events: [], weeks: {}, range: null, typeFilter: new Set(store.get('types', [])), preview: '',
+  sel: today(), events: [], weeks: {}, range: null, typeFilter: new Set(store.get('types', [])), preview: '', catFilter: store.get('cat', ''), passati: false,
   evFilter: { q: '', when: 'next', type: '', cat: '' }, userFilter: { q: '', cat: '' },
 };
 const isAdmin = () => S.me?.role === 'admin';
@@ -433,6 +433,7 @@ async function loadState() {
   const s = await api('/api/state');
   Object.assign(S, { me: s.me, sso: s.sso || null, categories: s.categories, types: s.types, locations: s.locations, users: s.users || [] });
   for (const id of [...S.typeFilter]) if (!typeOf(id)) S.typeFilter.delete(id);
+  if (S.catFilter && !S.categories.some(c => c.id === S.catFilter)) S.catFilter = '';
 }
 
 /* ============ intestazione ============ */
@@ -492,6 +493,7 @@ const sortEv = (a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : 0) ||
 function shown(e) {
   if (S.typeFilter.size && !S.typeFilter.has(e.typeId)) return false;
   if (S.preview && !(e.allStaff || e.categories.includes(S.preview))) return false;
+  if (S.catFilter && !(e.allStaff || e.categories.includes(S.catFilter))) return false;
   return true;
 }
 const onDay = (d) => S.events.filter(e => e.start <= d && e.end >= d && shown(e)).sort((a, b) => (b.allDay - a.allDay) || (a.start === d ? 0 : -1) - (b.start === d ? 0 : -1) || String(a.startTime || '').localeCompare(String(b.startTime || '')));
@@ -598,16 +600,16 @@ function gridRange() {
 async function renderCal() {
   const main = $('#main');
   const [gs, ge] = gridRange();
-  const agendaEnd = new Date(S.cursor.getFullYear(), S.cursor.getMonth() + 3, 0);
-  const from = ymd(gs), to = ymd(S.mode === 'agenda' ? agendaEnd : ge);
+  // Elenco: tutti gli eventi in programma, senza limite di mesi (e, a richiesta, anche quelli passati)
+  const agendaEnd = addDays(new Date(), 365 * 5), agendaFrom = S.passati ? addDays(new Date(), -365 * 3) : new Date();
+  const from = ymd(S.mode === 'agenda' ? agendaFrom : gs), to = ymd(S.mode === 'agenda' ? agendaEnd : ge);
   const upTo = ymd(addDays(new Date(), 120));
   main.classList.add('loading');
   try { await ensureEvents(from < today() ? from : today(), to > upTo ? to : upTo); }
   catch (e) { main.classList.remove('loading'); main.innerHTML = `<div class="err">${esc(e.message)}</div>`; return; }
   main.classList.remove('loading');
 
-  const title = S.mode === 'agenda'
-    ? `${fmt(S.cursor, { month: 'short' })} – ${fmt(agendaEnd, { month: 'short', year: 'numeric' })}`
+  const title = S.mode === 'agenda' ? (S.passati ? 'Tutti gli eventi' : 'Tutti gli eventi in programma')
     : fmt(S.cursor, { month: 'long', year: 'numeric' });
   const typeChips = S.types.map(t => `<button class="chip c-${t.color} ${S.typeFilter.has(t.id) ? 'on' : ''}" data-type="${t.id}"><span class="dot"></span>${esc(t.name)}</button>`).join('');
   main.innerHTML = `
@@ -617,22 +619,23 @@ async function renderCal() {
     <section>
       <div class="tb">
         <div class="month-nav">
-          <button class="btn icon ghost" data-nav="-1" aria-label="Mese precedente">${ic('prev')}</button>
-          <button class="btn icon ghost" data-nav="1" aria-label="Mese successivo">${ic('next')}</button>
-          <h2>${esc(title)}</h2>
+          ${S.mode === 'agenda' ? '' : `<button class="btn icon ghost" data-nav="-1" aria-label="Mese precedente">${ic('prev')}</button>
+          <button class="btn icon ghost" data-nav="1" aria-label="Mese successivo">${ic('next')}</button>`}
+          <h2 ${S.mode === 'agenda' ? 'style="text-transform:none"' : ''}>${esc(title)}</h2>
         </div>
-        <button class="btn sm" data-nav="0">Oggi</button>
+        ${S.mode === 'agenda' ? `<button class="btn sm" data-passati>${S.passati ? 'Solo quelli in programma' : 'Mostra anche i passati'}</button>` : '<button class="btn sm" data-nav="0">Oggi</button>'}
         <div class="spacer"></div>
         <div class="seg" role="group" aria-label="Vista"><button data-mode="month" class="${S.mode === 'month' ? 'on' : ''}">Mese</button><button data-mode="agenda" class="${S.mode === 'agenda' ? 'on' : ''}">Elenco</button></div>
         ${isAdmin() ? `<button class="btn primary" data-new>${ic('plus')}Nuovo evento</button>` : ''}
       </div>
       <div class="filters">
         ${S.types.length ? `<span class="lbl">Tipo</span>${typeChips}` : ''}
-        ${S.typeFilter.size ? `<button class="btn sm ghost" data-clear>Mostra tutti</button>` : ''}
+        ${S.categories.length ? `<span class="lbl" style="margin-left:6px">Categoria</span><select class="sm" id="catfilter" aria-label="Filtra per categoria" style="width:auto;max-width:220px"><option value="">Tutte</option>${S.categories.map(c => `<option value="${c.id}" ${S.catFilter === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>` : ''}
+        ${S.typeFilter.size || S.catFilter ? `<button class="btn sm ghost" data-clear>Mostra tutti</button>` : ''}
         ${isAdmin() ? `<span class="spacer"></span><label class="preview">${ic('eye')}Vedi come
           <select class="sm" id="preview"><option value="">Amministratore (tutto)</option>${S.categories.map(c => `<option value="${c.id}" ${S.preview === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>` : ''}
       </div>
-      ${S.mode === 'month' ? monthGrid(gs, ge) : agendaList(ymd(S.cursor), ymd(agendaEnd))}
+      ${S.mode === 'month' ? monthGrid(gs, ge) : agendaList(from, to)}
     </section>
     ${S.mode === 'month' ? `<aside class="side">${dayPanel()}${upcomingPanel()}</aside>` : `<aside class="side hide-m">${upcomingPanel(true)}</aside>`}
   </div>`;
@@ -682,7 +685,7 @@ function agendaList(from, to) {
     (days[k] ||= []).push(e);
   }
   const keys = Object.keys(days).sort();
-  if (!keys.length) return `<div class="card empty"><b>Nessun evento</b>In questo periodo non ci sono eventi${S.typeFilter.size || S.preview ? ' con i filtri scelti' : ''}.</div>`;
+  if (!keys.length) return `<div class="card empty"><b>Nessun evento</b>${S.passati ? 'Non ci sono eventi' : 'Non ci sono eventi in programma'}${S.typeFilter.size || S.preview || S.catFilter ? ' con i filtri scelti' : ''}.</div>`;
   const months = {};
   for (const k of keys) (months[k.slice(0, 7)] ||= []).push(k);
   return `<div class="agenda">${Object.entries(months).map(([m, ks]) => `<div class="ag-month card" style="padding:16px 18px">
@@ -707,7 +710,8 @@ $('#main').addEventListener('click', e => {
   if (mode) { S.mode = mode.dataset.mode; store.set('mode', S.mode); return renderCal(); }
   const ty = t.closest('[data-type]');
   if (ty) { const id = ty.dataset.type; S.typeFilter.has(id) ? S.typeFilter.delete(id) : S.typeFilter.add(id); store.set('types', [...S.typeFilter]); return renderCal(); }
-  if (t.closest('[data-clear]')) { S.typeFilter.clear(); store.set('types', []); return renderCal(); }
+  if (t.closest('[data-clear]')) { S.typeFilter.clear(); store.set('types', []); S.catFilter = ''; store.set('cat', ''); return renderCal(); }
+  if (t.closest('[data-passati]')) { S.passati = !S.passati; return renderCal(); }
   const nw = t.closest('[data-new]');
   if (nw) return openForm(null, nw.dataset.new || (S.sel >= today() ? S.sel : today()));
   const wk = t.closest('[data-week]');
@@ -722,7 +726,8 @@ $('#main').addEventListener('click', e => {
     if (matchMedia('(max-width:1060px)').matches) $('#daypanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 });
-$('#main').addEventListener('change', e => { if (e.target.id === 'preview') { S.preview = e.target.value; renderCal(); } });
+$('#main').addEventListener('change', e => { if (e.target.id === 'preview') { S.preview = e.target.value; renderCal(); }
+  if (e.target.id === 'catfilter') { S.catFilter = e.target.value; store.set('cat', S.catFilter); renderCal(); } });
 
 /* ============ finestre ============ */
 const dlg = $('#dlg');
