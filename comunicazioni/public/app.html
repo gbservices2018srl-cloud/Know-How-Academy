@@ -353,7 +353,8 @@ async function load() {
   try {
     if (S.view === 'home') S.ricevute = (await api('GET', '/api/ricevute')).messaggi;
     if (S.view === 'ricevute') S.ricevute = (await api('GET', '/api/ricevute?q=' + encodeURIComponent(S.q.ricevute))).messaggi;
-    if (S.view === 'inviate') S.inviate = (await api('GET', '/api/inviate?q=' + encodeURIComponent(S.q.inviate) + '&ruolo=' + encodeURIComponent(S.ruolo || ''))).messaggi;
+    if (S.view === 'inviate') { const r = await api('GET', '/api/inviate?q=' + encodeURIComponent(S.q.inviate) + '&ruolo=' + encodeURIComponent(S.ruolo || '') + (S.archivio ? '&archivio=1' : ''));
+      S.inviate = r.messaggi; S.altre = r.altre; }
     if ((S.view === 'nuova' || S.view === 'modifica') && !S.dest) S.dest = await api('GET', '/api/destinatari');
     if (S.view === 'leggi') S.cur = await api('GET', `/api/messaggi/${encodeURIComponent(S.id)}`);
     if (S.view === 'gestisci') S.cur = await api('GET', `/api/messaggi/${encodeURIComponent(S.id)}?vista=admin`);
@@ -470,8 +471,11 @@ function vLeggi() {
 /* ============ inviate (amministratore) ============ */
 function vInviate() {
   const list = S.inviate || [], q = S.q.inviate;
-  return `<div class="head"><div style="flex:1 1 260px"><h2 class="view">Comunicazioni inviate</h2>
-    <p>Chi le ha lette e confermate, chi no e chi ha fatto domande.</p></div>
+  return `<div class="head"><div style="flex:1 1 260px"><h2 class="view">${S.archivio ? 'Comunicazioni archiviate' : 'Comunicazioni inviate'}</h2>
+    <p>${S.archivio ? 'Confermate da tutti e senza domande in sospeso. Se arriva una domanda o un nuovo destinatario, tornano tra quelle in corso.' : 'Chi le ha lette e confermate, chi no e chi ha fatto domande. Quelle completate passano da sole in «Archiviate».'}</p>
+    <div class="filters" role="group" aria-label="Sezione" style="margin-top:8px">
+      <button class="fchip ${S.archivio ? '' : 'on'}" data-archivio="0" aria-pressed="${!S.archivio}">In corso${S.archivio ? ` · ${S.altre ?? ''}` : ` · ${list.length}`}</button>
+      <button class="fchip ${S.archivio ? 'on' : ''}" data-archivio="1" aria-pressed="${!!S.archivio}">Archiviate${S.archivio ? ` · ${list.length}` : ` · ${S.altre ?? ''}`}</button></div></div>
     ${cercaBox('inviate', 'Cerca per parola o frase…')}
     <div class="field" style="margin:0;flex:0 1 220px"><label class="sr" for="f-ruolo">Filtra per ruolo</label>
       <select id="f-ruolo" data-ruolo><option value="">Tutti i ruoli</option>${(S.figure || []).map(f => `<option value="${esc(f.id)}" ${S.ruolo === f.id ? 'selected' : ''}>${esc(f.nome)}</option>`).join('')}</select></div>
@@ -666,6 +670,7 @@ document.addEventListener('click', async e => {
   if (b.dataset.open) return go('leggi', b.dataset.open);
   if (b.dataset.gestisci) { S.filtro = 'tutti'; return go('gestisci', b.dataset.gestisci); }
   if (b.dataset.filtro) { S.filtro = b.dataset.filtro; return render(); }
+  if (b.dataset.archivio) { S.archivio = b.dataset.archivio === '1'; return load(); }
   if (b.dataset.ccmode) { S.ccMode = b.dataset.ccmode === '1'; S.pq = ''; return render(); }
   if (b.dataset.gruppo) { const t = bersaglio(), g = t.gruppi, k = b.dataset.gruppo; t.gruppi = g.includes(k) ? g.filter(x => x !== k) : [...g, k]; S.err = ''; return render(); }
   if (b.dataset.aggiungi) { bersaglio().persone.push(b.dataset.aggiungi); S.pq = ''; S.err = ''; render(); $('#n-pq')?.focus(); return; }
