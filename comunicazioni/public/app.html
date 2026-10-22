@@ -254,6 +254,7 @@ const I = {
   apps: '<rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/>',
   out: '<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>',
   trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/>',
   megafono: '<path d="M3 11l18-8v18l-18-8z"/><path d="M7 12v6a2 2 0 0 0 4 0v-4"/>',
   cal: '<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4M8 14.5h3M8 17.5h6"/>',
 };
@@ -296,7 +297,7 @@ const S = {
   q: { ricevute: '', inviate: '' },
   ricevute: null, inviate: null, cur: null,
   dest: null,                  // persone e gruppi (per scrivere)
-  draft: { titolo: '', testo: '', importante: false, conferma: true, gruppi: [], persone: [] },
+  draft: { titolo: '', testo: '', importante: false, conferma: true, retroattiva: false, gruppi: [], persone: [] },
   pq: '', drafts: {},          // ricerca persone, bozze delle risposte in chat
   filtro: 'tutti', sending: false, err: '',
 };
@@ -338,7 +339,8 @@ function bannerNotifiche() {
 /* ============ navigazione ============ */
 function go(view, id = null, persona = null) {
   Object.assign(S, { view, id, persona, err: '' });
-  if (view !== 'leggi' && view !== 'gestisci') S.cur = null;
+  if (view !== 'leggi' && view !== 'gestisci' && view !== 'modifica') S.cur = null;
+  if (view !== 'modifica') S.edit = null;
   const u = new URL(location.href);
   u.search = id ? `?m=${encodeURIComponent(id)}${persona ? '&persona=' + encodeURIComponent(persona) : ''}` : '';
   u.hash = '';
@@ -354,6 +356,8 @@ async function load() {
     if (S.view === 'nuova' && !S.dest) S.dest = await api('GET', '/api/destinatari');
     if (S.view === 'leggi') S.cur = await api('GET', `/api/messaggi/${encodeURIComponent(S.id)}`);
     if (S.view === 'gestisci') S.cur = await api('GET', `/api/messaggi/${encodeURIComponent(S.id)}?vista=admin`);
+    if (S.view === 'modifica' && !S.edit) { S.cur = await api('GET', `/api/messaggi/${encodeURIComponent(S.id)}?vista=admin`);
+      S.edit = { titolo: S.cur.titolo, testo: S.cur.testo, importante: S.cur.importante, conferma: S.cur.conferma, retroattiva: !!S.cur.retroattiva }; }
   } catch (e) {
     if (S.view === 'leggi' && S.me.admin) return go('gestisci', S.id, S.persona);
     $('#main').innerHTML = `<div class="empty"><b>${esc(e.message)}</b><button class="btn" data-go="ricevute">Torna alle comunicazioni</button></div>`;
@@ -373,7 +377,7 @@ async function contatori() {
 
 function render() {
   renderTop();
-  const v = { home: vHome, ricevute: vRicevute, inviate: vInviate, nuova: vNuova, leggi: vLeggi, gestisci: vGestisci }[S.view];
+  const v = { home: vHome, ricevute: vRicevute, inviate: vInviate, nuova: vNuova, leggi: vLeggi, gestisci: vGestisci, modifica: vModifica }[S.view];
   $('#main').innerHTML = v();
   if (S.view === 'leggi' && S.chatJump) { S.chatJump = false; $('#chat')?.scrollIntoView({ block: 'start' }); }
   if (S.view === 'gestisci' && S.persona) document.getElementById('conv-' + S.persona)?.scrollIntoView({ block: 'center' });
@@ -418,6 +422,7 @@ function vRicevute() {
   <div class="list">${list.length ? list.map(m => {
     const nuova = !m.letto_il;
     const stato = m.confermato_il ? '<span class="tag ok">' + ic('check') + 'Confermata</span>'
+      : m.rivedere ? '<span class="tag imp">Modificata: da rivedere</span>'
       : m.conferma ? '<span class="tag todo">Da confermare</span>' : (m.letto_il ? '<span class="tag plain">Letta</span>' : '');
     return `<button class="item ${nuova ? 'nuova' : ''}" data-open="${esc(m.id)}">
       <span class="dot" aria-hidden="true"></span>
@@ -441,12 +446,13 @@ function vLeggi() {
   <article class="card msg">
     ${m.importante ? '<span class="tag imp">Importante</span>' : ''}
     <h2>${esc(m.titolo)}</h2>
-    <div class="meta">Da ${esc(m.autore)} · ${esc(quando(m.creatoIl))}</div>
+    <div class="meta">Da ${esc(m.autore)} · ${esc(quando(m.creatoIl))}${m.modificatoIl ? ` · <b>modificata ${esc(quando(m.modificatoIl))}</b>` : ''}</div>
+    ${m.rivedere ? `<div class="err" role="status" style="margin:10px 0 0">${ic('edit')}Questa comunicazione è stata <b>modificata</b>: rileggila${m.conferma ? ' e conferma di averla vista' : ''}. Se ti serve qualche informazione in più, scrivi qui sotto.</div>` : ''}
     <div class="text">${testoHtml(m.testo)}</div>
   </article>
   <div class="actions">
     ${m.confermatoIl ? `<div class="done">${ic('check')}Hai confermato la lettura ${esc(quando(m.confermatoIl))}</div>`
-      : m.conferma ? `<button class="btn primary big" data-a="conferma">${ic('check')}Confermo di averla ricevuta e letta</button>` : ''}
+      : m.conferma ? `<button class="btn primary big" data-a="conferma">${ic('check')}${m.rivedere ? 'Ho visto la modifica' : 'Confermo di averla ricevuta e letta'}</button>` : ''}
   </div>
   <section class="card chat" id="chat" style="margin-top:14px" aria-labelledby="chat-t">
     <h3 id="chat-t">${ic('chat')} Hai bisogno di chiarimenti?</h3>
@@ -491,7 +497,8 @@ function vGestisci() {
   <article class="card msg">
     ${m.importante ? '<span class="tag imp">Importante</span>' : ''}
     <h2>${esc(m.titolo)}</h2>
-    <div class="meta">Inviata da ${esc(m.autore)} · ${esc(quando(m.creatoIl))} · a ${esc(m.aChi)}${m.conferma ? '' : ' · senza conferma di lettura'}</div>
+    <div class="meta">Inviata da ${esc(m.autore)} · ${esc(quando(m.creatoIl))} · a ${esc(m.aChi)}${m.conferma ? '' : ' · senza conferma di lettura'}${m.retroattiva ? ' · <b>retroattiva</b> (arriva anche a chi entra dopo nei gruppi)' : ''}${m.modificatoIl ? ` · modificata ${esc(quando(m.modificatoIl))}` : ''}</div>
+    <div style="margin-top:10px"><button class="btn sm" data-a="modifica">${ic('edit')}Modifica</button></div>
     <div class="text">${testoHtml(m.testo)}</div>
   </article>
   <div class="stats">
@@ -510,7 +517,7 @@ function vGestisci() {
         const st = x.confermatoIl ? `<span class="tag ok">Confermata</span><small>${esc(quando(x.confermatoIl))}</small>`
           : x.lettoIl ? `<span class="tag todo">${m.conferma ? 'Letta, non confermata' : 'Letta'}</span><small>${esc(quando(x.lettoIl))}</small>`
           : '<span class="tag no">Non ancora aperta</span>';
-        return `<div class="person"><div><div class="n">${esc(x.nome)}</div><small>${esc([x.figura, x.sedi].filter(Boolean).join(' · '))}</small>
+        return `<div class="person"><div><div class="n">${esc(x.nome)}</div><small>${esc([x.figura, x.sedi, x.aggiuntoDopo ? 'arrivata dopo (retroattiva)' : ''].filter(Boolean).join(' · '))}</small>
           ${x.notifiche ? '' : `<span class="nodev">${ic('belloff')}notifiche non attive</span>`}</div><div class="r">${st}</div></div>`;
       }).join('') || '<div class="muted" style="padding:10px 0">Nessuno in questo gruppo.</div>'}
     </section>
@@ -528,6 +535,30 @@ function vGestisci() {
   </div>
   <div style="margin-top:22px;display:flex;justify-content:flex-end">
     <button class="btn danger sm" data-a="elimina">${ic('trash')}Elimina comunicazione</button>
+  </div>`;
+}
+
+/* ============ modifica (amministratore) ============ */
+function vModifica() {
+  const m = S.cur, d = S.edit; if (!m || !d) return '<div class="empty">Caricamento…</div>';
+  const cambia = d.titolo.trim() !== m.titolo || d.testo.trim() !== m.testo;
+  return `<button class="link" data-a="annulla-modifica">${ic('back')}Torna alla comunicazione</button>
+  <div class="head"><div><h2 class="view">Modifica comunicazione</h2><p>Inviata a ${esc(m.aChi)}. I destinatari restano gli stessi.</p></div></div>
+  <div class="form">
+    <section class="card main" aria-label="Testo">
+      <div class="field"><label for="e-titolo">Oggetto</label><input id="e-titolo" data-e="titolo" maxlength="160" value="${esc(d.titolo)}"></div>
+      <div class="field"><label for="e-testo">Testo</label><textarea id="e-testo" data-e="testo" maxlength="10000">${esc(d.testo)}</textarea></div>
+      <label class="check"><input type="checkbox" data-e="conferma" ${d.conferma ? 'checked' : ''}> Chiedi la conferma di lettura</label>
+      <label class="check"><input type="checkbox" data-e="importante" ${d.importante ? 'checked' : ''}> Segna come importante</label>
+      <label class="check"><input type="checkbox" data-e="retroattiva" ${d.retroattiva ? 'checked' : ''}> Rendi retroattiva</label>
+      <div class="muted" style="font-size:13px;margin:-4px 0 0 30px">La riceve anche chi entra dopo nei gruppi scelti. Se la attivi ora, arriva subito a chi oggi è nei gruppi e non l'aveva ricevuta.</div>
+    </section>
+    <section class="card side">
+      <h3 style="margin:0 0 6px;font-size:17px">Cosa succede quando salvi</h3>
+      <p class="muted" style="font-size:14px;margin:0 0 12px">Se cambi l'oggetto o il testo, tutti i ${m.destinatari?.length || ''} destinatari ricevono la notifica «Comunicazione modificata»: la conferma torna da fare e dovranno indicare di averla vista oppure chiedere chiarimenti nella chat. Le conversazioni restano.</p>
+      ${S.err ? `<div class="err" role="alert">${esc(S.err)}</div>` : ''}
+      <button class="btn primary big" data-a="salva-modifica" ${S.sending ? 'disabled' : ''}>${ic('send')}${S.sending ? 'Salvataggio…' : cambia ? 'Salva e avvisa i destinatari' : 'Salva'}</button>
+    </section>
   </div>`;
 }
 
@@ -549,6 +580,8 @@ function vNuova() {
       <div class="field"><label for="n-testo">Testo</label><textarea id="n-testo" data-d="testo" maxlength="10000" placeholder="Scrivi qui la comunicazione…">${esc(d.testo)}</textarea></div>
       <label class="check"><input type="checkbox" data-d="conferma" ${d.conferma ? 'checked' : ''}> Chiedi la conferma di lettura</label>
       <label class="check"><input type="checkbox" data-d="importante" ${d.importante ? 'checked' : ''}> Segna come importante</label>
+      <label class="check"><input type="checkbox" data-d="retroattiva" ${d.retroattiva ? 'checked' : ''}> Rendi retroattiva</label>
+      <div class="muted" style="font-size:13px;margin:-4px 0 0 30px">La riceve anche chi entra dopo nei gruppi scelti (nuovi iscritti, cambio di figura o di sede). Non vale per le singole persone.</div>
     </section>
     <section class="card side" aria-labelledby="n-chi">
       <h3 id="n-chi" style="margin:0 0 4px;font-size:17px">A chi la mandi</h3>
@@ -587,11 +620,13 @@ document.addEventListener('input', e => {
     const pos = t.selectionStart; render(); const n = $(`[data-search="${k}"]`); n.focus(); try { n.setSelectionRange(pos, pos); } catch {} }, 300); }
   if (t.dataset.draft) S.drafts[t.dataset.draft] = t.value;
   if (t.dataset.d === 'titolo' || t.dataset.d === 'testo') S.draft[t.dataset.d] = t.value;
+  if ((t.dataset.e === 'titolo' || t.dataset.e === 'testo') && S.edit) S.edit[t.dataset.e] = t.value;
   if (t.dataset.pq !== undefined) { S.pq = t.value; risultatiPersone(); }
 });
 document.addEventListener('change', e => {
   const t = e.target;
-  if (t.dataset.d === 'conferma' || t.dataset.d === 'importante') S.draft[t.dataset.d] = t.checked;
+  if (['conferma', 'importante', 'retroattiva'].includes(t.dataset.d)) S.draft[t.dataset.d] = t.checked;
+  if (t.dataset.e && S.edit) S.edit[t.dataset.e] = t.type === 'checkbox' ? t.checked : t.value;
 });
 document.addEventListener('click', async e => {
   const b = e.target.closest('button,[data-go]'); if (!b) return;
@@ -623,6 +658,21 @@ document.addEventListener('click', async e => {
       toast(r.persone ? `Promemoria arrivato a ${r.raggiunte} su ${r.persone}.${r.senzaNotifiche.length ? ' Senza notifiche: ' + r.senzaNotifiche.join(', ') : ''}` : 'Nessuno da sollecitare.', 6000);
       await load();
     }
+    if (a === 'modifica') return go('modifica', S.cur.id);
+    if (a === 'annulla-modifica') return go('gestisci', S.id);
+    if (a === 'salva-modifica') {
+      const d = S.edit;
+      if (!d.titolo.trim()) { S.err = 'Scrivi l\'oggetto.'; return render(); }
+      if (!d.testo.trim()) { S.err = 'Scrivi il testo.'; return render(); }
+      S.sending = true; S.err = ''; render();
+      try {
+        const r = await api('PUT', `/api/messaggi/${S.id}`, d);
+        S.sending = false;
+        toast(r.cambiato ? `Modificata: avvisate ${r.persone} persone, notifica arrivata a ${r.raggiunti}.${r.aggiunti ? ` Arrivata anche a ${r.aggiunti} nuove persone (retroattiva).` : ''}`
+          : `Salvata.${r.aggiunti ? ` Arrivata a ${r.aggiunti} nuove persone (retroattiva).` : ''}`, 7000);
+        return go('gestisci', S.id);
+      } catch (x) { S.sending = false; S.err = x.message; return render(); }
+    }
     if (a === 'elimina') {
       if (!b.classList.contains('armed')) { b.classList.add('armed'); b.innerHTML = ic('trash') + 'Tocca di nuovo per eliminarla per tutti'; setTimeout(() => { if (b.isConnected) { b.classList.remove('armed'); b.innerHTML = ic('trash') + 'Elimina comunicazione'; } }, 4000); return; }
       await api('DELETE', `/api/messaggi/${S.cur.id}`); toast('Comunicazione eliminata.'); go('inviate');
@@ -635,7 +685,7 @@ document.addEventListener('click', async e => {
       S.sending = true; S.err = ''; render();
       try {
         const r = await api('POST', '/api/messaggi', d);
-        S.draft = { titolo: '', testo: '', importante: false, conferma: true, gruppi: [], persone: [] };
+        S.draft = { titolo: '', testo: '', importante: false, conferma: true, retroattiva: false, gruppi: [], persone: [] };
         toast(`Inviata a ${r.destinatari} ${r.destinatari === 1 ? 'persona' : 'persone'}: notifica arrivata a ${r.raggiunti}.${r.senzaNotifiche.length ? ' Senza notifiche: ' + r.senzaNotifiche.join(', ') : ''}`, 7000);
         S.sending = false; S.dest = null; go('gestisci', r.id);
       } catch (x) { S.sending = false; S.err = x.message; render(); }
@@ -653,7 +703,7 @@ setInterval(() => {
   if (document.hidden || !S.me) return;
   const a = document.activeElement;
   if (a && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && a.type !== 'checkbox'))) return;
-  if (S.view === 'nuova') return contatori();
+  if (S.view === 'nuova' || S.view === 'modifica') return contatori();
   load();
 }, 30000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && S.me && S.view !== 'nuova') load(); });

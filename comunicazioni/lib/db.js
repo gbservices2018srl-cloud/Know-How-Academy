@@ -63,6 +63,12 @@ async function migrate() {
       raggiunte int not null default 0,
       da text not null default ''
     );
+    -- retroattiva: arriva anche a chi entra dopo nei gruppi scelti; modifiche: chi l'aveva letta deve rivederla
+    alter table messaggi add column if not exists retroattiva boolean not null default false;
+    alter table messaggi add column if not exists modificato_il timestamptz;
+    alter table messaggi add column if not exists versione int not null default 1;
+    alter table destinatari add column if not exists aggiunto_dopo boolean not null default false;
+    alter table destinatari add column if not exists rivedere boolean not null default false;
   `);
 }
 
