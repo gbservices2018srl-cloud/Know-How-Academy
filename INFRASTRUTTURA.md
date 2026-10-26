@@ -8,11 +8,11 @@ Tutte le app sono su **Render** (workspace "Giancarlo's workspace"), il codice �
 | App | Indirizzo | Area admin | Servizio Render | Repository |
 |---|---|---|---|---|
 | Accesso unico (login, registrazione, riquadri delle app) | appgestione.it (www → appgestione.it) | `/admin` → "Gestione accessi" | `appgestione-eu` (lo stesso di Protocolli e Calendario) | `Know-How-Academy`, cartella `accessi/` (la cartella `portale/` è la vecchia pagina statica) |
-| Gestione finanziaria | finanza.appgestione.it (si apre su `/finanziario`) | `/admin` → "Pannello Master" | `APP-Gestione-Finanziaria` (Python, piano Starter, disco 1 GB) | `APP-Gestione-Finanziaria` (codice in `server/`) |
+| Gestione finanziaria | finanza.appgestione.it (si apre su `/finanziario`) | `/admin` → "Pannello Master" | `gestione-finanziaria-eu` (Python, Francoforte, piano Starter, disco 1 GB) | `APP-Gestione-Finanziaria` (codice in `server/`) |
 | Nuovalab (laboratorio) | laboratorio.appgestione.it | `/admin` → accesso, l'area admin si apre col ruolo ADMIN | `App-Nuova-lab` (sito statico, dati su Supabase) | `App-Nuova-lab` |
 | Ticket assistenza | ticket.appgestione.it (si apre su `/ticketassistenza`) | `/admin` → accesso, poi pannello in base al ruolo (super_admin / admin_azienda) | `app-ticket-assistenza` (Next.js, Frankfurt, dati su Supabase) | `app-ticket-assistenza` |
 | Protocolli | protocolli.appgestione.it | `/admin` | `appgestione-eu` (Node, Francoforte) — **lo stesso servizio fa girare anche il Calendario** | `Know-How-Academy` |
-| Calendario eventi | calendario.appgestione.it | `/admin` → accesso | `appgestione-eu` (lo stesso dei Protocolli); il vecchio servizio `calendario-eventi` va eliminato dopo il collegamento | `Know-How-Academy`, cartella `calendario/` (il repository `app-calendario-eventi` non si usa più) |
+| Calendario eventi | calendario.appgestione.it | `/admin` → accesso | `appgestione-eu` (lo stesso dei Protocolli) | `Know-How-Academy`, cartella `calendario/` (il repository `app-calendario-eventi` non si usa più) |
 | Magazzino centrale | magazzino.appgestione.it | stessa app: chi è Amministratore nel pannello accessi vede Richieste, Articoli, Riordino, Fornitori | `appgestione-eu` (lo stesso di Protocolli e Calendario) | `Know-How-Academy`, cartella `magazzino/` |
 | Turni | turni.appgestione.it | stessa app: Amministratore = planning, richieste, personale, regole, sedi, buste paga; Utente = il dipendente (riconosciuto dall'email scritta nella sua scheda) | `appgestione-eu` | `Know-How-Academy`, cartella `turni/` |
 | Radiografia studio | radiografia-studio.onrender.com | — | `radiografia-studio` (Python) | `app-radiografia-studi-dentalia` |
@@ -25,7 +25,7 @@ I vecchi indirizzi `www.appgestione.it/finanziario`, `/ticketassistenza` e `/lab
 |---|---|---|
 | `@` | A | `216.24.57.1` (Render) |
 | `www` | CNAME | `appgestione-eu.onrender.com` |
-| `finanza` | CNAME | `app-gestione-finanziaria.onrender.com` |
+| `finanza` | CNAME | `gestione-finanziaria-eu.onrender.com` |
 | `laboratorio` | CNAME | `app-nuova-lab.onrender.com` |
 | `ticket` | CNAME | `app-ticket-assistenza.onrender.com` |
 | `protocolli` | CNAME | `appgestione-eu.onrender.com` |
@@ -42,7 +42,7 @@ Per ogni nuovo sottodominio: record CNAME su Aruba **e** "Custom Domains" nel se
 **Trasloco Gestione finanziaria (14 ottobre 2026, 08:34–08:41):** dal vecchio `APP-Gestione-Finanziaria` (srv-d9tjv4v40ujc73eh59t0, Oregon, ora `MANUTENZIONE=true`, disco intatto, copia di sicurezza) al nuovo `gestione-finanziaria-eu` (srv-db7h9q2j9qps73cfer40, Francoforte, disco 1 GB su `/var/data`). Copia verificata (impronta, integrità, righe per tabella): 5 tabelle, 9 righe (4 aziende con tutti i loro dati contabili nella colonna `data`). Copia automatica spenta (`COPIA_FORZA=false`, `COPIA_DA=-`, marcatore `.trasloco_ok` sul disco). Dominio `finanza.appgestione.it` spostato sul nuovo servizio (CNAME Aruba → gestione-finanziaria-eu.onrender.com). Il vecchio servizio si elimina solo con l'OK del proprietario. **Stripe in modalità TEST dal 14/10/2026:** sul nuovo servizio `STRIPE_SECRET_KEY` (sk_test della "Sandbox di New business"), `STRIPE_PRICE_ID` = prezzo test 29 €/mese, `STRIPE_WEBHOOK_SECRET` = webhook test verso finanza.appgestione.it/api/stripe/webhook. I valori LIVE sono ancora nelle variabili del vecchio servizio APP-Gestione-Finanziaria: per tornare live ricopiarli da lì (prima di eliminarlo!) e verificare che il webhook live punti a finanza.appgestione.it.
 
 - **`appgestione-db-eu`** (PostgreSQL a pagamento, Francoforte, 1 GB, circa 6,30 $/mese, nessuna scadenza): usato da Protocolli (schema `mappa`), Calendario eventi (`calendario`), Accesso unico (`accessi`), Magazzino (`magazzino`) e Turni (`turni`).
-- **`radiografia-db`** (PostgreSQL gratuito): **scade il 29 ottobre 2026** e viene cancellato con i dati circa 14 giorni dopo, se non si passa a un piano a pagamento.
+- **`radiografia-db`** (Oregon) è passato al piano a pagamento Basic 256 MB; il 26 ottobre 2026 è stato creato anche `radiografia-db-eu` (Francoforte, stesso piano): quando l'app Radiografia userà quello nuovo, il vecchio si può eliminare.
 - Ticket assistenza e Nuovalab usano **Supabase**.
 - Gestione finanziaria salva i dati sul disco del suo servizio (`/var/data`).
 
@@ -54,9 +54,8 @@ Protocolli e Calendario: `ADMIN_USERNAME` / `ADMIN_PASSWORD` nelle impostazioni 
 - Accesso unico acceso il 7 ottobre 2026 (`SSO_ATTIVO=true`; Finanza con `SSO_API_KEY` e `SSO_URL`). Il sito statico `portale-appgestione` non ha più domini e si può eliminare.
 - Resend: dominio appgestione.it verificato e `RESEND_API_KEY` su Render.
 
-- Eliminare il vecchio servizio `calendario-eventi` su Render.
 - Chiave AI per la chat dei Protocolli (`AI_PROVIDER` + chiave Gemini o OpenAI su Render) e nome del modello in `AI_MODEL`.
-- Decidere su `radiografia-db` prima del 29 ottobre.
+- Radiografia: completare il passaggio a `radiografia-db-eu` ed eliminare `radiografia-db` (Oregon).
 
 ## Accesso unico (appgestione.it)
 - Una sola email e password per tutte le app. Chi si registra resta "in attesa"; l'amministratore lo approva da `appgestione.it/admin` e sceglie per ogni app: nessun accesso, Utente o Amministratore.
@@ -157,3 +156,5 @@ App nuova nello stesso servizio: **documenti.appgestione.it** (serve dominio per
 - **Sospendi / riattiva** a gruppi (tutti, figura, sede da Turni) o persone spuntate: `user_apps.sospesa` (il ruolo resta). Per Nuovalab e Ticket la sospensione blocca anche dentro l'app (come togliere l'accesso), la riattivazione lo ridà.
 - Ogni operazione va in `accessi.app_operazioni` con **Annulla**.
 - **Eventi aziendali (ex Calendario) non è più un'app a sé** (`apps.js → segue: 'comunicazioni'`): permesso, ruolo, sospensione, interruttore e notifiche sono quelli di Comunicazioni ed eventi. Le righe `user_apps` del calendario sono copie automatiche (`store.allineaSeguaci`); all'avvio del 16/10 chi aveva il Calendario ha ricevuto Comunicazioni con il ruolo più alto dei due (`fondiSeguaci`, una volta sola). Non compare più nel pannello, nella scheda App né tra gli interruttori delle notifiche.
+
+**Pulizia del 26 ottobre 2026:** eliminati dal proprietario su Render i vecchi servizi in Oregon `APP-Gestione-Finanziaria` (con disco), `mappa-protocolli`, `calendario-eventi` e il database `mappa-protocolli-db`. Prima dell'eliminazione i valori Stripe LIVE sono stati copiati dal proprietario (fuori dal codice); per tornare live vanno messi su `gestione-finanziaria-eu` e il webhook live su Stripe deve puntare a finanza.appgestione.it/api/stripe/webhook.
