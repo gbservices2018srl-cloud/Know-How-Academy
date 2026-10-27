@@ -134,6 +134,8 @@ async function migrate() {
     );
     create index if not exists manutenzioni_sede_idx on manutenzioni(sede_id, eseguita_il desc);
   `);
+  // test delle spore: la foto del risultato dopo l'incubazione si aggiunge a quella iniziale
+  await q('alter table test add column if not exists foto_esito_id text references foto(id) on delete set null');
 }
 
 module.exports = { pool, q, newId, SCHEMA, migrate };

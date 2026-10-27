@@ -220,6 +220,7 @@ dialog.dlg::backdrop{background:rgba(10,30,30,.45);backdrop-filter:blur(2px)}
 </header>
 <main id="main"><div class="empty">Caricamento…</div></main>
 <dialog class="ph" id="ph"><img alt="Foto"><form method="dialog" style="text-align:center;margin-top:8px"><button class="btn">Chiudi</button></form></dialog>
+<input type="file" accept="image/*" capture="environment" id="foto-spore" class="sr" tabindex="-1" aria-hidden="true">
 <dialog class="dlg" id="dlg" aria-label="Manutenzione"></dialog>
 <div class="toast" id="toast" hidden role="status"></div>
 <script>
@@ -397,7 +398,7 @@ function formMacchina() {
 /* ============ la scheda del giorno ============ */
 function testRec(t) {
   const att = t.esito === 'attesa';
-  return `<div class="rec">${fotoBtn(t.fotoId)}<div class="grow">
+  return `<div class="rec">${fotoBtn(t.fotoId)}${t.fotoEsitoId ? fotoBtn(t.fotoEsitoId) : ''}<div class="grow">
     <div><span class="tag ${t.esito === 'ok' ? 'ok' : t.esito === 'ko' ? 'ko' : 'q'}">${ESITO[t.esito]}</span> <b>${NOMI_TEST[t.tipo]}</b></div>
     <div class="meta">${esc(t.operatore)} · ${ora(t.creatoIl)}${t.aggiornatoIl && t.aggiornatoIl !== t.creatoIl && !att ? ' · aggiornato ' + esc(fmtD(t.aggiornatoIl)) : ''}</div>
     ${t.note ? `<div style="margin-top:4px">${esc(t.note)}</div>` : ''}
@@ -409,11 +410,11 @@ function formTest(tipo) {
   return `<div class="testbox">
     <div class="lbl" style="margin-bottom:6px">Esito</div>
     <div class="seg" role="group" aria-label="Esito"><button class="${f.esito === 'ok' ? 'on ok' : ''}" data-esito="ok">${ic('check')} Superato</button><button class="${f.esito === 'ko' ? 'on ko' : ''}" data-esito="ko">${ic('x')} Non superato</button>${tipo === 'spore' ? `<button class="${f.esito === 'attesa' ? 'on att' : ''}" data-esito="attesa">In incubazione</button>` : ''}</div>
-    <div class="lbl" style="margin:12px 0 6px">Foto del foglio del test</div>
+    <div class="lbl" style="margin:12px 0 6px">Foto del foglio del test (obbligatoria)</div>
     ${fotoInput()}
     <div class="field" style="margin-top:12px"><label for="t-note">Note (facoltative)</label><textarea id="t-note" data-f="note" rows="2">${esc(f.note || '')}</textarea></div>
     ${S.err ? `<div class="err" role="alert" style="margin-bottom:10px">${esc(S.err)}</div>` : ''}
-    <div style="display:flex;gap:8px"><button class="btn primary" data-a="salva-test" ${S.busy ? 'disabled' : ''}>${ic('check')}${S.busy ? 'Salvo…' : 'Salva il test'}</button><button class="btn" data-a="annulla-form">Annulla</button></div>
+    <div style="display:flex;gap:8px"><button class="btn primary" data-a="salva-test" ${S.busy || !S.form.foto ? 'disabled' : ''}>${ic('check')}${S.busy ? 'Salvo…' : 'Salva il test'}</button><button class="btn" data-a="annulla-form">Annulla</button></div>
   </div>`;
 }
 const fotoInput = () => `<div class="foto-in">${S.form.foto ? `<img class="thumb lg" src="${S.form.foto}" alt="Foto scattata">` : ''}
@@ -748,7 +749,11 @@ document.addEventListener('click', async e => {
   if (b.dataset.temp && S.form) { S.form.temperatura = +b.dataset.temp; return render(); }
   if (b.dataset.dente && S.udiForm) { const n = +b.dataset.dente, d = S.udiForm.denti; S.udiForm.denti = d.includes(n) ? d.filter(x => x !== n) : [...d, n]; return render(); }
   if (b.dataset.impianto) return go('udivedi', { id: b.dataset.impianto });
-  if (b.dataset.esitoSpore) { try { await api('PUT', 'api/steri/test/' + b.dataset.esitoSpore, { esito: b.dataset.v }); toast('Esito del test delle spore salvato.'); return load(); } catch (x) { return toast(x.message); } }
+  if (b.dataset.esitoSpore) { // l'esito si salva solo con la foto del risultato
+    S.sporeEsito = { id: b.dataset.esitoSpore, v: b.dataset.v };
+    toast('Scatta la foto del risultato del test delle spore.', 3000);
+    return $('#foto-spore').click();
+  }
   if (b.dataset.delTest || b.dataset.delCiclo) {
     if (!confirm('Togliere questa registrazione?')) return;
     try { await api('DELETE', b.dataset.delTest ? 'api/steri/test/' + b.dataset.delTest : 'api/steri/cicli/' + b.dataset.delCiclo); toast('Tolta.'); return load(); } catch (x) { return toast(x.message, 5000); }
@@ -797,7 +802,7 @@ document.addEventListener('click', async e => {
     }
     if (a === 'salva-test') {
       const f = S.form; if (!f.esito) { S.err = 'Scegli l\'esito del test.'; return render(); }
-      if (!f.foto && !confirm('Non hai aggiunto la foto del foglio del test. Salvare lo stesso?')) return;
+      if (!f.foto) { S.err = 'La foto del foglio del test è obbligatoria: scattala per poter salvare.'; return render(); }
       S.busy = true; render();
       try { await api('POST', `api/steri/schede/${S.scheda.id}/test`, { tipo: f.test, esito: f.esito, note: f.note || '', foto: f.foto || null }); }
       catch (x) { S.busy = false; S.form = null; S.err = ''; toast(x.message, 7000); return load(); } // es. già eseguito da un'altra persona
@@ -867,6 +872,12 @@ document.addEventListener('change', async e => {
   if (t.dataset.rf) { S.regF[t.dataset.rf] = t.value; if (t.dataset.rf === 'sede') S.regF.att = ''; return load(); }
   if (t.dataset.f === 'sede' && S.form) S.form.sede = t.value;
   if (t.dataset.u === 'sede' && S.udiForm) S.udiForm.sede = t.value;
+  if (t.id === 'foto-spore' && t.files[0] && S.sporeEsito) {
+    const { id, v } = S.sporeEsito; S.sporeEsito = null;
+    try { const foto = await riduci(t.files[0]); t.value = ''; await api('PUT', 'api/steri/test/' + id, { esito: v, foto }); toast('Esito del test delle spore salvato con la foto.'); load(); }
+    catch (x) { toast(x.message, 6000); }
+    return;
+  }
   if (t.matches('[data-foto-in]') && t.files[0]) { try { S.form.foto = await riduci(t.files[0]); S.form.dubbi = null; render(); } catch (x) { toast(x.message); } }
   if (t.matches('[data-foto-udi]') && t.files[0]) {
     const f = S.udiForm;
