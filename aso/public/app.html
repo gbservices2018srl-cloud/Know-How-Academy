@@ -163,14 +163,32 @@ button.thumbbtn{border:0;padding:0;background:none;border-radius:12px}
 .imp .grow{flex:1;min-width:0}
 .imp .n{font-weight:700;font-size:16px}
 .imp .meta{font-size:13.5px;color:var(--muted);display:flex;gap:4px 12px;flex-wrap:wrap;margin-top:2px}
-.denti-box{border:1px solid var(--line);border-radius:14px;padding:12px;background:var(--surface-2);margin-bottom:12px}
-.denti-schema{overflow-x:auto;padding-bottom:4px}
-.denti-schema .lato{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);min-width:640px}
-.denti-riga{display:flex;gap:4px;min-width:640px;margin:5px 0}
-.denti-riga .mezzo{width:2px;background:var(--fg);margin:0 5px;border-radius:2px}
-.denti-linea{height:2px;background:var(--fg);border-radius:2px;min-width:640px}
-.dente{flex:1 0 34px;height:42px;border-radius:8px;border:1px solid var(--line);background:var(--surface);font-weight:700;font-size:13.5px}
-.dente.on{background:var(--brand-yellow);border:2px solid #8a6a0e;color:#2b2b2f}
+.denti-box{border:1px solid var(--line);border-radius:16px;padding:12px 12px 10px;background:var(--surface);margin-bottom:12px}
+.denti-schema{overflow-x:auto;padding:6px 2px 4px;-webkit-overflow-scrolling:touch}
+.denti-in{min-width:600px;max-width:820px;margin:0 auto}
+.arc{display:flex;gap:2px;align-items:flex-end}.arc.inf{align-items:flex-start}
+.arc .lato{flex:1;display:flex;gap:2px;align-items:inherit}
+.arc .mezzo{width:1.5px;align-self:stretch;background:var(--line);margin:0 3px}
+.occl{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);border-top:1.5px dashed var(--line);margin:6px 0;padding-top:2px}
+.d{border:0;background:none;padding:3px 0;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;border-radius:10px;color:inherit}
+.d:not([disabled]):hover{background:var(--surface-2)}
+.d svg{width:100%;height:auto;max-height:86px;overflow:visible;display:block}
+.d b{font-size:11.5px;font-weight:700;color:var(--muted);padding:0 4px;border-radius:6px;line-height:1.4}
+.d .radice{fill:var(--surface);stroke:color-mix(in srgb,var(--muted) 55%,transparent);stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round}
+.d .corona{fill:var(--surface);stroke:var(--muted);stroke-width:1.8;stroke-linejoin:round;transition:fill .15s}
+.d .vite{fill:none;stroke:var(--accent);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.d:not([disabled]):hover .corona{stroke:var(--accent)}
+.d.on .corona{fill:var(--brand-yellow);stroke:#8a6a0e}
+.d.on b{color:#2b2b2f;background:var(--brand-yellow)}
+.d[disabled]{cursor:default}
+.ql{display:none;flex-basis:100%;font-size:11.5px;font-weight:700;color:var(--muted);margin:2px 0 0}
+@media (max-width:640px){
+  .denti-in{min-width:0}.denti-schema{overflow:visible}
+  .arc,.arc.inf{flex-direction:column;align-items:stretch;gap:10px}
+  .arc .lato{flex-wrap:wrap;align-items:flex-end}.arc.inf .lato{align-items:flex-start}
+  .arc .mezzo,.occl span{display:none}.ql{display:block}
+  .d{transform:none!important}
+}
 .scanbox{border:2px dashed color-mix(in srgb,var(--accent) 45%,var(--line));border-radius:16px;padding:14px;background:color-mix(in srgb,var(--accent-soft) 45%,var(--surface));margin-bottom:12px}
 .toast{position:fixed;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:11px 16px;border-radius:12px;font-weight:600;z-index:50;max-width:92vw;box-shadow:var(--shadow)}
 dialog.ph{border:0;padding:0;background:transparent;max-width:96vw;max-height:94vh}
@@ -511,14 +529,29 @@ function hl(t) {
   return s;
 }
 const SUP = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28], INF = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38];
-function odontogramma(sel) {
-  const riga = arr => arr.map(n => `<button type="button" class="dente ${sel.includes(n) ? 'on' : ''}" data-dente="${n}" aria-pressed="${sel.includes(n)}" aria-label="Dente ${n}">${n}</button>`).join('');
-  return `<div class="denti-box"><div class="lbl" style="margin-bottom:6px">Posizione dell'impianto: tocca il dente</div><div class="denti-schema">
-    <div class="lato"><span>Superiore destra</span><span>Superiore sinistra</span></div>
-    <div class="denti-riga">${riga(SUP.slice(0, 8))}<span class="mezzo"></span>${riga(SUP.slice(8))}</div><div class="denti-linea"></div>
-    <div class="denti-riga">${riga(INF.slice(0, 8))}<span class="mezzo"></span>${riga(INF.slice(8))}</div>
-    <div class="lato"><span>Inferiore destra</span><span>Inferiore sinistra</span></div></div>
-    <div class="muted" style="font-size:13px;margin-top:4px">${sel.length ? 'Scelti: ' + sel.join(', ') : 'Nessun dente scelto'}</div></div>`;
+// Denti stilizzati (arcata superiore: radici in alto; l'inferiore è capovolta). Il dente scelto mostra la vite dell'impianto.
+const DENTI = {
+  inc: { r: 'M15 45C14.5 30 16.5 14 20 4c3.5 10 5.5 26 5 41', c: 'M11 45c-1 11-.3 22 1.5 32 4.5 2 10.5 2 15 0 1.8-10 2.5-21 1.5-32z', w: .95 },
+  can: { r: 'M15 45C14.5 28 16.5 10 20 1c3.5 9 5.5 27 5 44', c: 'M11 45c-1 11 1 22 9 35 8-13 10-24 9-35z', w: 1 },
+  pre: { r: 'M13.5 45c-.5-14 .5-28 3-36 2.2 8 3.2 18 3.5 26 .3-8 1.3-18 3.5-26 2.5 8 3.5 22 3 36', c: 'M10 45c-1.2 12-.3 23 3 31 2.6 2 4.6 1.6 7-1 2.4 2.6 4.4 3 7 1 3.3-8 4.2-19 3-31z', w: 1.05 },
+  mol: { r: 'M8 45c-1-12 0-25 3-34 2.5 8 3.6 17 4 25 .8-9 2.5-18 5-23 2.5 5 4.2 14 5 23 .4-8 1.5-17 4-25 3 9 4 22 3 34', c: 'M5 45c-1.4 12-.6 23 2.5 30 2.8 2.2 5.4 2 8-.6 2.6 2.6 5.4 2.6 9 0 2.6 2.6 5.2 2.8 8 .6 3.1-7 3.9-18 2.5-30z', w: 1.35 },
+};
+const VITE = '<path class="vite" d="M16 45V12.5l4-4 4 4V45"/><path class="vite" d="M15 16.5l10-2.2M15 22.5l10-2.2M15 28.5l10-2.2M15 34.5l10-2.2M15 40.5l10-2.2"/>';
+const tipoDente = n => { const d = n % 10; return d <= 2 ? 'inc' : d === 3 ? 'can' : d <= 5 ? 'pre' : 'mol'; };
+function svgDente(n, on, inf) {
+  const t = DENTI[tipoDente(n)];
+  return `<svg viewBox="0 0 40 84" aria-hidden="true"><g${inf ? ' transform="matrix(1 0 0 -1 0 84)"' : ''}>${on ? VITE : `<path class="radice" d="${t.r}"/>`}<path class="corona" d="${t.c}"/></g></svg>`;
+}
+function odontogramma(sel, ro = false) {
+  const dente = (n, i, inf) => {
+    const k = Math.abs(i - 7.5) - .5, off = (k * k * .3).toFixed(1), on = sel.includes(n);
+    return `<button type="button" class="d ${on ? 'on' : ''}" ${ro ? 'disabled' : `data-dente="${n}"`} aria-pressed="${on}" aria-label="Dente ${n}" style="flex:${DENTI[tipoDente(n)].w};transform:translateY(${inf ? off : -off}px)">${inf ? `<b>${n}</b>` : ''}${svgDente(n, on, inf)}${inf ? '' : `<b>${n}</b>`}</button>`;
+  };
+  const ql = t => `<span class="ql">${t}</span>`;
+  const arc = (arr, inf) => `<div class="arc ${inf ? 'inf' : ''}"><div class="lato">${ql(inf ? 'Inferiore destra' : 'Superiore destra')}${arr.slice(0, 8).map((n, i) => dente(n, i, inf)).join('')}</div><span class="mezzo"></span><div class="lato">${ql(inf ? 'Inferiore sinistra' : 'Superiore sinistra')}${arr.slice(8).map((n, i) => dente(n, i + 8, inf)).join('')}</div></div>`;
+  return `<div class="denti-box">${ro ? '' : '<div class="lbl" style="margin-bottom:4px">Posizione dell\'impianto: tocca il dente (anche più di uno)</div>'}
+    <div class="denti-schema"><div class="denti-in">${arc(SUP, false)}<div class="occl"><span>Destra del paziente</span><span>Sinistra del paziente</span></div>${arc(INF, true)}</div></div>
+    ${ro ? '' : `<div class="muted" style="font-size:13px;margin-top:6px">${sel.length ? 'Scelti: <b style="color:var(--fg)">' + [...sel].sort((a, b) => a - b).join(', ') + '</b>' : 'Nessun dente scelto'}</div>`}</div>`;
 }
 function vUdiForm() {
   const f = S.udiForm, p = S.st.udi;
@@ -567,6 +600,7 @@ function vUdiVedi() {
   <div class="head"><div style="flex:1"><h2 class="view">${esc(r.pazienteCognome)} ${esc(r.pazienteNome)}</h2><p>Intervento del ${esc(fmtD(r.dataIntervento))} · ${esc(r.sede)}</p></div>
     <button class="btn" data-a="modifica-udi">${ic('edit')}Modifica</button></div>
   <div class="grid2" style="gap:14px">
+    ${r.denti.length ? `<section class="card pad" style="grid-column:1/-1"><h3 style="margin-bottom:8px">Posizione</h3>${odontogramma(r.denti, true)}</section>` : ''}
     <section class="card pad"><h3 style="margin-bottom:6px">Intervento</h3>
       ${riga('Posizione', r.denti.length ? (r.denti.length === 1 ? 'Dente ' : 'Denti ') + r.denti.join(', ') : '')}${riga('Medico', esc(r.medico))}${riga('Registrato da', esc(r.operatore) + ' il ' + esc(fmtD(r.creatoIl)))}${riga('Note', esc(r.note))}</section>
     <section class="card pad"><h3 style="margin-bottom:6px">Dispositivo</h3>
