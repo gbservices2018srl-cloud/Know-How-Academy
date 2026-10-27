@@ -160,3 +160,5 @@ App nuova nello stesso servizio: **documenti.appgestione.it** (serve dominio per
 **Pulizia del 26 ottobre 2026:** eliminati dal proprietario su Render i vecchi servizi in Oregon `APP-Gestione-Finanziaria` (con disco), `mappa-protocolli`, `calendario-eventi` e il database `mappa-protocolli-db`. Prima dell'eliminazione i valori Stripe LIVE sono stati copiati dal proprietario (fuori dal codice); per tornare live vanno messi su `gestione-finanziaria-eu` e il webhook live su Stripe deve puntare a finanza.appgestione.it/api/stripe/webhook.
 
 **Stripe LIVE dal 26 ottobre 2026:** il proprietario ha rimesso su `gestione-finanziaria-eu` i valori live (`STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`). Da verificare su Stripe che l'endpoint del webhook live sia https://finanza.appgestione.it/api/stripe/webhook.
+
+**27 ottobre 2026:** `appgestione-eu` passato dal piano gratuito a **Starter** (0.5 CPU, 512 MB, 7 $/mese): non si addormenta più dopo 15 minuti e i lavori automatici (comunicazioni retroattive, allineamento Eventi) girano sempre.
