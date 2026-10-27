@@ -636,27 +636,51 @@ async function attrezzaturaMia(req, id) {
   if (!rows[0] || !sedeOk(req, MT, rows[0].sede_id)) throw fail(404, 'Attrezzatura non trovata.');
   return rows[0];
 }
+// Riuniti e aspiratori si definiscono in Gestione accessi › Sedi (numero e nomi): qui si allineano da soli.
+// Ognuno è legato alla sua posizione nella sede (Riunito 1, 2… / Aspiratore 1…): se lo rinomini il registro resta collegato;
+// se la sede ne ha uno in meno, quello sparisce dalla dashboard ma le manutenzioni già registrate restano.
+let allineatoIl = 0;
+async function allineaAttrezzature(forza = false) {
+  if (!forza && Date.now() - allineatoIl < 20000) return;
+  allineatoIl = Date.now();
+  const sedi = await store.listSedi();
+  const { rows } = await db.q('select * from attrezzature');
+  for (const sd of sedi) {
+    const voluti = sd.attiva ? [...(sd.riunitiNomi || []).map((nome, i) => ({ rif: 'r' + (i + 1), tipo: 'riunito', nome })),
+      ...(sd.aspiratori || []).map((nome, i) => ({ rif: 'a' + (i + 1), tipo: 'aspiratore', nome }))] : [];
+    const qui = rows.filter(r => r.sede_id === sd.id);
+    for (const w of voluti) {
+      // già collegato, oppure uno aggiunto a mano prima con lo stesso nome (si collega e non si duplica)
+      const r = qui.find(x => x.rif === w.rif) || qui.find(x => !x.rif && x.tipo === w.tipo && x.nome.trim().toLowerCase() === w.nome.trim().toLowerCase());
+      if (r) {
+        if (r.rif !== w.rif || r.nome !== w.nome || !r.attiva || r.sede_nome !== sd.nome) {
+          await db.q('update attrezzature set rif = $2, nome = $3, attiva = true, sede_nome = $4 where id = $1', [r.id, w.rif, w.nome, sd.nome]);
+          Object.assign(r, { rif: w.rif, nome: w.nome, attiva: true });
+        }
+      } else {
+        const id = db.newId();
+        await db.q('insert into attrezzature (id, sede_id, sede_nome, tipo, nome, rif) values ($1,$2,$3,$4,$5,$6)', [id, sd.id, sd.nome, w.tipo, w.nome, w.rif]);
+        rows.push({ id, sede_id: sd.id, tipo: w.tipo, nome: w.nome, rif: w.rif, attiva: true });
+      }
+    }
+    for (const r of qui.filter(x => x.rif && x.attiva && !voluti.some(w => w.rif === x.rif)))
+      await db.q('update attrezzature set attiva = false where id = $1', [r.id]);
+  }
+}
+store.events.on('sedi', () => allineaAttrezzature(true).catch(e => console.warn('ASO attrezzature:', e.message)));
 app.get('/api/man/attrezzature', needUser, need(MT), wrap(async (req, res) => {
+  await allineaAttrezzature();
   const p = permDi(req, MT);
   const { rows } = await db.q(`select a.*,
       (select json_object_agg(x.voce, json_build_object('il', x.il, 'chi', x.chi)) from (
         select distinct on (m.voce) m.voce, m.eseguita_il as il, m.operatore_nome as chi from manutenzioni m
         where m.attrezzatura_id = a.id order by m.voce, m.eseguita_il desc) x) as ultime
-    from attrezzature a where a.sede_id = any($1) and a.attiva order by a.sede_nome, a.tipo desc, a.nome`, [p.sedi.map(s => s.id)]);
+    from attrezzature a where a.sede_id = any($1) and a.attiva order by a.sede_nome, a.tipo desc, coalesce(length(a.rif), 9), a.rif, a.nome`, [p.sedi.map(s => s.id)]);
   res.json({ admin: p.admin, attrezzature: rows.map(a => ({ id: a.id, sedeId: a.sede_id, sede: p.sedi.find(s => s.id === a.sede_id)?.nome || a.sede_nome,
-    tipo: a.tipo, nome: a.nome, ultime: a.ultime || {} })) });
+    tipo: a.tipo, nome: a.nome, daSedi: !!a.rif, ultime: a.ultime || {} })), sedi: accessi.publicUrl() + '/admin' });
 }));
-app.post('/api/man/attrezzature', needUser, need(MT), wrap(async (req, res) => {
-  if (!adminMT(req)) return bad(res, 403, 'Solo l\'amministratore aggiunge le attrezzature.');
-  const sede = sedeOk(req, MT, str(req.body.sede, 80));
-  if (!sede) return bad(res, 400, 'Scegli la sede.');
-  const tipo = str(req.body.tipo, 12), nome = str(req.body.nome, 80);
-  if (!VOCI[tipo]) return bad(res, 400, 'Scegli se è un riunito o un aspiratore.');
-  if (!nome) return bad(res, 400, 'Scrivi il nome.');
-  const id = db.newId();
-  await db.q('insert into attrezzature (id, sede_id, sede_nome, tipo, nome) values ($1,$2,$3,$4,$5)', [id, sede.id, sede.nome, tipo, nome]);
-  res.json({ id });
-}));
+// Non si aggiungono più da qui: riuniti e aspiratori vengono dalle Sedi (niente doppio inserimento)
+app.post('/api/man/attrezzature', needUser, need(MT), (req, res) => bad(res, 410, 'Riuniti e aspiratori si aggiungono in Gestione accessi › Sedi.'));
 app.put('/api/man/attrezzature/:id', needUser, need(MT), wrap(async (req, res) => {
   if (!adminMT(req)) return bad(res, 403, 'Solo l\'amministratore modifica le attrezzature.');
   const a = await attrezzaturaMia(req, req.params.id);

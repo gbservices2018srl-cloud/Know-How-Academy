@@ -81,6 +81,19 @@ dialog form{padding:22px;display:flex;flex-direction:column;gap:14px}
 .row{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
 .linkbox{display:flex;gap:8px}
 .linkbox input{font-size:13.5px}
+/* riuniti e aspiratori delle sedi */
+.attr{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.at{display:inline-flex;align-items:center;gap:5px;font:600 12.5px var(--f-body);padding:3px 9px 3px 6px;border-radius:999px;background:color-mix(in srgb,var(--teal) 12%,var(--surface));color:var(--teal-ink)}
+.at.a{background:color-mix(in srgb,#8C6898 14%,var(--surface));color:#6b4d78}
+.at svg,.ai svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:3.4;stroke-linecap:round;stroke-linejoin:round}
+.attr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.attr-ed{border:1px solid var(--line);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.attr-h{display:flex;align-items:center;gap:8px}.attr-h b{flex:1}
+.ai{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:color-mix(in srgb,var(--teal) 12%,transparent);color:var(--teal-ink)}.ai svg{width:20px;height:20px}
+.stepper{display:inline-flex;align-items:center;gap:6px}.stepper output{min-width:20px;text-align:center;font-weight:800}
+.stepper .btn{min-width:34px;padding:0}
+.attr-n{display:flex;align-items:center;gap:8px}.attr-n span{width:18px;font-size:12px;color:var(--muted);text-align:right}
+.attr-n input{flex:1;min-width:0;border:1px solid var(--line);border-radius:9px;padding:7px 10px;font:inherit;background:var(--surface)}
 /* sezione Accensione app */
 .acc-sum{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .acc-pill{font:700 13px var(--f-body);padding:6px 12px;border-radius:999px;background:color-mix(in srgb,var(--ok) 14%,var(--surface));color:var(--ok)}
@@ -368,25 +381,50 @@ function renderSedi() {
   const box = $('#sediBox');
   const righe = (SEDI || []).map(x => `<div class="sede ${x.attiva ? '' : 'off'}"><span class="sigla">${esc(x.sigla)}</span>
     <div style="min-width:0"><b>${esc(x.nome)}</b>${x.attiva ? '' : ' <span class="pill disabled">Disattivata</span>'}
-      <div class="meta">${[x.societa, x.indirizzo, x.email, x.riuniti + (x.riuniti === 1 ? ' riunito' : ' riuniti')].filter(Boolean).map(esc).map(t => `<span>${t}</span>`).join('')}</div></div>
+      <div class="meta">${[x.societa, x.indirizzo, x.email].filter(Boolean).map(esc).map(t => `<span>${t}</span>`).join('')}</div>
+      <div class="attr">${(x.riunitiNomi || []).map(n => `<span class="at r">${ICO_RIU}${esc(n)}</span>`).join('')}${(x.aspiratori || []).map(n => `<span class="at a">${ICO_ASP}${esc(n)}</span>`).join('')}${!(x.riunitiNomi || []).length && !(x.aspiratori || []).length ? '<span class="muted" style="font-size:13px">Nessun riunito o aspiratore</span>' : ''}</div></div>
     <div class="actions"><button class="btn small" data-sede-edit="${x.id}">Modifica</button><button class="btn small" data-sede-stato="${x.id}">${x.attiva ? 'Disattiva' : 'Riattiva'}</button></div></div>`).join('');
-  box.innerHTML = `<div class="tools"><p class="hint" style="flex:1 1 300px">Le sedi del gruppo valgono per tutte le app: si copiano da sole in Turni (con i riuniti), Calendario (luoghi degli eventi), Ticket (studi, con la società) e Nuovalab (studi, serve l'email della sede).</p>
+  box.innerHTML = `<div class="tools"><p class="hint" style="flex:1 1 300px">Le sedi del gruppo valgono per tutte le app: si copiano da sole in Turni (con i riuniti), Manutenzione attrezzature (riuniti e aspiratori con il loro nome), Calendario (luoghi degli eventi), Ticket (studi, con la società) e Nuovalab (studi, serve l'email della sede).</p>
       <button class="btn" data-sede-sync>Aggiorna le app</button><button class="btn primary" data-sede-new>+ Nuova sede</button></div>
     ${SEDI && !SEDI.length ? `<div class="card empty">Nessuna sede ancora. <button class="btn small primary" data-sede-import style="margin-left:8px">Importa le sedi già presenti in Nuovalab e Ticket</button></div>` : `<div class="card" style="padding:0">${righe || '<div class="empty">Caricamento…</div>'}</div>`}`;
 }
+// riuniti e aspiratori della sede: quanti sono e come si chiamano (li legge Manutenzione attrezzature)
+const ICO_RIU = '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M13.5 17.5l3.6-.8 4.6 17.8-4.4 1z"/><path d="M19 36.5h22.5l11 8.5"/><path d="M30 40.5v11M21 54h18"/><path d="M38 6.5h15.5v7"/></svg>';
+const ICO_ASP = '<svg viewBox="0 0 64 64" aria-hidden="true"><rect x="14" y="18" width="30" height="36" rx="4"/><path d="M20 18v-5a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v5"/><circle cx="29" cy="40" r="6.5"/><path d="M44 24h6a4 4 0 0 1 4 4v14"/></svg>';
+let ATTR = { riu: [], asp: [] };
+function attrHtml() {
+  const lista = (k, ico, label, def, max) => `<div class="attr-ed"><div class="attr-h"><span class="ai">${ico}</span><b>${label}</b>
+      <span class="stepper"><button type="button" class="btn small" data-attr-meno="${k}" aria-label="Uno in meno" ${ATTR[k].length ? '' : 'disabled'}>−</button><output>${ATTR[k].length}</output><button type="button" class="btn small" data-attr-piu="${k}" aria-label="Uno in più" ${ATTR[k].length >= max ? 'disabled' : ''}>+</button></span></div>
+    ${ATTR[k].map((n, i) => `<label class="attr-n"><span>${i + 1}</span><input data-attr="${k}" data-i="${i}" value="${esc(n)}" maxlength="60" placeholder="${def} ${i + 1}" aria-label="Nome ${def.toLowerCase()} ${i + 1}"></label>`).join('')}</div>`;
+  return `<div class="attr-grid">${lista('riu', ICO_RIU, 'Riuniti', 'Riunito', 20)}${lista('asp', ICO_ASP, 'Aspiratori', 'Aspiratore', 10)}</div>
+    <p class="hint" style="margin:6px 0 10px">Dai un nome a ognuno (es. «Sala blu», «Aspiratore Cattani»): compaiono così in Manutenzione attrezzature. Il numero dei riuniti vale anche per i Turni.</p>`;
+}
+function leggiAttr() { document.querySelectorAll('[data-attr]').forEach(el => { ATTR[el.dataset.attr][+el.dataset.i] = el.value; }); }
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-attr-piu],[data-attr-meno]'); if (!t) return;
+  leggiAttr();
+  if (t.dataset.attrPiu) { const k = t.dataset.attrPiu; ATTR[k].push(`${k === 'riu' ? 'Riunito' : 'Aspiratore'} ${ATTR[k].length + 1}`); }
+  else { const k = t.dataset.attrMeno; const ult = ATTR[k][ATTR[k].length - 1];
+    if (!confirm(`Togliere «${ult}»? Le manutenzioni già registrate restano nel registro.`)) return; ATTR[k].pop(); }
+  $('#attrBox').innerHTML = attrHtml();
+});
 const avvisiSedi = (r, ok) => r.avvisi?.length ? toast(r.avvisi.join(' · ')) : toast(ok);
 function apriSede(x) {
-  const v = x || { nome: '', sigla: '', indirizzo: '', societa: '', email: '', riuniti: 2 };
+  const v = x || { nome: '', sigla: '', indirizzo: '', societa: '', email: '', riuniti: 2, riunitiNomi: ['Riunito 1', 'Riunito 2'], aspiratori: ['Aspiratore 1'] };
+  ATTR = { riu: [...(v.riunitiNomi || [])], asp: [...(v.aspiratori || [])] };
   const soc = [...new Set((SEDI || []).map(s => s.societa).filter(Boolean))];
   open(`<h2>${x ? 'Modifica sede' : 'Nuova sede'}</h2>
     <div class="two"><label class="field">Nome<input id="s-nome" value="${esc(v.nome)}" maxlength="80" placeholder="es. To Smile Cabras" required></label>
     <label class="field">Sigla<input id="s-sigla" value="${esc(v.sigla)}" maxlength="3" style="text-transform:uppercase" placeholder="es. CAB" required></label></div>
     <label class="field">Indirizzo<input id="s-ind" value="${esc(v.indirizzo)}" maxlength="200"></label>
     <div class="two"><label class="field">Società<input id="s-soc" value="${esc(v.societa)}" maxlength="80" list="soc-list"><datalist id="soc-list">${soc.map(t => `<option value="${esc(t)}">`).join('')}</datalist></label>
-    <label class="field">Riuniti<input id="s-riu" type="number" min="0" max="20" value="${esc(v.riuniti)}"></label></div>
+    <span></span></div>
+    <div id="attrBox">${attrHtml()}</div>
     <label class="field">Email della sede <small class="muted" style="font-weight:500">serve a Nuovalab</small><input id="s-email" type="email" value="${esc(v.email)}" maxlength="160"></label>
     ${footer(x ? 'Salva e aggiorna le app' : 'Crea e copia nelle app')}`, async () => {
-    const body = { nome: val('s-nome'), sigla: val('s-sigla'), indirizzo: val('s-ind'), societa: val('s-soc'), riuniti: val('s-riu'), email: val('s-email') };
+    leggiAttr();
+    const body = { nome: val('s-nome'), sigla: val('s-sigla'), indirizzo: val('s-ind'), societa: val('s-soc'), email: val('s-email'),
+      riuniti: ATTR.riu.length, riunitiNomi: ATTR.riu, aspiratoriN: ATTR.asp.length, aspiratori: ATTR.asp };
     const r = await api(x ? 'PUT' : 'POST', x ? '/api/admin/sedi/' + x.id : '/api/admin/sedi', body);
     SEDI = r.sedi; renderSedi(); dlg.close(); avvisiSedi(r, x ? 'Sede aggiornata in tutte le app' : 'Sede creata in tutte le app');
   });

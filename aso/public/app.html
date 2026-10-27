@@ -368,7 +368,7 @@ async function load() {
     if (S.view === 'steri' || S.view === 'home') { if (S.st.sterilizzazione && !S.st.sterilizzazione.spenta) S.macchine = (await api('GET', 'api/steri/macchine')).macchine; }
     if (S.view === 'scheda') S.scheda = await api('GET', 'api/steri/schede/' + encodeURIComponent(S.id));
     if (S.view === 'storico') S.storico = (await api('GET', 'api/steri/storico?macchina=' + encodeURIComponent(S.id))).schede;
-    if (S.view === 'man' || S.view === 'manreg' || (S.view === 'home' && S.st.manutenzione && !S.st.manutenzione.spenta)) S.att = (await api('GET', 'api/man/attrezzature')).attrezzature;
+    if (S.view === 'man' || S.view === 'manreg' || (S.view === 'home' && S.st.manutenzione && !S.st.manutenzione.spenta)) { const r = await api('GET', 'api/man/attrezzature'); S.att = r.attrezzature; S.attLink = r.sedi; }
     if (S.view === 'manreg') { const f = S.regF; S.reg = (await api('GET', 'api/man/registro?' + new URLSearchParams({ sede: f.sede || '', attrezzatura: f.att || '', da: f.da || '', a: f.a || '' }))).righe; }
     if (S.view === 'udi') S.paz = (await api('GET', 'api/udi/pazienti?q=' + encodeURIComponent(S.q) + (S.sede ? '&sede=' + encodeURIComponent(S.sede) : ''))).pazienti;
     if (S.view === 'paz') { S.pz = await api('GET', 'api/udi/pazienti/' + encodeURIComponent(S.id)); if (!S.medici) api('GET', 'api/udi/medici').then(r => S.medici = r.medici).catch(() => {}); }
@@ -773,29 +773,14 @@ function vMan() {
   return `<div class="head"><div style="flex:1 1 260px"><h2 class="view">Manutenzione attrezzature</h2><p>Tocca un riunito o l'aspiratore, spunta cosa hai fatto e conferma: resta nel registro con il tuo nome, la data e l'ora.</p></div>
     ${p.sedi.length > 1 ? `<div class="field" style="margin:0;flex:0 1 220px"><label for="m-sedef" class="sr">Sede</label><select id="m-sedef" data-sede><option value="">Tutte le sedi</option>${p.sedi.map(s => `<option value="${esc(s.id)}" ${S.sede === s.id ? 'selected' : ''}>${esc(s.nome)}</option>`).join('')}</select></div>` : ''}
     <button class="btn" data-go="manreg">${ic('reg')}Registro</button>
-    ${p.admin ? `<button class="btn" data-a="gestisci-att">${ic('edit')}Riuniti e aspiratori</button>` : ''}</div>
-  ${S.attForm ? formAtt() : ''}
+    ${p.admin ? `<a class="btn" href="${esc(S.attLink || '/admin')}" title="Si impostano in Gestione accessi › Sedi">${ic('edit')}Riuniti e aspiratori</a>` : ''}</div>
+  ${p.admin && list.some(a => !a.daSedi) ? `<div class="card pad" style="margin-bottom:14px;background:var(--warn-soft);border-color:transparent"><b style="color:var(--warn)">Da sistemare</b>
+    <p style="margin:4px 0 8px;font-size:14px">Questi sono stati aggiunti a mano prima e non sono nelle Sedi. Mettili in <a href="${esc(S.attLink || '/admin')}">Gestione accessi › Sedi</a> con lo stesso nome (il registro si collega da solo) oppure toglili.</p>
+    ${list.filter(a => !a.daSedi).map(a => `<div class="rec" style="align-items:center;padding:6px 0"><div class="grow"><b>${esc(a.nome)}</b> <span class="meta">${a.tipo === 'riunito' ? 'Riunito' : 'Aspiratore'} · ${esc(a.sede)}</span></div><button class="btn sm danger" data-togli-att="${esc(a.id)}">${ic('trash')}Togli</button></div>`).join('')}</div>` : ''}
   ${!p.sedi.length ? '<div class="card empty"><b>Nessuna sede assegnata</b>Chiedi all\'amministratore di assegnarti la tua sede in Gestione accessi.</div>'
     : vis.length ? Object.entries(perSede).map(([sede, as]) => `${p.sedi.length > 1 ? `<div class="sede-h">${esc(sede)}</div>` : ''}<div class="att-grid">${as.map(a =>
       `<button class="att" style="--ac:${AC[a.tipo]}" data-att="${esc(a.id)}"><span class="art">${ART[a.tipo]}</span><span class="kind">${a.tipo === 'riunito' ? 'Riunito' : 'Aspiratore'}</span><span class="nm">${esc(a.nome)}</span><span class="last">${ultimaDi(a)}</span></button>`).join('')}</div>`).join('')
-    : `<div class="card empty"><b>Nessun riunito o aspiratore${S.sede ? ' in questa sede' : ''}</b>${p.admin ? 'Aggiungili con «Riuniti e aspiratori».' : 'L\'amministratore deve ancora inserirli per la tua sede.'}</div>`}`;
-}
-function formAtt() {
-  const f = S.attForm, p = S.st.manutenzione, list = (S.att || []).filter(a => !S.sede || a.sedeId === S.sede);
-  return `<section class="card pad" style="margin-bottom:16px"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px"><h3>Riuniti e aspiratori</h3><button class="btn sm" data-a="chiudi-att">Chiudi</button></div>
-    ${list.map(a => `<div class="rec" style="align-items:center"><span style="width:40px;height:40px;color:${AC[a.tipo]};flex:none">${ART[a.tipo]}</span>
-      <div class="grow"><input class="sr" aria-hidden="true"><div class="field" style="margin:0"><label class="sr" for="rn-${esc(a.id)}">Nome</label><input id="rn-${esc(a.id)}" data-rinomina="${esc(a.id)}" value="${esc(a.nome)}"></div>
-      <div class="meta">${a.tipo === 'riunito' ? 'Riunito' : 'Aspiratore'} · ${esc(a.sede)}</div></div>
-      <button class="btn sm" data-salva-nome="${esc(a.id)}">${ic('check')}Salva</button><button class="btn sm danger" data-togli-att="${esc(a.id)}" aria-label="Togli">${ic('trash')}</button></div>`).join('')}
-    <div class="testbox" style="margin-top:12px"><div class="lbl" style="margin-bottom:8px">Aggiungi</div>
-      <div class="grid2">
-        <div class="field"><label for="na-sede">Sede</label><select id="na-sede" data-af="sede">${p.sedi.map(s => `<option value="${esc(s.id)}" ${f.sede === s.id ? 'selected' : ''}>${esc(s.nome)}</option>`).join('')}</select></div>
-        <div class="field"><span class="lbl">Tipo</span><div class="seg" role="group" aria-label="Tipo"><button class="${f.tipo === 'riunito' ? 'on' : ''}" data-atipo="riunito">Riunito</button><button class="${f.tipo === 'aspiratore' ? 'on' : ''}" data-atipo="aspiratore">Aspiratore</button></div></div>
-        <div class="field"><label for="na-nome">Nome</label><input id="na-nome" data-af="nome" value="${esc(f.nome || '')}" placeholder="${f.tipo === 'riunito' ? 'Es. Riunito 1, Sala blu' : 'Es. Aspiratore Cattani'}"></div>
-      </div>
-      ${S.err ? `<div class="err" role="alert" style="margin-bottom:10px">${esc(S.err)}</div>` : ''}
-      <button class="btn primary" data-a="aggiungi-att">${ic('plus')}Aggiungi</button></div>
-  </section>`;
+    : `<div class="card empty"><b>Nessun riunito o aspiratore${S.sede ? ' in questa sede' : ''}</b>${p.admin ? `Impostali in <a href="${esc(S.attLink || '/admin')}">Gestione accessi › Sedi</a>: numero e nome di riuniti e aspiratori.` : 'L\'amministratore deve ancora impostarli per la tua sede in Gestione accessi › Sedi.'}</div>`}`;
 }
 function apriAtt(id) {
   const a = S.att.find(x => x.id === id); if (!a) return;
@@ -901,8 +886,6 @@ document.addEventListener('click', async e => {
   }
   if (b.dataset.att) return apriAtt(b.dataset.att);
   if (b.dataset.esporta) return apriEsporta(b.dataset.esporta);
-  if (b.dataset.atipo && S.attForm) { S.attForm.tipo = b.dataset.atipo; return render(); }
-  if (b.dataset.salvaNome) { try { await api('PUT', 'api/man/attrezzature/' + b.dataset.salvaNome, { nome: document.querySelector(`[data-rinomina="${b.dataset.salvaNome}"]`).value }); toast('Nome salvato.'); return load(); } catch (x) { return toast(x.message); } }
   if (b.dataset.togliAtt) { if (!confirm('Togliere questa attrezzatura dalla dashboard? Il registro delle manutenzioni già fatte resta.')) return;
     try { await api('PUT', 'api/man/attrezzature/' + b.dataset.togliAtt, { attiva: false }); toast('Tolta.'); return load(); } catch (x) { return toast(x.message); } }
   if (b.dataset.regMod) { const r = S.reg.find(x => x.id === b.dataset.regMod); S.regEdit = { id: r.id, voce: r.voce, note: r.note, quando: locDT(r.eseguitaIl) }; return render(); }
@@ -940,10 +923,6 @@ document.addEventListener('click', async e => {
     }
   }
   try {
-    if (a === 'gestisci-att') { S.attForm = { sede: S.sede || S.st.manutenzione.sedi[0]?.id || '', tipo: 'riunito', nome: '' }; S.err = ''; return render(); }
-    if (a === 'chiudi-att') { S.attForm = null; S.err = ''; return render(); }
-    if (a === 'aggiungi-att') { const f = S.attForm; if (!(f.nome || '').trim()) { S.err = 'Scrivi il nome.'; return render(); }
-      await api('POST', 'api/man/attrezzature', f); S.attForm = { ...f, nome: '' }; S.err = ''; toast('Aggiunto.'); return load(); }
     if (a === 'reg-annulla') { S.regEdit = null; return render(); }
     if (a === 'reg-salva') { const e = S.regEdit; await api('PUT', 'api/man/registro/' + e.id, { voce: e.voce, note: e.note, eseguitaIl: new Date(e.quando).toISOString() }); S.regEdit = null; toast('Correzione salvata.'); return load(); }
     if (a === 'stampa') return window.print();

@@ -645,16 +645,21 @@ function leggiSede(b) {
   const email = store.cleanEmail(b.email || '');
   if (email && !store.validEmail(email)) throw Object.assign(new Error("L'email della sede non è valida."), { status: 400 });
   const riuniti = Math.max(0, Math.min(20, Math.round(+b.riuniti || 0)));
-  return { nome, sigla, indirizzo: String(b.indirizzo || '').trim().slice(0, 200), societa: store.cleanName(b.societa || ''), email, riuniti };
+  const nomi = (v, n, def) => Array.from({ length: n }, (_, i) => String((Array.isArray(v) ? v : [])[i] ?? '').trim().slice(0, 60) || `${def} ${i + 1}`);
+  const riunitiNomi = nomi(b.riunitiNomi, riuniti, 'Riunito');
+  const aspN = Math.max(0, Math.min(10, Math.round(+(b.aspiratoriN ?? (Array.isArray(b.aspiratori) ? b.aspiratori.length : 0)) || 0)));
+  const aspiratori = nomi(b.aspiratori, aspN, 'Aspiratore');
+  return { nome, sigla, indirizzo: String(b.indirizzo || '').trim().slice(0, 200), societa: store.cleanName(b.societa || ''), email, riuniti, riunitiNomi, aspiratori };
 }
 async function salvaSede(id, d) {
   const { rows } = await store.q('select id from sedi where upper(sigla) = $1 and id <> $2', [d.sigla, id || '']);
   if (rows.length) throw Object.assign(new Error(`La sigla ${d.sigla} è già di un'altra sede.`), { status: 400 });
-  if (id) await store.q(`update sedi set nome=$2, sigla=$3, indirizzo=$4, societa=$5, email=$6, riuniti=$7 where id=$1`, [id, d.nome, d.sigla, d.indirizzo, d.societa, d.email, d.riuniti]);
+  const rn = JSON.stringify(d.riunitiNomi), as = JSON.stringify(d.aspiratori);
+  if (id) await store.q(`update sedi set nome=$2, sigla=$3, indirizzo=$4, societa=$5, email=$6, riuniti=$7, riuniti_nomi=$8, aspiratori=$9 where id=$1`, [id, d.nome, d.sigla, d.indirizzo, d.societa, d.email, d.riuniti, rn, as]);
   else {
     id = require('crypto').randomUUID();
-    await store.q(`insert into sedi (id, nome, sigla, indirizzo, societa, email, riuniti, sort) values ($1,$2,$3,$4,$5,$6,$7, (select coalesce(max(sort),0)+1 from sedi))`,
-      [id, d.nome, d.sigla, d.indirizzo, d.societa, d.email, d.riuniti]);
+    await store.q(`insert into sedi (id, nome, sigla, indirizzo, societa, email, riuniti, riuniti_nomi, aspiratori, sort) values ($1,$2,$3,$4,$5,$6,$7,$8,$9, (select coalesce(max(sort),0)+1 from sedi))`,
+      [id, d.nome, d.sigla, d.indirizzo, d.societa, d.email, d.riuniti, rn, as]);
   }
   return id;
 }

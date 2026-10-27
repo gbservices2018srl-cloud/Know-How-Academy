@@ -136,6 +136,8 @@ async function migrate() {
   `);
   // test delle spore: la foto del risultato dopo l'incubazione si aggiunge a quella iniziale
   await q('alter table test add column if not exists foto_esito_id text references foto(id) on delete set null');
+  // Manutenzione: riuniti e aspiratori arrivano dalle Sedi di Gestione accessi; "rif" = posizione (r1, r2… a1…) nella sede
+  await q('alter table attrezzature add column if not exists rif text');
   // Registro impianti per paziente: il paziente si crea una volta, poi si registrano le etichette dente per dente
   await q(`create table if not exists pazienti (
       id text primary key,

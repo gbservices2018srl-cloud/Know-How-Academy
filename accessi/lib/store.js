@@ -125,7 +125,10 @@ async function migrate() {
       sort int not null default 0,
       creata_il timestamptz not null default now()
     );
-    create unique index if not exists sedi_sigla_idx on sedi (upper(sigla));`);
+    create unique index if not exists sedi_sigla_idx on sedi (upper(sigla));
+    -- nomi dei riuniti (tanti quanti "riuniti") e aspiratori della sede: li leggono Manutenzione attrezzature e le altre app
+    alter table sedi add column if not exists riuniti_nomi jsonb not null default '[]';
+    alter table sedi add column if not exists aspiratori jsonb not null default '[]';`);
   // Turni: la figura scelta prima nel permesso diventa la figura della persona
   await q(`update users u set figura = ua.ente from user_apps ua
     where ua.user_id = u.id and ua.app = 'turni' and u.figura is null and ua.ente = any($1)`, [FIGURE.map(f => f.id)]);
@@ -395,7 +398,9 @@ async function redeemTicket(token, app) {
   if (t.purpose === 'sedi') return { purpose: 'sedi', email: t.email, sedi: t.data?.sedi || [] };
   return { purpose: t.purpose, ssoId: t.user_id || null, email: t.email };
 }
-const shapeSede = r => ({ id: r.id, nome: r.nome, sigla: r.sigla, indirizzo: r.indirizzo, societa: r.societa, email: r.email, riuniti: r.riuniti, attiva: r.attiva });
+const nomiRiuniti = r => Array.from({ length: r.riuniti || 0 }, (_, i) => String((r.riuniti_nomi || [])[i] || '').trim() || `Riunito ${i + 1}`);
+const shapeSede = r => ({ id: r.id, nome: r.nome, sigla: r.sigla, indirizzo: r.indirizzo, societa: r.societa, email: r.email, riuniti: r.riuniti, attiva: r.attiva,
+  riunitiNomi: nomiRiuniti(r), aspiratori: (r.aspiratori || []).map((n, i) => String(n || '').trim() || `Aspiratore ${i + 1}`) });
 async function listSedi() {
   const { rows } = await q('select * from sedi order by attiva desc, sort, nome');
   return rows.map(shapeSede);
