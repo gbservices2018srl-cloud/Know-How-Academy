@@ -129,6 +129,7 @@ const SSO_KEYS = APPS.filter(a => a.sso).map(a => a.key);
 // Lo fornisce la funzione "sso" dell'app, dopo aver verificato un biglietto monouso "catalog".
 const catalogCache = new Map();
 async function catalogo(a, u, fresh) {
+  if (a.enti === 'sedi') return { sedi: (await store.listSedi()).filter(s => s.attiva !== false).map(s => ({ id: s.id, nome: s.nome })) };
   if (!a.sso) return a.enti || {}; // elenchi fissi (es. le figure dei Turni)
   const c = catalogCache.get(a.key);
   if (!fresh && c && Date.now() - c.at < 60000) return c.enti;
@@ -396,7 +397,7 @@ app.get('/api/admin/users', needAdmin, wrap(async (req, res) => {
   }
   res.json({
     me: req.user.id,
-    apps: APPS.filter(a => !a.segue).map(a => ({ key: a.key, name: a.name, adminOnly: !!a.adminOnly, livelli: a.livelli || null })),
+    apps: APPS.filter(a => !a.segue && !a.virtuale).map(a => ({ key: a.key, name: a.name, adminOnly: !!a.adminOnly, livelli: a.livelli || null })),
     figure: store.FIGURE,
     livelli: lv,
     mail: mail.enabled(),
@@ -521,7 +522,7 @@ app.put('/api/admin/users/:id/apps/:app', needAdmin, wrap(async (req, res) => {
   res.json({ apps: await store.appsOf(u), livelli: await store.livelliOf(u.id), avvisi });
 }));
 /* ---------- app: spegnere per tutti, sospendere a gruppi o persone, storico con Annulla ---------- */
-const APP_GESTIBILI = () => APPS.filter(a => a.key !== 'accessi' && !a.segue);
+const APP_GESTIBILI = () => APPS.filter(a => a.key !== 'accessi' && !a.segue && !a.virtuale);
 async function registra(req, app, azione, chi, ids, dettaglio = {}) {
   const id = require('crypto').randomUUID();
   await store.q('insert into app_operazioni (id, app, azione, chi, persone, dettaglio, da) values ($1,$2,$3,$4,$5,$6,$7)',

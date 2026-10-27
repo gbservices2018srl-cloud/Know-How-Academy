@@ -32,7 +32,33 @@ module.exports = [
     dentro: 'comunicazioni', // si apre dal pulsante "Eventi" di Comunicazioni ed eventi aziendali (niente riquadro a parte)
     segue: 'comunicazioni',  // non è più un'app a sé: permesso, ruolo, sospensione, interruttore e notifiche sono quelli di Comunicazioni ed eventi
     desc: 'Formazione, riunioni ed eventi aziendali per lo staff.' },
-  { key: 'magazzino', name: 'Magazzino centrale', url: 'https://magazzino.appgestione.it', color: 'yellow',
+  // Gestione ASO: riquadro unico che raccoglie Magazzino, Compliance sterilizzazione e Registro impianti.
+  // È "virtuale": non si assegna, compare a chi ha almeno una delle tre app (che non hanno più un riquadro proprio).
+  { key: 'aso', name: 'Gestione ASO', url: 'https://appgestione.it/aso/', color: 'teal', virtuale: true,
+    gruppo: ['magazzino', 'sterilizzazione', 'registro_udi', 'manutenzione'],
+    desc: 'Magazzino, sterilizzazione, registro impianti (UDI) e manutenzione delle attrezzature.' },
+  { key: 'sterilizzazione', name: 'Compliance sterilizzazione', url: 'https://appgestione.it/aso/?v=steri', color: 'teal', dentro: 'aso',
+    enti: 'sedi', // le sedi del gruppo (scheda Sedi del pannello)
+    livelli: [
+      { key: 'admin', label: 'Amministratore (tutte le sedi)', role: 'admin' },
+      { key: 'operatore', label: 'Operatore (ASO)', ente: 'sedi', enteLabel: 'Quale sede', multi: true },
+    ],
+    desc: 'Sterilizzatrici, test Bowie-Dick, Helix e spore, cicli con vapor line.' },
+  { key: 'registro_udi', name: 'Registro impianti (UDI)', url: 'https://appgestione.it/aso/?v=udi', color: 'teal', dentro: 'aso',
+    enti: 'sedi',
+    livelli: [
+      { key: 'admin', label: 'Amministratore (tutte le sedi)', role: 'admin' },
+      { key: 'operatore', label: 'Operatore', ente: 'sedi', enteLabel: 'Quale sede', multi: true },
+    ],
+    desc: 'Registro degli impianti e dei materiali impiantabili con lotto, scadenza e codice UDI.' },
+  { key: 'manutenzione', name: 'Manutenzione attrezzature', url: 'https://appgestione.it/aso/?v=man', color: 'teal', dentro: 'aso',
+    enti: 'sedi',
+    livelli: [
+      { key: 'admin', label: 'Amministratore (tutte le sedi, crea i riuniti e corregge il registro)', role: 'admin' },
+      { key: 'operatore', label: 'Operatore', ente: 'sedi', enteLabel: 'Quale sede', multi: true },
+    ],
+    desc: 'Riuniti e aspiratori per sede: pulizia filtri, tubi e cordoni con registro.' },
+  { key: 'magazzino', name: 'Magazzino centrale', url: 'https://magazzino.appgestione.it', color: 'yellow', dentro: 'aso',
     desc: 'Disponibilità degli articoli, prenotazioni e riordino ai fornitori.' },
   { key: 'turni', name: 'Turni', url: 'https://turni.appgestione.it', color: 'teal',
     // La figura è quella della persona (Gestione accessi): con Dipendente o "Amministratore, anche in turno"

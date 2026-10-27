@@ -1,0 +1,810 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#4CAAAA">
+<base href="/aso/">
+<title>Gestione ASO · To Smile</title>
+<link rel="icon" href="logo.png">
+<link rel="stylesheet" href="/fonts/tosmile.css?f=fira-sans:400,500,600,700,800">
+<style>
+/* Colori e caratteri To Smile (gli stessi di Comunicazioni, Calendario e Turni), con tema scuro automatico */
+:root{
+  --bg:#EFF5F5; --dot:#D3E2E2; --surface:#FFFFFF; --surface-2:#F5F9F9; --surface-3:#EAF1F1; --fg:#1F2A2B; --muted:#5E6B6C;
+  --line:#DCE7E7; --accent:#2B8384; --accent-soft:#DCEFEF; --accent-fg:#FFFFFF;
+  --brand-teal:#4CAAAA; --brand-purple:#8C6898; --brand-yellow:#E8E564; --purple-soft:#EFE7F2;
+  --danger:#B42318; --danger-soft:#FBE3E0; --ok:#1F7A4D; --ok-soft:#DDF1E6; --warn:#8A4A12; --warn-soft:#FBEBDD;
+  --shadow:0 1px 2px rgba(20,48,48,.05),0 8px 28px rgba(20,48,48,.09);
+  --f-display:"Fira Sans",system-ui,sans-serif; --f-body:"Fira Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#101818; --dot:#1E2B2B; --surface:#172121; --surface-2:#1D2929; --surface-3:#223030; --fg:#E7F0F0; --muted:#9FB0B0;
+  --line:#2A3939; --accent:#62C3C3; --accent-soft:#163536; --accent-fg:#062222;
+  --brand-teal:#62C3C3; --brand-purple:#B597C2; --purple-soft:#2E2433;
+  --danger:#FF8A7A; --danger-soft:#3A1D1A; --ok:#6FD39C; --ok-soft:#173326; --warn:#F0B07A; --warn-soft:#3A2817;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35); color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:var(--bg);background-image:radial-gradient(var(--dot) 1.2px,transparent 1.3px);background-size:22px 22px;background-attachment:fixed;
+  color:var(--fg);font:15px/1.5 var(--f-body);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+svg.i{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+[hidden]{display:none!important}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.top{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:14px;padding:10px max(16px,env(safe-area-inset-left));
+  background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);box-shadow:inset 0 -3px 0 -1px color-mix(in srgb,var(--brand-yellow) 70%,transparent)}
+.brand{display:flex;align-items:center;gap:10px;min-width:0;text-decoration:none;color:inherit}
+.brand .logo{height:40px;width:auto;flex:none;display:block}
+.brand .sep{width:1px;height:26px;background:var(--line);flex:none}
+.brand h1{font:600 16px/1.1 var(--f-display);margin:0;white-space:nowrap;color:var(--muted)}
+@media (max-width:900px){.brand h1,.brand .sep{display:none}.who b{display:none}.who{padding:3px}}
+.tabs{display:flex;gap:4px;overflow-x:auto;flex:1;scrollbar-width:none;min-width:0;padding:2px}
+.tabs::-webkit-scrollbar{display:none}
+.tab{display:inline-flex;align-items:center;gap:7px;border:1px solid transparent;background:none;padding:7px 13px;border-radius:999px;white-space:nowrap;color:var(--muted);font-weight:600;font-size:14px;min-height:40px;text-decoration:none}
+.tab:hover{background:var(--surface-2)}
+.tab.on{background:var(--accent-soft);color:var(--fg);border-color:color-mix(in srgb,var(--accent) 30%,transparent)}
+.spacer{flex:1}
+.who{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:3px 12px 3px 3px;font-size:13px;flex:none;min-height:40px;text-decoration:none;color:inherit}
+.av{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:12px;background:var(--accent-soft);color:var(--accent);flex:none}
+main{max-width:1000px;margin:0 auto;padding:20px max(16px,env(safe-area-inset-left)) max(48px,env(safe-area-inset-bottom))}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--line);background:var(--surface);padding:9px 15px;border-radius:10px;font-weight:600;font-size:14.5px;white-space:nowrap;text-decoration:none;color:inherit;min-height:44px}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.primary:hover{filter:brightness(1.06);background:var(--accent)}
+.btn.wide{min-height:52px;font-size:16px;width:100%}
+.btn.danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 35%,transparent)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.sm{padding:6px 11px;font-size:13.5px;min-height:38px}
+.link{border:0;background:none;color:var(--accent);font-weight:600;padding:8px 0;min-height:40px;display:inline-flex;align-items:center;gap:4px;text-decoration:none}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}
+.pad{padding:16px 18px}
+.muted{color:var(--muted)}
+h2.view{font:700 26px/1.15 var(--f-display);letter-spacing:-.015em;margin:0}
+h3{font:700 17px/1.2 var(--f-display);margin:0}
+.head{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.head p{margin:4px 0 0;color:var(--muted)}
+.empty{padding:30px 16px;text-align:center;color:var(--muted)}
+.empty b{display:block;color:var(--fg);font-size:16px;margin-bottom:4px}
+.tag{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.tag.ok{background:var(--ok-soft);color:var(--ok)}
+.tag.ko{background:var(--danger-soft);color:var(--danger)}
+.tag.todo{background:var(--warn-soft);color:var(--warn)}
+.tag.plain{background:var(--surface-3);color:var(--muted)}
+.tag.q{background:var(--purple-soft);color:var(--brand-purple)}
+.err{background:var(--danger-soft);color:var(--danger);border-radius:10px;padding:10px 12px;font-size:14px;font-weight:600}
+.avvisi{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.avviso{display:flex;gap:8px;align-items:flex-start;padding:8px 11px;border-radius:10px;font-size:14px;font-weight:600}
+.avviso.rosso{background:var(--danger-soft);color:var(--danger)}
+.avviso.giallo{background:var(--warn-soft);color:var(--warn)}
+/* pagina d'ingresso */
+.hello{font:800 28px/1.15 var(--f-display);margin:6px 0 4px;letter-spacing:-.01em}
+.bigs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:18px}
+.big{position:relative;display:flex;flex-direction:column;gap:12px;text-align:left;text-decoration:none;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:22px;min-height:200px;box-shadow:var(--shadow);overflow:hidden;transition:transform .15s,border-color .15s}
+.big:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--bc) 55%,var(--line))}
+.big::before{content:"";position:absolute;inset:0 0 auto 0;height:5px;background:var(--bc)}
+.big .bi{width:52px;height:52px;border-radius:15px;display:grid;place-items:center;background:color-mix(in srgb,var(--bc) 16%,transparent);color:var(--bc)}
+.big .bi svg{width:28px;height:28px}
+.big h2{font:800 21px/1.15 var(--f-display);margin:0}
+.big p{margin:4px 0 0;color:var(--muted);font-size:14.5px}
+.big .st{margin-top:auto;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.big .go{color:var(--accent);font-weight:700}
+/* moduli */
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;min-width:0}
+.field label,.lbl{font-weight:700;font-size:13.5px;color:var(--muted)}
+.field input,.field select,.field textarea{border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:10px 12px;width:100%;min-height:44px}
+.field textarea{min-height:70px;resize:vertical}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 12px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:12px;padding:3px;background:var(--surface-2);gap:3px;flex-wrap:wrap}
+.seg button{border:0;background:none;padding:8px 14px;border-radius:9px;font-weight:700;min-height:42px;color:var(--muted)}
+.seg button.on{background:var(--surface);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.seg button.on.ok{background:var(--ok);color:#fff}
+.seg button.on.ko{background:var(--danger);color:#fff}
+.seg button.on.att{background:var(--brand-purple);color:#fff}
+.foto-in{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.thumb{width:78px;height:78px;border-radius:12px;object-fit:cover;border:1px solid var(--line);background:var(--surface-3);display:block}
+.thumb.lg{width:120px;height:120px}
+button.thumbbtn{border:0;padding:0;background:none;border-radius:12px}
+/* sterilizzazione */
+.macchine{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.mac h3{font-size:18px}
+.mac .sede{font-size:13px;color:var(--muted)}
+.mac .tests{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:10px;padding:6px 10px;font-size:13.5px;font-weight:700;background:var(--surface-3);color:var(--muted)}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.ko{background:var(--danger-soft);color:var(--danger)}
+.pill.att{background:var(--purple-soft);color:var(--brand-purple)}
+.mac .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.sez{margin-top:16px}
+.sez>h3{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.rec{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-top:1px solid var(--line)}
+.rec:first-of-type{border-top:0}
+.rec .grow{flex:1;min-width:0}
+.rec .meta{font-size:13px;color:var(--muted)}
+.testbox{border:1px dashed var(--line);border-radius:14px;padding:14px;margin-top:8px;background:var(--surface-2)}
+.days{display:flex;flex-direction:column;gap:8px}
+.day{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:11px 14px;color:inherit}
+/* registro UDI */
+.search{position:relative;flex:1 1 260px;max-width:420px}
+.search input{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:10px 12px 10px 38px;min-height:44px}
+.search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted)}
+.list{display:flex;flex-direction:column;gap:10px}
+.imp{display:flex;gap:14px;align-items:flex-start;text-align:left;width:100%;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 16px;color:inherit}
+.imp:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.imp .d{width:58px;flex:none;text-align:center;border-radius:12px;background:var(--surface-3);padding:6px 0;line-height:1.05}
+.imp .d b{display:block;font:700 22px/1 var(--f-display)}
+.imp .d small{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase}
+.imp .grow{flex:1;min-width:0}
+.imp .n{font-weight:700;font-size:16px}
+.imp .meta{font-size:13.5px;color:var(--muted);display:flex;gap:4px 12px;flex-wrap:wrap;margin-top:2px}
+.denti-box{border:1px solid var(--line);border-radius:14px;padding:12px;background:var(--surface-2);margin-bottom:12px}
+.denti-schema{overflow-x:auto;padding-bottom:4px}
+.denti-schema .lato{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);min-width:640px}
+.denti-riga{display:flex;gap:4px;min-width:640px;margin:5px 0}
+.denti-riga .mezzo{width:2px;background:var(--fg);margin:0 5px;border-radius:2px}
+.denti-linea{height:2px;background:var(--fg);border-radius:2px;min-width:640px}
+.dente{flex:1 0 34px;height:42px;border-radius:8px;border:1px solid var(--line);background:var(--surface);font-weight:700;font-size:13.5px}
+.dente.on{background:var(--brand-yellow);border:2px solid #8a6a0e;color:#2b2b2f}
+.scanbox{border:2px dashed color-mix(in srgb,var(--accent) 45%,var(--line));border-radius:16px;padding:14px;background:color-mix(in srgb,var(--accent-soft) 45%,var(--surface));margin-bottom:12px}
+.toast{position:fixed;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:11px 16px;border-radius:12px;font-weight:600;z-index:50;max-width:92vw;box-shadow:var(--shadow)}
+dialog.ph{border:0;padding:0;background:transparent;max-width:96vw;max-height:94vh}
+dialog.ph::backdrop{background:rgba(0,0,0,.75)}
+dialog.ph img{max-width:96vw;max-height:88vh;border-radius:12px;display:block}
+/* manutenzione */
+.att-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px}
+.att{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:18px 14px 14px;box-shadow:var(--shadow);color:inherit;transition:transform .15s,border-color .15s;min-height:210px}
+.att:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--ac) 55%,var(--line))}
+.att .art{width:96px;height:96px;border-radius:26px;display:grid;place-items:center;background:color-mix(in srgb,var(--ac) 12%,transparent);color:var(--ac)}
+.att .art svg{width:72px;height:72px}
+.att .nm{font:700 17px/1.2 var(--f-display)}
+.att .kind{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.att .last{font-size:12.5px;color:var(--muted);margin-top:auto}
+.sede-h{font:700 15px/1.2 var(--f-display);color:var(--muted);margin:22px 0 10px;display:flex;align-items:center;gap:8px}
+.sede-h::after{content:"";flex:1;height:1px;background:var(--line)}
+dialog.dlg{border:0;border-radius:22px;padding:0;width:min(480px,94vw);background:var(--surface);color:var(--fg);box-shadow:var(--shadow)}
+dialog.dlg::backdrop{background:rgba(10,30,30,.45);backdrop-filter:blur(2px)}
+.dlg .dh{display:flex;gap:14px;align-items:center;padding:18px 20px 12px;border-bottom:1px solid var(--line)}
+.dlg .dh .art{width:58px;height:58px;border-radius:16px;display:grid;place-items:center;background:color-mix(in srgb,var(--ac) 12%,transparent);color:var(--ac);flex:none}
+.dlg .dh .art svg{width:44px;height:44px}
+.dlg .db{padding:14px 20px}
+.dlg .df{display:flex;gap:8px;justify-content:flex-end;padding:12px 20px 18px;flex-wrap:wrap}
+.flag{display:flex;gap:12px;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:14px;margin-bottom:8px;cursor:pointer;background:var(--surface-2)}
+.flag:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+.flag input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+.flag .vi{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--surface);color:var(--accent);flex:none}
+.flag .vi svg{width:20px;height:20px}
+.flag .t{font-weight:700}
+.flag .s{font-size:12.5px;color:var(--muted)}
+.conf{background:var(--warn-soft);color:var(--warn);border-radius:12px;padding:12px 14px;font-size:14px;font-weight:600}
+.reg{width:100%;border-collapse:collapse;font-size:14px}
+.reg th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+.reg td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+.reg tr:last-child td{border-bottom:0}
+.tbl{overflow-x:auto}
+@media (max-width:640px){.reg thead{display:none}.reg tr{display:block;padding:10px 4px;border-bottom:1px solid var(--line)}.reg td{display:block;border:0;padding:2px 10px}}
+@media print{.top,.link,.head .btn,.card.pad:has(select),.reg td:last-child button{display:none!important}body{background:#fff}.card{box-shadow:none}}
+@media (max-width:640px){.brand .logo{height:32px}.brand h1{font-size:14px}.hello{font-size:24px}h2.view{font-size:22px}}
+</style>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="./" aria-label="Gestione ASO, inizio"><img class="logo" src="logo.png" alt="To Smile" width="543" height="162"><span class="sep"></span><h1>Gestione ASO</h1></a>
+  <nav class="tabs" id="tabs" aria-label="Sezioni"></nav>
+  <a class="who" id="who" href="/" title="Torna alle app"></a>
+</header>
+<main id="main"><div class="empty">Caricamento…</div></main>
+<dialog class="ph" id="ph"><img alt="Foto"><form method="dialog" style="text-align:center;margin-top:8px"><button class="btn">Chiudi</button></form></dialog>
+<dialog class="dlg" id="dlg" aria-label="Manutenzione"></dialog>
+<div class="toast" id="toast" hidden role="status"></div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const IC = {
+  back: '<path d="M15 18l-6-6 6-6"/>', plus: '<path d="M12 5v14M5 12h14"/>', cam: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
+  check: '<path d="M5 12l5 5L20 7"/>', x: '<path d="M6 6l12 12M18 6L6 18"/>', search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
+  box: '<path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/>', steri: '<path d="M5 4h14v16H5z"/><path d="M8 8h8M8 12h8M8 16h5"/><circle cx="16" cy="16" r="1.5"/>',
+  udi: '<path d="M8 3c-2 0-3 2-3 4 0 3 2 4 2 7s1 7 3 7 2-4 2-6c0 2 0 6 2 6s3-4 3-7 2-4 2-7c0-2-1-4-3-4-1.5 0-2.5 1-4 1S9.5 3 8 3z"/>',
+  cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>', trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/>', spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/>',
+  man: '<path d="M14.5 6.5a4 4 0 0 0 5 5L12 19a2.1 2.1 0 0 1-3-3z"/><path d="M14.5 6.5L17 4l3 3-2.5 2.5"/><path d="M5 5l4 4M4 8l4-4"/>',
+  filtro: '<path d="M4 5h16l-6 7.5V19l-4 1.5v-8z"/>', tubo: '<path d="M5 20V9a4 4 0 0 1 4-4h2a4 4 0 0 1 4 4v3a3 3 0 0 0 3 3h1"/><path d="M19 12v6"/>',
+  cordone: '<path d="M4 6c3 0 3 4 6 4s3-4 6-4 3 4 4 4"/><path d="M4 14c3 0 3 4 6 4s3-4 6-4 3 4 4 4"/>', drop: '<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>',
+  amalgama: '<circle cx="12" cy="12" r="8"/><path d="M12 8a4 4 0 1 1-4 4"/>', reg: '<path d="M6 3h12v18H6z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
+  ext: '<path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/>', hist: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>',
+};
+const ART = {
+  riunito: '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9.5" width="10" height="5" rx="2.5" transform="rotate(-12 14 12)"/><path d="M13.5 17.5l3.6-.8 4.6 17.8-4.4 1z"/><path d="M19 36.5h22.5l11 8.5"/><path d="M18.5 40h21l9.6 7.6"/><path d="M30 40.5v11"/><path d="M21 54h18"/><path d="M38 6.5h15.5v7"/><path d="M49.5 13.5h8l-2 4.5h-4z"/><path d="M33 25h17M41.5 25v11.5"/><path d="M36 25v-3M40 25v-3M44 25v-3"/></svg>',
+  aspiratore: '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="14" y="18" width="30" height="36" rx="4"/><path d="M20 18v-5a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v5"/><path d="M20 25h18M20 29h18"/><circle cx="29" cy="42" r="6.5"/><path d="M29 38.5a3.5 3.5 0 1 1-3.5 3.5"/><path d="M44 24h6a4 4 0 0 1 4 4v14"/><path d="M51 42h6v4h-6z"/><path d="M18 54v3.5M40 54v3.5"/></svg>',
+};
+const AC = { riunito: 'var(--accent)', aspiratore: 'var(--brand-purple)' };
+const VICON = { filtro_riunito: 'filtro', filtro_bacinella: 'drop', tubi_aspiranti: 'tubo', cordoni: 'cordone', filtro_aspiratore: 'filtro', filtro_amalgama: 'amalgama' };
+const ic = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${IC[n] || ''}</svg>`;
+async function api(method, url, body) {
+  const r = await fetch(url, { method, credentials: 'include', headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401) { location.href = '/accedi?next=' + encodeURIComponent(location.href); throw new Error('Accesso richiesto'); }
+  if (!r.ok) throw new Error(j.error || 'Errore, riprova.');
+  return j;
+}
+let toastT;
+function toast(t, ms = 3500) { const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => el.hidden = true, ms); }
+const MESI = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
+const fmtD = s => { if (!s) return ''; const [y, m, d] = String(s).slice(0, 10).split('-'); return `${+d} ${MESI[+m - 1]} ${y}`; };
+const fmtDL = s => new Intl.DateTimeFormat('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(String(s).slice(0, 10) + 'T12:00:00'));
+const ora = s => s ? new Date(s).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '';
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+const NOMI_TEST = { bd: 'Bowie-Dick', helix: 'Helix test', spore: 'Test delle spore' };
+const ESITO = { ok: 'Superato', ko: 'Non superato', attesa: 'In incubazione' };
+
+// Foto dal telefono: ridotta a 1600 px (JPEG) prima dell'invio, così è leggera ma leggibile
+function riduci(file, max = 1600) {
+  return new Promise((ok, ko) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      ok(c.toDataURL('image/jpeg', 0.8));
+    };
+    img.onerror = () => ko(new Error('Non riesco ad aprire la foto.'));
+    img.src = url;
+  });
+}
+function vediFoto(src) { const d = $('#ph'); d.querySelector('img').src = src; d.showModal(); }
+const fotoBtn = (id, cls = '') => id ? `<button class="thumbbtn" data-foto="api/foto/${esc(id)}" aria-label="Apri la foto"><img class="thumb ${cls}" src="api/foto/${esc(id)}" alt="Foto" loading="lazy"></button>` : '';
+
+const S = { att: null, reg: null, regF: {}, attForm: null, view: 'home', st: null, sede: '', macchine: null, scheda: null, form: null, storico: null, udi: null, q: '', udiForm: null, cur: null, busy: false };
+
+/* ============ barra e navigazione ============ */
+function renderTop() {
+  const st = S.st; if (!st) return;
+  const tabs = [['home', 'Inizio', 'back']];
+  if (st.sterilizzazione && !st.sterilizzazione.spenta) tabs.push(['steri', 'Sterilizzazione', 'steri']);
+  if (st.udi && !st.udi.spenta) tabs.push(['udi', 'Registro impianti', 'udi']);
+  if (st.manutenzione && !st.manutenzione.spenta) tabs.push(['man', 'Manutenzione', 'man']);
+  const vista = { scheda: 'steri', storico: 'steri', macchina: 'steri', udiform: 'udi', udivedi: 'udi', manreg: 'man' }[S.view] || S.view;
+  $('#tabs').innerHTML = tabs.map(([k, l, i]) => `<button class="tab ${vista === k ? 'on' : ''}" data-go="${k}">${ic(i)}${l}</button>`).join('')
+    + (st.magazzino ? `<a class="tab" href="${esc(st.magazzino)}">${ic('box')}Magazzino</a>` : '');
+  const n = st.me.nome || '';
+  $('#who').innerHTML = `<span class="av">${esc(n.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase())}</span><b>${esc(n.split(' ')[0])}</b>`;
+}
+function go(view, extra = {}) {
+  Object.assign(S, { view, ...extra });
+  const u = new URL(location.href);
+  u.search = view === 'home' ? '' : '?v=' + view + (S.id ? '&id=' + encodeURIComponent(S.id) : '');
+  history.replaceState(null, '', u);
+  window.scrollTo(0, 0);
+  load();
+}
+async function load() {
+  try {
+    if (S.view === 'steri' || S.view === 'home') { if (S.st.sterilizzazione && !S.st.sterilizzazione.spenta) S.macchine = (await api('GET', 'api/steri/macchine')).macchine; }
+    if (S.view === 'scheda') S.scheda = await api('GET', 'api/steri/schede/' + encodeURIComponent(S.id));
+    if (S.view === 'storico') S.storico = (await api('GET', 'api/steri/storico?macchina=' + encodeURIComponent(S.id))).schede;
+    if (S.view === 'man' || S.view === 'manreg' || (S.view === 'home' && S.st.manutenzione && !S.st.manutenzione.spenta)) S.att = (await api('GET', 'api/man/attrezzature')).attrezzature;
+    if (S.view === 'manreg') { const f = S.regF; S.reg = (await api('GET', 'api/man/registro?' + new URLSearchParams({ sede: f.sede || '', attrezzatura: f.att || '', da: f.da || '', a: f.a || '' }))).righe; }
+    if (S.view === 'udi') S.udi = (await api('GET', 'api/udi?q=' + encodeURIComponent(S.q) + (S.sede ? '&sede=' + encodeURIComponent(S.sede) : ''))).impianti;
+  } catch (e) { $('#main').innerHTML = `<div class="empty"><b>${esc(e.message)}</b><button class="btn" data-go="home">Torna all'inizio</button></div>`; return; }
+  render();
+}
+function render() {
+  renderTop();
+  const v = { home: vHome, steri: vSteri, scheda: vScheda, storico: vStorico, udi: vUdi, udiform: vUdiForm, udivedi: vUdiVedi, man: vMan, manreg: vManReg }[S.view] || vHome;
+  $('#main').innerHTML = v();
+}
+
+/* ============ ingresso ============ */
+function avvisiTot() { return (S.macchine || []).reduce((n, m) => n + m.stato.avvisi.filter(a => a.livello === 'rosso').length, 0); }
+function vHome() {
+  const st = S.st, steri = st.sterilizzazione && !st.sterilizzazione.spenta, udi = st.udi && !st.udi.spenta;
+  const rossi = avvisiTot(), gialli = (S.macchine || []).reduce((n, m) => n + m.stato.avvisi.filter(a => a.livello === 'giallo').length, 0);
+  return `<div class="hello">Ciao ${esc((st.me.nome || '').split(' ')[0])}</div><div class="muted">Cosa vuoi aprire?</div>
+  <div class="bigs">
+    ${steri ? `<button class="big" style="--bc:var(--accent)" data-go="steri"><span class="bi">${ic('steri')}</span>
+      <span><h2>Compliance sterilizzazione</h2><p>Sterilizzatrici, test Bowie-Dick, Helix e spore, cicli con la foto della vapor line.</p></span>
+      <span class="st"><span>${rossi ? `<span class="tag ko">${rossi} da sistemare</span>` : gialli ? `<span class="tag todo">${gialli} da fare oggi</span>` : (S.macchine || []).length ? '<span class="tag ok">Tutto in regola</span>' : '<span class="tag plain">Aggiungi le sterilizzatrici</span>'}</span><span class="go">Apri →</span></span></button>` : ''}
+    ${udi ? `<button class="big" style="--bc:var(--brand-purple)" data-go="udi"><span class="bi">${ic('udi')}</span>
+      <span><h2>Registro impianti</h2><p>Impianti e materiali impiantabili per paziente, con lotto, scadenza e codice UDI dalla foto dell'etichetta.</p></span>
+      <span class="st"><span class="tag plain">Normativa UDI</span><span class="go">Apri →</span></span></button>` : ''}
+    ${st.manutenzione && !st.manutenzione.spenta ? `<button class="big" style="--bc:#C27C2C" data-go="man"><span class="bi">${ic('man')}</span>
+      <span><h2>Manutenzione attrezzature</h2><p>Riuniti e aspiratori della sede: pulizia filtri, tubi aspiranti e cordoni, con registro.</p></span>
+      <span class="st"><span class="tag plain">${(S.att || []).length ? (S.att || []).length + ' attrezzature' : 'Registro manutenzioni'}</span><span class="go">Apri →</span></span></button>` : ''}
+    ${st.magazzino ? `<a class="big" style="--bc:#C9A227" href="${esc(st.magazzino)}"><span class="bi">${ic('box')}</span>
+      <span><h2>Magazzino</h2><p>Disponibilità degli articoli, prenotazioni e riordino ai fornitori.</p></span>
+      <span class="st"><span class="tag plain">Magazzino centrale</span><span class="go">Apri ${ic('ext')}</span></span></a>` : ''}
+  </div>`;
+}
+
+/* ============ sterilizzazione: le sterilizzatrici ============ */
+const pillTest = (nome, es) => `<span class="pill ${es === 'ok' ? 'ok' : es === 'ko' ? 'ko' : ''}">${es === 'ok' ? ic('check') : es === 'ko' ? ic('x') : ''}${nome}${es ? '' : ': da fare'}</span>`;
+function vSteri() {
+  const p = S.st.sterilizzazione, ms = S.macchine || [];
+  const sedi = p.sedi;
+  const vis = ms.filter(m => !S.sede || m.sedeId === S.sede);
+  return `<div class="head"><div style="flex:1 1 260px"><h2 class="view">Compliance sterilizzazione</h2>
+    <p>${fmtDL(S.st.oggi)} · Bowie-Dick e Helix ogni giorno, test delle spore ogni mese.</p></div>
+    ${sedi.length > 1 ? `<div class="field" style="margin:0;flex:0 1 220px"><label for="f-sede" class="sr">Sede</label><select id="f-sede" data-sede><option value="">Tutte le sedi</option>${sedi.map(s => `<option value="${esc(s.id)}" ${S.sede === s.id ? 'selected' : ''}>${esc(s.nome)}</option>`).join('')}</select></div>` : ''}
+    <button class="btn" data-a="nuova-macchina">${ic('plus')}Aggiungi sterilizzatrice</button></div>
+  ${S.form?.tipo === 'macchina' ? formMacchina() : ''}
+  ${!sedi.length ? '<div class="card empty"><b>Nessuna sede assegnata</b>Chiedi all\'amministratore di assegnarti la tua sede in Gestione accessi.</div>'
+    : vis.length ? `<div class="macchine">${vis.map(m => {
+      const s = m.stato;
+      return `<article class="card pad mac">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><h3>${esc(m.marca)} ${esc(m.modello)}</h3>
+          <div class="sede">${esc(m.sede)}${m.matricola ? ' · matr. ' + esc(m.matricola) : ''}</div></div>
+          <button class="btn sm" data-modifica-m="${esc(m.id)}" aria-label="Modifica sterilizzatrice">${ic('edit')}</button></div>
+        <div class="tests">${pillTest('Bowie-Dick', s.bd)}${pillTest('Helix', s.helix)}
+          <span class="pill ${s.avvisi.some(a => /spore/i.test(a.testo) && a.livello === 'rosso') ? 'ko' : ''}">Spore: ${s.ultimaSpore ? 'prossimo entro ' + esc(fmtD(s.prossimaSpore)) : 'da fare'}</span>
+          ${s.cicliOggi ? `<span class="pill">${s.cicliOggi} ${s.cicliOggi === 1 ? 'ciclo' : 'cicli'} oggi</span>` : ''}</div>
+        ${s.avvisi.length ? `<div class="avvisi">${s.avvisi.map(a => `<div class="avviso ${a.livello}">${a.livello === 'rosso' ? '⚠' : '•'} ${esc(a.testo)}</div>`).join('')}</div>` : '<div class="avvisi"><div class="avviso" style="background:var(--ok-soft);color:var(--ok)">✓ Tutto in regola oggi</div></div>'}
+        <div class="acts"><button class="btn primary" data-apri-oggi="${esc(m.id)}">${ic('steri')}${s.schedaOggi ? 'Apri la scheda di oggi' : 'Nuova scheda di oggi'}</button>
+          <button class="btn" data-storico="${esc(m.id)}">${ic('hist')}Storico</button></div>
+      </article>`; }).join('')}</div>`
+    : `<div class="card empty"><b>Nessuna sterilizzatrice${S.sede ? ' in questa sede' : ''}</b>Aggiungi la prima con «Aggiungi sterilizzatrice»: marca e modello.</div>`}`;
+}
+function formMacchina() {
+  const f = S.form, sedi = S.st.sterilizzazione.sedi;
+  return `<section class="card pad" style="margin-bottom:14px"><h3 style="margin-bottom:10px">${f.id ? 'Modifica sterilizzatrice' : 'Nuova sterilizzatrice'}</h3>
+    <div class="grid2">
+      ${f.id ? '' : `<div class="field"><label for="m-sede">Sede</label><select id="m-sede" data-f="sede">${sedi.map(s => `<option value="${esc(s.id)}" ${f.sede === s.id ? 'selected' : ''}>${esc(s.nome)}</option>`).join('')}</select></div>`}
+      <div class="field"><label for="m-marca">Marca</label><input id="m-marca" data-f="marca" value="${esc(f.marca || '')}" placeholder="Es. W&H, Melag, Euronda"></div>
+      <div class="field"><label for="m-modello">Modello</label><input id="m-modello" data-f="modello" value="${esc(f.modello || '')}" placeholder="Es. Lisa 522"></div>
+      <div class="field"><label for="m-matr">Matricola (facoltativa)</label><input id="m-matr" data-f="matricola" value="${esc(f.matricola || '')}"></div>
+    </div>
+    ${S.err ? `<div class="err" role="alert" style="margin-bottom:10px">${esc(S.err)}</div>` : ''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between"><div style="display:flex;gap:8px">
+      <button class="btn primary" data-a="salva-macchina">${ic('check')}Salva</button><button class="btn" data-a="annulla-form">Annulla</button></div>
+      ${f.id ? `<button class="btn danger" data-a="disattiva-macchina">Non più in uso</button>` : ''}</div>
+  </section>`;
+}
+
+/* ============ la scheda del giorno ============ */
+function testRec(t) {
+  const att = t.esito === 'attesa';
+  return `<div class="rec">${fotoBtn(t.fotoId)}<div class="grow">
+    <div><span class="tag ${t.esito === 'ok' ? 'ok' : t.esito === 'ko' ? 'ko' : 'q'}">${ESITO[t.esito]}</span> <b>${NOMI_TEST[t.tipo]}</b></div>
+    <div class="meta">${esc(t.operatore)} · ${ora(t.creatoIl)}${t.aggiornatoIl && t.aggiornatoIl !== t.creatoIl && !att ? ' · aggiornato ' + esc(fmtD(t.aggiornatoIl)) : ''}</div>
+    ${t.note ? `<div style="margin-top:4px">${esc(t.note)}</div>` : ''}
+    ${att ? `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" data-esito-spore="${esc(t.id)}" data-v="ok">${ic('check')}Superato</button><button class="btn sm danger" data-esito-spore="${esc(t.id)}" data-v="ko">${ic('x')}Non superato</button></div>` : ''}
+    </div><button class="btn sm" data-del-test="${esc(t.id)}" aria-label="Togli">${ic('trash')}</button></div>`;
+}
+function formTest(tipo) {
+  const f = S.form;
+  return `<div class="testbox">
+    <div class="lbl" style="margin-bottom:6px">Esito</div>
+    <div class="seg" role="group" aria-label="Esito"><button class="${f.esito === 'ok' ? 'on ok' : ''}" data-esito="ok">${ic('check')} Superato</button><button class="${f.esito === 'ko' ? 'on ko' : ''}" data-esito="ko">${ic('x')} Non superato</button>${tipo === 'spore' ? `<button class="${f.esito === 'attesa' ? 'on att' : ''}" data-esito="attesa">In incubazione</button>` : ''}</div>
+    <div class="lbl" style="margin:12px 0 6px">Foto del foglio del test</div>
+    ${fotoInput()}
+    <div class="field" style="margin-top:12px"><label for="t-note">Note (facoltative)</label><textarea id="t-note" data-f="note" rows="2">${esc(f.note || '')}</textarea></div>
+    ${S.err ? `<div class="err" role="alert" style="margin-bottom:10px">${esc(S.err)}</div>` : ''}
+    <div style="display:flex;gap:8px"><button class="btn primary" data-a="salva-test" ${S.busy ? 'disabled' : ''}>${ic('check')}${S.busy ? 'Salvo…' : 'Salva il test'}</button><button class="btn" data-a="annulla-form">Annulla</button></div>
+  </div>`;
+}
+const fotoInput = () => `<div class="foto-in">${S.form.foto ? `<img class="thumb lg" src="${S.form.foto}" alt="Foto scattata">` : ''}
+  <label class="btn">${ic('cam')}${S.form.foto ? 'Rifai la foto' : 'Scatta o scegli la foto'}<input type="file" accept="image/*" capture="environment" class="sr" data-foto-in></label></div>`;
+function formCiclo() {
+  const f = S.form;
+  return `<div class="testbox">
+    <div class="lbl" style="margin-bottom:6px">Foto della vapor line (obbligatoria)</div>
+    ${fotoInput()}
+    ${f.foto && S.st.ai ? `<button class="btn sm" style="margin-top:8px" data-a="leggi-ciclo" ${S.busy ? 'disabled' : ''}>${ic('spark')}${S.busy ? 'Leggo la foto…' : 'Leggi numero e temperatura dalla foto'}</button>` : ''}
+    ${f.dubbi?.length ? `<div class="muted" style="font-size:13px;margin-top:6px">${f.dubbi.map(esc).join(' · ')}</div>` : ''}
+    <div class="grid2" style="margin-top:12px">
+      <div class="field"><label for="c-num">Numero del ciclo dell'autoclave</label><input id="c-num" data-f="numero" inputmode="numeric" value="${esc(f.numero || '')}" placeholder="Es. 1542"></div>
+      <div class="field"><span class="lbl">Temperatura</span><div class="seg" role="group" aria-label="Temperatura"><button class="${f.temperatura === 134 ? 'on' : ''}" data-temp="134">134 °C</button><button class="${f.temperatura === 121 ? 'on' : ''}" data-temp="121">121 °C</button></div></div>
+    </div>
+    <div class="lbl" style="margin-bottom:6px">Esito della vapor line</div>
+    <div class="seg" role="group" aria-label="Esito"><button class="${f.esito === 'ok' ? 'on ok' : ''}" data-esito="ok">${ic('check')} Virata: sterilizzazione OK</button><button class="${f.esito === 'ko' ? 'on ko' : ''}" data-esito="ko">${ic('x')} Non virata</button></div>
+    <div class="field" style="margin-top:12px"><label for="c-note">Note (facoltative)</label><textarea id="c-note" data-f="note" rows="2" placeholder="Es. buste, strumenti trattati">${esc(f.note || '')}</textarea></div>
+    ${S.err ? `<div class="err" role="alert" style="margin-bottom:10px">${esc(S.err)}</div>` : ''}
+    <div style="display:flex;gap:8px"><button class="btn primary" data-a="salva-ciclo" ${S.busy ? 'disabled' : ''}>${ic('check')}${S.busy ? 'Salvo…' : 'Salva il ciclo'}</button><button class="btn" data-a="annulla-form">Annulla</button></div>
+  </div>`;
+}
+function vScheda() {
+  const s = S.scheda; if (!s) return '<div class="empty">Caricamento…</div>';
+  const f = S.form;
+  const sezTest = (tipo, sotto) => {
+    const list = s.test.filter(t => t.tipo === tipo);
+    return `<section class="card pad sez"><h3>${NOMI_TEST[tipo]} <span class="muted" style="font-weight:500;font-size:14px">· ${sotto}</span></h3>
+      ${list.map(testRec).join('')}
+      ${f?.tipo === 'test' && f.test === tipo ? formTest(tipo) : `<button class="btn ${list.length ? '' : 'primary'}" style="margin-top:${list.length ? 10 : 0}px" data-nuovo-test="${tipo}">${ic('plus')}${list.length ? 'Registra un altro ' + NOMI_TEST[tipo] : 'Registra ' + NOMI_TEST[tipo]}</button>`}
+    </section>`;
+  };
+  return `<button class="link" data-go="steri">${ic('back')}Le sterilizzatrici</button>
+  <div class="head"><div><h2 class="view">${esc(cap(fmtDL(s.giorno)))}</h2>
+    <p>${esc(s.macchina.marca)} ${esc(s.macchina.modello)} · ${esc(s.macchina.sede)} · scheda aperta da <b>${esc(s.apertaDa)}</b> alle ${ora(s.creataIl)}</p></div></div>
+  ${s.oggi && s.stato.avvisi.length ? `<div class="avvisi" style="margin-bottom:6px">${s.stato.avvisi.map(a => `<div class="avviso ${a.livello}">${a.livello === 'rosso' ? '⚠' : '•'} ${esc(a.testo)}</div>`).join('')}</div>` : ''}
+  ${sezTest('bd', 'ogni giorno, prima del primo ciclo')}
+  ${sezTest('helix', 'ogni giorno')}
+  ${sezTest('spore', s.stato.ultimaSpore ? 'ultimo il ' + fmtD(s.stato.ultimaSpore) + ', prossimo entro il ' + fmtD(s.stato.prossimaSpore) : 'una volta al mese')}
+  <section class="card pad sez"><h3>Cicli di sterilizzazione <span class="muted" style="font-weight:500;font-size:14px">· una vapor line per ogni ciclo</span></h3>
+    ${s.cicli.map(c => `<div class="rec">${fotoBtn(c.fotoId)}<div class="grow">
+      <div><b>Ciclo n. ${esc(c.numero)}</b> · ${c.temperatura ? c.temperatura + ' °C' : ''} <span class="tag ${c.esito === 'ok' ? 'ok' : 'ko'}">${c.esito === 'ok' ? 'Vapor line virata' : 'Vapor line NON virata'}</span></div>
+      <div class="meta">${esc(c.operatore)} · ${ora(c.creatoIl)}</div>${c.note ? `<div style="margin-top:4px">${esc(c.note)}</div>` : ''}</div>
+      <button class="btn sm" data-del-ciclo="${esc(c.id)}" aria-label="Togli">${ic('trash')}</button></div>`).join('')}
+    ${f?.tipo === 'ciclo' ? formCiclo() : `<button class="btn primary" style="margin-top:${s.cicli.length ? 10 : 0}px" data-a="nuovo-ciclo">${ic('cam')}Aggiungi ciclo con vapor line</button>`}
+  </section>`;
+}
+function vStorico() {
+  const m = (S.macchine || []).find(x => x.id === S.id), list = S.storico || [];
+  const pill = (tt, tipo, nome) => { const t = tt.filter(x => x.tipo === tipo); if (!t.length) return tipo === 'spore' ? '' : `<span class="pill">${nome}: –</span>`;
+    const e = t.some(x => x.esito === 'ko') ? 'ko' : t.some(x => x.esito === 'attesa') ? 'att' : 'ok'; return `<span class="pill ${e}">${nome}</span>`; };
+  return `<button class="link" data-go="steri">${ic('back')}Le sterilizzatrici</button>
+  <div class="head"><div><h2 class="view">Storico</h2><p>${m ? esc(m.marca + ' ' + m.modello + ' · ' + m.sede) : ''} · ultimi 120 giorni</p></div></div>
+  ${list.length ? `<div class="days">${list.map(d => `<button class="day" data-scheda="${esc(d.id)}"><span><b>${esc(cap(fmtDL(d.giorno)))}</b><br><span class="muted" style="font-size:13px">aperta da ${esc(d.apertaDa)}</span></span>
+    <span style="display:flex;gap:6px;flex-wrap:wrap">${pill(d.test, 'bd', 'Bowie-Dick')}${pill(d.test, 'helix', 'Helix')}${pill(d.test, 'spore', 'Spore')}<span class="pill ${d.cicliKo ? 'ko' : ''}">${d.cicli} cicli</span></span></button>`).join('')}</div>`
+    : '<div class="card empty"><b>Nessuna scheda</b>Le schede compaiono qui giorno per giorno.</div>'}`;
+}
+
+/* ============ registro impianti ============ */
+function vUdi() {
+  const p = S.st.udi, list = S.udi || [];
+  return `<div class="head"><div style="flex:1 1 260px"><h2 class="view">Registro impianti</h2><p>Impianti e materiali impiantabili con lotto, scadenza e codice UDI.</p></div>
+    <button class="btn primary" data-a="nuovo-impianto">${ic('plus')}Nuovo impianto</button></div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+    <label class="search">${ic('search')}<span class="sr">Cerca il paziente</span><input type="search" data-q value="${esc(S.q)}" placeholder="Cerca per cognome o nome del paziente"></label>
+    ${p.sedi.length > 1 ? `<div class="field" style="margin:0;flex:0 1 220px"><label for="u-sede" class="sr">Sede</label><select id="u-sede" data-sede-udi><option value="">Tutte le sedi</option>${p.sedi.map(s => `<option value="${esc(s.id)}" ${S.sede === s.id ? 'selected' : ''}>${esc(s.nome)}</option>`).join('')}</select></div>` : ''}
+  </div>
+  ${!p.sedi.length ? '<div class="card empty"><b>Nessuna sede assegnata</b>Chiedi all\'amministratore di assegnarti la tua sede in Gestione accessi.</div>'
+    : list.length ? `<div class="list">${list.map(r => { const [y, m, d] = r.dataIntervento.split('-');
+      return `<button class="imp" data-impianto="${esc(r.id)}"><span class="d"><small>${MESI[+m - 1]}</small><b>${+d}</b><small>${y}</small></span>
+      <span class="grow"><span class="n">${hl(r.pazienteCognome + ' ' + r.pazienteNome)}</span>
+        <span class="meta"><span>${r.denti.length ? (r.denti.length === 1 ? 'Dente ' : 'Denti ') + r.denti.join(', ') : 'Posizione non indicata'}</span><span>Dr. ${esc(r.medico)}</span>${p.sedi.length > 1 ? `<span>${esc(r.sede)}</span>` : ''}</span>
+        <span class="meta" style="margin-top:6px">${r.prodotto ? `<span><b style="color:var(--fg)">${esc(r.prodotto)}</b></span>` : ''}${r.lotto ? `<span>Lotto ${esc(r.lotto)}</span>` : ''}${r.scadenza ? `<span>Scad. ${esc(fmtD(r.scadenza))}</span>` : ''}${r.gtin ? `<span>UDI-DI ${esc(r.gtin)}</span>` : ''}</span>
+      </span>${r.fotoId ? `<img class="thumb" src="api/foto/${esc(r.fotoId)}" alt="" loading="lazy">` : ''}</button>`; }).join('')}</div>`
+    : `<div class="card empty">${S.q ? `<b>Nessun paziente trovato per «${esc(S.q)}»</b>Prova con un'altra parte del nome.` : '<b>Nessun impianto registrato</b>Registra il primo con «Nuovo impianto».'}</div>`}`;
+}
+function hl(t) {
+  const words = S.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  let s = esc(t);
+  for (const w of words) s = s.replace(new RegExp('(' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'ig'), '<mark style="background:color-mix(in srgb,var(--brand-yellow) 75%,transparent);color:inherit;border-radius:3px">$1</mark>');
+  return s;
+}
+const SUP = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28], INF = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38];
+function odontogramma(sel) {
+  const riga = arr => arr.map(n => `<button type="button" class="dente ${sel.includes(n) ? 'on' : ''}" data-dente="${n}" aria-pressed="${sel.includes(n)}" aria-label="Dente ${n}">${n}</button>`).join('');
+  return `<div class="denti-box"><div class="lbl" style="margin-bottom:6px">Posizione dell'impianto: tocca il dente</div><div class="denti-schema">
+    <div class="lato"><span>Superiore destra</span><span>Superiore sinistra</span></div>
+    <div class="denti-riga">${riga(SUP.slice(0, 8))}<span class="mezzo"></span>${riga(SUP.slice(8))}</div><div class="denti-linea"></div>
+    <div class="denti-riga">${riga(INF.slice(0, 8))}<span class="mezzo"></span>${riga(INF.slice(8))}</div>
+    <div class="lato"><span>Inferiore destra</span><span>Inferiore sinistra</span></div></div>
+    <div class="muted" style="font-size:13px;margin-top:4px">${sel.length ? 'Scelti: ' + sel.join(', ') : 'Nessun dente scelto'}</div></div>`;
+}
+function vUdiForm() {
+  const f = S.udiForm, p = S.st.udi;
+  const inp = (k, l, attrs = '') => `<div class="field"><label for="u-${k}">${l}</label><input id="u-${k}" data-u="${k}" value="${esc(f[k] || '')}" ${attrs}></div>`;
+  return `<button class="link" data-a="annulla-udi">${ic('back')}${f.id ? 'Torna alla registrazione' : 'Registro impianti'}</button>
+  <div class="head"><div><h2 class="view">${f.id ? 'Modifica impianto' : 'Nuovo impianto'}</h2><p>Registrazione secondo la normativa UDI: identificativo del dispositivo e del lotto, collegati al paziente.</p></div></div>
+  <section class="card pad">
+    <h3 style="margin-bottom:12px">Intervento e paziente</h3>
+    <div class="grid2">
+      ${f.id || p.sedi.length < 2 ? '' : `<div class="field"><label for="u-sede">Sede</label><select id="u-sede" data-u="sede">${p.sedi.map(s => `<option value="${esc(s.id)}" ${f.sede === s.id ? 'selected' : ''}>${esc(s.nome)}</option>`).join('')}</select></div>`}
+      ${inp('dataIntervento', 'Data dell\'intervento', 'type="date"')}
+      ${inp('pazienteCognome', 'Cognome del paziente', 'autocomplete="off"')}
+      ${inp('pazienteNome', 'Nome del paziente', 'autocomplete="off"')}
+      ${inp('medico', 'Medico che ha eseguito l\'intervento', 'list="medici" autocomplete="off"')}
+    </div>
+    <datalist id="medici">${[...new Set((S.udi || []).map(r => r.medico).filter(Boolean))].map(m => `<option value="${esc(m)}">`).join('')}</datalist>
+    ${odontogramma(f.denti)}
+  </section>
+  <section class="card pad" style="margin-top:14px">
+    <h3 style="margin-bottom:12px">Dispositivo impiantato</h3>
+    <div class="scanbox"><div style="font-weight:700;margin-bottom:4px">Foto della targhetta / etichetta dell'impianto</div>
+      <div class="muted" style="font-size:14px;margin-bottom:10px">Inquadra l'etichetta adesiva con il codice (il quadratino DataMatrix): leggo da solo codice UDI, lotto e scadenza${S.st.ai ? ', e anche nome e produttore' : ''}. Controlla poi i campi.</div>
+      <div class="foto-in">${f.foto ? `<img class="thumb lg" src="${f.foto}" alt="Etichetta">` : f.fotoId ? `<img class="thumb lg" src="api/foto/${esc(f.fotoId)}" alt="Etichetta">` : ''}
+        <label class="btn primary">${ic('cam')}${f.foto || f.fotoId ? 'Rifai la foto' : 'Fotografa l\'etichetta'}<input type="file" accept="image/*" capture="environment" class="sr" data-foto-udi></label></div>
+      ${S.busy ? '<div class="muted" style="margin-top:8px">Leggo l\'etichetta…</div>' : ''}
+      ${f.letto ? `<div class="muted" style="font-size:13px;margin-top:8px">${esc(f.letto)}</div>` : ''}</div>
+    <div class="grid2">
+      ${inp('prodotto', 'Prodotto (nome, misura)')}
+      ${inp('produttore', 'Produttore')}
+      ${inp('ref', 'Codice articolo (REF)')}
+      ${inp('gtin', 'UDI-DI (GTIN, 14 cifre)', 'inputmode="numeric"')}
+      ${inp('lotto', 'Lotto (LOT)')}
+      ${inp('scadenza', 'Scadenza', 'type="date"')}
+      ${inp('seriale', 'Numero di serie (SN), se c\'è')}
+    </div>
+    ${inp('udi', 'Codice UDI completo (dal DataMatrix)', 'placeholder="Es. (01)…(17)…(10)…"')}
+    <div class="field"><label for="u-note">Note (facoltative)</label><textarea id="u-note" data-u="note" rows="2">${esc(f.note || '')}</textarea></div>
+    ${S.err ? `<div class="err" role="alert" style="margin-bottom:10px">${esc(S.err)}</div>` : ''}
+    <button class="btn primary wide" data-a="salva-udi" ${S.saving ? 'disabled' : ''}>${ic('check')}${S.saving ? 'Salvo…' : 'Salva nel registro'}</button>
+  </section>`;
+}
+function vUdiVedi() {
+  const r = (S.udi || []).find(x => x.id === S.id); if (!r) return '<div class="empty">Caricamento…</div>';
+  const riga = (l, v) => v ? `<div class="rec" style="padding:8px 0"><div class="grow"><div class="meta">${l}</div><div style="font-weight:600;word-break:break-all">${v}</div></div></div>` : '';
+  return `<button class="link" data-go="udi">${ic('back')}Registro impianti</button>
+  <div class="head"><div style="flex:1"><h2 class="view">${esc(r.pazienteCognome)} ${esc(r.pazienteNome)}</h2><p>Intervento del ${esc(fmtD(r.dataIntervento))} · ${esc(r.sede)}</p></div>
+    <button class="btn" data-a="modifica-udi">${ic('edit')}Modifica</button></div>
+  <div class="grid2" style="gap:14px">
+    <section class="card pad"><h3 style="margin-bottom:6px">Intervento</h3>
+      ${riga('Posizione', r.denti.length ? (r.denti.length === 1 ? 'Dente ' : 'Denti ') + r.denti.join(', ') : '')}${riga('Medico', esc(r.medico))}${riga('Registrato da', esc(r.operatore) + ' il ' + esc(fmtD(r.creatoIl)))}${riga('Note', esc(r.note))}</section>
+    <section class="card pad"><h3 style="margin-bottom:6px">Dispositivo</h3>
+      ${riga('Prodotto', esc(r.prodotto))}${riga('Produttore', esc(r.produttore))}${riga('REF', esc(r.ref))}${riga('UDI-DI (GTIN)', esc(r.gtin))}${riga('Lotto', esc(r.lotto))}${riga('Scadenza', esc(fmtD(r.scadenza)))}${riga('Numero di serie', esc(r.seriale))}${riga('Codice UDI', esc(r.udi))}
+      ${r.fotoId ? `<div style="margin-top:8px">${fotoBtn(r.fotoId, 'lg')}</div>` : ''}</section>
+  </div>
+  <div style="margin-top:20px;display:flex;justify-content:flex-end"><button class="btn danger sm" data-a="elimina-udi">${ic('trash')}Elimina registrazione</button></div>`;
+}
+/* ============ manutenzione attrezzature ============ */
+const fmtDT = s => s ? new Date(s).toLocaleString('it-IT', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+function fa(s) { // "oggi", "ieri", "5 giorni fa"
+  const g = Math.floor((new Date(S.st.oggi + 'T23:59:59') - new Date(s)) / 864e5);
+  return g <= 0 ? 'oggi' : g === 1 ? 'ieri' : g + ' giorni fa';
+}
+function ultimaDi(a) {
+  const u = Object.values(a.ultime || {}).sort((x, y) => new Date(y.il) - new Date(x.il))[0];
+  return u ? `Ultima manutenzione: ${fa(u.il)}` : 'Nessuna manutenzione registrata';
+}
+function vMan() {
+  const p = S.st.manutenzione, list = S.att || [];
+  const vis = list.filter(a => !S.sede || a.sedeId === S.sede);
+  const perSede = {}; for (const a of vis) (perSede[a.sede] ||= []).push(a);
+  return `<div class="head"><div style="flex:1 1 260px"><h2 class="view">Manutenzione attrezzature</h2><p>Tocca un riunito o l'aspiratore, spunta cosa hai fatto e conferma: resta nel registro con il tuo nome, la data e l'ora.</p></div>
+    ${p.sedi.length > 1 ? `<div class="field" style="margin:0;flex:0 1 220px"><label for="m-sedef" class="sr">Sede</label><select id="m-sedef" data-sede><option value="">Tutte le sedi</option>${p.sedi.map(s => `<option value="${esc(s.id)}" ${S.sede === s.id ? 'selected' : ''}>${esc(s.nome)}</option>`).join('')}</select></div>` : ''}
+    <button class="btn" data-go="manreg">${ic('reg')}Registro</button>
+    ${p.admin ? `<button class="btn" data-a="gestisci-att">${ic('edit')}Riuniti e aspiratori</button>` : ''}</div>
+  ${S.attForm ? formAtt() : ''}
+  ${!p.sedi.length ? '<div class="card empty"><b>Nessuna sede assegnata</b>Chiedi all\'amministratore di assegnarti la tua sede in Gestione accessi.</div>'
+    : vis.length ? Object.entries(perSede).map(([sede, as]) => `${p.sedi.length > 1 ? `<div class="sede-h">${esc(sede)}</div>` : ''}<div class="att-grid">${as.map(a =>
+      `<button class="att" style="--ac:${AC[a.tipo]}" data-att="${esc(a.id)}"><span class="art">${ART[a.tipo]}</span><span class="kind">${a.tipo === 'riunito' ? 'Riunito' : 'Aspiratore'}</span><span class="nm">${esc(a.nome)}</span><span class="last">${ultimaDi(a)}</span></button>`).join('')}</div>`).join('')
+    : `<div class="card empty"><b>Nessun riunito o aspiratore${S.sede ? ' in questa sede' : ''}</b>${p.admin ? 'Aggiungili con «Riuniti e aspiratori».' : 'L\'amministratore deve ancora inserirli per la tua sede.'}</div>`}`;
+}
+function formAtt() {
+  const f = S.attForm, p = S.st.manutenzione, list = (S.att || []).filter(a => !S.sede || a.sedeId === S.sede);
+  return `<section class="card pad" style="margin-bottom:16px"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px"><h3>Riuniti e aspiratori</h3><button class="btn sm" data-a="chiudi-att">Chiudi</button></div>
+    ${list.map(a => `<div class="rec" style="align-items:center"><span style="width:40px;height:40px;color:${AC[a.tipo]};flex:none">${ART[a.tipo]}</span>
+      <div class="grow"><input class="sr" aria-hidden="true"><div class="field" style="margin:0"><label class="sr" for="rn-${esc(a.id)}">Nome</label><input id="rn-${esc(a.id)}" data-rinomina="${esc(a.id)}" value="${esc(a.nome)}"></div>
+      <div class="meta">${a.tipo === 'riunito' ? 'Riunito' : 'Aspiratore'} · ${esc(a.sede)}</div></div>
+      <button class="btn sm" data-salva-nome="${esc(a.id)}">${ic('check')}Salva</button><button class="btn sm danger" data-togli-att="${esc(a.id)}" aria-label="Togli">${ic('trash')}</button></div>`).join('')}
+    <div class="testbox" style="margin-top:12px"><div class="lbl" style="margin-bottom:8px">Aggiungi</div>
+      <div class="grid2">
+        <div class="field"><label for="na-sede">Sede</label><select id="na-sede" data-af="sede">${p.sedi.map(s => `<option value="${esc(s.id)}" ${f.sede === s.id ? 'selected' : ''}>${esc(s.nome)}</option>`).join('')}</select></div>
+        <div class="field"><span class="lbl">Tipo</span><div class="seg" role="group" aria-label="Tipo"><button class="${f.tipo === 'riunito' ? 'on' : ''}" data-atipo="riunito">Riunito</button><button class="${f.tipo === 'aspiratore' ? 'on' : ''}" data-atipo="aspiratore">Aspiratore</button></div></div>
+        <div class="field"><label for="na-nome">Nome</label><input id="na-nome" data-af="nome" value="${esc(f.nome || '')}" placeholder="${f.tipo === 'riunito' ? 'Es. Riunito 1, Sala blu' : 'Es. Aspiratore Cattani'}"></div>
+      </div>
+      ${S.err ? `<div class="err" role="alert" style="margin-bottom:10px">${esc(S.err)}</div>` : ''}
+      <button class="btn primary" data-a="aggiungi-att">${ic('plus')}Aggiungi</button></div>
+  </section>`;
+}
+function apriAtt(id) {
+  const a = S.att.find(x => x.id === id); if (!a) return;
+  S.dlg = { a, voci: [], note: '', conferma: false };
+  disegnaDlg(); $('#dlg').showModal();
+}
+function disegnaDlg() {
+  const { a, voci, conferma } = S.dlg, V = S.st.voci[a.tipo];
+  const ora = new Date().toLocaleString('it-IT', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+  $('#dlg').innerHTML = `<div class="dh" style="--ac:${AC[a.tipo]}"><span class="art">${ART[a.tipo]}</span><div><h3>${esc(a.nome)}</h3><div class="muted" style="font-size:13px">${esc(a.sede)} · ${esc(S.st.me.nome)}</div></div></div>
+    <div class="db">${conferma
+      ? `<div class="conf">Confermi di aver eseguito ${voci.length === 1 ? 'questa operazione' : 'queste operazioni'} oggi, ${esc(ora)}?<br><span style="font-weight:500">Dopo la conferma la registrazione non si può più modificare (solo l'amministratore può correggerla).</span></div>
+        <ul style="margin:12px 0 0;padding-left:20px">${voci.map(v => `<li><b>${esc(V.find(x => x[0] === v)[1])}</b></li>`).join('')}</ul>${S.dlg.note ? `<p class="muted">Note: ${esc(S.dlg.note)}</p>` : ''}`
+      : `<div class="lbl" style="margin-bottom:8px">Cosa hai fatto?</div>${V.map(([k, l]) => { const u = a.ultime[k];
+        return `<label class="flag"><input type="checkbox" data-voce="${k}" ${voci.includes(k) ? 'checked' : ''}><span class="vi">${ic(VICON[k])}</span><span><span class="t">${esc(l)}</span><br><span class="s">${u ? `Ultima: ${fmtDT(u.il)} · ${esc(u.chi)}` : 'Mai registrata'}</span></span></label>`; }).join('')}
+        <div class="field" style="margin:10px 0 0"><label for="dl-note">Note (facoltative)</label><input id="dl-note" data-dnote value="${esc(S.dlg.note)}"></div>`}
+      ${S.err ? `<div class="err" role="alert" style="margin-top:10px">${esc(S.err)}</div>` : ''}</div>
+    <div class="df">${conferma
+      ? `<button class="btn" data-a="dlg-indietro">Indietro</button><button class="btn primary" data-a="dlg-registra" ${S.busy ? 'disabled' : ''}>${ic('check')}${S.busy ? 'Registro…' : 'Sì, registra'}</button>`
+      : `<button class="btn" data-a="dlg-chiudi">Annulla</button><button class="btn primary" data-a="dlg-avanti" ${voci.length ? '' : 'disabled'}>Registra${voci.length ? ' (' + voci.length + ')' : ''}</button>`}</div>`;
+}
+function vManReg() {
+  const p = S.st.manutenzione, f = S.regF, rows = S.reg || [], admin = p.admin;
+  const atts = (S.att || []).filter(a => !f.sede || a.sedeId === f.sede);
+  return `<button class="link" data-go="man">${ic('back')}Manutenzione attrezzature</button>
+  <div class="head"><div style="flex:1"><h2 class="view">Registro manutenzioni</h2><p>${admin ? 'Come amministratore puoi correggere o togliere una registrazione: resta scritto chi l\'ha modificata.' : 'Le registrazioni non si modificano: per una correzione chiedi all\'amministratore.'}</p></div>
+    <button class="btn" data-a="stampa">${ic('reg')}Stampa</button></div>
+  <div class="card pad" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px">
+    ${p.sedi.length > 1 ? `<div class="field" style="margin:0;flex:1 1 160px"><label for="r-sede">Sede</label><select id="r-sede" data-rf="sede"><option value="">Tutte</option>${p.sedi.map(s => `<option value="${esc(s.id)}" ${f.sede === s.id ? 'selected' : ''}>${esc(s.nome)}</option>`).join('')}</select></div>` : ''}
+    <div class="field" style="margin:0;flex:1 1 160px"><label for="r-att">Attrezzatura</label><select id="r-att" data-rf="att"><option value="">Tutte</option>${atts.map(a => `<option value="${esc(a.id)}" ${f.att === a.id ? 'selected' : ''}>${esc(a.nome)}${p.sedi.length > 1 ? ' · ' + esc(a.sede) : ''}</option>`).join('')}</select></div>
+    <div class="field" style="margin:0;flex:1 1 140px"><label for="r-da">Dal</label><input type="date" id="r-da" data-rf="da" value="${esc(f.da || '')}"></div>
+    <div class="field" style="margin:0;flex:1 1 140px"><label for="r-a">Al</label><input type="date" id="r-a" data-rf="a" value="${esc(f.a || '')}"></div>
+  </div>
+  ${rows.length ? `<div class="card tbl"><table class="reg"><thead><tr><th>Data e ora</th><th>Attrezzatura</th><th>Operazione</th><th>Eseguita da</th><th>Note</th>${admin ? '<th></th>' : ''}</tr></thead><tbody>
+    ${rows.map(r => S.regEdit?.id === r.id ? rigaEdit(r) : `<tr><td style="white-space:nowrap"><b>${esc(fmtDT(r.eseguitaIl))}</b></td><td>${esc(r.attrezzatura)}${p.sedi.length > 1 ? `<div class="muted" style="font-size:12.5px">${esc(r.sede)}</div>` : ''}</td>
+      <td><span style="display:inline-flex;gap:6px;align-items:center">${ic(VICON[r.voce] || 'man')}${esc(r.voceNome)}</span></td><td>${esc(r.operatore)}</td>
+      <td>${esc(r.note)}${r.modificataDa ? `<div class="muted" style="font-size:12px">Corretta da ${esc(r.modificataDa)} il ${esc(fmtDT(r.modificataIl))}</div>` : ''}</td>
+      ${admin ? `<td style="white-space:nowrap"><button class="btn sm" data-reg-mod="${esc(r.id)}" aria-label="Correggi">${ic('edit')}</button> <button class="btn sm danger" data-reg-del="${esc(r.id)}" aria-label="Togli">${ic('trash')}</button></td>` : ''}</tr>`).join('')}
+  </tbody></table></div><div class="muted" style="font-size:13px;margin-top:8px">${rows.length} ${rows.length === 1 ? 'registrazione' : 'registrazioni'}</div>`
+    : '<div class="card empty"><b>Nessuna registrazione</b>Le manutenzioni registrate compaiono qui.</div>'}`;
+}
+function rigaEdit(r) {
+  const e = S.regEdit, V = S.st.voci[r.tipo];
+  return `<tr><td colspan="6"><div class="testbox" style="margin:0"><div class="grid2">
+    <div class="field"><label for="e-q">Data e ora</label><input type="datetime-local" id="e-q" data-re="quando" value="${esc(e.quando)}"></div>
+    <div class="field"><label for="e-v">Operazione</label><select id="e-v" data-re="voce">${V.map(([k, l]) => `<option value="${k}" ${e.voce === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+    <div class="field"><label for="e-n">Note</label><input id="e-n" data-re="note" value="${esc(e.note)}"></div></div>
+    <div class="muted" style="font-size:13px;margin-bottom:8px">${esc(r.attrezzatura)} · eseguita da ${esc(r.operatore)}</div>
+    <div style="display:flex;gap:8px"><button class="btn primary sm" data-a="reg-salva">${ic('check')}Salva correzione</button><button class="btn sm" data-a="reg-annulla">Annulla</button></div></div></td></tr>`;
+}
+const locDT = s => { const d = new Date(s); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
+
+// Legge il DataMatrix / codice a barre dalla foto (BarcodeDetector del telefono, altrimenti ZXing)
+let zx = null;
+async function leggiCodice(dataUrl) {
+  try {
+    const img = new Image(); img.src = dataUrl; await img.decode();
+    if ('BarcodeDetector' in window) {
+      const det = new BarcodeDetector({ formats: ['data_matrix', 'qr_code', 'code_128', 'ean_13', 'gs1_databar'] });
+      const r = await det.detect(img); if (r[0]?.rawValue) return r[0].rawValue;
+    }
+    if (!zx) await new Promise(ok => { const s = document.createElement('script'); s.src = 'vendor/zxing.js'; s.onload = ok; s.onerror = ok; document.head.append(s); zx = true; });
+    if (window.ZXing) {
+      const hints = new Map(); hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+      const r = await new ZXing.BrowserMultiFormatReader(hints).decodeFromImageElement(img).catch(() => null);
+      if (r) return r.getText();
+    }
+  } catch {}
+  return '';
+}
+
+/* ============ eventi ============ */
+document.addEventListener('click', async e => {
+  const b = e.target.closest('button,[data-go]'); if (!b) return;
+  if (b.dataset.foto) return vediFoto(b.dataset.foto);
+  if (b.dataset.go) { S.form = null; S.err = ''; return go(b.dataset.go, { id: null }); }
+  if (b.dataset.apriOggi) { try { const r = await api('POST', 'api/steri/schede', { macchina: b.dataset.apriOggi }); S.form = null; return go('scheda', { id: r.id }); } catch (x) { return toast(x.message); } }
+  if (b.dataset.storico) return go('storico', { id: b.dataset.storico });
+  if (b.dataset.scheda) return go('scheda', { id: b.dataset.scheda });
+  if (b.dataset.modificaM) { const m = S.macchine.find(x => x.id === b.dataset.modificaM); S.form = { tipo: 'macchina', id: m.id, marca: m.marca, modello: m.modello, matricola: m.matricola }; S.err = ''; render(); return window.scrollTo(0, 0); }
+  if (b.dataset.nuovoTest) { S.form = { tipo: 'test', test: b.dataset.nuovoTest, esito: '' }; S.err = ''; return render(); }
+  if (b.dataset.esito && S.form) { S.form.esito = b.dataset.esito; return render(); }
+  if (b.dataset.temp && S.form) { S.form.temperatura = +b.dataset.temp; return render(); }
+  if (b.dataset.dente && S.udiForm) { const n = +b.dataset.dente, d = S.udiForm.denti; S.udiForm.denti = d.includes(n) ? d.filter(x => x !== n) : [...d, n]; return render(); }
+  if (b.dataset.impianto) return go('udivedi', { id: b.dataset.impianto });
+  if (b.dataset.esitoSpore) { try { await api('PUT', 'api/steri/test/' + b.dataset.esitoSpore, { esito: b.dataset.v }); toast('Esito del test delle spore salvato.'); return load(); } catch (x) { return toast(x.message); } }
+  if (b.dataset.delTest || b.dataset.delCiclo) {
+    if (!confirm('Togliere questa registrazione?')) return;
+    try { await api('DELETE', b.dataset.delTest ? 'api/steri/test/' + b.dataset.delTest : 'api/steri/cicli/' + b.dataset.delCiclo); toast('Tolta.'); return load(); } catch (x) { return toast(x.message, 5000); }
+  }
+  if (b.dataset.att) return apriAtt(b.dataset.att);
+  if (b.dataset.atipo && S.attForm) { S.attForm.tipo = b.dataset.atipo; return render(); }
+  if (b.dataset.salvaNome) { try { await api('PUT', 'api/man/attrezzature/' + b.dataset.salvaNome, { nome: document.querySelector(`[data-rinomina="${b.dataset.salvaNome}"]`).value }); toast('Nome salvato.'); return load(); } catch (x) { return toast(x.message); } }
+  if (b.dataset.togliAtt) { if (!confirm('Togliere questa attrezzatura dalla dashboard? Il registro delle manutenzioni già fatte resta.')) return;
+    try { await api('PUT', 'api/man/attrezzature/' + b.dataset.togliAtt, { attiva: false }); toast('Tolta.'); return load(); } catch (x) { return toast(x.message); } }
+  if (b.dataset.regMod) { const r = S.reg.find(x => x.id === b.dataset.regMod); S.regEdit = { id: r.id, voce: r.voce, note: r.note, quando: locDT(r.eseguitaIl) }; return render(); }
+  if (b.dataset.regDel) { if (!confirm('Togliere definitivamente questa registrazione dal registro?')) return;
+    try { await api('DELETE', 'api/man/registro/' + b.dataset.regDel); toast('Registrazione tolta.'); return load(); } catch (x) { return toast(x.message); } }
+  const a = b.dataset.a; if (!a) return;
+  if (a.startsWith('dlg-')) {
+    if (a === 'dlg-chiudi') { S.err = ''; return $('#dlg').close(); }
+    if (a === 'dlg-avanti') { S.dlg.conferma = true; S.err = ''; return disegnaDlg(); }
+    if (a === 'dlg-indietro') { S.dlg.conferma = false; return disegnaDlg(); }
+    if (a === 'dlg-registra') {
+      S.busy = true; disegnaDlg();
+      try { const r = await api('POST', `api/man/attrezzature/${S.dlg.a.id}/registra`, { voci: S.dlg.voci, note: S.dlg.note }); S.busy = false; S.err = '';
+        $('#dlg').close(); toast(r.n === 1 ? 'Manutenzione registrata.' : r.n + ' manutenzioni registrate.'); return load(); }
+      catch (x) { S.busy = false; S.err = x.message; return disegnaDlg(); }
+    }
+  }
+  try {
+    if (a === 'gestisci-att') { S.attForm = { sede: S.sede || S.st.manutenzione.sedi[0]?.id || '', tipo: 'riunito', nome: '' }; S.err = ''; return render(); }
+    if (a === 'chiudi-att') { S.attForm = null; S.err = ''; return render(); }
+    if (a === 'aggiungi-att') { const f = S.attForm; if (!(f.nome || '').trim()) { S.err = 'Scrivi il nome.'; return render(); }
+      await api('POST', 'api/man/attrezzature', f); S.attForm = { ...f, nome: '' }; S.err = ''; toast('Aggiunto.'); return load(); }
+    if (a === 'reg-annulla') { S.regEdit = null; return render(); }
+    if (a === 'reg-salva') { const e = S.regEdit; await api('PUT', 'api/man/registro/' + e.id, { voce: e.voce, note: e.note, eseguitaIl: new Date(e.quando).toISOString() }); S.regEdit = null; toast('Correzione salvata.'); return load(); }
+    if (a === 'stampa') return window.print();
+    if (a === 'nuova-macchina') { S.form = { tipo: 'macchina', sede: S.sede || S.st.sterilizzazione.sedi[0]?.id || '' }; S.err = ''; return render(); }
+    if (a === 'annulla-form') { S.form = null; S.err = ''; return render(); }
+    if (a === 'salva-macchina') {
+      const f = S.form; if (!(f.marca || '').trim()) { S.err = 'Scrivi la marca.'; return render(); }
+      if (f.id) await api('PUT', 'api/steri/macchine/' + f.id, f); else await api('POST', 'api/steri/macchine', f);
+      S.form = null; S.err = ''; toast('Sterilizzatrice salvata.'); return load();
+    }
+    if (a === 'disattiva-macchina') {
+      if (!confirm('Segnare la sterilizzatrice come non più in uso? Le schede già registrate restano nello storico.')) return;
+      await api('PUT', 'api/steri/macchine/' + S.form.id, { ...S.form, attiva: false }); S.form = null; toast('Sterilizzatrice tolta dall\'elenco.'); return load();
+    }
+    if (a === 'salva-test') {
+      const f = S.form; if (!f.esito) { S.err = 'Scegli l\'esito del test.'; return render(); }
+      if (!f.foto && !confirm('Non hai aggiunto la foto del foglio del test. Salvare lo stesso?')) return;
+      S.busy = true; render();
+      try { await api('POST', `api/steri/schede/${S.scheda.id}/test`, { tipo: f.test, esito: f.esito, note: f.note || '', foto: f.foto || null }); }
+      finally { S.busy = false; }
+      S.form = null; S.err = ''; toast(f.esito === 'ko' ? 'Salvato: test NON superato. Avvisa il responsabile e non usare la sterilizzatrice.' : 'Test salvato.', 6000); return load();
+    }
+    if (a === 'nuovo-ciclo') { S.form = { tipo: 'ciclo', esito: 'ok', temperatura: 134 }; S.err = ''; return render(); }
+    if (a === 'leggi-ciclo') {
+      S.busy = true; render();
+      try { const r = await api('POST', 'api/steri/leggi-ciclo', { foto: S.form.foto });
+        if (r.numero) S.form.numero = r.numero; if (r.temperatura) S.form.temperatura = r.temperatura; if (r.esito) S.form.esito = r.esito; S.form.dubbi = r.dubbi;
+        toast(r.numero || r.temperatura ? 'Letti dalla foto: controlla i valori.' : 'Dalla foto non si leggono: compila a mano.'); }
+      finally { S.busy = false; } return render();
+    }
+    if (a === 'salva-ciclo') {
+      const f = S.form;
+      if (!f.foto) { S.err = 'Aggiungi la foto della vapor line.'; return render(); }
+      if (!(f.numero || '').trim()) { S.err = 'Scrivi il numero del ciclo.'; return render(); }
+      S.busy = true; render();
+      try { await api('POST', `api/steri/schede/${S.scheda.id}/cicli`, { numero: f.numero, temperatura: f.temperatura, esito: f.esito, note: f.note || '', foto: f.foto }); }
+      finally { S.busy = false; }
+      S.form = null; S.err = ''; toast(f.esito === 'ko' ? 'Salvato: vapor line NON virata. Il carico va risterilizzato.' : 'Ciclo salvato.', 6000); return load();
+    }
+    if (a === 'nuovo-impianto') {
+      const oggi = S.st.oggi;
+      S.udiForm = { sede: S.sede || S.st.udi.sedi[0]?.id || '', dataIntervento: oggi, pazienteCognome: '', pazienteNome: '', medico: '', denti: [] };
+      S.err = ''; Object.assign(S, { view: 'udiform' }); window.scrollTo(0, 0); return render();
+    }
+    if (a === 'modifica-udi') { const r = S.udi.find(x => x.id === S.id); S.udiForm = { ...r, denti: [...r.denti], scadenza: r.scadenza || '' }; S.err = ''; S.view = 'udiform'; window.scrollTo(0, 0); return render(); }
+    if (a === 'annulla-udi') { const id = S.udiForm?.id; S.udiForm = null; S.err = ''; return id ? go('udivedi', { id }) : go('udi', { id: null }); }
+    if (a === 'salva-udi') {
+      const f = S.udiForm;
+      if (!f.pazienteCognome?.trim()) { S.err = 'Scrivi il cognome del paziente.'; return render(); }
+      if (!f.medico?.trim()) { S.err = 'Scrivi il medico che ha eseguito l\'intervento.'; return render(); }
+      if (!f.lotto?.trim() && !f.udi?.trim() && !f.gtin?.trim()) { S.err = 'Servono almeno il lotto o il codice UDI: fotografa l\'etichetta o scrivili a mano.'; return render(); }
+      S.saving = true; render();
+      try {
+        if (f.id) { await api('PUT', 'api/udi/' + f.id, f); S.saving = false; S.udiForm = null; toast('Registrazione aggiornata.'); return go('udi', { id: null }); }
+        await api('POST', 'api/udi', f);
+      } finally { S.saving = false; }
+      S.udiForm = null; S.err = ''; toast('Impianto registrato.'); return go('udi', { id: null });
+    }
+    if (a === 'elimina-udi') {
+      if (!confirm('Eliminare definitivamente questa registrazione dal registro impianti?')) return;
+      await api('DELETE', 'api/udi/' + S.id); toast('Registrazione eliminata.'); return go('udi', { id: null });
+    }
+  } catch (x) { S.err = x.message; if (S.view === 'udiform' || S.form) render(); else toast(x.message, 5000); }
+});
+let qT;
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.dataset.f && S.form) S.form[t.dataset.f] = t.value;
+  if (t.dataset.u && S.udiForm) S.udiForm[t.dataset.u] = t.value;
+  if (t.dataset.af && S.attForm) S.attForm[t.dataset.af] = t.value;
+  if (t.dataset.re && S.regEdit) S.regEdit[t.dataset.re] = t.value;
+  if (t.dataset.dnote !== undefined && S.dlg) S.dlg.note = t.value;
+  if (t.dataset.voce && S.dlg) { const v = t.dataset.voce; S.dlg.voci = t.checked ? [...S.dlg.voci, v] : S.dlg.voci.filter(x => x !== v); disegnaDlg(); }
+  if (t.dataset.q !== undefined) { S.q = t.value; clearTimeout(qT); qT = setTimeout(async () => {
+    try { S.udi = (await api('GET', 'api/udi?q=' + encodeURIComponent(S.q) + (S.sede ? '&sede=' + encodeURIComponent(S.sede) : ''))).impianti; } catch {}
+    const pos = t.selectionStart; render(); const n = document.querySelector('[data-q]'); n.focus(); try { n.setSelectionRange(pos, pos); } catch {} }, 250); }
+});
+document.addEventListener('change', async e => {
+  const t = e.target;
+  if (t.dataset.sede !== undefined) { S.sede = t.value; return render(); }
+  if (t.dataset.sedeUdi !== undefined) { S.sede = t.value; return load(); }
+  if (t.dataset.rf) { S.regF[t.dataset.rf] = t.value; if (t.dataset.rf === 'sede') S.regF.att = ''; return load(); }
+  if (t.dataset.f === 'sede' && S.form) S.form.sede = t.value;
+  if (t.dataset.u === 'sede' && S.udiForm) S.udiForm.sede = t.value;
+  if (t.matches('[data-foto-in]') && t.files[0]) { try { S.form.foto = await riduci(t.files[0]); S.form.dubbi = null; render(); } catch (x) { toast(x.message); } }
+  if (t.matches('[data-foto-udi]') && t.files[0]) {
+    const f = S.udiForm;
+    try {
+      f.foto = await riduci(t.files[0], 2000); S.busy = true; render();
+      const codice = await leggiCodice(f.foto), letti = [];
+      if (codice) {
+        const c = await api('POST', 'api/udi/codice', { testo: codice });
+        f.udi = c.grezzo || codice; if (c.gtin) f.gtin = c.gtin; if (c.lotto) f.lotto = c.lotto; if (c.scadenza) f.scadenza = c.scadenza; if (c.seriale) f.seriale = c.seriale; if (c.ref) f.ref = c.ref;
+        letti.push('codice ' + (c.tipo || 'letto'));
+      }
+      if (S.st.ai) {
+        try { const r = await api('POST', 'api/udi/leggi', { foto: f.foto, codice });
+          for (const k of ['prodotto', 'produttore', 'ref', 'gtin', 'lotto', 'scadenza']) { const v = k === 'prodotto' ? r.nome : r[k]; if (v && !f[k]) f[k] = v; }
+          letti.push('etichetta'); if (r.dubbi?.length) letti.push('da controllare: ' + r.dubbi.join('; '));
+        } catch (x) { letti.push(x.message); }
+      }
+      f.letto = codice || S.st.ai ? 'Letto dalla foto: ' + letti.join(' · ') + '. Controlla i campi.' : 'Codice non trovato nella foto: avvicinati al quadratino o scrivi i dati a mano.';
+    } catch (x) { toast(x.message); }
+    S.busy = false; render();
+  }
+});
+
+/* ============ avvio ============ */
+(async () => {
+  try { S.st = await api('GET', 'api/stato'); } catch (e) { $('#main').innerHTML = `<div class="empty"><b>${esc(e.message)}</b></div>`; return; }
+  const u = new URLSearchParams(location.search), v = u.get('v'), id = u.get('id');
+  const ok = { steri: S.st.sterilizzazione, udi: S.st.udi, man: S.st.manutenzione };
+  if (v === 'steri' && ok.steri) return go('steri');
+  if ((v === 'scheda' || v === 'storico') && ok.steri && id) return go(v, { id });
+  if (v === 'udi' && ok.udi) return go('udi');
+  if ((v === 'man' || v === 'manreg') && S.st.manutenzione) return go(v);
+  if (v === 'udivedi' && ok.udi && id) { S.udi = (await api('GET', 'api/udi')).impianti; return go('udivedi', { id }); }
+  // con una sola sezione si entra subito lì
+  const solo = [ok.steri && 'steri', ok.udi && 'udi', ok.man && 'man', S.st.magazzino && 'mag'].filter(Boolean);
+  if (solo.length === 1 && solo[0] !== 'mag') return go(solo[0]);
+  go('home');
+})();
+</script>
+</body>
+</html>

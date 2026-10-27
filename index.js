@@ -6,6 +6,7 @@
 //   turni.appgestione.it                    → Turni (planning, assenze, buste paga)
 //   comunicazioni.appgestione.it            → Comunicazioni ed eventi aziendali
 //   documenti.appgestione.it                → Documenti di studio
+//   appgestione.it/aso/                     → Gestione ASO (Compliance sterilizzazione, Registro impianti UDI)
 //   tutto il resto (protocolli.…, onrender) → Protocolli
 // Altri indirizzi si possono aggiungere con ACCESSI_HOSTS e CALENDARIO_HOSTS (separati da virgola).
 const http = require('http');
@@ -16,6 +17,11 @@ const magazzino = require('./magazzino/server');
 const turni = require('./turni/server');
 const comunicazioni = require('./comunicazioni/server');
 const documenti = require('./documenti/server');
+const aso = require('./aso/server');
+// Gestione ASO vive su appgestione.it/aso/ (stesso dominio dell'accesso unico: niente nuovi domini da collegare)
+const asoMontata = require('express')();
+asoMontata.use((req, res, next) => req.url === '/aso' || req.url.startsWith('/aso?') ? res.redirect(301, '/aso/' + req.url.slice(4)) : next());
+asoMontata.use('/aso', aso.app);
 
 const PORT = process.env.PORT || 3000;
 const hosts = (list, extra) => new Set([...list, ...(process.env[extra] || '').split(',').map(h => h.trim().toLowerCase()).filter(Boolean)]);
@@ -29,7 +35,7 @@ const hostOf = req => String(req.headers.host || '').split(':')[0].toLowerCase()
 
 function route(req) {
   const h = hostOf(req);
-  if (accHosts.has(h)) return accessi.app;
+  if (accHosts.has(h)) return /^\/aso(\/|\?|$)/.test(req.url) ? asoMontata : accessi.app;
   if (calHosts.has(h) || h.startsWith('calendario.')) return calendario.app;
   if (magHosts.has(h) || h.startsWith('magazzino.')) return magazzino.app;
   if (turHosts.has(h) || h.startsWith('turni.')) return turni.app;
@@ -46,6 +52,7 @@ function route(req) {
   await turni.start();
   await comunicazioni.start();
   await documenti.start();
+  await aso.start();
   { // quali fornitori esterni sono attivi (solo i nomi, mai le chiavi): serve per l'elenco dei fornitori nella privacy
     const ai = require('./lib/ai'), p = ai.providerInfo(), e = ai.embedInfo();
     console.log(`Fornitori esterni attivi: assistente Protocolli = ${p.ok ? p.provider + ' (' + p.model + ')' : 'nessuno'}, ricerca per significato = ${e.ok ? e.provider : 'nessuna'}, `

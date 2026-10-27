@@ -232,7 +232,13 @@ async function fondiSeguaci() {
 async function appsOf(user) {
   if (user.owner) return Object.fromEntries(APP_KEYS.map(k => [k, 'admin']));
   const { rows } = await q('select app, role from user_apps where user_id = $1 and not sospesa', [user.id]);
-  return Object.fromEntries(rows.filter(r => APP_KEYS.includes(r.app)).map(r => [r.app, r.role]));
+  const out = Object.fromEntries(rows.filter(r => APP_KEYS.includes(r.app)).map(r => [r.app, r.role]));
+  // riquadri "virtuali" (es. Gestione ASO): ci sono se la persona ha almeno una delle app che contengono
+  for (const v of APPS.filter(a => a.virtuale)) {
+    const figli = v.gruppo.filter(k => out[k]);
+    if (figli.length) out[v.key] = figli.some(k => out[k] === 'admin') ? 'admin' : 'user';
+  }
+  return out;
 }
 // App spente (per tutti tranne gli amministratori dell'app): letto dal database al massimo ogni 15 secondi
 let SPENTE = null;
