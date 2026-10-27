@@ -15,7 +15,7 @@ Tutte le app sono su **Render** (workspace "Giancarlo's workspace"), il codice �
 | Calendario eventi | calendario.appgestione.it | `/admin` → accesso | `appgestione-eu` (lo stesso dei Protocolli) | `Know-How-Academy`, cartella `calendario/` (il repository `app-calendario-eventi` non si usa più) |
 | Magazzino centrale | magazzino.appgestione.it | stessa app: chi è Amministratore nel pannello accessi vede Richieste, Articoli, Riordino, Fornitori | `appgestione-eu` (lo stesso di Protocolli e Calendario) | `Know-How-Academy`, cartella `magazzino/` |
 | Turni | turni.appgestione.it | stessa app: Amministratore = planning, richieste, personale, regole, sedi, buste paga; Utente = il dipendente (riconosciuto dall'email scritta nella sua scheda) | `appgestione-eu` | `Know-How-Academy`, cartella `turni/` |
-| Radiografia studio | radiografia-studio.onrender.com | — | `radiografia-studio-eu` (Python, Francoforte, Starter) + database `radiografia-db-eu` | `app-radiografia-studi-dentalia` |
+| Radiografia studio | radiografia-studio-eu.onrender.com | — | `radiografia-studio-eu` (Python, Francoforte, Starter) + database `radiografia-db-eu` | `app-radiografia-studi-dentalia` |
 
 I vecchi indirizzi `www.appgestione.it/finanziario`, `/ticketassistenza` e `/laboratorio` portano da soli ai nuovi sottodomini.
 
@@ -42,7 +42,7 @@ Per ogni nuovo sottodominio: record CNAME su Aruba **e** "Custom Domains" nel se
 **Trasloco Gestione finanziaria (14 ottobre 2026, 08:34–08:41):** dal vecchio `APP-Gestione-Finanziaria` (srv-d9tjv4v40ujc73eh59t0, Oregon, ora `MANUTENZIONE=true`, disco intatto, copia di sicurezza) al nuovo `gestione-finanziaria-eu` (srv-db7h9q2j9qps73cfer40, Francoforte, disco 1 GB su `/var/data`). Copia verificata (impronta, integrità, righe per tabella): 5 tabelle, 9 righe (4 aziende con tutti i loro dati contabili nella colonna `data`). Copia automatica spenta (`COPIA_FORZA=false`, `COPIA_DA=-`, marcatore `.trasloco_ok` sul disco). Dominio `finanza.appgestione.it` spostato sul nuovo servizio (CNAME Aruba → gestione-finanziaria-eu.onrender.com). Il vecchio servizio si elimina solo con l'OK del proprietario. **Stripe in modalità TEST dal 14/10/2026:** sul nuovo servizio `STRIPE_SECRET_KEY` (sk_test della "Sandbox di New business"), `STRIPE_PRICE_ID` = prezzo test 29 €/mese, `STRIPE_WEBHOOK_SECRET` = webhook test verso finanza.appgestione.it/api/stripe/webhook. I valori LIVE sono ancora nelle variabili del vecchio servizio APP-Gestione-Finanziaria: per tornare live ricopiarli da lì (prima di eliminarlo!) e verificare che il webhook live punti a finanza.appgestione.it.
 
 - **`appgestione-db-eu`** (PostgreSQL a pagamento, Francoforte, 1 GB, circa 6,30 $/mese, nessuna scadenza): usato da Protocolli (schema `mappa`), Calendario eventi (`calendario`), Accesso unico (`accessi`), Magazzino (`magazzino`) e Turni (`turni`).
-- **`radiografia-db`** (Oregon) è passato al piano a pagamento Basic 256 MB; il 26 ottobre 2026 è stato creato anche `radiografia-db-eu` (Francoforte, stesso piano): quando l'app Radiografia userà quello nuovo, il vecchio si può eliminare.
+- **Radiografia**: dal 27 ottobre 2026 tutta a Francoforte (`radiografia-studio-eu` + `radiografia-db-eu`, Basic 256 MB).
 - Ticket assistenza e Nuovalab usano **Supabase**.
 - Gestione finanziaria salva i dati sul disco del suo servizio (`/var/data`).
 
