@@ -109,7 +109,9 @@ setInterval(() => { const now = Date.now(); for (const [k, a] of hits) if (!a.so
 // un'app "dentro" un'altra (Calendario dentro Comunicazioni ed eventi) non ha un suo riquadro se la persona ha anche l'altra
 // spente: app spente dal pannello (la persona vede il riquadro grigio, l'amministratore dell'app la usa normalmente)
 const appsForUser = (apps, spente = new Set()) => APPS.filter(a => apps[a.key] && !(a.dentro && apps[a.dentro])).map(a => ({ key: a.key, name: a.name, url: a.url, link: a.sso ? `/sso/${a.key}` : a.url,
-  color: a.color, desc: a.desc, role: apps[a.key], ...(spente.has(a.key) ? { spenta: true } : {}) }));
+  color: a.color, desc: a.desc, role: apps[a.key],
+  // un riquadro "contenitore" (Gestione ASO) è spento quando sono spente tutte le app che la persona ha lì dentro
+  ...((a.virtuale ? (a.gruppo || []).filter(k => apps[k]).every(k => spente.has(k)) : spente.has(a.key)) ? { spenta: true } : {}) }));
 
 // App su Supabase (Nuovalab, Ticket): quando qualcuno viene disattivato, eliminato o perde l'accesso,
 // la funzione "sso" di quell'app blocca il suo accesso anche lì.
@@ -523,6 +525,14 @@ app.put('/api/admin/users/:id/apps/:app', needAdmin, wrap(async (req, res) => {
 }));
 /* ---------- app: spegnere per tutti, sospendere a gruppi o persone, storico con Annulla ---------- */
 const APP_GESTIBILI = () => APPS.filter(a => a.key !== 'accessi' && !a.segue && !a.virtuale);
+// interruttori: tutte le app e sotto-app (anche Eventi dentro Comunicazioni); i "contenitori" (Gestione ASO) accendono/spengono i figli
+const APP_SPEGNIBILI = () => APPS.filter(a => a.key !== 'accessi' && !a.virtuale);
+const figliDi = key => { const v = APPS.find(a => a.key === key && a.virtuale); return v ? v.gruppo.filter(k => APP_SPEGNIBILI().some(a => a.key === k)) : null; };
+async function impostaStato(keys, spenta, da) {
+  for (const k of keys) await store.q(`insert into app_stato (app, spenta, cambiata_il, cambiata_da) values ($1,$2,now(),$3)
+    on conflict (app) do update set spenta = excluded.spenta, cambiata_il = now(), cambiata_da = excluded.cambiata_da`, [k, spenta, da]);
+  store.appSpenteAggiorna();
+}
 async function registra(req, app, azione, chi, ids, dettaglio = {}) {
   const id = require('crypto').randomUUID();
   await store.q('insert into app_operazioni (id, app, azione, chi, persone, dettaglio, da) values ($1,$2,$3,$4,$5,$6,$7)',
@@ -553,7 +563,23 @@ app.get('/api/admin/app', needAdmin, wrap(async (req, res) => {
       return { key: a.key, name: a.name, color: a.color, spenta: !!s?.spenta, cambiataIl: s?.cambiata_il || null, cambiataDa: s?.cambiata_da || '',
         attivi: c?.attivi || 0, sospesi: c?.sospesi || 0 }; }),
     operazioni: op,
+    nomi: Object.fromEntries(APPS.map(a => [a.key, a.name])),
   });
+}));
+// Sezione "Accensione": albero delle app con le sotto-app
+app.get('/api/admin/accensione', needAdmin, wrap(async (req, res) => {
+  const { rows: st } = await store.q('select app, spenta, cambiata_il, cambiata_da from app_stato');
+  const { rows: op } = await store.q(`select id, quando, app, azione, da, annullata from app_operazioni where azione in ('spegni','accendi') order by quando desc limit 15`);
+  const riga = a => { const s = st.find(x => x.app === a.key);
+    return { key: a.key, name: a.name, desc: a.desc || '', color: a.color, spenta: !!s?.spenta, cambiataIl: s?.cambiata_il || null, cambiataDa: s?.cambiata_da || '' }; };
+  const sotto = new Set(APPS.filter(a => a.dentro || a.segue).map(a => a.key));
+  const albero = [];
+  for (const a of APPS.filter(x => x.key !== 'accessi' && !sotto.has(x.key))) {
+    const figli = (a.virtuale ? a.gruppo.map(k => APPS.find(x => x.key === k)) : APPS.filter(x => x.dentro === a.key || x.segue === a.key)).filter(Boolean).map(riga);
+    if (a.virtuale) albero.push({ key: a.key, name: a.name, desc: a.desc || '', color: a.color, gruppo: true, spenta: figli.every(f => f.spenta), figli });
+    else albero.push({ ...riga(a), figli });
+  }
+  res.json({ albero, operazioni: op, nomi: Object.fromEntries(APPS.map(a => [a.key, a.name])) });
 }));
 // persone con un permesso nell'app (attivo o sospeso), con figura e sedi per scegliere i gruppi
 app.get('/api/admin/app/:app/persone', needAdmin, wrap(async (req, res) => {
@@ -565,12 +591,11 @@ app.get('/api/admin/app/:app/persone', needAdmin, wrap(async (req, res) => {
     ruolo: r.role, sospesa: r.sospesa, io: r.id === req.user.id })), figure: store.FIGURE });
 }));
 app.put('/api/admin/app/:app/stato', needAdmin, wrap(async (req, res) => {
-  const a = APP_GESTIBILI().find(x => x.key === req.params.app); if (!a) return bad(res, 404, 'App sconosciuta');
+  const figli = figliDi(req.params.app);
+  const a = figli ? APPS.find(x => x.key === req.params.app) : APP_SPEGNIBILI().find(x => x.key === req.params.app); if (!a) return bad(res, 404, 'App sconosciuta');
   const spenta = !!req.body.spenta, da = `${req.user.first_name} ${req.user.last_name}`.trim() || req.user.email;
-  await store.q(`insert into app_stato (app, spenta, cambiata_il, cambiata_da) values ($1,$2,now(),$3)
-    on conflict (app) do update set spenta = excluded.spenta, cambiata_il = now(), cambiata_da = excluded.cambiata_da`, [a.key, spenta, da]);
-  store.appSpenteAggiorna();
-  const op = await registra(req, a.key, spenta ? 'spegni' : 'accendi', 'Tutti tranne gli amministratori', []);
+  await impostaStato(figli || [a.key], spenta, da);
+  const op = await registra(req, a.key, spenta ? 'spegni' : 'accendi', 'Tutti tranne gli amministratori', [], figli ? { figli } : {});
   res.json({ ok: true, operazione: op });
 }));
 app.post('/api/admin/app/:app/sospensioni', needAdmin, wrap(async (req, res) => {
@@ -587,11 +612,7 @@ app.post('/api/admin/operazioni/:id/annulla', needAdmin, wrap(async (req, res) =
   const { rows } = await store.q('select * from app_operazioni where id = $1', [req.params.id]);
   const o = rows[0]; if (!o) return bad(res, 404, 'Operazione non trovata');
   if (o.annullata) return bad(res, 400, 'Questa operazione è già stata annullata.');
-  if (o.azione === 'spegni' || o.azione === 'accendi') {
-    await store.q(`insert into app_stato (app, spenta, cambiata_il, cambiata_da) values ($1,$2,now(),$3)
-      on conflict (app) do update set spenta = excluded.spenta, cambiata_il = now(), cambiata_da = excluded.cambiata_da`, [o.app, o.azione === 'accendi', 'annullamento']);
-    store.appSpenteAggiorna();
-  } else await cambiaSospensione(o.app, o.dettaglio.ids || [], o.azione === 'riattiva');
+  if (o.azione === 'spegni' || o.azione === 'accendi') await impostaStato(o.dettaglio?.figli || [o.app], o.azione === 'accendi', 'annullamento'); else await cambiaSospensione(o.app, o.dettaglio.ids || [], o.azione === 'riattiva');
   await store.q('update app_operazioni set annullata = true where id = $1', [o.id]);
   res.json({ ok: true });
 }));

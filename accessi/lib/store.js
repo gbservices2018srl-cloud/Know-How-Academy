@@ -102,6 +102,10 @@ async function migrate() {
       chi text not null default '', persone int not null default 0, dettaglio jsonb not null default '{}',
       da text not null default '', annullata boolean not null default false
     );`);
+  // Sotto-app con interruttore proprio: un vecchio "spenta" rimasto su una sotto-app (prima non contava) si azzera una volta sola
+  await q(`create table if not exists migrazioni (k text primary key, fatta_il timestamptz not null default now())`);
+  if ((await q(`insert into migrazioni (k) values ('sotto-app-interruttore') on conflict do nothing`)).rowCount)
+    await q('update app_stato set spenta = false where spenta and app = any($1)', [APPS.filter(a => a.segue).map(a => a.key)]);
   await q(`create table if not exists app_auto (
       user_id text not null references users(id) on delete cascade,
       app text not null,
@@ -246,7 +250,8 @@ async function appSpente() {
   if (!SPENTE || Date.now() - SPENTE.t > 15000) {
     const { rows } = await q('select app from app_stato where spenta');
     // le app unite a un'altra (Eventi dentro Comunicazioni) seguono l'interruttore di quella: un loro vecchio "spenta" non conta più
-    SPENTE = { t: Date.now(), set: new Set(rows.map(r => r.app).filter(a => !APPS.find(x => x.key === a)?.segue)) };
+    // anche le sotto-app (Eventi dentro Comunicazioni) hanno il loro interruttore; spegnere l'app "capo" spegne anche loro
+    SPENTE = { t: Date.now(), set: new Set(rows.map(r => r.app)) };
   }
   return SPENTE.set;
 }
