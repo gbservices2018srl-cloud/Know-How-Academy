@@ -15,7 +15,7 @@ Tutte le app sono su **Render** (workspace "Giancarlo's workspace"), il codice �
 | Calendario eventi | calendario.appgestione.it | `/admin` → accesso | `appgestione-eu` (lo stesso dei Protocolli) | `Know-How-Academy`, cartella `calendario/` (il repository `app-calendario-eventi` non si usa più) |
 | Magazzino centrale | magazzino.appgestione.it | stessa app: chi è Amministratore nel pannello accessi vede Richieste, Articoli, Riordino, Fornitori | `appgestione-eu` (lo stesso di Protocolli e Calendario) | `Know-How-Academy`, cartella `magazzino/` |
 | Turni | turni.appgestione.it | stessa app: Amministratore = planning, richieste, personale, regole, sedi, buste paga; Utente = il dipendente (riconosciuto dall'email scritta nella sua scheda) | `appgestione-eu` | `Know-How-Academy`, cartella `turni/` |
-| Radiografia studio | radiografia-studio.onrender.com | — | `radiografia-studio` (Python) | `app-radiografia-studi-dentalia` |
+| Radiografia studio | radiografia-studio.onrender.com | — | `radiografia-studio-eu` (Python, Francoforte, Starter) + database `radiografia-db-eu` | `app-radiografia-studi-dentalia` |
 
 I vecchi indirizzi `www.appgestione.it/finanziario`, `/ticketassistenza` e `/laboratorio` portano da soli ai nuovi sottodomini.
 
@@ -55,7 +55,6 @@ Protocolli e Calendario: `ADMIN_USERNAME` / `ADMIN_PASSWORD` nelle impostazioni 
 - Resend: dominio appgestione.it verificato e `RESEND_API_KEY` su Render.
 
 - Chiave AI per la chat dei Protocolli (`AI_PROVIDER` + chiave Gemini o OpenAI su Render) e nome del modello in `AI_MODEL`.
-- Radiografia: completare il passaggio a `radiografia-db-eu` ed eliminare `radiografia-db` (Oregon).
 
 ## Accesso unico (appgestione.it)
 - Una sola email e password per tutte le app. Chi si registra resta "in attesa"; l'amministratore lo approva da `appgestione.it/admin` e sceglie per ogni app: nessun accesso, Utente o Amministratore.
@@ -162,3 +161,5 @@ App nuova nello stesso servizio: **documenti.appgestione.it** (serve dominio per
 **Stripe LIVE dal 26 ottobre 2026:** il proprietario ha rimesso su `gestione-finanziaria-eu` i valori live (`STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`). Da verificare su Stripe che l'endpoint del webhook live sia https://finanza.appgestione.it/api/stripe/webhook.
 
 **27 ottobre 2026:** `appgestione-eu` passato dal piano gratuito a **Starter** (0.5 CPU, 512 MB, 7 $/mese): non si addormenta più dopo 15 minuti e i lavori automatici (comunicazioni retroattive, allineamento Eventi) girano sempre.
+
+**27 ottobre 2026:** Radiografia è su `radiografia-studio-eu` + `radiografia-db-eu` (Francoforte); i vecchi `radiografia-studio` e `radiografia-db` in Oregon non esistono più. In Oregon non resta niente.
