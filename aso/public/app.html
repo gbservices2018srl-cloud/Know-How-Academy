@@ -109,7 +109,26 @@ h3{font:700 17px/1.2 var(--f-display);margin:0}
 .thumb.lg{width:120px;height:120px}
 button.thumbbtn{border:0;padding:0;background:none;border-radius:12px}
 /* sterilizzazione */
-.macchine{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.ster-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+.ster{position:relative;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);padding:16px;gap:12px;--ac:var(--accent)}
+.ster.ko{--ac:var(--danger);border-color:color-mix(in srgb,var(--danger) 35%,var(--line))}
+.ster-main{display:flex;flex-direction:column;align-items:center;text-align:center;gap:2px;border:0;background:none;padding:6px 0 0;color:inherit;border-radius:16px}
+.ster-main .art{width:104px;height:104px;border-radius:28px;display:grid;place-items:center;background:color-mix(in srgb,var(--ac) 12%,transparent);color:var(--ac);margin-bottom:10px;transition:transform .15s}
+.ster-main:hover .art{transform:scale(1.04)}
+.ster-main .art svg{width:78px;height:78px}
+.ster-main .marca{font:800 24px/1.1 var(--f-display);letter-spacing:.01em;text-transform:uppercase;overflow-wrap:anywhere}
+.ster-main .modello{font-weight:600;font-size:15px;color:var(--fg)}
+.ster-main .dove{font-size:12.5px;color:var(--muted);min-height:1em}
+.ster .badge{position:absolute;top:12px;right:12px;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px}
+.badge.ok{background:var(--ok-soft);color:var(--ok)}.badge.todo{background:var(--warn-soft);color:var(--warn)}.badge.ko{background:var(--danger-soft);color:var(--danger)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.sc{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:700;padding:5px 9px;border-radius:999px;background:var(--surface-3);color:var(--muted)}
+.sc svg{width:14px;height:14px}.sc i{width:8px;height:8px;border-radius:50%;border:1.6px solid currentColor;display:inline-block}
+.sc.ok{background:var(--ok-soft);color:var(--ok)}.sc.ko{background:var(--danger-soft);color:var(--danger)}
+.mini-avvisi{display:flex;flex-direction:column;gap:3px;font-size:12.5px;font-weight:600}
+.mini-avvisi .rosso{color:var(--danger)}.mini-avvisi .giallo{color:var(--warn)}
+.ster-foot{display:flex;gap:6px;align-items:center;margin-top:auto;padding-top:10px;border-top:1px solid var(--line)}
+.ster-foot .btn.sm{padding:0;width:40px;flex:none}.ster-foot .btn.primary.sm{width:auto;flex:1;min-width:0;padding:6px 10px}
 .mac h3{font-size:18px}
 .mac .sede{font-size:13px;color:var(--muted)}
 .mac .tests{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
@@ -220,6 +239,7 @@ const ART = {
   riunito: '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9.5" width="10" height="5" rx="2.5" transform="rotate(-12 14 12)"/><path d="M13.5 17.5l3.6-.8 4.6 17.8-4.4 1z"/><path d="M19 36.5h22.5l11 8.5"/><path d="M18.5 40h21l9.6 7.6"/><path d="M30 40.5v11"/><path d="M21 54h18"/><path d="M38 6.5h15.5v7"/><path d="M49.5 13.5h8l-2 4.5h-4z"/><path d="M33 25h17M41.5 25v11.5"/><path d="M36 25v-3M40 25v-3M44 25v-3"/></svg>',
   aspiratore: '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="14" y="18" width="30" height="36" rx="4"/><path d="M20 18v-5a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v5"/><path d="M20 25h18M20 29h18"/><circle cx="29" cy="42" r="6.5"/><path d="M29 38.5a3.5 3.5 0 1 1-3.5 3.5"/><path d="M44 24h6a4 4 0 0 1 4 4v14"/><path d="M51 42h6v4h-6z"/><path d="M18 54v3.5M40 54v3.5"/></svg>',
 };
+ART.autoclave = '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="17" width="50" height="34" rx="5"/><circle cx="25" cy="34" r="10.5"/><circle cx="25" cy="34" r="6"/><path d="M35.5 34h3"/><rect x="42" y="23" width="10" height="6.5" rx="1.5"/><circle cx="44.5" cy="37" r="1.4"/><circle cx="49.5" cy="37" r="1.4"/><path d="M42 44h10"/><path d="M13 51v4M51 51v4"/><path d="M20 12c-1.5-1.6 1.5-2.8 0-4.6M26 12c-1.5-1.6 1.5-2.8 0-4.6M32 12c-1.5-1.6 1.5-2.8 0-4.6"/></svg>';
 const AC = { riunito: 'var(--accent)', aspiratore: 'var(--brand-purple)' };
 const VICON = { filtro_riunito: 'filtro', filtro_bacinella: 'drop', tubi_aspiranti: 'tubo', cordoni: 'cordone', filtro_aspiratore: 'filtro', filtro_amalgama: 'amalgama' };
 const ic = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${IC[n] || ''}</svg>`;
@@ -331,20 +351,27 @@ function vSteri() {
     <button class="btn" data-a="nuova-macchina">${ic('plus')}Aggiungi sterilizzatrice</button></div>
   ${S.form?.tipo === 'macchina' ? formMacchina() : ''}
   ${!sedi.length ? '<div class="card empty"><b>Nessuna sede assegnata</b>Chiedi all\'amministratore di assegnarti la tua sede in Gestione accessi.</div>'
-    : vis.length ? `<div class="macchine">${vis.map(m => {
-      const s = m.stato;
-      return `<article class="card pad mac">
-        <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><h3>${esc(m.marca)} ${esc(m.modello)}</h3>
-          <div class="sede">${esc(m.sede)}${m.matricola ? ' · matr. ' + esc(m.matricola) : ''}</div></div>
-          <button class="btn sm" data-modifica-m="${esc(m.id)}" aria-label="Modifica sterilizzatrice">${ic('edit')}</button></div>
-        <div class="tests">${pillTest('Bowie-Dick', s.bd)}${pillTest('Helix', s.helix)}
-          <span class="pill ${s.avvisi.some(a => /spore/i.test(a.testo) && a.livello === 'rosso') ? 'ko' : ''}">Spore: ${s.ultimaSpore ? 'prossimo entro ' + esc(fmtD(s.prossimaSpore)) : 'da fare'}</span>
-          ${s.cicliOggi ? `<span class="pill">${s.cicliOggi} ${s.cicliOggi === 1 ? 'ciclo' : 'cicli'} oggi</span>` : ''}</div>
-        ${s.avvisi.length ? `<div class="avvisi">${s.avvisi.map(a => `<div class="avviso ${a.livello}">${a.livello === 'rosso' ? '⚠' : '•'} ${esc(a.testo)}</div>`).join('')}</div>` : '<div class="avvisi"><div class="avviso" style="background:var(--ok-soft);color:var(--ok)">✓ Tutto in regola oggi</div></div>'}
-        <div class="acts"><button class="btn primary" data-apri-oggi="${esc(m.id)}">${ic('steri')}${s.schedaOggi ? 'Apri la scheda di oggi' : 'Nuova scheda di oggi'}</button>
-          <button class="btn" data-storico="${esc(m.id)}">${ic('hist')}Storico</button>
-          ${p.admin ? `<button class="btn" data-esporta="${esc(m.id)}">${ic('down')}Scarica e svuota</button>` : ''}</div>
-      </article>`; }).join('')}</div>`
+    : vis.length ? `${[...new Set(vis.map(m => m.sede))].map(sede => `${sedi.length > 1 && !S.sede ? `<div class="sede-h">${esc(sede)}</div>` : ''}<div class="ster-grid">${vis.filter(m => m.sede === sede).map(m => {
+      const s = m.stato, rossi = s.avvisi.filter(a => a.livello === 'rosso'), gialli = s.avvisi.filter(a => a.livello === 'giallo');
+      const stato = rossi.length ? 'ko' : gialli.length ? 'todo' : 'ok';
+      const chip = (nome, es) => `<span class="sc ${es === 'ok' ? 'ok' : es === 'ko' ? 'ko' : ''}">${es === 'ok' ? ic('check') : es === 'ko' ? ic('x') : '<i></i>'}${nome}</span>`;
+      const sporeKo = s.avvisi.some(a => /spore/i.test(a.testo) && a.livello === 'rosso');
+      return `<article class="ster ${stato}">
+        <span class="badge ${stato}">${stato === 'ko' ? '⚠ ' + rossi.length + (rossi.length === 1 ? ' avviso' : ' avvisi') : stato === 'todo' ? gialli.length + ' da fare' : '✓ In regola'}</span>
+        <button class="ster-main" data-apri-oggi="${esc(m.id)}" aria-label="Apri la scheda di oggi di ${esc(m.marca)} ${esc(m.modello)}">
+          <span class="art">${ART.autoclave}</span>
+          <span class="marca">${esc(m.marca)}</span>
+          <span class="modello">${esc(m.modello || '')}</span>
+          <span class="dove">${sedi.length > 1 && S.sede ? esc(m.sede) + (m.matricola ? ' · ' : '') : ''}${m.matricola ? 'matr. ' + esc(m.matricola) : ''}</span>
+        </button>
+        <div class="chips">${chip('Bowie-Dick', s.bd)}${chip('Helix', s.helix)}<span class="sc ${sporeKo ? 'ko' : s.ultimaSpore ? 'ok' : ''}">${sporeKo ? ic('x') : s.ultimaSpore ? ic('check') : '<i></i>'}Spore${s.ultimaSpore && !sporeKo ? ' · entro ' + esc(fmtD(s.prossimaSpore).replace(/ \d{4}$/, '')) : ''}</span>
+          ${s.cicliOggi ? `<span class="sc">${s.cicliOggi} ${s.cicliOggi === 1 ? 'ciclo' : 'cicli'} oggi</span>` : ''}</div>
+        ${s.avvisi.length ? `<div class="mini-avvisi">${s.avvisi.map(a => `<div class="${a.livello}">${a.livello === 'rosso' ? '⚠' : '•'} ${esc(a.testo)}</div>`).join('')}</div>` : ''}
+        <div class="ster-foot"><button class="btn primary sm" data-apri-oggi="${esc(m.id)}">${ic('steri')}${s.schedaOggi ? 'Scheda di oggi' : 'Nuova scheda'}</button>
+          <button class="btn sm" data-storico="${esc(m.id)}" title="Storico" aria-label="Storico">${ic('hist')}</button>
+          ${p.admin ? `<button class="btn sm" data-esporta="${esc(m.id)}" title="Scarica e svuota" aria-label="Scarica e svuota">${ic('down')}</button>` : ''}
+          <button class="btn sm" data-modifica-m="${esc(m.id)}" title="Modifica" aria-label="Modifica sterilizzatrice">${ic('edit')}</button></div>
+      </article>`; }).join('')}</div>`).join('')}`
     : `<div class="card empty"><b>Nessuna sterilizzatrice${S.sede ? ' in questa sede' : ''}</b>Aggiungi la prima con «Aggiungi sterilizzatrice»: marca e modello.</div>`}`;
 }
 function formMacchina() {
@@ -537,7 +564,7 @@ function apriEsporta(id) {
 }
 function disegnaEsp() {
   const { m, passo, n, canc } = S.esp, nome = esc(m.marca + ' ' + m.modello);
-  const testa = `<div class="dh" style="--ac:var(--accent)"><span class="art">${ic('steri')}</span><div><h3>${nome}</h3><div class="muted" style="font-size:13px">${esc(m.sede)}</div></div></div>`;
+  const testa = `<div class="dh" style="--ac:var(--accent)"><span class="art">${ART.autoclave}</span><div><h3>${nome}</h3><div class="muted" style="font-size:13px">${esc(m.sede)}</div></div></div>`;
   const conta = c => `${c.schede} schede, ${c.test} test, ${c.cicli} cicli e ${c.foto} foto`;
   let body, foot;
   if (passo === 1) {
