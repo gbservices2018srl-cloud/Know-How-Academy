@@ -136,6 +136,29 @@ async function migrate() {
   `);
   // test delle spore: la foto del risultato dopo l'incubazione si aggiunge a quella iniziale
   await q('alter table test add column if not exists foto_esito_id text references foto(id) on delete set null');
+  // Registro impianti per paziente: il paziente si crea una volta, poi si registrano le etichette dente per dente
+  await q(`create table if not exists pazienti (
+      id text primary key,
+      sede_id text not null,
+      sede_nome text not null default '',
+      cognome text not null,
+      nome text not null default '',
+      nascita date,
+      note text not null default '',
+      operatore_nome text not null default '',
+      creato_il timestamptz not null default now()
+    );
+    create index if not exists pazienti_sede_idx on pazienti(sede_id, lower(cognome), lower(nome));
+    alter table impianti add column if not exists paziente_id text references pazienti(id);
+    create index if not exists impianti_paziente_idx on impianti(paziente_id);`);
+  // impianti registrati prima (senza paziente): si crea il paziente con lo stesso cognome e nome nella stessa sede e si collegano
+  await q(`insert into pazienti (id, sede_id, sede_nome, cognome, nome, operatore_nome, creato_il)
+    select md5(random()::text || clock_timestamp()::text), x.sede_id, x.sede_nome, x.paziente_cognome, x.paziente_nome, x.operatore_nome, x.creato_il
+    from (select distinct on (sede_id, lower(paziente_cognome), lower(paziente_nome)) sede_id, sede_nome, paziente_cognome, paziente_nome, operatore_nome, creato_il
+          from impianti where paziente_id is null order by sede_id, lower(paziente_cognome), lower(paziente_nome), creato_il) x
+    where not exists (select 1 from pazienti p where p.sede_id = x.sede_id and lower(p.cognome) = lower(x.paziente_cognome) and lower(p.nome) = lower(x.paziente_nome))`);
+  await q(`update impianti i set paziente_id = p.id from pazienti p
+    where i.paziente_id is null and p.sede_id = i.sede_id and lower(p.cognome) = lower(i.paziente_cognome) and lower(p.nome) = lower(i.paziente_nome)`);
 }
 
 module.exports = { pool, q, newId, SCHEMA, migrate };

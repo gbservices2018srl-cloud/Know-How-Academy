@@ -468,9 +468,9 @@ Rispondi SOLO con JSON: {"numero":"","temperatura":134,"esito":"ok","dubbi":[]}
 const UD = 'registro_udi';
 const shapeImpianto = (r, p) => ({ id: r.id, sedeId: r.sede_id, sede: p.sedi.find(s => s.id === r.sede_id)?.nome || r.sede_nome,
   dataIntervento: r.data_intervento, pazienteCognome: r.paziente_cognome, pazienteNome: r.paziente_nome, denti: r.denti || [],
-  medico: r.medico, prodotto: r.prodotto, produttore: r.produttore, ref: r.ref, udi: r.udi, gtin: r.gtin, lotto: r.lotto,
+  pazienteId: r.paziente_id, medico: r.medico, prodotto: r.prodotto, produttore: r.produttore, ref: r.ref, udi: r.udi, gtin: r.gtin, lotto: r.lotto,
   scadenza: r.scadenza, seriale: r.seriale, note: r.note, fotoId: r.foto_id, operatore: r.operatore_nome, creatoIl: r.creato_il });
-const COLS_IMP = `id, sede_id, sede_nome, to_char(data_intervento, 'YYYY-MM-DD') as data_intervento, paziente_cognome, paziente_nome, denti, medico,
+const COLS_IMP = `id, paziente_id, sede_id, sede_nome, to_char(data_intervento, 'YYYY-MM-DD') as data_intervento, paziente_cognome, paziente_nome, denti, medico,
   prodotto, produttore, ref, udi, gtin, lotto, to_char(scadenza, 'YYYY-MM-DD') as scadenza, seriale, note, foto_id, operatore_id, operatore_nome, creato_il`;
 
 app.get('/api/udi', needUser, need(UD), wrap(async (req, res) => {
@@ -494,20 +494,23 @@ function campiImpianto(b) {
     prodotto: str(b.prodotto, 160), produttore: str(b.produttore, 120), ref: str(b.ref, 60), udi: str(b.udi, 300), gtin: str(b.gtin, 14).replace(/\D/g, ''),
     lotto: str(b.lotto, 40), scadenza: isDate(scad) ? scad : null, seriale: str(b.seriale, 40), note: str(b.note, 1000) };
   if (!isDate(data)) throw fail(400, 'Scegli la data dell\'intervento.');
-  if (!f.cognome) throw fail(400, 'Scrivi il cognome del paziente.');
+  if (!f.cognome && !b.pazienteId) throw fail(400, 'Scrivi il cognome del paziente.');
   if (!f.medico) throw fail(400, 'Scrivi il medico che ha eseguito l\'intervento.');
   if (!f.lotto && !f.udi && !f.gtin) throw fail(400, 'Servono almeno il lotto o il codice UDI: fotografa l\'etichetta o scrivili a mano.');
   return f;
 }
 app.post('/api/udi', needUser, need(UD), wrap(async (req, res) => {
-  const sede = sedeOk(req, UD, str(req.body.sede, 80));
+  let sede, paz = null;
+  if (req.body.pazienteId) { paz = await pazienteMio(req, req.body.pazienteId); sede = sedeOk(req, UD, paz.sede_id); }
+  else sede = sedeOk(req, UD, str(req.body.sede, 80));
   if (!sede) return bad(res, 400, 'Scegli la sede.');
   const f = campiImpianto(req.body);
+  if (paz) { f.cognome = paz.cognome; f.nome = paz.nome; }
   const foto = await salvaFoto(req.body.foto, sede.id);
   const id = db.newId();
   await db.q(`insert into impianti (id, sede_id, sede_nome, data_intervento, paziente_cognome, paziente_nome, denti, medico, prodotto, produttore, ref, udi, gtin,
-      lotto, scadenza, seriale, note, foto_id, operatore_id, operatore_nome) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
-    [id, sede.id, sede.nome, f.data, f.cognome, f.nome, f.denti, f.medico, f.prodotto, f.produttore, f.ref, f.udi, f.gtin, f.lotto, f.scadenza, f.seriale, f.note, foto, req.me.id, req.me.nome]);
+      lotto, scadenza, seriale, note, foto_id, operatore_id, operatore_nome, paziente_id) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
+    [id, sede.id, sede.nome, f.data, f.cognome, f.nome, f.denti, f.medico, f.prodotto, f.produttore, f.ref, f.udi, f.gtin, f.lotto, f.scadenza, f.seriale, f.note, foto, req.me.id, req.me.nome, paz?.id || null]);
   res.json({ id });
 }));
 async function impiantoMio(req, id) {
@@ -517,7 +520,8 @@ async function impiantoMio(req, id) {
 }
 app.put('/api/udi/:id', needUser, need(UD), wrap(async (req, res) => {
   const r = await impiantoMio(req, req.params.id);
-  const f = campiImpianto(req.body);
+  const f = campiImpianto({ ...req.body, pazienteId: r.paziente_id });
+  if (r.paziente_id) { f.cognome = r.paziente_cognome; f.nome = r.paziente_nome; }
   const foto = req.body.foto ? await salvaFoto(req.body.foto, r.sede_id) : r.foto_id;
   await db.q(`update impianti set data_intervento=$2, paziente_cognome=$3, paziente_nome=$4, denti=$5, medico=$6, prodotto=$7, produttore=$8, ref=$9, udi=$10,
       gtin=$11, lotto=$12, scadenza=$13, seriale=$14, note=$15, foto_id=$16, aggiornato_il=now() where id=$1`,
@@ -531,6 +535,77 @@ app.delete('/api/udi/:id', needUser, need(UD), wrap(async (req, res) => {
   await db.q('delete from impianti where id = $1', [r.id]);
   res.json({ ok: true });
 }));
+/* ---------- pazienti ---------- */
+async function pazienteMio(req, id) {
+  const { rows } = await db.q(`select *, to_char(nascita, 'YYYY-MM-DD') as nascita_t from pazienti where id = $1`, [str(id, 60)]);
+  if (!rows[0] || !sedeOk(req, UD, rows[0].sede_id)) throw fail(404, 'Paziente non trovato.');
+  return rows[0];
+}
+const shapePaz = (r, p) => ({ id: r.id, sedeId: r.sede_id, sede: p.sedi.find(s => s.id === r.sede_id)?.nome || r.sede_nome, cognome: r.cognome, nome: r.nome,
+  nascita: r.nascita_t || null, note: r.note, creatoIl: r.creato_il, n: r.n ?? undefined, denti: r.denti_tutti || undefined, ultimo: r.ultimo || undefined, trovatoPer: r.trovato || undefined });
+// Elenco pazienti con la ricerca per cognome e/o nome (o per lotto / codice UDI: utile in caso di richiamo)
+app.get('/api/udi/pazienti', needUser, need(UD), wrap(async (req, res) => {
+  const p = permDi(req, UD), sede = str(req.query.sede, 80);
+  const params = [sede && sedeOk(req, UD, sede) ? [sede] : p.sedi.map(s => s.id)];
+  let f = 'true', trovato = 'null';
+  const t = str(req.query.q, 80).toLowerCase();
+  if (t) {
+    const parole = t.split(/\s+/).filter(Boolean).slice(0, 4);
+    const nomi = parole.map(w => { params.push('%' + w.replace(/[\\%_]/g, c => '\\' + c) + '%'); return `(lower(p.cognome) like $${params.length} or lower(p.nome) like $${params.length})`; }).join(' and ');
+    params.push('%' + t.replace(/[\\%_]/g, c => '\\' + c) + '%');
+    const cod = `exists (select 1 from impianti i where i.paziente_id = p.id and (lower(i.lotto) like $${params.length} or lower(i.udi) like $${params.length} or i.gtin like $${params.length} or lower(i.seriale) like $${params.length}))`;
+    f = `((${nomi}) or ${cod})`;
+    trovato = `case when ${cod} and not (${nomi}) then 'codice' end`;
+  }
+  const { rows } = await db.q(`select p.*, to_char(p.nascita, 'YYYY-MM-DD') as nascita_t, ${trovato} as trovato,
+      (select count(*)::int from impianti i where i.paziente_id = p.id) as n,
+      (select array_agg(distinct d order by d) from impianti i, unnest(i.denti) d where i.paziente_id = p.id) as denti_tutti,
+      (select to_char(max(data_intervento), 'YYYY-MM-DD') from impianti i where i.paziente_id = p.id) as ultimo
+    from pazienti p where p.sede_id = any($1) and ${f}
+    order by ${t ? 'lower(p.cognome), lower(p.nome)' : 'coalesce((select max(i.creato_il) from impianti i where i.paziente_id = p.id), p.creato_il) desc'} limit 300`, params);
+  res.json({ pazienti: rows.map(r => shapePaz(r, p)) });
+}));
+app.post('/api/udi/pazienti', needUser, need(UD), wrap(async (req, res) => {
+  const sede = sedeOk(req, UD, str(req.body.sede, 80));
+  if (!sede) return bad(res, 400, 'Scegli la sede.');
+  const cognome = str(req.body.cognome, 80), nome = str(req.body.nome, 80), nascita = str(req.body.nascita, 10);
+  if (!cognome) return bad(res, 400, 'Scrivi il cognome del paziente.');
+  if (nascita && !isDate(nascita)) return bad(res, 400, 'Data di nascita non valida.');
+  // stesso paziente già presente nella sede → si apre quello
+  const { rows: g } = await db.q(`select id from pazienti where sede_id = $1 and lower(cognome) = lower($2) and lower(nome) = lower($3)
+    and ($4::date is null or nascita is null or nascita = $4::date) limit 1`, [sede.id, cognome, nome, nascita || null]);
+  if (g[0]) return res.json({ id: g[0].id, esistente: true });
+  const id = db.newId();
+  await db.q('insert into pazienti (id, sede_id, sede_nome, cognome, nome, nascita, operatore_nome) values ($1,$2,$3,$4,$5,$6,$7)', [id, sede.id, sede.nome, cognome, nome, nascita || null, req.me.nome]);
+  res.json({ id });
+}));
+app.get('/api/udi/pazienti/:id', needUser, need(UD), wrap(async (req, res) => {
+  const p = permDi(req, UD), r = await pazienteMio(req, req.params.id);
+  const { rows } = await db.q(`select ${COLS_IMP} from impianti where paziente_id = $1 order by data_intervento desc, creato_il desc`, [r.id]);
+  res.json({ paziente: shapePaz(r, p), impianti: rows.map(x => shapeImpianto(x, p)), admin: p.admin });
+}));
+app.put('/api/udi/pazienti/:id', needUser, need(UD), wrap(async (req, res) => {
+  const r = await pazienteMio(req, req.params.id);
+  const cognome = str(req.body.cognome, 80) || r.cognome, nome = str(req.body.nome ?? r.nome, 80), nascita = str(req.body.nascita, 10);
+  if (nascita && !isDate(nascita)) return bad(res, 400, 'Data di nascita non valida.');
+  await db.q('update pazienti set cognome = $2, nome = $3, nascita = $4 where id = $1', [r.id, cognome, nome, nascita || null]);
+  await db.q('update impianti set paziente_cognome = $2, paziente_nome = $3 where paziente_id = $1', [r.id, cognome, nome]);
+  res.json({ ok: true });
+}));
+app.delete('/api/udi/pazienti/:id', needUser, need(UD), wrap(async (req, res) => {
+  const r = await pazienteMio(req, req.params.id);
+  const { rows: [{ n }] } = await db.q('select count(*)::int as n from impianti where paziente_id = $1', [r.id]);
+  if (n && !permDi(req, UD).admin) return bad(res, 403, 'Il paziente ha delle etichette registrate: solo l\'amministratore può eliminarlo.');
+  await db.q('delete from impianti where paziente_id = $1', [r.id]);
+  await db.q('delete from pazienti where id = $1', [r.id]);
+  res.json({ ok: true });
+}));
+// Medici già usati (per suggerirli nel modulo)
+app.get('/api/udi/medici', needUser, need(UD), wrap(async (req, res) => {
+  const { rows } = await db.q(`select medico, count(*) n from impianti where sede_id = any($1) and medico <> '' group by medico order by n desc limit 50`, [permDi(req, UD).sedi.map(s => s.id)]);
+  res.json({ medici: rows.map(r => r.medico) });
+}));
+
 // Codice letto dalla fotocamera (DataMatrix GS1 / HIBC / EAN) → GTIN, lotto, scadenza, seriale
 app.post('/api/udi/codice', needUser, need(UD), wrap(async (req, res) => {
   res.json(etichetta.interpreta(str(req.body.testo, 300)));

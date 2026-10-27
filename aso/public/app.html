@@ -181,6 +181,46 @@ button.thumbbtn{border:0;padding:0;background:none;border-radius:12px}
 .d.on .corona{fill:var(--brand-yellow);stroke:#8a6a0e}
 .d.on b{color:#2b2b2f;background:var(--brand-yellow)}
 .d[disabled]{cursor:default}
+/* registro impianti per paziente */
+.paz-grid{display:flex;flex-direction:column;gap:10px}
+.paz{display:flex;gap:14px;align-items:center;text-align:left;width:100%;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:14px 16px;color:inherit;box-shadow:var(--shadow)}
+.paz:hover{border-color:color-mix(in srgb,var(--brand-purple) 45%,var(--line))}
+.paz .grow{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.paz .n{font:700 17px/1.2 var(--f-display)}
+.paz .meta{font-size:13px;color:var(--muted);display:flex;gap:4px 12px;flex-wrap:wrap}
+.paz .go{color:var(--muted);transform:rotate(180deg);display:flex}
+.pav{width:46px;height:46px;border-radius:15px;display:grid;place-items:center;flex:none;font:800 16px/1 var(--f-display);background:var(--purple-soft);color:var(--brand-purple)}
+.pav.pav-l{width:62px;height:62px;border-radius:20px;font-size:22px}
+.dchips{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}
+.dc{font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--brand-yellow) 55%,transparent);color:#4a3d05}
+.dc.cnt{background:var(--accent-soft);color:var(--accent)}.dc.vuoto{background:var(--surface-3);color:var(--muted)}
+.paz-head{display:flex;gap:14px;align-items:center;margin:4px 0 16px}
+.odo-card{padding:14px 14px 10px}
+.grp{margin-bottom:18px}
+.grp-h{display:flex;align-items:center;gap:10px;border:0;background:none;padding:4px 0;margin-bottom:8px;color:inherit;font-weight:700;font-size:14.5px;text-align:left}
+.grp-h span:last-child::first-letter{text-transform:uppercase}
+.grp-n{min-width:34px;height:28px;border-radius:9px;display:grid;place-items:center;background:var(--brand-yellow);color:#2b2b2f;font:800 14px/1 var(--f-display);padding:0 6px}
+.lab-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.lab{display:flex;flex-direction:column;gap:3px;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:8px 8px 10px;color:inherit;box-shadow:var(--shadow);min-width:0;transition:transform .15s,border-color .15s}
+.lab:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.lab-img{aspect-ratio:4/3;border-radius:11px;overflow:hidden;background:var(--surface-3);display:grid;place-items:center;color:var(--muted);margin-bottom:4px}
+.lab-img img{width:100%;height:100%;object-fit:cover;display:block}.lab-img svg{width:34px;height:34px}
+.lab-t{font-weight:700;font-size:14px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.lab-m{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lab-open{grid-column:1/-1;display:flex;gap:14px;flex-wrap:wrap;background:var(--surface-2);border:1.5px solid color-mix(in srgb,var(--accent) 45%,var(--line));border-radius:16px;padding:12px}
+.lab-open .grow{flex:1 1 240px;min-width:0}
+.lab-big{width:180px;max-width:100%;aspect-ratio:4/3;border-radius:12px;overflow:hidden;flex:none;background:var(--surface-3);display:grid;place-items:center;color:var(--muted)}
+.lab-big img{width:100%;height:100%;object-fit:cover;display:block}
+.lab-dl{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px 14px;margin:8px 0 0}
+.lab-dl dt{font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}.lab-dl dd{margin:0;font-weight:600;font-size:14px}
+dialog.dlg.wide{width:min(720px,96vw);max-height:92vh}
+dialog.dlg.wide .db{max-height:calc(92vh - 100px);overflow:auto}
+.dente-art{width:58px;height:58px;border-radius:16px;display:grid;place-items:center;background:color-mix(in srgb,var(--brand-yellow) 30%,transparent)}
+.dente-art svg{width:26px!important;height:52px!important}
+.dente-art .radice{fill:var(--surface);stroke:var(--muted);stroke-width:1.6}.dente-art .corona{fill:var(--brand-yellow);stroke:#8a6a0e;stroke-width:1.8}.dente-art .vite{fill:none;stroke:var(--accent);stroke-width:2;stroke-linecap:round}
+.big-add{width:100%;margin-top:12px;min-height:50px}
+.d.cur{background:var(--accent-soft)!important}
+.d b sup{font-size:9px;margin-left:1px}
 .ql{display:none;flex-basis:100%;font-size:11.5px;font-weight:700;color:var(--muted);margin:2px 0 0}
 @media (max-width:640px){
   .denti-in{min-width:0}.denti-schema{overflow:visible}
@@ -300,7 +340,7 @@ function riduci(file, max = 1600) {
 function vediFoto(src) { const d = $('#ph'); d.querySelector('img').src = src; d.showModal(); }
 const fotoBtn = (id, cls = '') => id ? `<button class="thumbbtn" data-foto="api/foto/${esc(id)}" aria-label="Apri la foto"><img class="thumb ${cls}" src="api/foto/${esc(id)}" alt="Foto" loading="lazy"></button>` : '';
 
-const S = { att: null, reg: null, regF: {}, attForm: null, view: 'home', st: null, sede: '', macchine: null, scheda: null, form: null, storico: null, udi: null, q: '', udiForm: null, cur: null, busy: false };
+const S = { att: null, reg: null, regF: {}, attForm: null, view: 'home', st: null, sede: '', macchine: null, scheda: null, form: null, storico: null, udi: null, q: '', paz: null, pz: null, pzForm: null, dente: null, lab: null, medici: null, cur: null, busy: false };
 
 /* ============ barra e navigazione ============ */
 function renderTop() {
@@ -309,7 +349,7 @@ function renderTop() {
   if (st.sterilizzazione && !st.sterilizzazione.spenta) tabs.push(['steri', 'Sterilizzazione', 'steri']);
   if (st.udi && !st.udi.spenta) tabs.push(['udi', 'Registro impianti', 'udi']);
   if (st.manutenzione && !st.manutenzione.spenta) tabs.push(['man', 'Manutenzione', 'man']);
-  const vista = { scheda: 'steri', storico: 'steri', macchina: 'steri', udiform: 'udi', udivedi: 'udi', manreg: 'man' }[S.view] || S.view;
+  const vista = { scheda: 'steri', storico: 'steri', macchina: 'steri', paz: 'udi', manreg: 'man' }[S.view] || S.view;
   $('#tabs').innerHTML = tabs.map(([k, l, i]) => `<button class="tab ${vista === k ? 'on' : ''}" data-go="${k}">${ic(i)}${l}</button>`).join('')
     + (st.magazzino ? `<a class="tab" href="${esc(st.magazzino)}">${ic('box')}Magazzino</a>` : '');
   const n = st.me.nome || '';
@@ -330,13 +370,14 @@ async function load() {
     if (S.view === 'storico') S.storico = (await api('GET', 'api/steri/storico?macchina=' + encodeURIComponent(S.id))).schede;
     if (S.view === 'man' || S.view === 'manreg' || (S.view === 'home' && S.st.manutenzione && !S.st.manutenzione.spenta)) S.att = (await api('GET', 'api/man/attrezzature')).attrezzature;
     if (S.view === 'manreg') { const f = S.regF; S.reg = (await api('GET', 'api/man/registro?' + new URLSearchParams({ sede: f.sede || '', attrezzatura: f.att || '', da: f.da || '', a: f.a || '' }))).righe; }
-    if (S.view === 'udi') S.udi = (await api('GET', 'api/udi?q=' + encodeURIComponent(S.q) + (S.sede ? '&sede=' + encodeURIComponent(S.sede) : ''))).impianti;
+    if (S.view === 'udi') S.paz = (await api('GET', 'api/udi/pazienti?q=' + encodeURIComponent(S.q) + (S.sede ? '&sede=' + encodeURIComponent(S.sede) : ''))).pazienti;
+    if (S.view === 'paz') { S.pz = await api('GET', 'api/udi/pazienti/' + encodeURIComponent(S.id)); if (!S.medici) api('GET', 'api/udi/medici').then(r => S.medici = r.medici).catch(() => {}); }
   } catch (e) { $('#main').innerHTML = `<div class="empty"><b>${esc(e.message)}</b><button class="btn" data-go="home">Torna all'inizio</button></div>`; return; }
   render();
 }
 function render() {
   renderTop();
-  const v = { home: vHome, steri: vSteri, scheda: vScheda, storico: vStorico, udi: vUdi, udiform: vUdiForm, udivedi: vUdiVedi, man: vMan, manreg: vManReg }[S.view] || vHome;
+  const v = { home: vHome, steri: vSteri, scheda: vScheda, storico: vStorico, udi: vUdi, paz: vPaz, man: vMan, manreg: vManReg }[S.view] || vHome;
   $('#main').innerHTML = v();
 }
 
@@ -504,24 +545,6 @@ function vStorico() {
     : '<div class="card empty"><b>Nessuna scheda</b>Le schede compaiono qui giorno per giorno.</div>'}`;
 }
 
-/* ============ registro impianti ============ */
-function vUdi() {
-  const p = S.st.udi, list = S.udi || [];
-  return `<div class="head"><div style="flex:1 1 260px"><h2 class="view">Registro impianti</h2><p>Impianti e materiali impiantabili con lotto, scadenza e codice UDI.</p></div>
-    <button class="btn primary" data-a="nuovo-impianto">${ic('plus')}Nuovo impianto</button></div>
-  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
-    <label class="search">${ic('search')}<span class="sr">Cerca il paziente</span><input type="search" data-q value="${esc(S.q)}" placeholder="Cerca per cognome o nome del paziente"></label>
-    ${p.sedi.length > 1 ? `<div class="field" style="margin:0;flex:0 1 220px"><label for="u-sede" class="sr">Sede</label><select id="u-sede" data-sede-udi><option value="">Tutte le sedi</option>${p.sedi.map(s => `<option value="${esc(s.id)}" ${S.sede === s.id ? 'selected' : ''}>${esc(s.nome)}</option>`).join('')}</select></div>` : ''}
-  </div>
-  ${!p.sedi.length ? '<div class="card empty"><b>Nessuna sede assegnata</b>Chiedi all\'amministratore di assegnarti la tua sede in Gestione accessi.</div>'
-    : list.length ? `<div class="list">${list.map(r => { const [y, m, d] = r.dataIntervento.split('-');
-      return `<button class="imp" data-impianto="${esc(r.id)}"><span class="d"><small>${MESI[+m - 1]}</small><b>${+d}</b><small>${y}</small></span>
-      <span class="grow"><span class="n">${hl(r.pazienteCognome + ' ' + r.pazienteNome)}</span>
-        <span class="meta"><span>${r.denti.length ? (r.denti.length === 1 ? 'Dente ' : 'Denti ') + r.denti.join(', ') : 'Posizione non indicata'}</span><span>Dr. ${esc(r.medico)}</span>${p.sedi.length > 1 ? `<span>${esc(r.sede)}</span>` : ''}</span>
-        <span class="meta" style="margin-top:6px">${r.prodotto ? `<span><b style="color:var(--fg)">${esc(r.prodotto)}</b></span>` : ''}${r.lotto ? `<span>Lotto ${esc(r.lotto)}</span>` : ''}${r.scadenza ? `<span>Scad. ${esc(fmtD(r.scadenza))}</span>` : ''}${r.gtin ? `<span>UDI-DI ${esc(r.gtin)}</span>` : ''}</span>
-      </span>${r.fotoId ? `<img class="thumb" src="api/foto/${esc(r.fotoId)}" alt="" loading="lazy">` : ''}</button>`; }).join('')}</div>`
-    : `<div class="card empty">${S.q ? `<b>Nessun paziente trovato per «${esc(S.q)}»</b>Prova con un'altra parte del nome.` : '<b>Nessun impianto registrato</b>Registra il primo con «Nuovo impianto».'}</div>`}`;
-}
 function hl(t) {
   const words = S.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
   let s = esc(t);
@@ -542,72 +565,147 @@ function svgDente(n, on, inf) {
   const t = DENTI[tipoDente(n)];
   return `<svg viewBox="0 0 40 84" aria-hidden="true"><g${inf ? ' transform="matrix(1 0 0 -1 0 84)"' : ''}>${on ? VITE : `<path class="radice" d="${t.r}"/>`}<path class="corona" d="${t.c}"/></g></svg>`;
 }
-function odontogramma(sel, ro = false) {
+/* ============ registro impianti (per paziente → dente → etichette) ============ */
+const QUAD = { 1: 'superiore destro', 2: 'superiore sinistro', 3: 'inferiore sinistro', 4: 'inferiore destro' };
+const POS = ['', 'incisivo centrale', 'incisivo laterale', 'canino', 'primo premolare', 'secondo premolare', 'primo molare', 'secondo molare', 'terzo molare'];
+const nomeDente = n => n ? `${POS[n % 10]} ${QUAD[Math.floor(n / 10)] || ''}` : 'senza posizione indicata';
+const iniziali = p => ((p.cognome || '')[0] || '') + ((p.nome || '')[0] || '');
+function vUdi() {
+  const p = S.st.udi, list = S.paz || [], f = S.pzForm;
+  return `<div class="head"><div style="flex:1 1 260px"><h2 class="view">Registro impianti</h2><p>Crea il paziente, tocca il dente e fotografa le etichette: lotto, scadenza e codice UDI si compilano da soli.</p></div>
+    ${f ? '' : `<button class="btn primary" data-a="nuovo-paz">${ic('plus')}Nuovo paziente</button>`}</div>
+  ${f ? formPaz() : ''}
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+    <label class="search">${ic('search')}<span class="sr">Cerca il paziente</span><input type="search" data-q value="${esc(S.q)}" placeholder="Cerca per cognome o nome (anche per lotto)"></label>
+    ${p.sedi.length > 1 ? `<div class="field" style="margin:0;flex:0 1 220px"><label for="u-sede" class="sr">Sede</label><select id="u-sede" data-sede-udi><option value="">Tutte le sedi</option>${p.sedi.map(s => `<option value="${esc(s.id)}" ${S.sede === s.id ? 'selected' : ''}>${esc(s.nome)}</option>`).join('')}</select></div>` : ''}
+  </div>
+  ${!p.sedi.length ? '<div class="card empty"><b>Nessuna sede assegnata</b>Chiedi all\'amministratore di assegnarti la tua sede in Gestione accessi.</div>'
+    : list.length ? `<div class="paz-grid">${list.map(r => `<button class="paz" data-paz="${esc(r.id)}">
+        <span class="pav">${esc(iniziali(r).toUpperCase())}</span>
+        <span class="grow"><span class="n">${hl(r.cognome + ' ' + r.nome)}</span>
+          <span class="meta">${r.nascita ? `<span>nato/a il ${esc(fmtD(r.nascita))}</span>` : ''}${p.sedi.length > 1 ? `<span>${esc(r.sede)}</span>` : ''}${r.ultimo ? `<span>ultimo intervento ${esc(fmtD(r.ultimo))}</span>` : ''}</span>
+          <span class="dchips">${r.n ? `<span class="dc cnt">${r.n} ${r.n === 1 ? 'etichetta' : 'etichette'}</span>` + (r.denti || []).map(d => `<span class="dc">${d}</span>`).join('') : '<span class="dc vuoto">Nessuna etichetta</span>'}${r.trovatoPer === 'codice' ? `<span class="tag q">trovato per lotto / codice</span>` : ''}</span>
+        </span><span class="go">${ic('back')}</span></button>`).join('')}</div>`
+    : `<div class="card empty">${S.q ? `<b>Nessun paziente trovato per «${esc(S.q)}»</b>Prova con un'altra parte del nome, o crealo con «Nuovo paziente».` : '<b>Nessun paziente</b>Crea il primo con «Nuovo paziente».'}</div>`}`;
+}
+function formPaz() {
+  const f = S.pzForm, p = S.st.udi;
+  return `<section class="card pad" style="margin-bottom:16px"><h3 style="margin-bottom:12px">${f.id ? 'Modifica paziente' : 'Nuovo paziente'}</h3>
+    <div class="grid2">
+      ${f.id || p.sedi.length < 2 ? '' : `<div class="field"><label for="pz-sede">Sede</label><select id="pz-sede" data-pf="sede">${p.sedi.map(s => `<option value="${esc(s.id)}" ${f.sede === s.id ? 'selected' : ''}>${esc(s.nome)}</option>`).join('')}</select></div>`}
+      <div class="field"><label for="pz-c">Cognome</label><input id="pz-c" data-pf="cognome" value="${esc(f.cognome)}" autocomplete="off" autocapitalize="words"></div>
+      <div class="field"><label for="pz-n">Nome</label><input id="pz-n" data-pf="nome" value="${esc(f.nome)}" autocomplete="off" autocapitalize="words"></div>
+      <div class="field"><label for="pz-d">Data di nascita (facoltativa)</label><input id="pz-d" type="date" data-pf="nascita" value="${esc(f.nascita || '')}"></div>
+    </div>
+    ${S.err ? `<div class="err" role="alert" style="margin-bottom:10px">${esc(S.err)}</div>` : ''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-a="salva-paz">${ic('check')}${f.id ? 'Salva' : 'Crea e apri l\'odontogramma'}</button><button class="btn" data-a="annulla-paz">Annulla</button></div>
+  </section>`;
+}
+// odontogramma del paziente: i denti con etichette mostrano la vite e il numero di etichette
+function odontogramma(conta, cur) {
   const dente = (n, i, inf) => {
-    const k = Math.abs(i - 7.5) - .5, off = (k * k * .3).toFixed(1), on = sel.includes(n);
-    return `<button type="button" class="d ${on ? 'on' : ''}" ${ro ? 'disabled' : `data-dente="${n}"`} aria-pressed="${on}" aria-label="Dente ${n}" style="flex:${DENTI[tipoDente(n)].w};transform:translateY(${inf ? off : -off}px)">${inf ? `<b>${n}</b>` : ''}${svgDente(n, on, inf)}${inf ? '' : `<b>${n}</b>`}</button>`;
+    const k = Math.abs(i - 7.5) - .5, off = (k * k * .3).toFixed(1), c = conta[n] || 0;
+    return `<button type="button" class="d ${c ? 'on' : ''} ${cur === n ? 'cur' : ''}" data-dente-p="${n}" aria-label="Dente ${n}${c ? ', ' + c + ' etichette' : ''}" style="flex:${DENTI[tipoDente(n)].w};transform:translateY(${inf ? off : -off}px)">${inf ? `<b>${n}${c > 1 ? `<sup>${c}</sup>` : ''}</b>` : ''}${svgDente(n, !!c, inf)}${inf ? '' : `<b>${n}${c > 1 ? `<sup>${c}</sup>` : ''}</b>`}</button>`;
   };
   const ql = t => `<span class="ql">${t}</span>`;
   const arc = (arr, inf) => `<div class="arc ${inf ? 'inf' : ''}"><div class="lato">${ql(inf ? 'Inferiore destra' : 'Superiore destra')}${arr.slice(0, 8).map((n, i) => dente(n, i, inf)).join('')}</div><span class="mezzo"></span><div class="lato">${ql(inf ? 'Inferiore sinistra' : 'Superiore sinistra')}${arr.slice(8).map((n, i) => dente(n, i + 8, inf)).join('')}</div></div>`;
-  return `<div class="denti-box">${ro ? '' : '<div class="lbl" style="margin-bottom:4px">Posizione dell\'impianto: tocca il dente (anche più di uno)</div>'}
-    <div class="denti-schema"><div class="denti-in">${arc(SUP, false)}<div class="occl"><span>Destra del paziente</span><span>Sinistra del paziente</span></div>${arc(INF, true)}</div></div>
-    ${ro ? '' : `<div class="muted" style="font-size:13px;margin-top:6px">${sel.length ? 'Scelti: <b style="color:var(--fg)">' + [...sel].sort((a, b) => a - b).join(', ') + '</b>' : 'Nessun dente scelto'}</div>`}</div>`;
+  return `<div class="denti-schema"><div class="denti-in">${arc(SUP, false)}<div class="occl"><span>Destra del paziente</span><span>Sinistra del paziente</span></div>${arc(INF, true)}</div></div>`;
 }
-function vUdiForm() {
-  const f = S.udiForm, p = S.st.udi;
-  const inp = (k, l, attrs = '') => `<div class="field"><label for="u-${k}">${l}</label><input id="u-${k}" data-u="${k}" value="${esc(f[k] || '')}" ${attrs}></div>`;
-  return `<button class="link" data-a="annulla-udi">${ic('back')}${f.id ? 'Torna alla registrazione' : 'Registro impianti'}</button>
-  <div class="head"><div><h2 class="view">${f.id ? 'Modifica impianto' : 'Nuovo impianto'}</h2><p>Registrazione secondo la normativa UDI: identificativo del dispositivo e del lotto, collegati al paziente.</p></div></div>
-  <section class="card pad">
-    <h3 style="margin-bottom:12px">Intervento e paziente</h3>
-    <div class="grid2">
-      ${f.id || p.sedi.length < 2 ? '' : `<div class="field"><label for="u-sede">Sede</label><select id="u-sede" data-u="sede">${p.sedi.map(s => `<option value="${esc(s.id)}" ${f.sede === s.id ? 'selected' : ''}>${esc(s.nome)}</option>`).join('')}</select></div>`}
-      ${inp('dataIntervento', 'Data dell\'intervento', 'type="date"')}
-      ${inp('pazienteCognome', 'Cognome del paziente', 'autocomplete="off"')}
-      ${inp('pazienteNome', 'Nome del paziente', 'autocomplete="off"')}
-      ${inp('medico', 'Medico che ha eseguito l\'intervento', 'list="medici" autocomplete="off"')}
-    </div>
-    <datalist id="medici">${[...new Set((S.udi || []).map(r => r.medico).filter(Boolean))].map(m => `<option value="${esc(m)}">`).join('')}</datalist>
-    ${odontogramma(f.denti)}
-  </section>
-  <section class="card pad" style="margin-top:14px">
-    <h3 style="margin-bottom:12px">Dispositivo impiantato</h3>
-    <div class="scanbox"><div style="font-weight:700;margin-bottom:4px">Foto della targhetta / etichetta dell'impianto</div>
-      <div class="muted" style="font-size:14px;margin-bottom:10px">Inquadra l'etichetta adesiva con il codice (il quadratino DataMatrix): leggo da solo codice UDI, lotto e scadenza${S.st.ai ? ', e anche nome e produttore' : ''}. Controlla poi i campi.</div>
+const contaDenti = imp => { const c = {}; for (const r of imp) for (const d of r.denti) c[d] = (c[d] || 0) + 1; return c; };
+const perDente = (imp, n) => imp.filter(r => n ? r.denti.includes(n) : !r.denti.length);
+function tile(r, aperta) {
+  if (aperta) return labAperta(r);
+  return `<button class="lab" data-lab="${esc(r.id)}" data-lab-dente="${r.denti[0] || 0}">
+    <span class="lab-img">${r.fotoId ? `<img src="api/foto/${esc(r.fotoId)}" alt="" loading="lazy">` : ic('udi')}</span>
+    <span class="lab-t">${esc(r.prodotto || r.produttore || 'Etichetta')}</span>
+    <span class="lab-m">${r.lotto ? 'Lotto ' + esc(r.lotto) : r.gtin ? 'UDI-DI ' + esc(r.gtin) : ''}</span>
+    <span class="lab-m">${esc(fmtD(r.dataIntervento))} · Dr. ${esc(r.medico)}</span></button>`;
+}
+function labAperta(r) {
+  const riga = (l, v) => v ? `<div><dt>${l}</dt><dd>${v}</dd></div>` : '';
+  return `<div class="lab-open">
+    ${r.fotoId ? `<button class="thumbbtn lab-big" data-foto="api/foto/${esc(r.fotoId)}" aria-label="Apri la foto"><img src="api/foto/${esc(r.fotoId)}" alt="Etichetta"></button>` : `<span class="lab-big vuota">${ic('udi')}</span>`}
+    <div class="grow"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><h3>${esc(r.prodotto || 'Etichetta')}</h3><button class="btn sm" data-lab="${esc(r.id)}" aria-label="Chiudi">${ic('x')}</button></div>
+      <dl class="lab-dl">${riga('Intervento', esc(fmtD(r.dataIntervento)))}${riga('Medico', 'Dr. ' + esc(r.medico))}${riga('Produttore', esc(r.produttore))}${riga('REF', esc(r.ref))}
+        ${riga('Lotto', esc(r.lotto))}${riga('Scadenza', esc(fmtD(r.scadenza)))}${riga('UDI-DI (GTIN)', esc(r.gtin))}${riga('Numero di serie', esc(r.seriale))}${r.udi ? riga('Codice UDI', `<span style="word-break:break-all">${esc(r.udi)}</span>`) : ''}${riga('Note', esc(r.note))}
+        ${riga('Registrato da', esc(r.operatore) + ' il ' + esc(fmtD(r.creatoIl)))}</dl>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><button class="btn sm" data-lab-mod="${esc(r.id)}">${ic('edit')}Modifica</button><button class="btn sm danger" data-lab-del="${esc(r.id)}">${ic('trash')}Elimina</button></div></div></div>`;
+}
+function vPaz() {
+  const d = S.pz; if (!d) return '<div class="empty">Caricamento…</div>';
+  const pz = d.paziente, imp = d.impianti, conta = contaDenti(imp);
+  const denti = Object.keys(conta).map(Number).sort((a, b) => a - b), senza = perDente(imp, 0);
+  return `<button class="link" data-go="udi">${ic('back')}Registro impianti</button>
+  ${S.pzForm ? formPaz() : `<div class="paz-head"><span class="pav pav-l">${esc(iniziali(pz).toUpperCase())}</span><div style="flex:1;min-width:0"><h2 class="view">${esc(pz.cognome)} ${esc(pz.nome)}</h2>
+    <p class="muted" style="margin:2px 0 0">${pz.nascita ? 'Nato/a il ' + esc(fmtD(pz.nascita)) + ' · ' : ''}${esc(pz.sede)} · ${imp.length ? `${imp.length} ${imp.length === 1 ? 'etichetta' : 'etichette'} su ${denti.length} ${denti.length === 1 ? 'dente' : 'denti'}` : 'nessuna etichetta ancora'}</p></div>
+    <button class="btn sm" data-a="mod-paz" title="Modifica paziente" aria-label="Modifica paziente">${ic('edit')}</button></div>`}
+  <section class="card pad odo-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px"><h3>Odontogramma</h3><span class="muted" style="font-size:13px">Tocca un dente per registrare o vedere le etichette</span></div>
+    ${odontogramma(conta, S.dente)}</section>
+  ${imp.length ? `<section class="sez"><h3 style="margin:22px 0 10px">Etichette registrate</h3>
+    ${[...denti, ...(senza.length ? [0] : [])].map(n => `<div class="grp"><button class="grp-h" data-dente-p="${n}">${n ? `<span class="grp-n">${n}</span>` : ''}<span>${n ? 'Dente ' + n + ' · ' : ''}${esc(nomeDente(n))}</span></button>
+      <div class="lab-grid">${perDente(imp, n).map(r => tile(r, false)).join('')}</div></div>`).join('')}</section>` : ''}
+  ${d.admin || !imp.length ? `<div style="margin-top:26px;display:flex;justify-content:flex-end"><button class="btn danger sm" data-a="elimina-paz">${ic('trash')}Elimina paziente</button></div>` : ''}`;
+}
+// finestra del dente: etichette a icona (si espandono) + aggiunta
+function apriDente(n, aperta = null) {
+  S.dente = n; S.lab = null; S.labOpen = aperta; S.err = '';
+  disegnaDente(); if (!$('#dlg').open) $('#dlg').showModal();
+  document.querySelectorAll('.d.cur').forEach(x => x.classList.remove('cur'));
+  document.querySelectorAll(`[data-dente-p="${n}"].d`).forEach(x => x.classList.add('cur'));
+}
+function disegnaDente() {
+  const n = S.dente, pz = S.pz.paziente, list = perDente(S.pz.impianti, n), f = S.lab;
+  const dl = $('#dlg'); dl.classList.add('wide');
+  const testa = `<div class="dh"><span class="art dente-art">${n ? svgDente(n, !!list.length, n >= 30) : ic('udi')}</span><div style="min-width:0"><h3>${n ? 'Dente ' + n : 'Senza posizione'}</h3>
+    <div class="muted" style="font-size:13px">${esc(cap(nomeDente(n)))} · ${esc(pz.cognome)} ${esc(pz.nome)}</div></div><button class="btn sm" data-a="dlg-chiudi" style="margin-left:auto" aria-label="Chiudi">${ic('x')}</button></div>`;
+  let body;
+  if (f) body = formLab();
+  else body = `${list.length ? `<div class="lab-grid">${list.map(r => tile(r, S.labOpen === r.id)).join('')}</div>` : `<div class="empty" style="padding:18px 6px">${ic('udi')}<b style="margin-top:6px">Nessuna etichetta su questo dente</b>Fotografa l'etichetta dell'impianto o del materiale impiantato.</div>`}
+    ${n ? `<button class="btn primary big-add" data-a="lab-nuova">${ic('cam')}${list.length ? 'Aggiungi un\'altra etichetta' : 'Aggiungi etichetta'}</button>` : ''}`;
+  dl.innerHTML = testa + `<div class="db">${body}</div>`;
+}
+function formLab() {
+  const f = S.lab;
+  const inp = (k, l, attrs = '') => `<div class="field"><label for="l-${k}">${l}</label><input id="l-${k}" data-l="${k}" value="${esc(f[k] || '')}" ${attrs}></div>`;
+  return `<div class="scanbox"><div style="font-weight:700;margin-bottom:4px">Foto dell'etichetta</div>
+      <div class="muted" style="font-size:13.5px;margin-bottom:10px">Inquadra l'etichetta con il quadratino DataMatrix: leggo codice UDI, lotto e scadenza${S.st.ai ? ', nome e produttore' : ''}. Poi controlla i campi.</div>
       <div class="foto-in">${f.foto ? `<img class="thumb lg" src="${f.foto}" alt="Etichetta">` : f.fotoId ? `<img class="thumb lg" src="api/foto/${esc(f.fotoId)}" alt="Etichetta">` : ''}
-        <label class="btn primary">${ic('cam')}${f.foto || f.fotoId ? 'Rifai la foto' : 'Fotografa l\'etichetta'}<input type="file" accept="image/*" capture="environment" class="sr" data-foto-udi></label></div>
-      ${S.busy ? '<div class="muted" style="margin-top:8px">Leggo l\'etichetta…</div>' : ''}
-      ${f.letto ? `<div class="muted" style="font-size:13px;margin-top:8px">${esc(f.letto)}</div>` : ''}</div>
+        <label class="btn primary">${ic('cam')}${f.foto || f.fotoId ? 'Rifai la foto' : 'Fotografa l\'etichetta'}<input type="file" accept="image/*" capture="environment" class="sr" data-foto-lab></label></div>
+      ${S.busy ? '<div class="muted" style="margin-top:8px">Leggo l\'etichetta…</div>' : ''}${f.letto ? `<div class="muted" style="font-size:13px;margin-top:8px">${esc(f.letto)}</div>` : ''}</div>
     <div class="grid2">
-      ${inp('prodotto', 'Prodotto (nome, misura)')}
-      ${inp('produttore', 'Produttore')}
-      ${inp('ref', 'Codice articolo (REF)')}
-      ${inp('gtin', 'UDI-DI (GTIN, 14 cifre)', 'inputmode="numeric"')}
-      ${inp('lotto', 'Lotto (LOT)')}
-      ${inp('scadenza', 'Scadenza', 'type="date"')}
+      ${inp('dataIntervento', 'Data dell\'intervento', 'type="date"')}
+      ${inp('medico', 'Medico che ha eseguito l\'intervento', 'list="medici" autocomplete="off"')}
+      ${inp('prodotto', 'Prodotto (nome, misura)')}${inp('produttore', 'Produttore')}
+      ${inp('ref', 'Codice articolo (REF)')}${inp('gtin', 'UDI-DI (GTIN, 14 cifre)', 'inputmode="numeric"')}
+      ${inp('lotto', 'Lotto (LOT)')}${inp('scadenza', 'Scadenza', 'type="date"')}
       ${inp('seriale', 'Numero di serie (SN), se c\'è')}
     </div>
+    <datalist id="medici">${(S.medici || []).map(m => `<option value="${esc(m)}">`).join('')}</datalist>
     ${inp('udi', 'Codice UDI completo (dal DataMatrix)', 'placeholder="Es. (01)…(17)…(10)…"')}
-    <div class="field"><label for="u-note">Note (facoltative)</label><textarea id="u-note" data-u="note" rows="2">${esc(f.note || '')}</textarea></div>
+    <div class="field"><label for="l-note">Note (facoltative)</label><input id="l-note" data-l="note" value="${esc(f.note || '')}"></div>
     ${S.err ? `<div class="err" role="alert" style="margin-bottom:10px">${esc(S.err)}</div>` : ''}
-    <button class="btn primary wide" data-a="salva-udi" ${S.saving ? 'disabled' : ''}>${ic('check')}${S.saving ? 'Salvo…' : 'Salva nel registro'}</button>
-  </section>`;
+    <div class="df" style="padding:4px 0 0"><button class="btn" data-a="lab-annulla">Indietro</button><button class="btn primary" data-a="lab-salva" ${S.saving || S.busy ? 'disabled' : ''}>${ic('check')}${S.saving ? 'Salvo…' : f.id ? 'Salva le modifiche' : 'Salva l\'etichetta'}</button></div>`;
 }
-function vUdiVedi() {
-  const r = (S.udi || []).find(x => x.id === S.id); if (!r) return '<div class="empty">Caricamento…</div>';
-  const riga = (l, v) => v ? `<div class="rec" style="padding:8px 0"><div class="grow"><div class="meta">${l}</div><div style="font-weight:600;word-break:break-all">${v}</div></div></div>` : '';
-  return `<button class="link" data-go="udi">${ic('back')}Registro impianti</button>
-  <div class="head"><div style="flex:1"><h2 class="view">${esc(r.pazienteCognome)} ${esc(r.pazienteNome)}</h2><p>Intervento del ${esc(fmtD(r.dataIntervento))} · ${esc(r.sede)}</p></div>
-    <button class="btn" data-a="modifica-udi">${ic('edit')}Modifica</button></div>
-  <div class="grid2" style="gap:14px">
-    ${r.denti.length ? `<section class="card pad" style="grid-column:1/-1"><h3 style="margin-bottom:8px">Posizione</h3>${odontogramma(r.denti, true)}</section>` : ''}
-    <section class="card pad"><h3 style="margin-bottom:6px">Intervento</h3>
-      ${riga('Posizione', r.denti.length ? (r.denti.length === 1 ? 'Dente ' : 'Denti ') + r.denti.join(', ') : '')}${riga('Medico', esc(r.medico))}${riga('Registrato da', esc(r.operatore) + ' il ' + esc(fmtD(r.creatoIl)))}${riga('Note', esc(r.note))}</section>
-    <section class="card pad"><h3 style="margin-bottom:6px">Dispositivo</h3>
-      ${riga('Prodotto', esc(r.prodotto))}${riga('Produttore', esc(r.produttore))}${riga('REF', esc(r.ref))}${riga('UDI-DI (GTIN)', esc(r.gtin))}${riga('Lotto', esc(r.lotto))}${riga('Scadenza', esc(fmtD(r.scadenza)))}${riga('Numero di serie', esc(r.seriale))}${riga('Codice UDI', esc(r.udi))}
-      ${r.fotoId ? `<div style="margin-top:8px">${fotoBtn(r.fotoId, 'lg')}</div>` : ''}</section>
-  </div>
-  <div style="margin-top:20px;display:flex;justify-content:flex-end"><button class="btn danger sm" data-a="elimina-udi">${ic('trash')}Elimina registrazione</button></div>`;
+async function ricaricaPaz() { S.pz = await api('GET', 'api/udi/pazienti/' + encodeURIComponent(S.id)); render(); if ($('#dlg').open && S.dente !== null && S.dente !== undefined) disegnaDente(); }
+async function fotoLab(file) {
+  const f = S.lab;
+  try {
+    f.foto = await riduci(file, 2000); S.busy = true; disegnaDente();
+    const codice = await leggiCodice(f.foto), letti = [];
+    if (codice) {
+      const c = await api('POST', 'api/udi/codice', { testo: codice });
+      f.udi = c.grezzo || codice; if (c.gtin) f.gtin = c.gtin; if (c.lotto) f.lotto = c.lotto; if (c.scadenza) f.scadenza = c.scadenza; if (c.seriale) f.seriale = c.seriale; if (c.ref) f.ref = c.ref;
+      letti.push('codice ' + (c.tipo || 'letto'));
+    }
+    if (S.st.ai) {
+      try { const r = await api('POST', 'api/udi/leggi', { foto: f.foto, codice });
+        for (const k of ['prodotto', 'produttore', 'ref', 'gtin', 'lotto', 'scadenza']) { const v = k === 'prodotto' ? r.nome : r[k]; if (v && !f[k]) f[k] = v; }
+        letti.push('etichetta'); if (r.dubbi?.length) letti.push('da controllare: ' + r.dubbi.join('; '));
+      } catch (x) { letti.push(x.message); }
+    }
+    f.letto = codice || S.st.ai ? 'Letto dalla foto: ' + letti.join(' · ') + '. Controlla i campi.' : 'Codice non trovato nella foto: avvicinati al quadratino o scrivi i dati a mano.';
+  } catch (x) { toast(x.message); }
+  S.busy = false; disegnaDente();
 }
 /* ============ scarica e svuota (amministratore) ============ */
 function apriEsporta(id) {
@@ -781,8 +879,17 @@ document.addEventListener('click', async e => {
   if (b.dataset.nuovoTest) { S.form = { tipo: 'test', test: b.dataset.nuovoTest, esito: '' }; S.err = ''; return render(); }
   if (b.dataset.esito && S.form) { S.form.esito = b.dataset.esito; return render(); }
   if (b.dataset.temp && S.form) { S.form.temperatura = +b.dataset.temp; return render(); }
-  if (b.dataset.dente && S.udiForm) { const n = +b.dataset.dente, d = S.udiForm.denti; S.udiForm.denti = d.includes(n) ? d.filter(x => x !== n) : [...d, n]; return render(); }
-  if (b.dataset.impianto) return go('udivedi', { id: b.dataset.impianto });
+  if (b.dataset.paz) { S.pzForm = null; S.pz = null; return go('paz', { id: b.dataset.paz }); }
+  if (b.dataset.denteP !== undefined) return apriDente(+b.dataset.denteP);
+  if (b.dataset.lab) { // riquadro etichetta: si espande / si chiude
+    if ($('#dlg').open && S.dente !== null) { S.labOpen = S.labOpen === b.dataset.lab ? null : b.dataset.lab; return disegnaDente(); }
+    return apriDente(+b.dataset.labDente, b.dataset.lab);
+  }
+  if (b.dataset.labMod) { const r = S.pz.impianti.find(x => x.id === b.dataset.labMod); S.lab = { ...r, scadenza: r.scadenza || '' }; S.err = ''; return disegnaDente(); }
+  if (b.dataset.labDel) {
+    if (!confirm('Eliminare definitivamente questa etichetta dal registro impianti?')) return;
+    try { await api('DELETE', 'api/udi/' + b.dataset.labDel); S.labOpen = null; toast('Etichetta eliminata.'); return ricaricaPaz(); } catch (x) { return toast(x.message, 6000); }
+  }
   if (b.dataset.esitoSpore) { // l'esito si salva solo con la foto del risultato
     S.sporeEsito = { id: b.dataset.esitoSpore, v: b.dataset.v };
     toast('Scatta la foto del risultato del test delle spore.', 3000);
@@ -803,9 +910,26 @@ document.addEventListener('click', async e => {
     try { await api('DELETE', 'api/man/registro/' + b.dataset.regDel); toast('Registrazione tolta.'); return load(); } catch (x) { return toast(x.message); } }
   const a = b.dataset.a; if (!a) return;
   if (a === 'esp-scarica') return scaricaEsp();
+  if (a === 'lab-nuova') { const prec = perDente(S.pz.impianti, S.dente)[0] || S.pz.impianti[0];
+    S.lab = { dataIntervento: prec?.dataIntervento || S.st.oggi, medico: prec?.medico || '' }; S.err = ''; return disegnaDente(); }
+  if (a === 'lab-annulla') { S.lab = null; S.err = ''; return disegnaDente(); }
+  if (a === 'lab-salva') {
+    const f = S.lab;
+    if (!f.medico?.trim()) { S.err = 'Scrivi il medico che ha eseguito l\'intervento.'; return disegnaDente(); }
+    if (!f.lotto?.trim() && !f.udi?.trim() && !f.gtin?.trim()) { S.err = 'Servono almeno il lotto o il codice UDI: fotografa l\'etichetta o scrivili a mano.'; return disegnaDente(); }
+    S.saving = true; disegnaDente();
+    try {
+      const body = { ...f, denti: f.id ? f.denti : [S.dente], pazienteId: S.pz.paziente.id };
+      const r = f.id ? await api('PUT', 'api/udi/' + f.id, body) : await api('POST', 'api/udi', body);
+      S.lab = null; S.err = ''; S.labOpen = f.id || r.id; toast(f.id ? 'Etichetta aggiornata.' : 'Etichetta salvata sul dente ' + S.dente + '.');
+      if (f.medico && !(S.medici || []).includes(f.medico)) S.medici = [f.medico, ...(S.medici || [])];
+    } catch (x) { S.err = x.message; }
+    S.saving = false; return ricaricaPaz();
+  }
   if (a === 'esp-cancella') { if (!confirm('Ultima conferma: cancellare dall\'app i dati scaricati?')) return; return cancellaEsp(); }
   if (a.startsWith('dlg-')) {
     if (a === 'dlg-chiudi') { S.err = ''; S.esp = null; return $('#dlg').close(); }
+    if (a === 'dlg-x') return $('#dlg').close();
     if (a === 'dlg-avanti') { S.dlg.conferma = true; S.err = ''; return disegnaDlg(); }
     if (a === 'dlg-indietro') { S.dlg.conferma = false; return disegnaDlg(); }
     if (a === 'dlg-registra') {
@@ -860,43 +984,36 @@ document.addEventListener('click', async e => {
       finally { S.busy = false; }
       S.form = null; S.err = ''; toast(f.esito === 'ko' ? 'Salvato: vapor line NON virata. Il carico va risterilizzato.' : 'Ciclo salvato.', 6000); return load();
     }
-    if (a === 'nuovo-impianto') {
-      const oggi = S.st.oggi;
-      S.udiForm = { sede: S.sede || S.st.udi.sedi[0]?.id || '', dataIntervento: oggi, pazienteCognome: '', pazienteNome: '', medico: '', denti: [] };
-      S.err = ''; Object.assign(S, { view: 'udiform' }); window.scrollTo(0, 0); return render();
+    if (a === 'nuovo-paz') { S.pzForm = { sede: S.sede || S.st.udi.sedi[0]?.id || '', cognome: S.q && !/\d/.test(S.q) ? S.q.trim().split(/\s+/)[0].replace(/^./, c => c.toUpperCase()) : '', nome: '', nascita: '' }; S.err = ''; render(); return setTimeout(() => $('#pz-c')?.focus(), 50); }
+    if (a === 'mod-paz') { const p = S.pz.paziente; S.pzForm = { id: p.id, cognome: p.cognome, nome: p.nome, nascita: p.nascita || '' }; S.err = ''; return render(); }
+    if (a === 'annulla-paz') { S.pzForm = null; S.err = ''; return render(); }
+    if (a === 'salva-paz') {
+      const f = S.pzForm; if (!f.cognome?.trim()) { S.err = 'Scrivi il cognome del paziente.'; return render(); }
+      if (f.id) { await api('PUT', 'api/udi/pazienti/' + f.id, f); S.pzForm = null; S.err = ''; toast('Paziente aggiornato.'); return load(); }
+      const r = await api('POST', 'api/udi/pazienti', f); S.pzForm = null; S.err = '';
+      if (r.esistente) toast('Questo paziente c\'era già: ho aperto il suo odontogramma.', 5000);
+      return go('paz', { id: r.id });
     }
-    if (a === 'modifica-udi') { const r = S.udi.find(x => x.id === S.id); S.udiForm = { ...r, denti: [...r.denti], scadenza: r.scadenza || '' }; S.err = ''; S.view = 'udiform'; window.scrollTo(0, 0); return render(); }
-    if (a === 'annulla-udi') { const id = S.udiForm?.id; S.udiForm = null; S.err = ''; return id ? go('udivedi', { id }) : go('udi', { id: null }); }
-    if (a === 'salva-udi') {
-      const f = S.udiForm;
-      if (!f.pazienteCognome?.trim()) { S.err = 'Scrivi il cognome del paziente.'; return render(); }
-      if (!f.medico?.trim()) { S.err = 'Scrivi il medico che ha eseguito l\'intervento.'; return render(); }
-      if (!f.lotto?.trim() && !f.udi?.trim() && !f.gtin?.trim()) { S.err = 'Servono almeno il lotto o il codice UDI: fotografa l\'etichetta o scrivili a mano.'; return render(); }
-      S.saving = true; render();
-      try {
-        if (f.id) { await api('PUT', 'api/udi/' + f.id, f); S.saving = false; S.udiForm = null; toast('Registrazione aggiornata.'); return go('udi', { id: null }); }
-        await api('POST', 'api/udi', f);
-      } finally { S.saving = false; }
-      S.udiForm = null; S.err = ''; toast('Impianto registrato.'); return go('udi', { id: null });
+    if (a === 'elimina-paz') {
+      const n = S.pz.impianti.length;
+      if (!confirm(n ? `Eliminare il paziente e le sue ${n} etichette? Non si può annullare.` : 'Eliminare questo paziente?')) return;
+      await api('DELETE', 'api/udi/pazienti/' + S.pz.paziente.id); toast('Paziente eliminato.'); return go('udi', { id: null });
     }
-    if (a === 'elimina-udi') {
-      if (!confirm('Eliminare definitivamente questa registrazione dal registro impianti?')) return;
-      await api('DELETE', 'api/udi/' + S.id); toast('Registrazione eliminata.'); return go('udi', { id: null });
-    }
-  } catch (x) { S.err = x.message; if (S.view === 'udiform' || S.form) render(); else toast(x.message, 5000); }
+  } catch (x) { S.err = x.message; if (S.form || S.pzForm) render(); else toast(x.message, 5000); }
 });
 let qT;
 document.addEventListener('input', e => {
   const t = e.target;
   if (t.dataset.f && S.form) S.form[t.dataset.f] = t.value;
-  if (t.dataset.u && S.udiForm) S.udiForm[t.dataset.u] = t.value;
+  if (t.dataset.pf && S.pzForm) S.pzForm[t.dataset.pf] = t.value;
+  if (t.dataset.l && S.lab) S.lab[t.dataset.l] = t.value;
   if (t.dataset.af && S.attForm) S.attForm[t.dataset.af] = t.value;
   if (t.dataset.re && S.regEdit) S.regEdit[t.dataset.re] = t.value;
   if (t.dataset.dnote !== undefined && S.dlg) S.dlg.note = t.value;
   if (t.dataset.espok !== undefined && S.esp) { S.esp.ok = t.checked; return disegnaEsp(); }
   if (t.dataset.voce && S.dlg) { const v = t.dataset.voce; S.dlg.voci = t.checked ? [...S.dlg.voci, v] : S.dlg.voci.filter(x => x !== v); disegnaDlg(); }
   if (t.dataset.q !== undefined) { S.q = t.value; clearTimeout(qT); qT = setTimeout(async () => {
-    try { S.udi = (await api('GET', 'api/udi?q=' + encodeURIComponent(S.q) + (S.sede ? '&sede=' + encodeURIComponent(S.sede) : ''))).impianti; } catch {}
+    try { S.paz = (await api('GET', 'api/udi/pazienti?q=' + encodeURIComponent(S.q) + (S.sede ? '&sede=' + encodeURIComponent(S.sede) : ''))).pazienti; } catch {}
     const pos = t.selectionStart; render(); const n = document.querySelector('[data-q]'); n.focus(); try { n.setSelectionRange(pos, pos); } catch {} }, 250); }
 });
 document.addEventListener('change', async e => {
@@ -905,7 +1022,7 @@ document.addEventListener('change', async e => {
   if (t.dataset.sedeUdi !== undefined) { S.sede = t.value; return load(); }
   if (t.dataset.rf) { S.regF[t.dataset.rf] = t.value; if (t.dataset.rf === 'sede') S.regF.att = ''; return load(); }
   if (t.dataset.f === 'sede' && S.form) S.form.sede = t.value;
-  if (t.dataset.u === 'sede' && S.udiForm) S.udiForm.sede = t.value;
+  if (t.dataset.pf === 'sede' && S.pzForm) S.pzForm.sede = t.value;
   if (t.id === 'foto-spore' && t.files[0] && S.sporeEsito) {
     const { id, v } = S.sporeEsito; S.sporeEsito = null;
     try { const foto = await riduci(t.files[0]); t.value = ''; await api('PUT', 'api/steri/test/' + id, { esito: v, foto }); toast('Esito del test delle spore salvato con la foto.'); load(); }
@@ -913,26 +1030,7 @@ document.addEventListener('change', async e => {
     return;
   }
   if (t.matches('[data-foto-in]') && t.files[0]) { try { S.form.foto = await riduci(t.files[0]); S.form.dubbi = null; render(); } catch (x) { toast(x.message); } }
-  if (t.matches('[data-foto-udi]') && t.files[0]) {
-    const f = S.udiForm;
-    try {
-      f.foto = await riduci(t.files[0], 2000); S.busy = true; render();
-      const codice = await leggiCodice(f.foto), letti = [];
-      if (codice) {
-        const c = await api('POST', 'api/udi/codice', { testo: codice });
-        f.udi = c.grezzo || codice; if (c.gtin) f.gtin = c.gtin; if (c.lotto) f.lotto = c.lotto; if (c.scadenza) f.scadenza = c.scadenza; if (c.seriale) f.seriale = c.seriale; if (c.ref) f.ref = c.ref;
-        letti.push('codice ' + (c.tipo || 'letto'));
-      }
-      if (S.st.ai) {
-        try { const r = await api('POST', 'api/udi/leggi', { foto: f.foto, codice });
-          for (const k of ['prodotto', 'produttore', 'ref', 'gtin', 'lotto', 'scadenza']) { const v = k === 'prodotto' ? r.nome : r[k]; if (v && !f[k]) f[k] = v; }
-          letti.push('etichetta'); if (r.dubbi?.length) letti.push('da controllare: ' + r.dubbi.join('; '));
-        } catch (x) { letti.push(x.message); }
-      }
-      f.letto = codice || S.st.ai ? 'Letto dalla foto: ' + letti.join(' · ') + '. Controlla i campi.' : 'Codice non trovato nella foto: avvicinati al quadratino o scrivi i dati a mano.';
-    } catch (x) { toast(x.message); }
-    S.busy = false; render();
-  }
+  if (t.matches('[data-foto-lab]') && t.files[0] && S.lab) return fotoLab(t.files[0]);
 });
 
 // Aggiornamento automatico: chi ha aperto la stessa sterilizzatrice vede subito i test fatti dagli altri
@@ -941,6 +1039,11 @@ setInterval(() => {
   if (S.view === 'scheda' || S.view === 'steri' || S.view === 'man') load();
 }, 20000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !S.form && !S.busy && ['scheda', 'steri', 'man'].includes(S.view)) load(); });
+
+$('#dlg').addEventListener('close', () => {
+  $('#dlg').classList.remove('wide');
+  if (S.dente !== null) { S.dente = null; S.lab = null; S.labOpen = null; S.err = ''; if (S.view === 'paz') render(); }
+});
 
 /* ============ avvio ============ */
 (async () => {
@@ -951,7 +1054,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
   if ((v === 'scheda' || v === 'storico') && ok.steri && id) return go(v, { id });
   if (v === 'udi' && ok.udi) return go('udi');
   if ((v === 'man' || v === 'manreg') && S.st.manutenzione) return go(v);
-  if (v === 'udivedi' && ok.udi && id) { S.udi = (await api('GET', 'api/udi')).impianti; return go('udivedi', { id }); }
+  if (v === 'paz' && ok.udi && id) return go('paz', { id });
   // con una sola sezione si entra subito lì
   const solo = [ok.steri && 'steri', ok.udi && 'udi', ok.man && 'man', S.st.magazzino && 'mag'].filter(Boolean);
   if (solo.length === 1 && solo[0] !== 'mag') return go(solo[0]);
