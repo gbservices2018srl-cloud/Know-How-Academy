@@ -213,6 +213,7 @@ const IC = {
   filtro: '<path d="M4 5h16l-6 7.5V19l-4 1.5v-8z"/>', tubo: '<path d="M5 20V9a4 4 0 0 1 4-4h2a4 4 0 0 1 4 4v3a3 3 0 0 0 3 3h1"/><path d="M19 12v6"/>',
   cordone: '<path d="M4 6c3 0 3 4 6 4s3-4 6-4 3 4 4 4"/><path d="M4 14c3 0 3 4 6 4s3-4 6-4 3 4 4 4"/>', drop: '<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>',
   amalgama: '<circle cx="12" cy="12" r="8"/><path d="M12 8a4 4 0 1 1-4 4"/>', reg: '<path d="M6 3h12v18H6z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
+  down: '<path d="M12 4v11M7 10.5l5 5 5-5"/><path d="M5 20h14"/>',
   ext: '<path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/>', hist: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>',
 };
 const ART = {
@@ -341,7 +342,8 @@ function vSteri() {
           ${s.cicliOggi ? `<span class="pill">${s.cicliOggi} ${s.cicliOggi === 1 ? 'ciclo' : 'cicli'} oggi</span>` : ''}</div>
         ${s.avvisi.length ? `<div class="avvisi">${s.avvisi.map(a => `<div class="avviso ${a.livello}">${a.livello === 'rosso' ? '⚠' : '•'} ${esc(a.testo)}</div>`).join('')}</div>` : '<div class="avvisi"><div class="avviso" style="background:var(--ok-soft);color:var(--ok)">✓ Tutto in regola oggi</div></div>'}
         <div class="acts"><button class="btn primary" data-apri-oggi="${esc(m.id)}">${ic('steri')}${s.schedaOggi ? 'Apri la scheda di oggi' : 'Nuova scheda di oggi'}</button>
-          <button class="btn" data-storico="${esc(m.id)}">${ic('hist')}Storico</button></div>
+          <button class="btn" data-storico="${esc(m.id)}">${ic('hist')}Storico</button>
+          ${p.admin ? `<button class="btn" data-esporta="${esc(m.id)}">${ic('down')}Scarica e svuota</button>` : ''}</div>
       </article>`; }).join('')}</div>`
     : `<div class="card empty"><b>Nessuna sterilizzatrice${S.sede ? ' in questa sede' : ''}</b>Aggiungi la prima con «Aggiungi sterilizzatrice»: marca e modello.</div>`}`;
 }
@@ -528,6 +530,55 @@ function vUdiVedi() {
   </div>
   <div style="margin-top:20px;display:flex;justify-content:flex-end"><button class="btn danger sm" data-a="elimina-udi">${ic('trash')}Elimina registrazione</button></div>`;
 }
+/* ============ scarica e svuota (amministratore) ============ */
+function apriEsporta(id) {
+  const m = S.macchine.find(x => x.id === id); if (!m) return;
+  S.esp = { m, passo: 1 }; S.err = ''; disegnaEsp(); $('#dlg').showModal();
+}
+function disegnaEsp() {
+  const { m, passo, n, canc } = S.esp, nome = esc(m.marca + ' ' + m.modello);
+  const testa = `<div class="dh" style="--ac:var(--accent)"><span class="art">${ic('steri')}</span><div><h3>${nome}</h3><div class="muted" style="font-size:13px">${esc(m.sede)}</div></div></div>`;
+  const conta = c => `${c.schede} schede, ${c.test} test, ${c.cicli} cicli e ${c.foto} foto`;
+  let body, foot;
+  if (passo === 1) {
+    body = `<p style="margin-top:0"><b>1. Scarico</b> tutti i dati di questa sterilizzatrice in un file ZIP: schede giorno per giorno, test, cicli e tutte le foto.</p>
+      <p>Nel file trovi il <b>Registro sterilizzazione</b> (si apre con il browser e si può stampare, con le foto) e due fogli <b>CSV</b> da aprire con Excel.</p>
+      <p class="muted" style="margin-bottom:0"><b>2.</b> Dopo lo scarico ti chiedo se cancellare quei dati dall'app.</p>`;
+    foot = `<button class="btn" data-a="dlg-chiudi">Annulla</button><button class="btn primary" data-a="esp-scarica" ${S.busy ? 'disabled' : ''}>${ic('down')}${S.busy ? 'Preparo il file…' : 'Scarica i dati'}</button>`;
+  } else if (passo === 2) {
+    body = `<div class="avviso" style="background:var(--ok-soft);color:var(--ok)">✓ File scaricato: ${conta(n)}.</div>
+      <p>Salvalo in un posto sicuro (la cartella dello studio, Drive…) e <b>aprilo per controllare</b> che ci sia tutto.</p>
+      <div class="conf">Vuoi cancellare dall'app i dati scaricati? L'operazione non si può annullare: resterà solo il file che hai scaricato.</div>
+      <p class="muted" style="font-size:13px">Per tenere in regola gli avvisi restano nell'app: la scheda di oggi, l'ultimo test delle spore (serve per calcolare il prossimo) e le spore ancora in incubazione.</p>
+      <label class="flag" style="margin:0"><input type="checkbox" data-espok ${S.esp.ok ? 'checked' : ''}><span class="t">Ho salvato e controllato il file</span></label>`;
+    foot = `<button class="btn" data-a="dlg-chiudi">Non cancellare</button><button class="btn danger" data-a="esp-cancella" ${S.esp.ok && !S.busy ? '' : 'disabled'}>${ic('trash')}${S.busy ? 'Cancello…' : 'Cancella i dati dall\'app'}</button>`;
+  } else {
+    body = `<div class="avviso" style="background:var(--ok-soft);color:var(--ok)">✓ Dati cancellati dall'app: ${conta(canc)}.</div><p class="muted" style="margin-bottom:0">Lo scarico e la cancellazione restano annotati con il tuo nome, la data e l'ora.</p>`;
+    foot = `<button class="btn primary" data-a="dlg-chiudi">Fatto</button>`;
+  }
+  $('#dlg').innerHTML = testa + `<div class="db">${body}${S.err ? `<div class="err" role="alert" style="margin-top:10px">${esc(S.err)}</div>` : ''}</div><div class="df">${foot}</div>`;
+}
+async function scaricaEsp() {
+  S.busy = true; S.err = ''; disegnaEsp();
+  try {
+    const r = await fetch(`api/steri/macchine/${encodeURIComponent(S.esp.m.id)}/esporta`, { credentials: 'include' });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Scarico non riuscito, riprova.');
+    const id = r.headers.get('X-Esportazione'), n = JSON.parse(r.headers.get('X-Conteggi') || '{}');
+    const nome = (/filename="([^"]+)"/.exec(r.headers.get('Content-Disposition') || '') || [])[1] || 'sterilizzazione.zip';
+    const blob = await r.blob();
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nome; document.body.append(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 60000);
+    Object.assign(S.esp, { passo: 2, id, n, ok: false });
+  } catch (x) { S.err = x.message; }
+  S.busy = false; disegnaEsp();
+}
+async function cancellaEsp() {
+  S.busy = true; S.err = ''; disegnaEsp();
+  try { const r = await api('POST', `api/steri/esportazioni/${encodeURIComponent(S.esp.id)}/cancella`, {}); Object.assign(S.esp, { passo: 3, canc: r.cancellati }); load(); }
+  catch (x) { S.err = x.message; }
+  S.busy = false; disegnaEsp();
+}
+
 /* ============ manutenzione attrezzature ============ */
 const fmtDT = s => s ? new Date(s).toLocaleString('it-IT', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
 function fa(s) { // "oggi", "ieri", "5 giorni fa"
@@ -659,6 +710,7 @@ document.addEventListener('click', async e => {
     try { await api('DELETE', b.dataset.delTest ? 'api/steri/test/' + b.dataset.delTest : 'api/steri/cicli/' + b.dataset.delCiclo); toast('Tolta.'); return load(); } catch (x) { return toast(x.message, 5000); }
   }
   if (b.dataset.att) return apriAtt(b.dataset.att);
+  if (b.dataset.esporta) return apriEsporta(b.dataset.esporta);
   if (b.dataset.atipo && S.attForm) { S.attForm.tipo = b.dataset.atipo; return render(); }
   if (b.dataset.salvaNome) { try { await api('PUT', 'api/man/attrezzature/' + b.dataset.salvaNome, { nome: document.querySelector(`[data-rinomina="${b.dataset.salvaNome}"]`).value }); toast('Nome salvato.'); return load(); } catch (x) { return toast(x.message); } }
   if (b.dataset.togliAtt) { if (!confirm('Togliere questa attrezzatura dalla dashboard? Il registro delle manutenzioni già fatte resta.')) return;
@@ -667,8 +719,10 @@ document.addEventListener('click', async e => {
   if (b.dataset.regDel) { if (!confirm('Togliere definitivamente questa registrazione dal registro?')) return;
     try { await api('DELETE', 'api/man/registro/' + b.dataset.regDel); toast('Registrazione tolta.'); return load(); } catch (x) { return toast(x.message); } }
   const a = b.dataset.a; if (!a) return;
+  if (a === 'esp-scarica') return scaricaEsp();
+  if (a === 'esp-cancella') { if (!confirm('Ultima conferma: cancellare dall\'app i dati scaricati?')) return; return cancellaEsp(); }
   if (a.startsWith('dlg-')) {
-    if (a === 'dlg-chiudi') { S.err = ''; return $('#dlg').close(); }
+    if (a === 'dlg-chiudi') { S.err = ''; S.esp = null; return $('#dlg').close(); }
     if (a === 'dlg-avanti') { S.dlg.conferma = true; S.err = ''; return disegnaDlg(); }
     if (a === 'dlg-indietro') { S.dlg.conferma = false; return disegnaDlg(); }
     if (a === 'dlg-registra') {
@@ -755,6 +809,7 @@ document.addEventListener('input', e => {
   if (t.dataset.af && S.attForm) S.attForm[t.dataset.af] = t.value;
   if (t.dataset.re && S.regEdit) S.regEdit[t.dataset.re] = t.value;
   if (t.dataset.dnote !== undefined && S.dlg) S.dlg.note = t.value;
+  if (t.dataset.espok !== undefined && S.esp) { S.esp.ok = t.checked; return disegnaEsp(); }
   if (t.dataset.voce && S.dlg) { const v = t.dataset.voce; S.dlg.voci = t.checked ? [...S.dlg.voci, v] : S.dlg.voci.filter(x => x !== v); disegnaDlg(); }
   if (t.dataset.q !== undefined) { S.q = t.value; clearTimeout(qT); qT = setTimeout(async () => {
     try { S.udi = (await api('GET', 'api/udi?q=' + encodeURIComponent(S.q) + (S.sede ? '&sede=' + encodeURIComponent(S.sede) : ''))).impianti; } catch {}

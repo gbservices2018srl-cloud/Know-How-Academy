@@ -4,6 +4,7 @@
 //   Amministratore → tutte le sedi; Operatore → solo le sedi assegnate (ogni studio vede il suo).
 const path = require('path');
 const fs = require('fs');
+const zlib = require('zlib');
 const express = require('express');
 const db = require('./lib/db');
 const accessi = require('../accessi/server');
@@ -262,6 +263,135 @@ app.delete('/api/steri/cicli/:id', needUser, need(ST), wrap(async (req, res) => 
   if (!puoCancellare(req, c)) return bad(res, 403, 'Puoi togliere solo un ciclo che hai registrato tu nelle ultime 24 ore (o chiedere all\'amministratore).');
   await db.q('delete from cicli where id = $1', [c.id]);
   res.json({ ok: true });
+}));
+
+/* ---------- Scarica e svuota (solo amministratore) ---------- */
+// ZIP "store" scritto un file alla volta (le foto non stanno tutte in memoria insieme)
+function zipStream(res) {
+  const cd = []; let off = 0;
+  const now = new Date();
+  const t = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+  const d = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+  const w = b => { off += b.length; return res.write(b) ? null : new Promise(r => res.once('drain', r)); };
+  return {
+    async add(name, data) {
+      data = Buffer.isBuffer(data) ? data : Buffer.from(String(data), 'utf8');
+      const nb = Buffer.from(name, 'utf8'), crc = zlib.crc32(data), h = Buffer.alloc(30);
+      h.writeUInt32LE(0x04034b50, 0); h.writeUInt16LE(20, 4); h.writeUInt16LE(0x0800, 6); h.writeUInt16LE(0, 8);
+      h.writeUInt16LE(t, 10); h.writeUInt16LE(d, 12); h.writeUInt32LE(crc, 14); h.writeUInt32LE(data.length, 18); h.writeUInt32LE(data.length, 22);
+      h.writeUInt16LE(nb.length, 26); h.writeUInt16LE(0, 28);
+      cd.push({ nb, crc, size: data.length, off });
+      await w(h); await w(nb); await w(data);
+    },
+    async end() {
+      const start = off;
+      for (const e of cd) {
+        const c = Buffer.alloc(46);
+        c.writeUInt32LE(0x02014b50, 0); c.writeUInt16LE(20, 4); c.writeUInt16LE(20, 6); c.writeUInt16LE(0x0800, 8); c.writeUInt16LE(0, 10);
+        c.writeUInt16LE(t, 12); c.writeUInt16LE(d, 14); c.writeUInt32LE(e.crc, 16); c.writeUInt32LE(e.size, 20); c.writeUInt32LE(e.size, 24);
+        c.writeUInt16LE(e.nb.length, 28); c.writeUInt32LE(e.off, 42);
+        await w(c); await w(e.nb);
+      }
+      const z = Buffer.alloc(22);
+      z.writeUInt32LE(0x06054b50, 0); z.writeUInt16LE(cd.length, 8); z.writeUInt16LE(cd.length, 10); z.writeUInt32LE(off - start, 12); z.writeUInt32LE(start, 16);
+      await w(z); res.end();
+    },
+  };
+}
+const adminST = req => !!permDi(req, ST)?.admin;
+const escH = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const csv = rows => '﻿' + rows.map(r => r.map(v => { const x = String(v ?? ''); return /[;"\n\r]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(';')).join('\r\n');
+const oraIt = d => new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }).format(new Date(d));
+const dataIt = g => { const [y, m, dd] = String(g).slice(0, 10).split('-'); return `${dd}/${m}/${y}`; };
+const slug = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'x';
+const NOMI_T = { bd: 'Bowie-Dick', helix: 'Helix test', spore: 'Test delle spore' };
+const ESITI_T = { ok: 'Superato', ko: 'NON superato', attesa: 'In incubazione' };
+
+// Scarica tutti i dati della sterilizzatrice fino a questo momento (ZIP: registro HTML con le foto, CSV per Excel, foto)
+app.get('/api/steri/macchine/:id/esporta', needUser, need(ST), wrap(async (req, res) => {
+  if (!adminST(req)) return bad(res, 403, 'Solo l\'amministratore può scaricare e svuotare i dati.');
+  const m = await macchinaMia(req, req.params.id);
+  const { rows: [{ ora: cut }] } = await db.q('select now() as ora');
+  const { rows: schede } = await db.q(`select id, to_char(giorno, 'YYYY-MM-DD') as giorno, aperta_da_nome, creata_il from schede
+    where macchina_id = $1 and creata_il <= $2 order by giorno`, [m.id, cut]);
+  const ids = schede.map(x => x.id);
+  const { rows: test } = await db.q('select t.*, f.mime from test t left join foto f on f.id = t.foto_id where scheda_id = any($1) and creato_il <= $2 order by creato_il', [ids, cut]);
+  const { rows: cicli } = await db.q('select c.*, f.mime from cicli c left join foto f on f.id = c.foto_id where scheda_id = any($1) and creato_il <= $2 order by creato_il', [ids, cut]);
+  const giornoDi = new Map(schede.map(x => [x.id, x.giorno]));
+  const ext = mime => mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
+  const nomeFoto = (r, cosa) => r.foto_id ? `foto/${giornoDi.get(r.scheda_id)}_${cosa}_${r.foto_id.slice(0, 8)}.${ext(r.mime)}` : '';
+  const foto = [...test.map(t => [t.foto_id, nomeFoto(t, t.tipo)]), ...cicli.map(c => [c.foto_id, nomeFoto(c, 'ciclo-' + slug(c.numero))])].filter(x => x[0]);
+  const id = db.newId(), sede = sedeOk(req, ST, m.sede_id)?.nome || m.sede_nome, nomeM = `${m.marca} ${m.modello}`.trim();
+  const conteggi = { schede: schede.length, test: test.length, cicli: cicli.length, foto: foto.length };
+  await db.q('insert into esportazioni (id, macchina_id, sede_id, fatta_il, fatta_da, conteggi) values ($1,$2,$3,$4,$5,$6)', [id, m.id, m.sede_id, cut, req.me.nome, JSON.stringify(conteggi)]);
+  const file = `sterilizzazione_${slug(sede)}_${slug(nomeM)}_${oggi()}.zip`;
+  res.set({ 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="${file}"`, 'X-Esportazione': id,
+    'X-Conteggi': JSON.stringify(conteggi), 'Cache-Control': 'no-store', 'Access-Control-Expose-Headers': 'X-Esportazione, X-Conteggi, Content-Disposition' });
+  const z = zipStream(res);
+  // registro leggibile e stampabile
+  const perScheda = s => {
+    const tt = test.filter(t => t.scheda_id === s.id), cc = cicli.filter(c => c.scheda_id === s.id);
+    const img = r => r.foto_id ? `<a href="${nomeFoto(r, r.tipo || 'ciclo-' + slug(r.numero))}"><img src="${nomeFoto(r, r.tipo || 'ciclo-' + slug(r.numero))}" alt=""></a>` : '<span class="no">senza foto</span>';
+    return `<section><h2>${dataIt(s.giorno)}</h2><p class="m">Scheda aperta da ${escH(s.aperta_da_nome)} alle ${oraIt(s.creata_il)}</p>
+      ${tt.length ? `<table><tr><th>Test</th><th>Esito</th><th>Operatore</th><th>Ora</th><th>Note</th><th>Foto</th></tr>${tt.map(t => `<tr class="${t.esito}"><td>${NOMI_T[t.tipo]}</td><td><b>${ESITI_T[t.esito]}</b></td><td>${escH(t.operatore_nome)}</td><td>${oraIt(t.creato_il)}</td><td>${escH(t.note)}</td><td>${img(t)}</td></tr>`).join('')}</table>` : '<p class="no">Nessun test registrato</p>'}
+      ${cc.length ? `<table><tr><th>Ciclo n.</th><th>Temperatura</th><th>Vapor line</th><th>Operatore</th><th>Ora</th><th>Note</th><th>Foto</th></tr>${cc.map(c => `<tr class="${c.esito}"><td><b>${escH(c.numero)}</b></td><td>${c.temperatura ? c.temperatura + ' °C' : ''}</td><td><b>${c.esito === 'ok' ? 'Virata' : 'NON virata'}</b></td><td>${escH(c.operatore_nome)}</td><td>${oraIt(c.creato_il)}</td><td>${escH(c.note)}</td><td>${img(c)}</td></tr>`).join('')}</table>` : ''}
+    </section>`;
+  };
+  await z.add('Registro sterilizzazione.html', `<!doctype html><html lang="it"><head><meta charset="utf-8"><title>Registro sterilizzazione · ${escH(nomeM)} · ${escH(sede)}</title>
+<style>body{font:14px/1.45 system-ui,sans-serif;color:#1f2a2b;max-width:1000px;margin:24px auto;padding:0 16px}h1{margin:0 0 4px}h2{font-size:17px;margin:22px 0 2px;border-top:2px solid #2B8384;padding-top:10px}
+.m{color:#5e6b6c;margin:0 0 8px}table{width:100%;border-collapse:collapse;margin:6px 0 10px}th,td{border:1px solid #dce7e7;padding:5px 8px;text-align:left;vertical-align:top}th{background:#eff5f5;font-size:12px}
+tr.ko td{background:#fbe3e0}tr.attesa td{background:#efe7f2}img{width:90px;height:90px;object-fit:cover;border-radius:6px}.no{color:#999}section{break-inside:avoid}@media print{a{color:inherit}}</style></head><body>
+<h1>Registro sterilizzazione</h1><p class="m"><b>${escH(nomeM)}</b>${m.matricola ? ' · matricola ' + escH(m.matricola) : ''} · sede ${escH(sede)}<br>
+Esportato il ${dataIt(oggi())} alle ${oraIt(cut)} da ${escH(req.me.nome)} · ${schede.length} schede, ${test.length} test, ${cicli.length} cicli, ${foto.length} foto${schede.length ? ` · dal ${dataIt(schede[0].giorno)} al ${dataIt(schede[schede.length - 1].giorno)}` : ''}</p>
+${schede.map(perScheda).join('') || '<p>Nessuna scheda.</p>'}</body></html>`);
+  await z.add('test.csv', csv([['Data', 'Ora', 'Test', 'Esito', 'Operatore', 'Note', 'Foto'],
+    ...test.map(t => [dataIt(giornoDi.get(t.scheda_id)), oraIt(t.creato_il), NOMI_T[t.tipo], ESITI_T[t.esito], t.operatore_nome, t.note, nomeFoto(t, t.tipo)])]));
+  await z.add('cicli.csv', csv([['Data', 'Ora', 'Numero ciclo', 'Temperatura (°C)', 'Vapor line', 'Operatore', 'Note', 'Foto'],
+    ...cicli.map(c => [dataIt(giornoDi.get(c.scheda_id)), oraIt(c.creato_il), c.numero, c.temperatura || '', c.esito === 'ok' ? 'Virata' : 'NON virata', c.operatore_nome, c.note, nomeFoto(c, 'ciclo-' + slug(c.numero))])]));
+  for (const [fid, nome] of foto) {
+    const { rows } = await db.q('select dati from foto where id = $1', [fid]);
+    if (rows[0]) await z.add(nome, rows[0].dati);
+  }
+  await z.end();
+}));
+
+// Dopo lo scarico: cancella dall'app i dati scaricati (solo quelli fino al momento dello scarico).
+// Restano: la scheda di oggi, l'ultimo test delle spore (serve per la scadenza del prossimo) e le spore ancora in incubazione.
+app.post('/api/steri/esportazioni/:id/cancella', needUser, need(ST), wrap(async (req, res) => {
+  if (!adminST(req)) return bad(res, 403, 'Solo l\'amministratore può svuotare i dati.');
+  const { rows: [e] } = await db.q('select * from esportazioni where id = $1', [str(req.params.id, 60)]);
+  if (!e || !sedeOk(req, ST, e.sede_id)) return bad(res, 404, 'Scarico non trovato.');
+  if (e.cancellata_il) return bad(res, 400, 'Questi dati sono già stati cancellati.');
+  if (Date.now() - new Date(e.fatta_il) > 6 * 3600e3) return bad(res, 400, 'Lo scarico è di più di 6 ore fa: scarica di nuovo i dati prima di cancellarli.');
+  const cut = e.fatta_il, g = oggi();
+  const client = await db.pool.connect();
+  try {
+    await client.query('begin');
+    const { rows: [sp] } = await client.query(`select t.id from test t join schede s on s.id = t.scheda_id where s.macchina_id = $1 and t.tipo = 'spore'
+      order by s.giorno desc, t.creato_il desc limit 1`, [e.macchina_id]);
+    const tenere = sp?.id || '';
+    const fotoT = await client.query(`delete from test t using schede s where s.id = t.scheda_id and s.macchina_id = $1 and s.giorno < $3
+      and t.creato_il <= $2 and t.aggiornato_il <= $2 and t.esito <> 'attesa' and t.id <> $4 returning t.foto_id`, [e.macchina_id, cut, g, tenere]);
+    const fotoC = await client.query(`delete from cicli c using schede s where s.id = c.scheda_id and s.macchina_id = $1 and s.giorno < $3
+      and c.creato_il <= $2 returning c.foto_id`, [e.macchina_id, cut, g]);
+    const sch = await client.query(`delete from schede s where s.macchina_id = $1 and s.giorno < $3 and s.creata_il <= $2
+      and not exists (select 1 from test t where t.scheda_id = s.id) and not exists (select 1 from cicli c where c.scheda_id = s.id)`, [e.macchina_id, cut, g]);
+    const fids = [...fotoT.rows, ...fotoC.rows].map(r => r.foto_id).filter(Boolean);
+    const fo = fids.length ? await client.query('delete from foto f where id = any($1) and not exists (select 1 from test where foto_id = f.id) and not exists (select 1 from cicli where foto_id = f.id)', [fids]) : { rowCount: 0 };
+    const cancellati = { schede: sch.rowCount, test: fotoT.rowCount, cicli: fotoC.rowCount, foto: fo.rowCount };
+    await client.query('update esportazioni set cancellata_il = now(), cancellata_da = $2, cancellati = $3 where id = $1', [e.id, req.me.nome, JSON.stringify(cancellati)]);
+    await client.query('commit');
+    console.log(`Gestione ASO: dati della sterilizzatrice ${e.macchina_id} cancellati da ${req.me.nome} dopo lo scarico`, cancellati);
+    res.json({ ok: true, cancellati });
+  } catch (x) { await client.query('rollback').catch(() => {}); throw x; }
+  finally { client.release(); }
+}));
+// Ultimi scarichi della sterilizzatrice (per l'amministratore)
+app.get('/api/steri/macchine/:id/esportazioni', needUser, need(ST), wrap(async (req, res) => {
+  if (!adminST(req)) return bad(res, 403, 'Solo l\'amministratore.');
+  const m = await macchinaMia(req, req.params.id);
+  const { rows } = await db.q('select * from esportazioni where macchina_id = $1 order by fatta_il desc limit 20', [m.id]);
+  res.json({ esportazioni: rows.map(r => ({ id: r.id, fattaIl: r.fatta_il, fattaDa: r.fatta_da, conteggi: r.conteggi, cancellataIl: r.cancellata_il, cancellataDa: r.cancellata_da, cancellati: r.cancellati })) });
 }));
 
 // Lettura della foto (vapor line o stampa dell'autoclave) con l'AI: numero di ciclo, temperatura, viraggio

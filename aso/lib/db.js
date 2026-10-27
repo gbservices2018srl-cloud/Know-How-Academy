@@ -120,6 +120,18 @@ async function migrate() {
       modificata_il timestamptz
     );
     create index if not exists manutenzioni_att_idx on manutenzioni(attrezzatura_id, eseguita_il desc);
+    -- Esportazioni dei dati di una sterilizzatrice (scarica e svuota): resta la traccia di chi e quando
+    create table if not exists esportazioni (
+      id text primary key,
+      macchina_id text not null,
+      sede_id text not null,
+      fatta_il timestamptz not null default now(),
+      fatta_da text not null default '',
+      conteggi jsonb not null default '{}',
+      cancellata_il timestamptz,
+      cancellata_da text not null default '',
+      cancellati jsonb
+    );
     create index if not exists manutenzioni_sede_idx on manutenzioni(sede_id, eseguita_il desc);
   `);
 }
