@@ -104,10 +104,12 @@ async function statoMacchine(ids) {
   if (!ids.length) return new Map();
   const g = oggi();
   const { rows } = await db.q(`select m.id,
-      (select json_agg(json_build_object('tipo', t.tipo, 'esito', t.esito)) from test t join schede s on s.id = t.scheda_id
+      (select json_agg(json_build_object('tipo', t.tipo, 'esito', t.esito, 'chi', t.operatore_nome, 'il', t.creato_il) order by t.creato_il) from test t join schede s on s.id = t.scheda_id
         where s.macchina_id = m.id and s.giorno = $2 and t.tipo in ('bd','helix')) as test_oggi,
+      (select json_build_object('id', t.id, 'esito', t.esito, 'chi', t.operatore_nome, 'il', t.creato_il, 'giorno', to_char(s.giorno, 'YYYY-MM-DD'))
+        from test t join schede s on s.id = t.scheda_id where s.macchina_id = m.id and t.tipo = 'spore' order by s.giorno desc, t.creato_il desc limit 1) as spore_ultimo,
       (select count(*)::int from cicli c join schede s on s.id = c.scheda_id where s.macchina_id = m.id and s.giorno = $2) as cicli_oggi,
-      (select max(s.giorno)::text from test t join schede s on s.id = t.scheda_id where s.macchina_id = m.id and t.tipo = 'spore') as ultima_spore,
+      (select max(s.giorno)::text from test t join schede s on s.id = t.scheda_id where s.macchina_id = m.id and t.tipo = 'spore' and t.esito <> 'ko') as ultima_spore,
       (select count(*)::int from test t join schede s on s.id = t.scheda_id where s.macchina_id = m.id and t.tipo = 'spore' and t.esito = 'attesa') as spore_attesa,
       (select id from schede s where s.macchina_id = m.id and s.giorno = $2) as scheda_oggi
     from sterilizzatrici m where m.id = any($1)`, [ids, g]);
@@ -115,7 +117,8 @@ async function statoMacchine(ids) {
   const out = new Map();
   for (const r of rows) {
     const t = r.test_oggi || [];
-    const fatto = tipo => t.find(x => x.tipo === tipo);
+    // per ogni test giornaliero conta l'esito più recente; "ok" chiude il test per tutti fino a domani
+    const fatto = tipo => t.filter(x => x.tipo === tipo).pop();
     const avvisi = [];
     for (const [tipo, nome] of [['bd', 'Bowie-Dick'], ['helix', 'Helix']]) {
       const x = fatto(tipo);
@@ -128,7 +131,14 @@ async function statoMacchine(ids) {
     else if (gg > SPORE_GIORNI) avvisi.push({ livello: 'rosso', testo: `Test delle spore scaduto da ${gg - SPORE_GIORNI} giorni` });
     else if (gg > SPORE_GIORNI - 5) avvisi.push({ livello: 'giallo', testo: `Test delle spore in scadenza tra ${SPORE_GIORNI - gg} giorni` });
     if (r.spore_attesa) avvisi.push({ livello: 'giallo', testo: 'Test delle spore in incubazione: inserisci l\'esito' });
+    const su = r.spore_ultimo;
+    if (su?.esito === 'ko') avvisi.push({ livello: 'rosso', testo: 'Ultimo test delle spore NON superato: va ripetuto' });
+    // il test delle spore si può registrare solo se: mai fatto, ultimo non superato, oppure in scadenza (ultimi 5 giorni) o scaduto
+    const sporeEseguibile = !su || su.esito === 'ko' || (su.esito === 'ok' && gg !== null && gg >= SPORE_GIORNI - 5);
+    const daChi = tipo => { const x = fatto(tipo); return x?.esito === 'ok' ? { chi: x.chi, il: x.il } : null; };
     out.set(r.id, { bd: fatto('bd')?.esito || null, helix: fatto('helix')?.esito || null, cicliOggi: r.cicli_oggi,
+      bdDa: daChi('bd'), helixDa: daChi('helix'), sporeUltimo: su || null, sporeEseguibile,
+      sporeDal: r.ultima_spore ? new Date(Date.parse(r.ultima_spore) + (SPORE_GIORNI - 5) * 864e5).toISOString().slice(0, 10) : null,
       ultimaSpore: r.ultima_spore, prossimaSpore: r.ultima_spore ? new Date(Date.parse(r.ultima_spore) + SPORE_GIORNI * 864e5).toISOString().slice(0, 10) : null,
       schedaOggi: r.scheda_oggi, avvisi });
   }
@@ -207,17 +217,40 @@ app.get('/api/steri/storico', needUser, need(ST), wrap(async (req, res) => {
 }));
 
 const ESITI = ['ok', 'ko', 'attesa'];
+// Un salvataggio alla volta per sterilizzatrice: due ASO che registrano lo stesso test insieme → passa solo il primo
+const code = new Map();
+function inFila(chiave, fn) {
+  const prima = code.get(chiave) || Promise.resolve();
+  const ora = prima.catch(() => {}).then(fn);
+  const fine = ora.catch(() => {});
+  code.set(chiave, fine);
+  fine.then(() => { if (code.get(chiave) === fine) code.delete(chiave); });
+  return ora;
+}
 app.post('/api/steri/schede/:id/test', needUser, need(ST), wrap(async (req, res) => {
   const s = await schedaMia(req, req.params.id);
+  return inFila(s.macchina_id, () => registraTest(req, res, s));
+}));
+async function registraTest(req, res, s) {
   const tipo = str(req.body.tipo, 10), esito = str(req.body.esito, 10);
   if (!['bd', 'helix', 'spore'].includes(tipo)) return bad(res, 400, 'Tipo di test non valido.');
   if (!ESITI.includes(esito) || (esito === 'attesa' && tipo !== 'spore')) return bad(res, 400, 'Scegli l\'esito del test.');
+  if (s.g !== oggi()) return bad(res, 409, 'I test si registrano solo nella scheda di oggi.');
+  // un test già eseguito (da chiunque) non si rifà: Bowie-Dick e Helix fino a domani, le spore fino alla prossima scadenza
+  const st = (await statoMacchine([s.macchina_id])).get(s.macchina_id);
+  const da = tipo === 'bd' ? st.bdDa : tipo === 'helix' ? st.helixDa : null;
+  if (da) return bad(res, 409, `${NOMI_T[tipo]} di oggi già eseguito da ${da.chi} alle ${oraIt(da.il)}.`);
+  if (tipo === 'spore' && !st.sporeEseguibile) {
+    const u = st.sporeUltimo;
+    return bad(res, 409, u.esito === 'attesa' ? `C'è già un test delle spore in incubazione (registrato da ${u.chi} il ${dataIt(u.giorno)}): inserisci il suo esito.`
+      : `Test delle spore già eseguito il ${dataIt(u.giorno)} da ${u.chi}: il prossimo si registra dal ${dataIt(st.sporeDal)}.`);
+  }
   const foto = await salvaFoto(req.body.foto, s.sede_id);
   const id = db.newId();
   await db.q(`insert into test (id, scheda_id, tipo, esito, note, foto_id, operatore_id, operatore_nome) values ($1,$2,$3,$4,$5,$6,$7,$8)`,
     [id, s.id, tipo, esito, str(req.body.note, 1000), foto, req.me.id, req.me.nome]);
   res.json({ id });
-}));
+}
 async function testMio(req, id) {
   const { rows } = await db.q('select t.*, s.sede_id from test t join schede s on s.id = t.scheda_id where t.id = $1', [str(id, 60)]);
   if (!rows[0] || !sedeOk(req, ST, rows[0].sede_id)) throw fail(404, 'Test non trovato.');

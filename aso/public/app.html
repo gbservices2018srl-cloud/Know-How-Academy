@@ -109,6 +109,10 @@ h3{font:700 17px/1.2 var(--f-display);margin:0}
 .thumb.lg{width:120px;height:120px}
 button.thumbbtn{border:0;padding:0;background:none;border-radius:12px}
 /* sterilizzazione */
+.fatto{display:flex;gap:10px;align-items:center;margin-top:8px;padding:11px 14px;border-radius:12px;background:var(--ok-soft);color:var(--ok);font-size:14px}
+.fatto svg{width:22px;height:22px;flex:none;stroke-width:2.4}
+.fatto.att{background:var(--purple-soft);color:var(--brand-purple)}
+.sez.chiusa{border-color:color-mix(in srgb,var(--ok) 40%,var(--line))}
 .ster-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
 .ster{position:relative;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);padding:16px;gap:12px;--ac:var(--accent)}
 .ster.ko{--ac:var(--danger);border-color:color-mix(in srgb,var(--danger) 35%,var(--line))}
@@ -436,10 +440,23 @@ function vScheda() {
   const s = S.scheda; if (!s) return '<div class="empty">Caricamento…</div>';
   const f = S.form;
   const sezTest = (tipo, sotto) => {
-    const list = s.test.filter(t => t.tipo === tipo);
-    return `<section class="card pad sez"><h3>${NOMI_TEST[tipo]} <span class="muted" style="font-weight:500;font-size:14px">· ${sotto}</span></h3>
+    const list = s.test.filter(t => t.tipo === tipo), st = s.stato;
+    // Già eseguito da qualcuno → verde e chiuso per tutti (Bowie-Dick e Helix fino a domani, spore fino alla prossima scadenza)
+    let chiuso = '', sporeAttesa = '';
+    if (!s.oggi) chiuso = '<div class="muted" style="font-size:13px;margin-top:6px">Scheda di un giorno passato: i test si registrano solo nella scheda di oggi.</div>';
+    else if (tipo !== 'spore' && st[tipo + 'Da']) chiuso = `<div class="fatto">${ic('check')}<span><b>Eseguito</b> da ${esc(st[tipo + 'Da'].chi)} alle ${ora(st[tipo + 'Da'].il)} · si rifà domani</span></div>`;
+    else if (tipo === 'spore' && !st.sporeEseguibile) {
+      const u = st.sporeUltimo;
+      if (u.esito === 'attesa') {
+        chiuso = `<div class="fatto att">${ic('hist')}<span><b>In incubazione</b>: registrato da ${esc(u.chi)} il ${esc(fmtD(u.giorno))}</span></div>`;
+        if (!list.some(t => t.id === u.id)) sporeAttesa = `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="muted" style="font-size:13px">Esito dopo l'incubazione:</span><button class="btn sm" data-esito-spore="${esc(u.id)}" data-v="ok">${ic('check')}Superato</button><button class="btn sm danger" data-esito-spore="${esc(u.id)}" data-v="ko">${ic('x')}Non superato</button></div>`;
+      } else chiuso = `<div class="fatto">${ic('check')}<span><b>Valido</b>: eseguito da ${esc(u.chi)} il ${esc(fmtD(u.giorno))} · il prossimo si registra dal ${esc(fmtD(st.sporeDal))}</span></div>`;
+    }
+    const ripeti = list.length && list[list.length - 1].esito === 'ko';
+    return `<section class="card pad sez ${chiuso && s.oggi ? 'chiusa' : ''}"><h3>${NOMI_TEST[tipo]} <span class="muted" style="font-weight:500;font-size:14px">· ${sotto}</span></h3>
       ${list.map(testRec).join('')}
-      ${f?.tipo === 'test' && f.test === tipo ? formTest(tipo) : `<button class="btn ${list.length ? '' : 'primary'}" style="margin-top:${list.length ? 10 : 0}px" data-nuovo-test="${tipo}">${ic('plus')}${list.length ? 'Registra un altro ' + NOMI_TEST[tipo] : 'Registra ' + NOMI_TEST[tipo]}</button>`}
+      ${chiuso}${sporeAttesa}
+      ${chiuso ? '' : f?.tipo === 'test' && f.test === tipo ? formTest(tipo) : `<button class="btn ${ripeti ? 'danger' : 'primary'}" style="margin-top:${list.length ? 10 : 0}px" data-nuovo-test="${tipo}">${ic('plus')}${ripeti ? 'Ripeti il ' + NOMI_TEST[tipo] : 'Registra ' + NOMI_TEST[tipo]}</button>`}
     </section>`;
   };
   return `<button class="link" data-go="steri">${ic('back')}Le sterilizzatrici</button>
@@ -783,6 +800,7 @@ document.addEventListener('click', async e => {
       if (!f.foto && !confirm('Non hai aggiunto la foto del foglio del test. Salvare lo stesso?')) return;
       S.busy = true; render();
       try { await api('POST', `api/steri/schede/${S.scheda.id}/test`, { tipo: f.test, esito: f.esito, note: f.note || '', foto: f.foto || null }); }
+      catch (x) { S.busy = false; S.form = null; S.err = ''; toast(x.message, 7000); return load(); } // es. già eseguito da un'altra persona
       finally { S.busy = false; }
       S.form = null; S.err = ''; toast(f.esito === 'ko' ? 'Salvato: test NON superato. Avvisa il responsabile e non usare la sterilizzatrice.' : 'Test salvato.', 6000); return load();
     }
@@ -871,6 +889,13 @@ document.addEventListener('change', async e => {
     S.busy = false; render();
   }
 });
+
+// Aggiornamento automatico: chi ha aperto la stessa sterilizzatrice vede subito i test fatti dagli altri
+setInterval(() => {
+  if (document.visibilityState !== 'visible' || S.busy || S.form || $('#dlg').open || $('#ph').open) return;
+  if (S.view === 'scheda' || S.view === 'steri' || S.view === 'man') load();
+}, 20000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !S.form && !S.busy && ['scheda', 'steri', 'man'].includes(S.view)) load(); });
 
 /* ============ avvio ============ */
 (async () => {
