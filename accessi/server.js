@@ -876,6 +876,21 @@ app.post('/api/notifiche/invia', needNotifyKey, wrap(async (req, res) => {
 const PUB = path.join(__dirname, 'public');
 const sendPage = file => (req, res) => { res.set('Cache-Control', 'no-store'); res.sendFile(path.join(PUB, file)); };
 app.get('/', (req, res) => req.user ? sendPage('home.html')(req, res) : res.redirect('/accedi'));
+// Riquadri "contenitore" (es. Controllo di gestione): pagina con le app che contiene, per chi ne ha almeno una
+app.get('/c/:key', (req, res, next) => {
+  const v = APPS.find(a => a.key === req.params.key && a.virtuale);
+  if (!v) return next();
+  if (!req.user) return res.redirect('/accedi?next=' + encodeURIComponent(req.originalUrl));
+  if (!v.gruppo.some(k => req.apps[k])) return res.redirect('/?noaccess=' + v.key);
+  sendPage('contenitore.html')(req, res);
+});
+app.get('/api/contenitore/:key', needUser, wrap(async (req, res) => {
+  const v = APPS.find(a => a.key === req.params.key && a.virtuale);
+  if (!v) return bad(res, 404, 'Non trovato');
+  const spente = await store.appSpente();
+  res.json({ key: v.key, name: v.name, desc: v.desc, apps: v.gruppo.map(k => APPS.find(a => a.key === k)).filter(a => a && req.apps[a.key])
+    .map(a => ({ key: a.key, name: a.name, desc: a.desc, url: a.url, color: a.color, role: req.apps[a.key], spenta: spente.has(a.key) })) });
+}));
 for (const p of ['/accedi', '/registrati', '/password-dimenticata', '/reimposta']) {
   app.get(p, (req, res) => (req.user && p !== '/reimposta')
     ? res.redirect(safeNext(req.query.next)) : sendPage('accesso.html')(req, res));

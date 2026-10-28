@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>To Smile · App</title>
+<link rel="stylesheet" href="/fonts/tosmile.css?f=fira-sans:600,700,800|figtree:400,500,600,700">
+<link rel="stylesheet" href="/static/accessi.css?v=3">
+<link rel="icon" href="/static/icon.svg">
+<meta name="theme-color" content="#4CAAAA">
+<style>
+/* Pagina di un riquadro "contenitore": le app che raccoglie, a riquadri grandi */
+.wrap{max-width:1000px;margin:0 auto;display:flex;flex-direction:column;gap:30px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+header{display:flex;flex-direction:column;gap:14px}
+header p{margin:0;color:var(--muted);font-size:17px;max-width:62ch}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.app{--c:var(--teal);--ink:var(--teal-ink);position:relative;display:flex;flex-direction:column;gap:14px;text-decoration:none;color:inherit;overflow:hidden;
+  background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:28px 26px 22px;min-height:230px;transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease}
+.app::before{content:"";position:absolute;left:0;top:0;right:0;height:6px;background:var(--c)}
+.app:hover{transform:translateY(-3px);border-color:color-mix(in srgb,var(--c) 60%,var(--line));box-shadow:0 14px 34px rgba(43,48,51,.12)}
+.app:focus-visible{outline:3px solid var(--c);outline-offset:3px}
+.icon{width:62px;height:62px;border-radius:18px;display:grid;place-items:center;background:color-mix(in srgb,var(--c) 18%,transparent);color:var(--ink)}
+.icon svg{width:32px;height:32px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.app h2{font-size:24px}
+.app p{margin:0;color:var(--muted);font-size:15.5px}
+.app .go{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13.5px;color:var(--muted)}
+.app .go span:last-child{font-weight:700;color:var(--ink)}
+.app.off{filter:grayscale(1);opacity:.6;cursor:not-allowed}.app.off:hover{transform:none;box-shadow:none}
+.role{display:inline-block;font-size:12px;font-weight:700;padding:3px 8px;border-radius:7px;background:color-mix(in srgb,var(--c) 16%,transparent);color:var(--ink)}
+.teal{--c:var(--teal);--ink:var(--teal-ink)} .purple{--c:var(--purple);--ink:var(--purple-ink)} .yellow{--c:var(--yellow);--ink:var(--olive-ink)}
+@media (max-width:640px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <a class="logo" href="/" aria-label="To Smile, le tue app"><img src="/static/logo-tosmile.png" alt="To Smile · Persone, salute, sorrisi" width="548" height="165"></a>
+    <a class="btn small" href="/">← Le mie app</a>
+  </div>
+  <header>
+    <h1 id="tit">…</h1>
+    <div class="rule" aria-hidden="true"></div>
+    <p id="desc"></p>
+  </header>
+  <main class="grid" id="grid" aria-live="polite"></main>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ICONS = {
+  finanza: '<path d="M4 19V5M4 19h16"/><path d="M8 15l3.5-4 3 2.5L20 7"/>',
+  bilancio: '<path d="M12 3v18M5 7h14"/><path d="M5 7l-3 7a3.5 3.5 0 0 0 6 0zM19 7l-3 7a3.5 3.5 0 0 0 6 0z"/><path d="M8 21h8"/>',
+};
+(async () => {
+  const key = location.pathname.split('/').filter(Boolean).pop();
+  const r = await fetch('/api/contenitore/' + encodeURIComponent(key), { credentials: 'same-origin' });
+  if (r.status === 401) return location.href = '/accedi?next=' + encodeURIComponent(location.pathname);
+  const d = await r.json();
+  document.title = 'To Smile · ' + d.name;
+  const [a, ...b] = d.name.split(' ');
+  $('#tit').innerHTML = `${esc(a)} <span>${esc(b.join(' '))}</span>`;
+  $('#desc').textContent = 'Scegli l\'app: entri direttamente, senza un\'altra password.';
+  const off = x => x.spenta && x.role !== 'admin';
+  $('#grid').innerHTML = d.apps.map(x => off(x) ? `<div class="app off ${esc(x.color)}" aria-disabled="true"><span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[x.key] || ''}</svg></span>
+      <h2>${esc(x.name.replace(/^Controllo di gestione · /, ''))}</h2><p>${esc(x.desc)}</p><div class="go"><span class="role">Temporaneamente non disponibile</span><span></span></div></div>`
+    : `<a class="app ${esc(x.color)}" href="${esc(x.url)}"><span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[x.key] || ''}</svg></span>
+      <h2>${esc(x.name.replace(/^Controllo di gestione · /, ''))}</h2><p>${esc(x.desc)}</p>
+      <div class="go"><span>${x.role === 'admin' ? '<span class="role">Amministratore</span>' : ''}</span><span>Apri →</span></div></a>`).join('');
+})();
+</script>
+</body>
+</html>

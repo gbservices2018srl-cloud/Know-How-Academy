@@ -7,8 +7,14 @@
 // multi: la persona può lavorare in più studi (il primo è quello principale; nell'app sceglie lo studio in alto)
 // e la funzione "sso" crea o aggiorna il profilo nell'app, così la persona non deve avere un'altra password.
 module.exports = [
-  { key: 'finanza', name: 'Gestione finanziaria', url: 'https://finanza.appgestione.it', color: 'teal',
+  // Controllo di gestione: riquadro unico con Gestione finanziaria e l'App di bilancio (budget, consuntivo, scostamenti)
+  { key: 'controllo', name: 'Controllo di gestione', url: 'https://appgestione.it/c/controllo', color: 'teal', virtuale: true,
+    gruppo: ['finanza', 'bilancio'],
+    desc: 'Gestione finanziaria e bilancio: budget, consuntivo, scostamenti e indicatori.' },
+  { key: 'finanza', name: 'Gestione finanziaria', url: 'https://finanza.appgestione.it', color: 'teal', dentro: 'controllo',
     desc: 'Andamento economico e dati finanziari del gruppo.' },
+  { key: 'bilancio', name: 'Controllo di gestione · Bilancio', url: 'https://finanza.appgestione.it/bilancio', color: 'purple', dentro: 'controllo',
+    desc: 'Dal bilancio a 4 sezioni: budget, consuntivo, scostamenti, costi fissi e variabili, break even, EBITDA e utile.' },
   { key: 'laboratorio', name: 'Nuovalab', url: 'https://laboratorio.appgestione.it', color: 'purple',
     sso: 'https://ncfsugpmqimukynuvzba.supabase.co/functions/v1/sso',
     livelli: [
