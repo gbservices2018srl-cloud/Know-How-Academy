@@ -35,10 +35,15 @@ module.exports = [
     desc: "Richieste di supporto tra gli studi e l'amministrazione." },
   { key: 'protocolli', name: 'Protocolli', url: 'https://protocolli.appgestione.it', color: 'teal',
     desc: 'Il flusso di lavoro dello studio con protocolli, procedure e assistente.' },
-  { key: 'calendario', name: 'Eventi aziendali', url: 'https://calendario.appgestione.it', color: 'purple',
-    dentro: 'comunicazioni', // si apre dal pulsante "Eventi" di Comunicazioni ed eventi aziendali (niente riquadro a parte)
+  // Comunicazioni: riquadro unico con Comunicazioni aziendali, Calendario eventi e (per i medici) Comunicazioni cliniche con ASO.
+  // È "virtuale": compare a chi ha almeno una delle tre.
+  { key: 'area_comunicazioni', name: 'Comunicazioni', url: 'https://appgestione.it/c/area_comunicazioni', color: 'purple', virtuale: true,
+    gruppo: ['comunicazioni', 'calendario', 'clinica'],
+    desc: 'Comunicazioni aziendali, calendario eventi e, per i medici, le comunicazioni cliniche con le ASO.' },
+  { key: 'calendario', name: 'Calendario eventi', url: 'https://calendario.appgestione.it', color: 'purple',
+    dentro: 'area_comunicazioni', // si apre dal riquadro Comunicazioni (e dal pulsante "Eventi" di Comunicazioni aziendali)
     segue: 'comunicazioni',  // non è più un'app a sé: permesso, ruolo, sospensione, interruttore e notifiche sono quelli di Comunicazioni ed eventi
-    desc: 'Formazione, riunioni ed eventi aziendali per lo staff.' },
+    desc: 'Formazione, riunioni ed eventi aziendali, con iscrizione.' },
   // Gestione ASO: riquadro unico che raccoglie Magazzino, Compliance sterilizzazione e Registro impianti.
   // È "virtuale": non si assegna, compare a chi ha almeno una delle tre app (che non hanno più un riquadro proprio).
   { key: 'aso', name: 'Gestione ASO', url: 'https://appgestione.it/aso/', color: 'teal', virtuale: true,
@@ -75,7 +80,7 @@ module.exports = [
     desc: 'Richieste di misure implantari al medico della sede: standard o emergenza, con documentazione su DTX.' },
   // Comunicazioni cliniche: l'app dei medici con le richieste delle ASO. Si attiva da sola a ogni profilo "Medico odontoiatra";
   // le sedi del medico arrivano dai Turni (sedi con ore), oppure si scelgono qui con il livello Medico.
-  { key: 'clinica', name: 'Comunicazioni cliniche', url: 'https://appgestione.it/clinica/', color: 'purple',
+  { key: 'clinica', name: 'Comunicazioni cliniche con ASO', url: 'https://appgestione.it/clinica/', color: 'purple', dentro: 'area_comunicazioni',
     autoFigura: 'Medico', autoLivello: 'medico',
     enti: 'sedi',
     livelli: [
@@ -94,11 +99,11 @@ module.exports = [
       { key: 'admin_no', label: 'Amministratore, non in turno', role: 'admin' },
     ],
     desc: 'Planning delle sedi, ferie e permessi, sostituzioni e buste paga.' },
-  { key: 'comunicazioni', name: 'Comunicazioni ed eventi aziendali', url: 'https://comunicazioni.appgestione.it', color: 'purple',
+  { key: 'comunicazioni', name: 'Comunicazioni aziendali', url: 'https://comunicazioni.appgestione.it', color: 'purple', dentro: 'area_comunicazioni',
     // ogni persona attiva riceve da sola l'accesso come Utente, una volta sola (anche chi viene approvato dopo):
     // dal pannello si può poi togliere o cambiare in Amministratore (chi scrive le comunicazioni)
     auto: 'tutti',
-    desc: 'Comunicazioni con conferma di lettura ed eventi aziendali: formazione, riunioni, appuntamenti.' },
+    desc: 'Comunicazioni con conferma di lettura da parte del personale.' },
   { key: 'documenti', name: 'Documenti di studio', url: 'https://documenti.appgestione.it', color: 'teal',
     auto: ['turni', 'calendario'],
     desc: 'Procedure, moduli e regolamenti dello studio, sempre aggiornati.' },

@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#8C6898">
 <base href="/clinica/">
-<title>Comunicazioni cliniche · To Smile</title>
+<title>Comunicazioni cliniche con ASO · To Smile</title>
 <link rel="icon" href="logo.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="stylesheet" href="/fonts/tosmile.css?f=fira-sans:400,500,600,700,800">
@@ -151,9 +151,9 @@ h3{font:700 17px/1.2 var(--f-display);margin:0}
 </head>
 <body>
 <header class="top">
-  <a class="brand" href="./" aria-label="Comunicazioni cliniche"><img class="logo" src="logo.png" alt="To Smile" width="543" height="162"><span class="sep"></span><h1>Comunicazioni cliniche</h1></a>
+  <a class="brand" href="./" aria-label="Comunicazioni cliniche con ASO"><img class="logo" src="logo.png" alt="To Smile" width="543" height="162"><span class="sep"></span><h1>Comunicazioni cliniche con ASO</h1></a>
   <span class="spacer"></span>
-  <a class="who" id="who" href="/" title="Torna alle app"></a>
+  <a class="who" id="who" href="/c/area_comunicazioni" title="Torna a Comunicazioni"></a>
 </header>
 <main id="main"><div class="empty">Caricamento…</div></main>
 <div class="toast" id="toast" role="status" hidden></div>
@@ -193,7 +193,7 @@ function render() {
   const emg = r.filter(x => x.tipo === 'emergenza' && (x.stato === 'inviata' || x.stato === 'in_carico'));
   const lista = gruppi[S.f].filter(x => !(x.tipo === 'emergenza' && (x.stato === 'inviata' || x.stato === 'in_carico')));
   const da = gruppi.nuove.length;
-  document.title = (da ? `(${da}) ` : '') + 'Comunicazioni cliniche · To Smile';
+  document.title = (da ? `(${da}) ` : '') + 'Comunicazioni cliniche con ASO · To Smile';
   const emgN = gruppi.nuove.filter(x => x.tipo === 'emergenza').length;
   $('#main').innerHTML = `${notifBox()}
   <div class="hero"><div style="flex:1 1 260px"><h2 class="view">Misure implantari</h2><p>${da ? `<b>${da} ${da === 1 ? 'nuova richiesta' : 'nuove richieste'}</b> dalle ASO.` : 'Nessuna richiesta nuova.'} Prendi in carico, valuta il caso e conferma quando è pianificato su DTX.</p></div>
@@ -242,7 +242,7 @@ async function notifInit() {
   if (S.d) render();
 }
 function notifBox() {
-  const t = { off: 'Attiva le notifiche: ogni richiesta ti arriva sul telefono, le emergenze in rosso.', spenta: 'Le notifiche di Comunicazioni cliniche sono spente: riaccendile per ricevere le richieste.', bloccate: 'Hai bloccato le notifiche per appgestione.it: riattivale dalle impostazioni del browser (lucchetto → Notifiche → Consenti).', ios: 'Su iPhone le notifiche arrivano se aggiungi To Smile alla schermata Home (Condividi → Aggiungi alla schermata Home) e la apri da lì.' }[S.notif];
+  const t = { off: 'Attiva le notifiche: ogni richiesta ti arriva sul telefono, le emergenze in rosso.', spenta: 'Le notifiche di Comunicazioni cliniche con ASO sono spente: riaccendile per ricevere le richieste.', bloccate: 'Hai bloccato le notifiche per appgestione.it: riattivale dalle impostazioni del browser (lucchetto → Notifiche → Consenti).', ios: 'Su iPhone le notifiche arrivano se aggiungi To Smile alla schermata Home (Condividi → Aggiungi alla schermata Home) e la apri da lì.' }[S.notif];
   if (!t) return '';
   return `<div class="card notif">${ic('bell')}<p>${t}</p>${S.notif === 'off' || S.notif === 'spenta' ? '<button class="btn primary" id="nt-on">Attiva notifiche</button>' : ''}</div>`;
 }
