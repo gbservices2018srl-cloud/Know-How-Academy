@@ -21,6 +21,9 @@ const aso = require('./aso/server');
 // Gestione ASO vive su appgestione.it/aso/ (stesso dominio dell'accesso unico: niente nuovi domini da collegare)
 const asoMontata = require('express')();
 asoMontata.use((req, res, next) => req.url === '/aso' || req.url.startsWith('/aso?') ? res.redirect(301, '/aso/' + req.url.slice(4)) : next());
+// Comunicazioni cliniche (app dei medici) usa lo stesso server di Gestione ASO, su appgestione.it/clinica/
+asoMontata.use((req, res, next) => req.url === '/clinica' || req.url.startsWith('/clinica?') ? res.redirect(301, '/clinica/' + req.url.slice(8)) : next());
+asoMontata.use('/clinica', aso.app);
 asoMontata.use('/aso', aso.app);
 
 const PORT = process.env.PORT || 3000;
@@ -35,7 +38,7 @@ const hostOf = req => String(req.headers.host || '').split(':')[0].toLowerCase()
 
 function route(req) {
   const h = hostOf(req);
-  if (accHosts.has(h)) return /^\/aso(\/|\?|$)/.test(req.url) ? asoMontata : accessi.app;
+  if (accHosts.has(h)) return /^\/(aso|clinica)(\/|\?|$)/.test(req.url) ? asoMontata : accessi.app;
   if (calHosts.has(h) || h.startsWith('calendario.')) return calendario.app;
   if (magHosts.has(h) || h.startsWith('magazzino.')) return magazzino.app;
   if (turHosts.has(h) || h.startsWith('turni.')) return turni.app;

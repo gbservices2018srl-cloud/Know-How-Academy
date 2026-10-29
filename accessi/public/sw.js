@@ -6,9 +6,11 @@ self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 self.addEventListener('push', e => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch { d = { body: e.data && e.data.text() }; }
+  // le EMERGENZE restano sullo schermo finché non si toccano, con icona rossa e vibrazione lunga
+  const urg = !!d.urgente;
   e.waitUntil(self.registration.showNotification(d.title || 'To Smile', {
-    body: d.body || '', icon: '/static/icon-192.png', badge: '/static/badge-72.png', tag: d.tag, renotify: !!d.tag,
-    data: { url: d.url || '/' },
+    body: d.body || '', icon: urg ? '/static/urgente-192.png' : '/static/icon-192.png', badge: '/static/badge-72.png', tag: d.tag, renotify: !!d.tag,
+    requireInteraction: urg, vibrate: urg ? [400, 150, 400, 150, 800] : undefined, data: { url: d.url || '/' },
   }));
 });
 

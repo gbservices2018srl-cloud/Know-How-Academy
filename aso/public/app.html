@@ -252,6 +252,30 @@ dialog.dlg::backdrop{background:rgba(10,30,30,.45);backdrop-filter:blur(2px)}
 .dlg .dh .art svg{width:44px;height:44px}
 .dlg .db{padding:14px 20px}
 .dlg .df{display:flex;gap:8px;justify-content:flex-end;padding:12px 20px 18px;flex-wrap:wrap}
+/* misure implantari */
+.mreq{position:relative;display:flex;flex-direction:column;gap:10px;padding:16px 18px 14px 22px;overflow:hidden}
+.mreq::before{content:"";position:absolute;inset:0 auto 0 0;width:6px;background:var(--mc,var(--accent))}
+.mreq.emg{--mc:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,var(--line))}
+.mreq.fine{--mc:var(--ok)} .mreq.ann{--mc:var(--line);opacity:.65}
+.mreq .r1{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
+.mreq .n{font:800 17px/1.2 var(--f-display)} .mreq .lav{font-weight:600;margin-top:2px}
+.mreq .meta{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.mreq .meta span{display:inline-flex;align-items:center;gap:5px}.mreq .meta svg{width:15px;height:15px}
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.steps .s{display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:700;color:var(--muted)}
+.steps .s::before{content:"";height:5px;border-radius:9px;background:var(--surface-3)}
+.steps .s.on::before{background:var(--mc,var(--accent))} .steps .s.on{color:var(--fg)}
+.steps .s small{font-weight:500;color:var(--muted)}
+.nota-med{background:var(--ok-soft);color:var(--ok);border-radius:10px;padding:8px 11px;font-size:14px}
+.blocco{display:flex;gap:12px;align-items:flex-start;background:var(--danger-soft);color:var(--danger);border:2px solid var(--danger);border-radius:14px;padding:12px 14px;margin:4px 0 12px;font-weight:600}
+.blocco b{display:block;font-size:16px;margin-bottom:2px} .blocco svg{width:26px;height:26px;flex:none}
+.seg.tipo button{display:inline-flex;align-items:center;gap:6px}
+.seg.tipo button.on.ko{box-shadow:0 0 0 3px color-mix(in srgb,var(--danger) 25%,transparent)}
+.flag.dtx:has(input:not(:checked)){border-style:dashed}
+.btn.emg{background:var(--danger);border-color:var(--danger);color:#fff}
+.regola{border:2px solid var(--danger);background:var(--danger-soft);color:var(--danger);border-radius:14px;padding:14px 16px;font-weight:600}
+.regola b{display:block;font-size:17px;margin-bottom:4px}
+.mancano{font-size:13px;color:var(--muted);margin-top:8px}
 .flag{display:flex;gap:12px;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:14px;margin-bottom:8px;cursor:pointer;background:var(--surface-2)}
 .flag:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
 .flag input{width:22px;height:22px;accent-color:var(--accent);flex:none}
@@ -298,6 +322,8 @@ const IC = {
   cordone: '<path d="M4 6c3 0 3 4 6 4s3-4 6-4 3 4 4 4"/><path d="M4 14c3 0 3 4 6 4s3-4 6-4 3 4 4 4"/>', drop: '<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>',
   amalgama: '<circle cx="12" cy="12" r="8"/><path d="M12 8a4 4 0 1 1-4 4"/>', reg: '<path d="M6 3h12v18H6z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
   down: '<path d="M12 4v11M7 10.5l5 5 5-5"/><path d="M5 20h14"/>',
+  mis: '<path d="M3 17L17 3l4 4L7 21z"/><path d="M7.5 12.5l2 2M10.5 9.5l2 2M13.5 6.5l2 2"/>', urg: '<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.01"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>', send: '<path d="M4 12l16-8-6 16-3-6z"/><path d="M11 14l9-10"/>',
   ext: '<path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/>', hist: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>',
 };
 const ART = {
@@ -342,7 +368,7 @@ function riduci(file, max = 1600) {
 function vediFoto(src) { const d = $('#ph'); d.querySelector('img').src = src; d.showModal(); }
 const fotoBtn = (id, cls = '') => id ? `<button class="thumbbtn" data-foto="api/foto/${esc(id)}" aria-label="Apri la foto"><img class="thumb ${cls}" src="api/foto/${esc(id)}" alt="Foto" loading="lazy"></button>` : '';
 
-const S = { att: null, reg: null, regF: {}, attForm: null, view: 'home', st: null, sede: '', macchine: null, scheda: null, form: null, storico: null, udi: null, q: '', paz: null, pz: null, pzForm: null, dente: null, lab: null, medici: null, cur: null, busy: false };
+const S = { att: null, reg: null, regF: {}, attForm: null, view: 'home', st: null, sede: '', macchine: null, scheda: null, form: null, storico: null, udi: null, q: '', paz: null, pz: null, pzForm: null, dente: null, lab: null, medici: null, cur: null, busy: false, mis: null, misR: null, misI: {}, misMed: {} };
 
 /* ============ barra e navigazione ============ */
 function renderTop() {
@@ -351,6 +377,7 @@ function renderTop() {
   if (st.sterilizzazione && !st.sterilizzazione.spenta) tabs.push(['steri', 'Sterilizzazione', 'steri']);
   if (st.udi && !st.udi.spenta) tabs.push(['udi', 'Registro impianti', 'udi']);
   if (st.manutenzione && !st.manutenzione.spenta) tabs.push(['man', 'Manutenzione', 'man']);
+  if (st.misure && !st.misure.spenta) tabs.push(['misure', 'Misure implantari', 'mis']);
   const vista = { scheda: 'steri', storico: 'steri', macchina: 'steri', paz: 'udi', manreg: 'man' }[S.view] || S.view;
   $('#tabs').innerHTML = tabs.map(([k, l, i]) => `<button class="tab ${vista === k ? 'on' : ''}" data-go="${k}">${ic(i)}${l}</button>`).join('')
     + (st.magazzino ? `<a class="tab" href="${esc(st.magazzino)}">${ic('box')}Magazzino</a>` : '');
@@ -372,6 +399,7 @@ async function load() {
     if (S.view === 'storico') S.storico = (await api('GET', 'api/steri/storico?macchina=' + encodeURIComponent(S.id))).schede;
     if (S.view === 'man' || S.view === 'manreg' || (S.view === 'home' && S.st.manutenzione && !S.st.manutenzione.spenta)) { const r = await api('GET', 'api/man/attrezzature'); S.att = r.attrezzature; S.attLink = r.sedi; }
     if (S.view === 'manreg') { const f = S.regF; S.reg = (await api('GET', 'api/man/registro?' + new URLSearchParams({ sede: f.sede || '', attrezzatura: f.att || '', da: f.da || '', a: f.a || '' }))).righe; }
+    if (S.view === 'misure' || (S.view === 'home' && S.st.misure && !S.st.misure.spenta)) { const r = await api('GET', 'api/misure'); S.misR = r.richieste; S.misI = r; if (S.mis?.sede) await mediciMis(S.mis.sede); }
     if (S.view === 'udi') S.paz = (await api('GET', 'api/udi/pazienti?q=' + encodeURIComponent(S.q) + (S.sede ? '&sede=' + encodeURIComponent(S.sede) : ''))).pazienti;
     if (S.view === 'paz') { S.pz = await api('GET', 'api/udi/pazienti/' + encodeURIComponent(S.id)); if (!S.medici) api('GET', 'api/udi/medici').then(r => S.medici = r.medici).catch(() => {}); }
   } catch (e) { $('#main').innerHTML = `<div class="empty"><b>${esc(e.message)}</b><button class="btn" data-go="home">Torna all'inizio</button></div>`; return; }
@@ -379,7 +407,7 @@ async function load() {
 }
 function render() {
   renderTop();
-  const v = { home: vHome, steri: vSteri, scheda: vScheda, storico: vStorico, udi: vUdi, paz: vPaz, man: vMan, manreg: vManReg }[S.view] || vHome;
+  const v = { home: vHome, steri: vSteri, scheda: vScheda, storico: vStorico, udi: vUdi, paz: vPaz, man: vMan, manreg: vManReg, misure: vMisure }[S.view] || vHome;
   $('#main').innerHTML = v();
 }
 
@@ -399,10 +427,98 @@ function vHome() {
     ${st.manutenzione && !st.manutenzione.spenta ? `<button class="big" style="--bc:#C27C2C" data-go="man"><span class="bi">${ic('man')}</span>
       <span><h2>Manutenzione attrezzature</h2><p>Riuniti e aspiratori della sede: pulizia filtri, tubi aspiranti e cordoni, con registro.</p></span>
       <span class="st"><span class="tag plain">${(S.att || []).length ? (S.att || []).length + ' attrezzature' : 'Registro manutenzioni'}</span><span class="go">Apri →</span></span></button>` : ''}
+    ${st.misure && !st.misure.spenta ? `<button class="big" style="--bc:#2F6FA8" data-go="misure"><span class="bi">${ic('mis')}</span>
+      <span><h2>Misure implantari</h2><p>Richiesta al medico della sede per valutare il caso e pianificarlo su DTX, almeno 5 giorni prima dell'intervento.</p></span>
+      <span class="st"><span>${(() => { const r = S.misR || [], e = r.filter(x => x.tipo === 'emergenza' && x.stato === 'inviata').length, a = r.filter(x => x.stato === 'inviata' || x.stato === 'in_carico').length;
+        return e ? `<span class="tag ko">${e} in emergenza</span>` : a ? `<span class="tag todo">${a} in attesa del medico</span>` : '<span class="tag plain">Nuova richiesta</span>'; })()}</span><span class="go">Apri →</span></span></button>` : ''}
     ${st.magazzino ? `<a class="big" style="--bc:#C9A227" href="${esc(st.magazzino)}"><span class="bi">${ic('box')}</span>
       <span><h2>Magazzino</h2><p>Disponibilità degli articoli, prenotazioni e riordino ai fornitori.</p></span>
       <span class="st"><span class="tag plain">Magazzino centrale</span><span class="go">Apri ${ic('ext')}</span></span></a>` : ''}
   </div>`;
+}
+
+/* ============ misure implantari ============ */
+const giorniA = d => Math.round((Date.parse(d + 'T12:00:00Z') - Date.parse((S.misI.oggi || S.st.oggi) + 'T12:00:00Z')) / 864e5);
+const traG = n => n < 0 ? `${-n} giorni fa` : n === 0 ? 'oggi' : n === 1 ? 'domani' : `tra ${n} giorni`;
+async function mediciMis(sede) { if (sede && !S.misMed[sede]) S.misMed[sede] = (await api('GET', 'api/misure/medici?sede=' + encodeURIComponent(sede))).medici; }
+function misControllo(f) { // cosa blocca l'invio (le stesse regole le controlla il server)
+  const g = f.data ? giorniA(f.data) : null, min = S.misI.giorniMin || 5;
+  const blocco = f.data && g < 0 ? { t: 'Data già passata', s: 'Controlla la data prevista dell\'intervento.' }
+    : f.data && f.tipo === 'standard' && g < min ? { t: 'Richiesta bloccata: mancano meno di ' + min + ' giorni', s: `L'intervento è ${traG(g)}. Le richieste standard vanno inviate almeno ${min} giorni prima (oggi puoi chiedere per interventi dal ${fmtD(S.misI.minima)}).` } : null;
+  const manca = [];
+  if (!f.cognome?.trim() || !f.nome?.trim()) manca.push('nome e cognome del paziente');
+  if (!f.lavoro?.trim()) manca.push('il tipo di lavoro');
+  if (!f.data) manca.push('la data dell\'intervento');
+  if (!f.medico) manca.push('il medico');
+  if (!f.dtx) manca.push('la spunta della documentazione su DTX');
+  return { blocco, manca, ok: !blocco && !manca.length };
+}
+function vMisure() {
+  const p = S.st.misure, f = S.mis, list = S.misR || [];
+  const aperte = list.filter(r => r.stato === 'inviata' || r.stato === 'in_carico'), chiuse = list.filter(r => r.stato === 'pianificata' || r.stato === 'annullata');
+  return `<div class="head"><div style="flex:1 1 260px"><h2 class="view">Misure implantari</h2><p>Chiedi al medico della sede di valutare il caso. La documentazione va caricata prima su DTX.</p></div>
+    ${f || !p.sedi.length ? '' : `<button class="btn primary" data-a="mis-nuova">${ic('plus')}Nuova richiesta</button>`}</div>
+  ${f ? formMis() : ''}
+  ${!p.sedi.length ? '<div class="card empty"><b>Nessuna sede assegnata</b>Chiedi all\'amministratore di assegnarti la tua sede in Gestione accessi.</div>'
+    : !list.length && !f ? '<div class="card empty"><b>Nessuna richiesta</b>Crea la prima con «Nuova richiesta».</div>'
+    : `${aperte.length ? `<h3 class="sede-h" style="margin:18px 0 10px">In attesa del medico · ${aperte.length}</h3><div class="list">${aperte.map(cardMis).join('')}</div>` : ''}
+       ${chiuse.length ? `<h3 class="sede-h" style="margin:22px 0 10px">Concluse</h3><div class="list">${chiuse.map(cardMis).join('')}</div>` : ''}`}`;
+}
+function cardMis(r) {
+  const g = giorniA(r.dataIntervento), em = r.tipo === 'emergenza', st = r.stato;
+  const passo = { inviata: 1, in_carico: 2, pianificata: 3, annullata: 0 }[st];
+  return `<article class="card mreq ${em ? 'emg' : ''} ${st === 'pianificata' ? 'fine' : ''} ${st === 'annullata' ? 'ann' : ''}">
+    <div class="r1"><div style="flex:1 1 200px;min-width:0"><div class="n">${esc(r.cognome)} ${esc(r.nome)}</div><div class="lav">${esc(r.lavoro)}</div></div>
+      ${em ? `<span class="tag ko">${ic('urg')}EMERGENZA</span>` : ''}${st === 'annullata' ? '<span class="tag plain">Annullata</span>' : st === 'pianificata' ? `<span class="tag ok">${ic('check')}Pianificata su DTX</span>` : ''}</div>
+    <div class="meta"><span>${ic('cal')}Intervento ${esc(fmtD(r.dataIntervento))} · ${traG(g)}</span><span>${ic('user')}${esc(r.medico)}</span>${S.st.misure.sedi.length > 1 ? `<span>${esc(r.sede)}</span>` : ''}<span>inviata da ${esc(r.creatoDa)} il ${esc(fmtDT(r.creatoIl))}</span></div>
+    ${st !== 'annullata' ? `<div class="steps"><span class="s on">Inviata<small>${esc(fmtDT(r.creatoIl))}</small></span><span class="s ${passo >= 2 ? 'on' : ''}">Presa in carico<small>${r.presaIl ? esc(fmtDT(r.presaIl)) : 'in attesa'}</small></span><span class="s ${passo >= 3 ? 'on' : ''}">Pianificata su DTX<small>${r.pianificataIl ? esc(fmtDT(r.pianificataIl)) : '—'}</small></span></div>` : ''}
+    ${r.notaMedico ? `<div class="nota-med"><b>Nota del medico:</b> ${esc(r.notaMedico)}</div>` : ''}
+    ${r.note ? `<div class="muted" style="font-size:13.5px">Note: ${esc(r.note)}</div>` : ''}
+    ${st === 'inviata' ? `<div><button class="btn sm danger" data-mis-annulla="${esc(r.id)}">${ic('x')}Annulla richiesta</button></div>` : ''}
+  </article>`;
+}
+function formMis() {
+  const f = S.mis, p = S.st.misure, med = S.misMed[f.sede], c = misControllo(f), em = f.tipo === 'emergenza';
+  return `<section class="card pad" style="margin-bottom:18px"><h3 style="margin-bottom:12px">Nuova richiesta di misure implantari</h3>
+    ${p.sedi.length > 1 ? `<div class="field"><label for="mi-sede">Sede</label><select id="mi-sede" data-mf="sede">${p.sedi.map(s => `<option value="${esc(s.id)}" ${f.sede === s.id ? 'selected' : ''}>${esc(s.nome)}</option>`).join('')}</select></div>` : ''}
+    <div class="grid2">
+      <div class="field"><label for="mi-c">Cognome del paziente</label><input id="mi-c" data-mf="cognome" value="${esc(f.cognome)}" autocomplete="off" autocapitalize="words"></div>
+      <div class="field"><label for="mi-n">Nome del paziente</label><input id="mi-n" data-mf="nome" value="${esc(f.nome)}" autocomplete="off" autocapitalize="words"></div>
+    </div>
+    <div class="field"><label for="mi-l">Tipo di lavoro da fare</label><input id="mi-l" data-mf="lavoro" value="${esc(f.lavoro)}" autocomplete="off" placeholder="Es. All-on-4 superiore · impianti 14 15 18"></div>
+    <div class="grid2">
+      <div class="field"><label for="mi-d">Data prevista dell'intervento</label><input id="mi-d" type="date" data-mf="data" min="${esc(S.misI.oggi || S.st.oggi)}" value="${esc(f.data)}" ${c.blocco ? 'aria-invalid="true" style="border-color:var(--danger)"' : ''}></div>
+      <div class="field"><span class="lbl">Tipo di richiesta</span><div class="seg tipo" role="group" aria-label="Tipo di richiesta">
+        <button type="button" data-mis-tipo="standard" class="${!em ? 'on' : ''}" aria-pressed="${!em}">Standard</button>
+        <button type="button" data-mis-tipo="emergenza" class="${em ? 'on ko' : ''}" aria-pressed="${em}">${ic('urg')}Emergenza</button></div></div>
+    </div>
+    ${c.blocco ? `<div class="blocco" role="alert">${ic('urg')}<span><b>${esc(c.blocco.t)}</b>${esc(c.blocco.s)}</span></div>` : ''}
+    ${em ? `<div class="avviso rosso" style="margin:-2px 0 12px">${ic('urg')}<span>Le emergenze seguono un regolamento definito: ogni abuso comporta sanzioni.</span></div>` : ''}
+    <div class="field"><label for="mi-m">Medico a cui inviarla</label>${!med ? '<div class="muted">Carico i medici della sede…</div>'
+      : med.length ? `<select id="mi-m" data-mf="medico"><option value="">Scegli il medico</option>${med.map(m => `<option value="${esc(m.id)}" ${f.medico === m.id ? 'selected' : ''}>${esc(m.nome)}</option>`).join('')}</select>`
+      : '<div class="err">Nessun medico abilitato in questa sede. Chiedi all\'amministratore di assegnarlo in Gestione accessi (o nei Turni).</div>'}</div>
+    <div class="field"><label for="mi-no">Note per il medico (facoltative)</label><textarea id="mi-no" data-mf="note">${esc(f.note)}</textarea></div>
+    <label class="flag dtx"><input type="checkbox" data-mf="dtx" ${f.dtx ? 'checked' : ''}><span><span class="t">Ho caricato la documentazione su DTX</span><br><span class="s">Obbligatorio: senza questa spunta la richiesta non parte.</span></span></label>
+    ${S.err ? `<div class="err" role="alert" style="margin:10px 0">${esc(S.err)}</div>` : ''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn ${em ? 'emg' : 'primary'}" data-a="mis-invia" ${c.ok && !S.busy ? '' : 'disabled'}>${ic(em ? 'urg' : 'send')}${S.busy ? 'Invio…' : em ? 'Invia in emergenza' : 'Invia la richiesta'}</button><button class="btn" data-a="mis-chiudi">Annulla</button></div>
+    ${c.manca.length && !c.blocco ? `<div class="mancano">Per inviare manca: ${c.manca.join(', ')}.</div>` : ''}
+  </section>`;
+}
+function regolamentoMis() {
+  const f = S.mis;
+  $('#dlg').innerHTML = `<div class="dh" style="--ac:var(--danger)"><span class="art">${ic('urg')}</span><div><h3>Richiesta di emergenza</h3><div class="muted" style="font-size:13px">${esc(f.cognome)} ${esc(f.nome)} · ${esc(f.lavoro)}</div></div></div>
+    <div class="db"><div class="regola" role="alert"><b>Attenzione</b>Le richieste di emergenza seguono un regolamento definito. Ogni abuso comporterà sanzioni.</div>
+    <p>Usa l'emergenza solo quando il caso non può attendere i tempi standard (${S.misI.giorniMin || 5} giorni). Il medico riceverà una notifica in rosso.</p>
+    <label class="flag" style="margin:0"><input type="checkbox" data-regok ${S.misRegOk ? 'checked' : ''}><span class="t">Ho letto il regolamento e confermo che è un'emergenza</span></label></div>
+    <div class="df"><button class="btn" data-a="dlg-chiudi">Torna indietro</button><button class="btn emg" data-a="mis-conferma" ${S.misRegOk && !S.busy ? '' : 'disabled'}>${ic('urg')}${S.busy ? 'Invio…' : 'Confermo e invio'}</button></div>`;
+}
+async function inviaMis(regolamento) {
+  const f = S.mis; S.busy = true; S.err = ''; if ($('#dlg').open) regolamentoMis(); else render();
+  try {
+    const r = await api('POST', 'api/misure', { sede: f.sede, cognome: f.cognome.trim(), nome: f.nome.trim(), lavoro: f.lavoro.trim(), dataIntervento: f.data, tipo: f.tipo, medico: f.medico, note: f.note, dtx: !!f.dtx, regolamento });
+    S.busy = false; $('#dlg').open && $('#dlg').close(); S.mis = null;
+    toast(`Richiesta inviata a ${r.medico}${f.tipo === 'emergenza' ? ' in EMERGENZA' : ''}: riceverà una notifica.`, 4500); return load();
+  } catch (x) { S.busy = false; S.err = x.message; if ($('#dlg').open) $('#dlg').close(); render(); }
 }
 
 /* ============ sterilizzazione: le sterilizzatrici ============ */
@@ -866,6 +982,11 @@ document.addEventListener('click', async e => {
   if (b.dataset.nuovoTest) { S.form = { tipo: 'test', test: b.dataset.nuovoTest, esito: '' }; S.err = ''; return render(); }
   if (b.dataset.esito && S.form) { S.form.esito = b.dataset.esito; return render(); }
   if (b.dataset.temp && S.form) { S.form.temperatura = +b.dataset.temp; return render(); }
+  if (b.dataset.misTipo && S.mis) { S.mis.tipo = b.dataset.misTipo; S.err = ''; return render(); }
+  if (b.dataset.misAnnulla) {
+    if (!confirm('Annullare questa richiesta? Il medico riceverà un avviso.')) return;
+    try { await api('POST', 'api/misure/' + b.dataset.misAnnulla + '/annulla', {}); toast('Richiesta annullata.'); return load(); } catch (x) { return toast(x.message, 5000); }
+  }
   if (b.dataset.paz) { S.pzForm = null; S.pz = null; return go('paz', { id: b.dataset.paz }); }
   if (b.dataset.denteP !== undefined) return apriDente(+b.dataset.denteP);
   if (b.dataset.lab) { // riquadro etichetta: si espande / si chiude
@@ -895,6 +1016,10 @@ document.addEventListener('click', async e => {
     try { await api('DELETE', 'api/man/registro/' + b.dataset.regDel); toast('Registrazione tolta.'); return load(); } catch (x) { return toast(x.message); } }
   const a = b.dataset.a; if (!a) return;
   if (a === 'esp-scarica') return scaricaEsp();
+  if (a === 'mis-nuova') { const sede = S.st.misure.sedi[0]?.id || ''; S.mis = { sede, cognome: '', nome: '', lavoro: '', data: '', tipo: 'standard', medico: '', note: '', dtx: false }; S.err = ''; render(); mediciMis(sede).then(() => { if (S.misMed[sede]?.length === 1) S.mis.medico = S.misMed[sede][0].id; render(); }).catch(x => toast(x.message)); return setTimeout(() => $('#mi-c')?.focus(), 50); }
+  if (a === 'mis-chiudi') { S.mis = null; S.err = ''; return render(); }
+  if (a === 'mis-invia') { if (!S.mis || !misControllo(S.mis).ok) return; if (S.mis.tipo === 'emergenza') { S.misRegOk = false; regolamentoMis(); return $('#dlg').showModal(); } return inviaMis(false); }
+  if (a === 'mis-conferma') return S.misRegOk && inviaMis(true);
   if (a === 'lab-nuova') { const prec = perDente(S.pz.impianti, S.dente)[0] || S.pz.impianti[0];
     S.lab = { dataIntervento: prec?.dataIntervento || S.st.oggi, medico: prec?.medico || '' }; S.err = ''; return disegnaDente(); }
   if (a === 'lab-annulla') { S.lab = null; S.err = ''; return disegnaDente(); }
@@ -987,6 +1112,8 @@ document.addEventListener('input', e => {
   const t = e.target;
   if (t.dataset.f && S.form) S.form[t.dataset.f] = t.value;
   if (t.dataset.pf && S.pzForm) S.pzForm[t.dataset.pf] = t.value;
+  if (t.dataset.regok !== undefined) { S.misRegOk = t.checked; return regolamentoMis(); }
+  if (t.dataset.mf && S.mis && t.type !== 'checkbox' && t.type !== 'date' && t.tagName !== 'SELECT') { S.mis[t.dataset.mf] = t.value; const m = $('.mancano'), c = misControllo(S.mis), bt = $('[data-a="mis-invia"]'); if (bt) bt.disabled = !c.ok; if (m) m.textContent = c.manca.length ? 'Per inviare manca: ' + c.manca.join(', ') + '.' : ''; }
   if (t.dataset.l && S.lab) S.lab[t.dataset.l] = t.value;
   if (t.dataset.af && S.attForm) S.attForm[t.dataset.af] = t.value;
   if (t.dataset.re && S.regEdit) S.regEdit[t.dataset.re] = t.value;
@@ -1004,6 +1131,11 @@ document.addEventListener('change', async e => {
   if (t.dataset.rf) { S.regF[t.dataset.rf] = t.value; if (t.dataset.rf === 'sede') S.regF.att = ''; return load(); }
   if (t.dataset.f === 'sede' && S.form) S.form.sede = t.value;
   if (t.dataset.pf === 'sede' && S.pzForm) S.pzForm.sede = t.value;
+  if (t.dataset.mf && S.mis && (t.type === 'checkbox' || t.type === 'date' || t.tagName === 'SELECT')) {
+    S.mis[t.dataset.mf] = t.type === 'checkbox' ? t.checked : t.value; S.err = '';
+    if (t.dataset.mf === 'sede') { S.mis.medico = ''; render(); try { await mediciMis(t.value); if (S.misMed[t.value]?.length === 1) S.mis.medico = S.misMed[t.value][0].id; } catch (x) { toast(x.message); } }
+    return render();
+  }
   if (t.id === 'foto-spore' && t.files[0] && S.sporeEsito) {
     const { id, v } = S.sporeEsito; S.sporeEsito = null;
     try { const foto = await riduci(t.files[0]); t.value = ''; await api('PUT', 'api/steri/test/' + id, { esito: v, foto }); toast('Esito del test delle spore salvato con la foto.'); load(); }
@@ -1017,7 +1149,7 @@ document.addEventListener('change', async e => {
 // Aggiornamento automatico: chi ha aperto la stessa sterilizzatrice vede subito i test fatti dagli altri
 setInterval(() => {
   if (document.visibilityState !== 'visible' || S.busy || S.form || $('#dlg').open || $('#ph').open) return;
-  if (S.view === 'scheda' || S.view === 'steri' || S.view === 'man') load();
+  if (S.view === 'scheda' || S.view === 'steri' || S.view === 'man' || (S.view === 'misure' && !S.mis)) load();
 }, 20000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !S.form && !S.busy && ['scheda', 'steri', 'man'].includes(S.view)) load(); });
 
@@ -1036,8 +1168,9 @@ $('#dlg').addEventListener('close', () => {
   if (v === 'udi' && ok.udi) return go('udi');
   if ((v === 'man' || v === 'manreg') && S.st.manutenzione) return go(v);
   if (v === 'paz' && ok.udi && id) return go('paz', { id });
+  if (v === 'misure' && S.st.misure && !S.st.misure.spenta) return go('misure');
   // con una sola sezione si entra subito lì
-  const solo = [ok.steri && 'steri', ok.udi && 'udi', ok.man && 'man', S.st.magazzino && 'mag'].filter(Boolean);
+  const solo = [ok.steri && 'steri', ok.udi && 'udi', ok.man && 'man', S.st.misure && !S.st.misure.spenta && 'misure', S.st.magazzino && 'mag'].filter(Boolean);
   if (solo.length === 1 && solo[0] !== 'mag') return go(solo[0]);
   go('home');
 })();

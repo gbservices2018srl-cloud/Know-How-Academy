@@ -138,6 +138,31 @@ async function migrate() {
   await q('alter table test add column if not exists foto_esito_id text references foto(id) on delete set null');
   // Manutenzione: riuniti e aspiratori arrivano dalle Sedi di Gestione accessi; "rif" = posizione (r1, r2… a1…) nella sede
   await q('alter table attrezzature add column if not exists rif text');
+  // Misure implantari: richieste delle ASO al medico della sede (Comunicazioni cliniche)
+  await q(`create table if not exists misure (
+      id text primary key,
+      sede_id text not null,
+      sede_nome text not null default '',
+      paziente_cognome text not null,
+      paziente_nome text not null default '',
+      lavoro text not null,
+      data_intervento date not null,
+      tipo text not null default 'standard' check (tipo in ('standard','emergenza')),
+      dtx boolean not null default false,
+      medico_id text not null,
+      medico_nome text not null default '',
+      stato text not null default 'inviata' check (stato in ('inviata','in_carico','pianificata','annullata')),
+      note text not null default '',
+      creato_da text not null default '',
+      creato_da_nome text not null default '',
+      creato_il timestamptz not null default now(),
+      presa_il timestamptz,
+      pianificata_il timestamptz,
+      nota_medico text not null default '',
+      annullata_il timestamptz
+    );
+    create index if not exists misure_sede_idx on misure(sede_id, creato_il desc);
+    create index if not exists misure_medico_idx on misure(medico_id, stato);`);
   // Registro impianti per paziente: il paziente si crea una volta, poi si registrano le etichette dente per dente
   await q(`create table if not exists pazienti (
       id text primary key,

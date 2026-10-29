@@ -31,7 +31,7 @@ const BASE = '/aso';
 
 /* ---------- chi sta usando l'app ---------- */
 // Permessi per app: { admin, sedi: [{id, nome}] } (admin vede tutte le sedi attive). Magazzino: solo se c'è.
-const APPS_ASO = ['sterilizzazione', 'registro_udi', 'manutenzione'];
+const APPS_ASO = ['sterilizzazione', 'registro_udi', 'manutenzione', 'misure'];
 let sediCache = null, sediT = 0;
 async function tutteLeSedi() {
   if (!sediCache || Date.now() - sediT > 60000) { sediCache = (await store.listSedi()).filter(s => s.attiva !== false).map(s => ({ id: s.id, nome: s.nome })); sediT = Date.now(); }
@@ -51,7 +51,10 @@ app.use(wrap(async (req, res, next) => {
     if (role === 'admin' || owner) perm[k] = { admin: true, sedi: await tutteLeSedi() };
     else perm[k] = { admin: false, sedi: (lv[k]?.enti || []).map(e => ({ id: e.id, nome: String(e.nome || '').split(' · ')[0] })) };
   }
-  req.me = { id: u.id, nome: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email, owner, perm,
+  // Comunicazioni cliniche (medici): amministratore = tutte le richieste; medico = quelle a lui
+  const rc = c.apps.clinica;
+  const clinica = !rc ? null : (rc !== 'admin' && !owner && spente.has('clinica')) ? { spenta: true } : { admin: rc === 'admin' || owner };
+  req.me = { id: u.id, nome: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email, owner, perm, clinica, figura: u.figura || '',
     magazzino: !!c.apps.magazzino && (owner || c.apps.magazzino === 'admin' || !spente.has('magazzino')) };
   next();
 }));
@@ -89,7 +92,7 @@ app.get('/api/foto/:id', needUser, wrap(async (req, res) => {
 app.get('/api/stato', needUser, wrap(async (req, res) => {
   const p = req.me.perm;
   res.json({ me: { id: req.me.id, nome: req.me.nome },
-    sterilizzazione: p.sterilizzazione || null, udi: p.registro_udi || null, manutenzione: p.manutenzione || null, voci: VOCI, magazzino: req.me.magazzino ? 'https://magazzino.appgestione.it' : null,
+    sterilizzazione: p.sterilizzazione || null, udi: p.registro_udi || null, manutenzione: p.manutenzione || null, misure: p.misure || null, clinica: req.me.clinica, voci: VOCI, magazzino: req.me.magazzino ? 'https://magazzino.appgestione.it' : null,
     ai: !!process.env.ANTHROPIC_API_KEY, oggi: oggi(), home: accessi.publicUrl() });
 }));
 
@@ -740,13 +743,131 @@ app.delete('/api/man/registro/:id', needUser, need(MT), wrap(async (req, res) =>
   res.json({ ok: true });
 }));
 
+/* ============ MISURE IMPLANTARI (ASO) → COMUNICAZIONI CLINICHE (medici) ============ */
+const MI = 'misure';
+const notifiche = require('../accessi/lib/notifiche');
+const GIORNI_MIN = 5; // una richiesta standard va fatta almeno 5 giorni prima dell'intervento
+const piuGiorni = (g, n) => new Date(Date.parse(g + 'T12:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+// sedi in cui lavora ogni persona, dai Turni (ore assegnate nella sede) → id delle sedi di Gestione accessi
+let turniCache = null, turniT = 0;
+async function sediDaiTurni() {
+  if (turniCache && Date.now() - turniT < 60000) return turniCache;
+  const m = new Map();
+  try {
+    const turni = require('../turni/lib/db');
+    const { rows } = await turni.q('select data from config where id = 1');
+    const cfg = rows[0]?.data || {};
+    for (const e of cfg.staff || []) {
+      if (!e.ssoId) continue;
+      const ids = (cfg.sedi || []).filter(s => (e.ore?.[s.id] || 0) > 0).map(s => s.centrale || s.id);
+      if (ids.length) m.set(e.ssoId, ids);
+    }
+  } catch (e) { console.warn('Misure: sedi dai Turni non lette:', e.message); }
+  turniCache = m; turniT = Date.now();
+  return m;
+}
+// medici "aperti" della sede: attivi, con Comunicazioni cliniche, figura Medico, che lavorano in quella sede
+async function mediciDiSede(sedeId) {
+  const [utenti, turni] = await Promise.all([store.usersWithApp('clinica'), sediDaiTurni()]);
+  const out = [];
+  for (const u of utenti) {
+    if (u.figura !== 'Medico') continue;
+    const lv = (await store.livelliOf(u.id)).clinica;
+    const sedi = lv?.enti?.length ? lv.enti.map(e => e.id) : (turni.get(u.id) || []);
+    if (sedi.includes(sedeId)) out.push({ id: u.id, nome: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email });
+  }
+  return out.sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
+}
+const shapeMis = r => ({ id: r.id, sedeId: r.sede_id, sede: r.sede_nome, cognome: r.paziente_cognome, nome: r.paziente_nome, lavoro: r.lavoro,
+  dataIntervento: r.data_t, tipo: r.tipo, dtx: r.dtx, medicoId: r.medico_id, medico: r.medico_nome, stato: r.stato, note: r.note,
+  creatoDa: r.creato_da_nome, creatoIl: r.creato_il, presaIl: r.presa_il, pianificataIl: r.pianificata_il, notaMedico: r.nota_medico, annullataIl: r.annullata_il });
+const COLS_MIS = `*, to_char(data_intervento, 'YYYY-MM-DD') as data_t`;
+const avvisa = (ids, app, p) => notifiche.notifica(ids, app, p).catch(e => console.warn('Misure: notifica non inviata:', e.message));
+
+app.get('/api/misure', needUser, need(MI), wrap(async (req, res) => {
+  const p = permDi(req, MI), sede = str(req.query.sede, 80);
+  const sedi = sede && sedeOk(req, MI, sede) ? [sede] : p.sedi.map(s => s.id);
+  const { rows } = await db.q(`select ${COLS_MIS} from misure where sede_id = any($1) order by (stato in ('pianificata','annullata')), (tipo = 'emergenza') desc, creato_il desc limit 300`, [sedi]);
+  res.json({ richieste: rows.map(shapeMis), oggi: oggi(), minima: piuGiorni(oggi(), GIORNI_MIN), giorniMin: GIORNI_MIN });
+}));
+app.get('/api/misure/medici', needUser, need(MI), wrap(async (req, res) => {
+  const sede = sedeOk(req, MI, str(req.query.sede, 80));
+  if (!sede) return bad(res, 400, 'Scegli la sede.');
+  res.json({ medici: await mediciDiSede(sede.id) });
+}));
+app.post('/api/misure', needUser, need(MI), wrap(async (req, res) => {
+  const b = req.body, sede = sedeOk(req, MI, str(b.sede, 80));
+  if (!sede) return bad(res, 400, 'Scegli la sede.');
+  const cognome = str(b.cognome, 80), nome = str(b.nome, 80), lavoro = str(b.lavoro, 300), data = str(b.dataIntervento, 10);
+  const tipo = b.tipo === 'emergenza' ? 'emergenza' : 'standard';
+  if (!cognome || !nome) return bad(res, 400, 'Scrivi nome e cognome del paziente.');
+  if (!lavoro) return bad(res, 400, 'Scrivi il tipo di lavoro da fare.');
+  if (!isDate(data)) return bad(res, 400, 'Scegli la data prevista dell\'intervento.');
+  if (data < oggi()) return bad(res, 400, 'La data dell\'intervento è già passata.');
+  if (tipo === 'standard' && data < piuGiorni(oggi(), GIORNI_MIN))
+    return bad(res, 400, `Richiesta bloccata: una richiesta standard va fatta almeno ${GIORNI_MIN} giorni prima dell'intervento (dal ${piuGiorni(oggi(), GIORNI_MIN).split('-').reverse().join('/')}).`);
+  if (b.dtx !== true) return bad(res, 400, 'Richiesta bloccata: conferma di aver caricato la documentazione su DTX.');
+  if (tipo === 'emergenza' && b.regolamento !== true) return bad(res, 400, 'Per una richiesta di emergenza conferma di aver letto il regolamento.');
+  const medico = (await mediciDiSede(sede.id)).find(m => m.id === str(b.medico, 80));
+  if (!medico) return bad(res, 400, 'Scegli il medico tra quelli della sede.');
+  const id = db.newId();
+  await db.q(`insert into misure (id, sede_id, sede_nome, paziente_cognome, paziente_nome, lavoro, data_intervento, tipo, dtx, medico_id, medico_nome, note, creato_da, creato_da_nome)
+    values ($1,$2,$3,$4,$5,$6,$7,$8,true,$9,$10,$11,$12,$13)`, [id, sede.id, sede.nome, cognome, nome, lavoro, data, tipo, medico.id, medico.nome, str(b.note, 1000), req.me.id, req.me.nome]);
+  const quando = data.split('-').reverse().join('/');
+  avvisa([medico.id], 'clinica', tipo === 'emergenza'
+    ? { title: '🔴 EMERGENZA · Misure implantari', body: `${cognome} ${nome} · ${lavoro} · intervento il ${quando} (${sede.nome})`, url: 'https://appgestione.it/clinica/?r=' + id, tag: id, urgente: true }
+    : { title: 'Nuova richiesta · Misure implantari', body: `${cognome} ${nome} · ${lavoro} · intervento il ${quando} (${sede.nome})`, url: 'https://appgestione.it/clinica/?r=' + id, tag: id });
+  res.json({ id, medico: medico.nome });
+}));
+app.post('/api/misure/:id/annulla', needUser, need(MI), wrap(async (req, res) => {
+  const { rows: [r] } = await db.q(`select ${COLS_MIS} from misure where id = $1`, [str(req.params.id, 60)]);
+  if (!r || !sedeOk(req, MI, r.sede_id)) return bad(res, 404, 'Richiesta non trovata.');
+  if (r.stato !== 'inviata') return bad(res, 400, 'Il medico l\'ha già presa in carico: per cambiarla scrivigli.');
+  await db.q(`update misure set stato = 'annullata', annullata_il = now() where id = $1`, [r.id]);
+  avvisa([r.medico_id], 'clinica', { title: 'Richiesta annullata · Misure implantari', body: `${r.paziente_cognome} ${r.paziente_nome} · ${r.lavoro}`, url: 'https://appgestione.it/clinica/', tag: r.id });
+  res.json({ ok: true });
+}));
+
+// --- lato medico ---
+const needClinica = (req, res, next) => req.me?.clinica && !req.me.clinica.spenta ? next() : bad(res, 403, 'Non sei abilitato alle Comunicazioni cliniche.');
+app.get('/api/clinica', needUser, needClinica, wrap(async (req, res) => {
+  const tutte = req.me.clinica.admin && req.query.tutte === '1';
+  const { rows } = await db.q(`select ${COLS_MIS} from misure where ${tutte ? 'true' : 'medico_id = $1'} and (stato <> 'annullata' or annullata_il > now() - interval '7 days')
+    order by case stato when 'inviata' then 0 when 'in_carico' then 1 else 2 end, (tipo = 'emergenza') desc, data_intervento, creato_il desc limit 400`, tutte ? [] : [req.me.id]);
+  res.json({ richieste: rows.map(shapeMis), admin: req.me.clinica.admin, oggi: oggi(), me: { nome: req.me.nome } });
+}));
+async function richiestaMia(req, id) {
+  const { rows: [r] } = await db.q(`select ${COLS_MIS} from misure where id = $1`, [str(id, 60)]);
+  if (!r || (r.medico_id !== req.me.id && !req.me.clinica.admin)) throw fail(404, 'Richiesta non trovata.');
+  return r;
+}
+app.post('/api/clinica/:id/presa', needUser, needClinica, wrap(async (req, res) => {
+  const r = await richiestaMia(req, req.params.id);
+  if (r.stato !== 'inviata') return bad(res, 400, r.stato === 'annullata' ? 'L\'ASO ha annullato questa richiesta.' : 'Già presa in carico.');
+  await db.q(`update misure set stato = 'in_carico', presa_il = now() where id = $1`, [r.id]);
+  avvisa([r.creato_da], MI, { title: 'Presa in carico · Misure implantari', body: `${r.medico_nome} ha preso in carico ${r.paziente_cognome} ${r.paziente_nome} (${r.lavoro})`, url: 'https://appgestione.it/aso/?v=misure', tag: r.id });
+  res.json({ ok: true });
+}));
+app.post('/api/clinica/:id/pianificata', needUser, needClinica, wrap(async (req, res) => {
+  const r = await richiestaMia(req, req.params.id);
+  if (!['inviata', 'in_carico'].includes(r.stato)) return bad(res, 400, r.stato === 'annullata' ? 'L\'ASO ha annullato questa richiesta.' : 'Già pianificata.');
+  await db.q(`update misure set stato = 'pianificata', presa_il = coalesce(presa_il, now()), pianificata_il = now(), nota_medico = $2 where id = $1`, [r.id, str(req.body.nota, 1000)]);
+  avvisa([r.creato_da], MI, { title: '✓ Pianificata su DTX · Misure implantari', body: `${r.medico_nome} ha visto il caso di ${r.paziente_cognome} ${r.paziente_nome}: pianificato su DTX`, url: 'https://appgestione.it/aso/?v=misure', tag: r.id });
+  res.json({ ok: true });
+}));
+
 /* ---------- pagina ---------- */
 const PUB = path.join(__dirname, 'public');
 app.get('/', (req, res) => {
   res.set('Cache-Control', 'no-store');
+  if (req.baseUrl === '/clinica') { // Comunicazioni cliniche (medici)
+    if (!req.me) return res.redirect(accessi.loginUrl(`${req.protocol}://${req.get('host')}${req.originalUrl}`));
+    if (!req.me.clinica || req.me.clinica.spenta) return res.redirect(`${accessi.publicUrl()}/?noaccess=clinica`);
+    return res.sendFile(path.join(PUB, 'clinica.html'));
+  }
   if (!req.me) return res.redirect(accessi.loginUrl(`${req.protocol}://${req.get('host')}${req.originalUrl}`));
   const p = req.me.perm;
-  if (!p.sterilizzazione && !p.registro_udi && !p.manutenzione && !req.me.magazzino) return res.redirect(`${accessi.publicUrl()}/?noaccess=aso`);
+  if (!p.sterilizzazione && !p.registro_udi && !p.manutenzione && !p.misure && !req.me.magazzino) return res.redirect(`${accessi.publicUrl()}/?noaccess=aso`);
   res.sendFile(path.join(PUB, 'app.html'));
 });
 app.use(express.static(PUB, { index: false, maxAge: '1h' }));

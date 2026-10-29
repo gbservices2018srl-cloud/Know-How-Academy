@@ -12,6 +12,7 @@ const q = (t, p) => store.q(t, p);
 const APP_NOTIFICHE = {
   calendario: 'Eventi aziendali', turni: 'Turni', magazzino: 'Magazzino centrale',
   laboratorio: 'Nuovalab', ticket: 'Ticket assistenza', comunicazioni: 'Comunicazioni ed eventi', documenti: 'Documenti di studio',
+  misure: 'Misure implantari', clinica: 'Comunicazioni cliniche',
 };
 
 async function migrate() {
@@ -73,7 +74,7 @@ async function notifica(userIds, app, payload) {
         and (a.role = 'admin' or not exists (select 1 from app_stato st where st.app = $3 and st.spenta))))`, [ids, app, store.capo(app)]);
   const base = APP_URL(app);
   const url = payload.url && /^https?:\/\//.test(payload.url) ? payload.url : base + (payload.url || '/');
-  const body = JSON.stringify({ title: payload.title || APP_NOTIFICHE[app], body: payload.body || '', url, tag: payload.tag ? `${app}-${payload.tag}` : undefined, app });
+  const body = JSON.stringify({ title: payload.title || APP_NOTIFICHE[app], body: payload.body || '', url, tag: payload.tag ? `${app}-${payload.tag}` : undefined, app, urgente: !!payload.urgente });
   await Promise.all(rows.map(async s => {
     try {
       await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, body, {

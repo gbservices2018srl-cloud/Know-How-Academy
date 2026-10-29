@@ -215,6 +215,17 @@ async function accessiAutomatici(userId = null) {
     }
     if (!userId && rows.length) console.log(`Accesso automatico a «${a.name}» dato a ${rows.length} persone`);
   }
+  // autoFigura: chi ha quella figura professionale (es. Medico odontoiatra) riceve l'app, una volta sola
+  for (const a of APPS.filter(x => x.autoFigura)) {
+    const p = [a.key, a.autoFigura]; if (userId) p.push(userId);
+    const { rows } = await q(`select u.id from users u where u.status = 'active' and not u.owner and u.figura = $2 ${userId ? 'and u.id = $3' : ''}
+      and not exists (select 1 from app_auto z where z.user_id = u.id and z.app = $1)`, p);
+    for (const r of rows) {
+      await q('insert into app_auto (user_id, app) values ($1,$2) on conflict do nothing', [r.id, a.key]);
+      await q(`insert into user_apps (user_id, app, role) values ($1,$2,'user') on conflict (user_id, app) do nothing`, [r.id, a.key]);
+    }
+    if (!userId && rows.length) console.log(`Accesso automatico a «${a.name}» dato a ${rows.length} persone (${a.autoFigura})`);
+  }
   await allineaSeguaci();
 }
 // App che "seguono" un'altra (Eventi aziendali segue Comunicazioni ed eventi): stesso permesso e stesso ruolo, copiati qui.

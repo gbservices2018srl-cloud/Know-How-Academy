@@ -41,7 +41,7 @@ module.exports = [
   // Gestione ASO: riquadro unico che raccoglie Magazzino, Compliance sterilizzazione e Registro impianti.
   // È "virtuale": non si assegna, compare a chi ha almeno una delle tre app (che non hanno più un riquadro proprio).
   { key: 'aso', name: 'Gestione ASO', url: 'https://appgestione.it/aso/', color: 'teal', virtuale: true,
-    gruppo: ['magazzino', 'sterilizzazione', 'registro_udi', 'manutenzione'],
+    gruppo: ['magazzino', 'sterilizzazione', 'registro_udi', 'manutenzione', 'misure'],
     desc: 'Magazzino, sterilizzazione, registro impianti (UDI) e manutenzione delle attrezzature.' },
   { key: 'sterilizzazione', name: 'Compliance sterilizzazione', url: 'https://appgestione.it/aso/?v=steri', color: 'teal', dentro: 'aso',
     enti: 'sedi', // le sedi del gruppo (scheda Sedi del pannello)
@@ -64,6 +64,23 @@ module.exports = [
       { key: 'operatore', label: 'Operatore', ente: 'sedi', enteLabel: 'Quale sede', multi: true },
     ],
     desc: 'Riuniti e aspiratori per sede: pulizia filtri, tubi e cordoni con registro.' },
+  { key: 'misure', name: 'Misure implantari', url: 'https://appgestione.it/aso/?v=misure', color: 'teal', dentro: 'aso',
+    enti: 'sedi',
+    livelli: [
+      { key: 'admin', label: 'Amministratore (tutte le sedi)', role: 'admin' },
+      { key: 'operatore', label: 'Operatore (ASO)', ente: 'sedi', enteLabel: 'Quale sede', multi: true },
+    ],
+    desc: 'Richieste di misure implantari al medico della sede: standard o emergenza, con documentazione su DTX.' },
+  // Comunicazioni cliniche: l'app dei medici con le richieste delle ASO. Si attiva da sola a ogni profilo "Medico odontoiatra";
+  // le sedi del medico arrivano dai Turni (sedi con ore), oppure si scelgono qui con il livello Medico.
+  { key: 'clinica', name: 'Comunicazioni cliniche', url: 'https://appgestione.it/clinica/', color: 'purple',
+    autoFigura: 'Medico',
+    enti: 'sedi',
+    livelli: [
+      { key: 'admin', label: 'Amministratore (vede tutte le richieste)', role: 'admin' },
+      { key: 'medico', label: 'Medico', ente: 'sedi', enteLabel: 'Sedi in cui lavora', multi: true },
+    ],
+    desc: 'Le richieste cliniche delle ASO: misure implantari da prendere in carico e pianificare su DTX.' },
   { key: 'magazzino', name: 'Magazzino centrale', url: 'https://magazzino.appgestione.it', color: 'yellow', dentro: 'aso',
     desc: 'Disponibilità degli articoli, prenotazioni e riordino ai fornitori.' },
   { key: 'turni', name: 'Turni', url: 'https://turni.appgestione.it', color: 'teal',
