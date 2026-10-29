@@ -139,13 +139,13 @@ dialog form{padding:22px;display:flex;flex-direction:column;gap:14px}
 @media (max-width:560px){.approw{grid-template-columns:minmax(0,1fr) auto}.approw .actions{grid-column:1/-1}}
 </style>
 <!-- dopo una modifica la pagina resta dov'era (comune a tutte le app To Smile) -->
-<script src="/static/resta-qui.js?v=1" defer></script>
+<script src="/static/resta-qui.js?v=2" defer></script>
 </head>
 <body>
 <div class="wrap">
   <div class="top">
     <a class="logo" href="/" aria-label="To Smile"><img src="/static/logo-tosmile.png" alt="To Smile" width="548" height="165"></a>
-    <nav><a class="btn small" href="/">← Le mie app</a><a class="btn small" href="/esci">Esci</a></nav>
+    <nav><a class="btn small" href="/" data-ts-home>← Le mie app</a><a class="btn small" href="/esci">Esci</a></nav>
   </div>
   <header>
     <h1>Gestione <span>accessi</span></h1>

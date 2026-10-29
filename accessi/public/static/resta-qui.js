@@ -71,3 +71,60 @@
   new MutationObserver(pianifica).observe(document.documentElement, { childList: true, subtree: true });
   window.addEventListener('scroll', function () { if (snap && Date.now() - snap.t < DURATA) pianifica(); }, { passive: true });
 })();
+
+/* To Smile · pulsante "Le mie app" in alto, uguale in tutte le app: riporta alla pagina con tutte le app.
+   Si mette accanto al logo dell'app (barra in alto o barra laterale); se l'app ridisegna la barra, ricompare da solo.
+   Una pagina può farne a meno con <body data-ts-home="no"> (es. la pagina "Le mie app" stessa). */
+(function () {
+  if (window.__tsHome) return; window.__tsHome = true;
+  var qui = location.hostname === 'appgestione.it' || location.hostname === 'www.appgestione.it';
+  if (qui && /^\/(accedi|registrati|password-dimenticata|reimposta|privacy|cookie|termini)?\/?$/.test(location.pathname)) return;
+  var URL_HOME = qui ? '/' : 'https://appgestione.it/';
+  var css = '.ts-home{display:inline-flex;align-items:center;gap:6px;flex:none;height:36px;padding:0 12px 0 9px;border-radius:999px;border:1px solid #D3E2E2;background:#fff;color:#2B8384;' +
+    'font:700 13.5px/1 "Fira Sans",system-ui,-apple-system,"Segoe UI",sans-serif;text-decoration:none;white-space:nowrap;box-shadow:0 1px 2px rgba(20,48,48,.08);margin-right:10px;vertical-align:middle;letter-spacing:0}' +
+    '.ts-home:hover{background:#EAF4F4;border-color:#4CAAAA}.ts-home:focus-visible{outline:2px solid #2B8384;outline-offset:2px}' +
+    '.ts-home svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}' +
+    '.ts-home.blocco{display:flex;margin:0 0 12px;justify-content:center;width:100%;box-sizing:border-box}' +
+    '.ts-home.vola{position:fixed;left:max(12px,env(safe-area-inset-left));top:max(10px,env(safe-area-inset-top));z-index:2147483000;margin:0}' +
+    '@media (max-width:700px){.ts-home:not(.blocco) span{display:none}.ts-home:not(.blocco){width:36px;padding:0;justify-content:center;margin-right:8px}}' +
+    '@media (prefers-color-scheme:dark){.ts-home{background:#172121;border-color:#2A3939;color:#62C3C3}.ts-home:hover{background:#1D2929}}' +
+    '@media print{.ts-home{display:none!important}}';
+  function crea(cls) {
+    var a = document.createElement('a');
+    a.className = 'ts-home' + (cls ? ' ' + cls : ''); a.href = URL_HOME; a.setAttribute('data-ts-home', '');
+    a.title = 'Torna a Le mie app'; a.setAttribute('aria-label', 'Home: torna a Le mie app');
+    a.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg><span>Le mie app</span>';
+    return a;
+  }
+  function visibile(e) { if (!e) return false; var r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.top < 160; }
+  function metti() {
+    if (!document.body || document.body.getAttribute('data-ts-home') === 'no') return;
+    if (document.querySelector('a[data-ts-home]')) return;
+    if (!document.getElementById('ts-home-css')) { var st = document.createElement('style'); st.id = 'ts-home-css'; st.textContent = css; document.head.appendChild(st); }
+    // barra laterale (Gestione finanziaria, Bilancio): sotto il logo, a tutta larghezza
+    var side = document.querySelector('#sidebar, aside.sidebar');
+    if (side && visibile(side) && side.querySelector('.brand')) { var b0 = side.querySelector('.brand'); b0.parentNode.insertBefore(crea('blocco'), b0.nextSibling); return; }
+    // barra in alto: prima del logo / nome dell'app
+    var bars = document.querySelectorAll('header, .top, .topbar, .navbar');
+    for (var i = 0; i < bars.length; i++) {
+      var bar = bars[i]; if (!visibile(bar)) continue;
+      var brand = bar.querySelector('.brand, .navbar-brand, .hin, .top-in');
+      if (brand && brand.matches('.hin, .top-in')) brand = brand.querySelector('.brand, a, img') || brand;
+      if (brand && brand.closest('.brand, .navbar-brand') && brand.tagName !== 'DIV' && brand.tagName !== 'SPAN') brand = brand.closest('.brand, .navbar-brand');
+      if (brand) {
+        // dentro il gruppo del logo (che è già una riga), come primo elemento; se il logo è un link o un'immagine, subito prima
+        if (/^(A|IMG|SPAN|B)$/.test(brand.tagName)) brand.parentNode.insertBefore(crea(), brand);
+        else brand.insertBefore(crea(), brand.firstChild);
+      } else bar.insertBefore(crea(), bar.firstChild);
+      return;
+    }
+    if (pronta) document.body.appendChild(crea('vola')); // nessuna barra (pagina già caricata): pulsante fisso in alto a sinistra
+  }
+  var pronta = false;
+  window.addEventListener('load', function () { setTimeout(function () { pronta = true; presto(); }, 1500); });
+  var t = null;
+  function presto() { if (t) return; t = setTimeout(function () { t = null; try { metti(); } catch (e) {} }, 120); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', presto); else presto();
+  window.addEventListener('load', presto);
+  new MutationObserver(function () { if (!document.querySelector('a[data-ts-home]')) presto(); }).observe(document.documentElement, { childList: true, subtree: true });
+})();
