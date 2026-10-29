@@ -17,6 +17,7 @@ module.exports = [
     desc: 'Dal bilancio a 4 sezioni: budget, consuntivo, scostamenti, costi fissi e variabili, break even, EBITDA e utile.' },
   { key: 'laboratorio', name: 'Nuovalab', url: 'https://laboratorio.appgestione.it', color: 'purple',
     sso: 'https://ncfsugpmqimukynuvzba.supabase.co/functions/v1/sso',
+    autoFigura: 'Medico', // il medico appena attivato la trova già (come Utente: il medico di Nuovalab lo scegli poi tu)
     livelli: [
       { key: 'ADMIN', label: 'Amministratore', role: 'admin' },
       { key: 'LABORATORIO', label: 'Laboratorio', ente: 'laboratori', enteLabel: 'Quale laboratorio' },
@@ -43,29 +44,30 @@ module.exports = [
   { key: 'aso', name: 'Gestione ASO', url: 'https://appgestione.it/aso/', color: 'teal', virtuale: true,
     gruppo: ['magazzino', 'sterilizzazione', 'registro_udi', 'manutenzione', 'misure'],
     desc: 'Magazzino, sterilizzazione, registro impianti (UDI) e manutenzione delle attrezzature.' },
+  // autoFigura 'ASO' + autoLivello: l'ASO appena attivata trova già Gestione ASO come Operatore (con le sue sedi, se già note)
   { key: 'sterilizzazione', name: 'Compliance sterilizzazione', url: 'https://appgestione.it/aso/?v=steri', color: 'teal', dentro: 'aso',
-    enti: 'sedi', // le sedi del gruppo (scheda Sedi del pannello)
+    enti: 'sedi', autoFigura: 'ASO', autoLivello: 'operatore', // le sedi del gruppo (scheda Sedi del pannello)
     livelli: [
       { key: 'admin', label: 'Amministratore (tutte le sedi)', role: 'admin' },
       { key: 'operatore', label: 'Operatore (ASO)', ente: 'sedi', enteLabel: 'Quale sede', multi: true },
     ],
     desc: 'Sterilizzatrici, test Bowie-Dick, Helix e spore, cicli con vapor line.' },
   { key: 'registro_udi', name: 'Registro impianti (UDI)', url: 'https://appgestione.it/aso/?v=udi', color: 'teal', dentro: 'aso',
-    enti: 'sedi',
+    enti: 'sedi', autoFigura: 'ASO', autoLivello: 'operatore',
     livelli: [
       { key: 'admin', label: 'Amministratore (tutte le sedi)', role: 'admin' },
       { key: 'operatore', label: 'Operatore', ente: 'sedi', enteLabel: 'Quale sede', multi: true },
     ],
     desc: 'Registro degli impianti e dei materiali impiantabili con lotto, scadenza e codice UDI.' },
   { key: 'manutenzione', name: 'Manutenzione attrezzature', url: 'https://appgestione.it/aso/?v=man', color: 'teal', dentro: 'aso',
-    enti: 'sedi',
+    enti: 'sedi', autoFigura: 'ASO', autoLivello: 'operatore',
     livelli: [
       { key: 'admin', label: 'Amministratore (tutte le sedi, crea i riuniti e corregge il registro)', role: 'admin' },
       { key: 'operatore', label: 'Operatore', ente: 'sedi', enteLabel: 'Quale sede', multi: true },
     ],
     desc: 'Riuniti e aspiratori per sede: pulizia filtri, tubi e cordoni con registro.' },
   { key: 'misure', name: 'Misure implantari', url: 'https://appgestione.it/aso/?v=misure', color: 'teal', dentro: 'aso',
-    enti: 'sedi',
+    enti: 'sedi', autoFigura: 'ASO', autoLivello: 'operatore',
     livelli: [
       { key: 'admin', label: 'Amministratore (tutte le sedi)', role: 'admin' },
       { key: 'operatore', label: 'Operatore (ASO)', ente: 'sedi', enteLabel: 'Quale sede', multi: true },
@@ -74,14 +76,14 @@ module.exports = [
   // Comunicazioni cliniche: l'app dei medici con le richieste delle ASO. Si attiva da sola a ogni profilo "Medico odontoiatra";
   // le sedi del medico arrivano dai Turni (sedi con ore), oppure si scelgono qui con il livello Medico.
   { key: 'clinica', name: 'Comunicazioni cliniche', url: 'https://appgestione.it/clinica/', color: 'purple',
-    autoFigura: 'Medico',
+    autoFigura: 'Medico', autoLivello: 'medico',
     enti: 'sedi',
     livelli: [
       { key: 'admin', label: 'Amministratore (vede tutte le richieste)', role: 'admin' },
       { key: 'medico', label: 'Medico', ente: 'sedi', enteLabel: 'Sedi in cui lavora', multi: true },
     ],
     desc: 'Le richieste cliniche delle ASO: misure implantari da prendere in carico e pianificare su DTX.' },
-  { key: 'magazzino', name: 'Magazzino centrale', url: 'https://magazzino.appgestione.it', color: 'yellow', dentro: 'aso',
+  { key: 'magazzino', name: 'Magazzino centrale', url: 'https://magazzino.appgestione.it', color: 'yellow', dentro: 'aso', autoFigura: 'ASO',
     desc: 'Disponibilità degli articoli, prenotazioni e riordino ai fornitori.' },
   { key: 'turni', name: 'Turni', url: 'https://turni.appgestione.it', color: 'teal',
     // La figura è quella della persona (Gestione accessi): con Dipendente o "Amministratore, anche in turno"

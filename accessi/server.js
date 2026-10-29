@@ -210,7 +210,9 @@ async function leggiPermesso(a, v, u, persona) {
   let lv = { livello: L.key, ente: null, enteNome: null, enti: [] };
   if (L.ente) {
     // un solo ente, oppure (livelli "multi") più studi: il primo è il principale
-    const ids = [...new Set((L.multi && Array.isArray(v.enti) && v.enti.length ? v.enti : [v.ente]).map(x => String(x || '')).filter(Boolean))].slice(0, 20);
+    let ids = [...new Set((L.multi && Array.isArray(v.enti) && v.enti.length ? v.enti : [v.ente]).map(x => String(x || '')).filter(Boolean))].slice(0, 20);
+    // app per sede senza sede scelta: si usano le sedi già scelte per la persona in un'altra app (non serve riselezionarle)
+    if (!ids.length && L.ente === 'sedi' && persona) ids = (await store.sediNote(persona.id, a.key)).map(x => x.id);
     if (!ids.length) throw Object.assign(new Error(`${L.enteLabel}: scegli dall'elenco.`), { status: 400 });
     const cerca = async (id, fresh) => {
       const cat = await catalogo(a, u, fresh);

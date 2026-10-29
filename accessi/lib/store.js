@@ -112,6 +112,12 @@ async function migrate() {
       dato_il timestamptz not null default now(),
       primary key (user_id, app)
     );`);
+  // Nuove regole automatiche per figura (Nuovalab ai medici, Gestione ASO alle ASO): valgono per chi viene attivato da ora.
+  // Le persone già attive restano come le ha impostate l'amministratore (si segnano come "già fatto").
+  if ((await q(`insert into migrazioni (k) values ('auto-figura-nuovalab-aso') on conflict do nothing`)).rowCount) {
+    for (const x of APPS.filter(x => x.autoFigura && x.key !== 'clinica'))
+      await q(`insert into app_auto (user_id, app) select id, $1 from users where status <> 'pending' and figura = any($2) on conflict do nothing`, [x.key, [].concat(x.autoFigura)]);
+  }
   // Sedi del gruppo: si gestiscono qui e vengono copiate in Turni, Calendario, Ticket e Nuovalab
   await q(`create table if not exists sedi (
       id text primary key,
@@ -215,19 +221,51 @@ async function accessiAutomatici(userId = null) {
     }
     if (!userId && rows.length) console.log(`Accesso automatico a «${a.name}» dato a ${rows.length} persone`);
   }
-  // autoFigura: chi ha quella figura professionale (es. Medico odontoiatra) riceve l'app, una volta sola
+  // autoFigura: chi ha quella figura professionale (es. Medico odontoiatra, ASO) riceve l'app, una volta sola.
+  // autoLivello: con quel livello; se il livello chiede la sede, si usano le sedi già scelte in un'altra app della persona.
   for (const a of APPS.filter(x => x.autoFigura)) {
-    const p = [a.key, a.autoFigura]; if (userId) p.push(userId);
-    const { rows } = await q(`select u.id from users u where u.status = 'active' and not u.owner and u.figura = $2 ${userId ? 'and u.id = $3' : ''}
+    const p = [a.key, [].concat(a.autoFigura)]; if (userId) p.push(userId);
+    const { rows } = await q(`select u.id from users u where u.status = 'active' and not u.owner and u.figura = any($2) ${userId ? 'and u.id = $3' : ''}
       and not exists (select 1 from app_auto z where z.user_id = u.id and z.app = $1)`, p);
+    const L = a.autoLivello && a.livelli?.find(l => l.key === a.autoLivello);
     for (const r of rows) {
       await q('insert into app_auto (user_id, app) values ($1,$2) on conflict do nothing', [r.id, a.key]);
-      await q(`insert into user_apps (user_id, app, role) values ($1,$2,'user') on conflict (user_id, app) do nothing`, [r.id, a.key]);
+      const enti = L?.ente === 'sedi' ? await sediNote(r.id) : [];
+      await q(`insert into user_apps (user_id, app, role, livello, ente, ente_nome, enti) values ($1,$2,$3,$4,$5,$6,$7) on conflict (user_id, app) do nothing`,
+        [r.id, a.key, L?.role || 'user', L ? L.key : null, enti[0]?.id || null, enti[0]?.nome || null, enti.length ? JSON.stringify(enti) : null]);
     }
     if (!userId && rows.length) console.log(`Accesso automatico a «${a.name}» dato a ${rows.length} persone (${a.autoFigura})`);
   }
   await allineaSeguaci();
 }
+// Sedi: le app che si assegnano per sede (Gestione ASO, Comunicazioni cliniche) condividono la scelta.
+const APPS_SEDI = () => APPS.filter(a => a.livelli?.some(l => l.ente === 'sedi'));
+const idsDi = e => (Array.isArray(e) ? e : []).map(x => x.id).sort().join('|');
+// le sedi già scelte per la persona in una qualunque di quelle app (le più usate)
+async function sediNote(userId, tranne = null) {
+  const { rows } = await q(`select enti from user_apps where user_id = $1 and app = any($2) and app <> coalesce($3, '') and role <> 'admin'
+      and enti is not null and jsonb_array_length(enti) > 0`, [userId, APPS_SEDI().map(a => a.key), tranne]);
+  const conta = new Map();
+  for (const r of rows) { const k = idsDi(r.enti); conta.set(k, { n: (conta.get(k)?.n || 0) + 1, enti: r.enti }); }
+  return [...conta.values()].sort((a, b) => b.n - a.n)[0]?.enti || [];
+}
+// dopo aver scelto le sedi in un'app: le stesse sedi vanno nelle altre app "per sede" della persona
+// che non ne avevano ancora, o che avevano le stesse di prima (erano allineate). Quelle volutamente diverse restano.
+async function allineaSedi(userId, app, prima, enti) {
+  if (!enti?.length) return;
+  const { rows } = await q(`select app, role, livello, enti from user_apps where user_id = $1 and app = any($2) and app <> $3 and role <> 'admin'`,
+    [userId, APPS_SEDI().map(a => a.key), app]);
+  for (const r of rows) {
+    const vuoto = !Array.isArray(r.enti) || !r.enti.length;
+    if (!vuoto && idsDi(r.enti) !== idsDi(prima)) continue;
+    const L = APPS.find(a => a.key === r.app).livelli.find(l => l.ente === 'sedi');
+    const lv = r.livello && APPS.find(a => a.key === r.app).livelli.find(l => l.key === r.livello);
+    if (lv && lv.ente !== 'sedi') continue; // livello senza sede (es. amministratore)
+    await q(`update user_apps set livello = $3, ente = $4, ente_nome = $5, enti = $6 where user_id = $1 and app = $2`,
+      [userId, r.app, lv ? lv.key : L.key, enti[0].id, enti[0].nome, JSON.stringify(enti)]);
+  }
+}
+
 // App che "seguono" un'altra (Eventi aziendali segue Comunicazioni ed eventi): stesso permesso e stesso ruolo, copiati qui.
 const capo = app => APPS.find(a => a.key === app)?.segue || app;
 async function allineaSeguaci() {
@@ -306,6 +344,8 @@ async function setPassword(userId, password) {
 // livello: per le app con "livelli" (Nuovalab, Ticket) → { livello, ente, enteNome }; il ruolo Utente/Amministratore ne deriva.
 async function setAppRole(userId, app, role, livello = null) {
   if (!APP_KEYS.includes(app)) throw new Error('App sconosciuta');
+  const perSede = APPS_SEDI().some(a => a.key === app);
+  const prima = perSede ? (await q('select enti from user_apps where user_id = $1 and app = $2', [userId, app])).rows[0]?.enti || [] : [];
   if (role === 'user' || role === 'admin') {
     if (app === 'accessi' && role === 'user') role = 'admin';
     await q(`insert into user_apps (user_id, app, role, livello, ente, ente_nome, enti) values ($1,$2,$3,$4,$5,$6,$7)
@@ -315,6 +355,7 @@ async function setAppRole(userId, app, role, livello = null) {
   } else {
     await q('delete from user_apps where user_id = $1 and app = $2', [userId, app]);
   }
+  if (perSede && role === 'user' && livello?.enti?.length) await allineaSedi(userId, app, prima, livello.enti);
   if (APPS.some(a => a.segue === app)) await allineaSeguaci();
 }
 
@@ -453,6 +494,6 @@ module.exports = {
   accessiAutomatici, allineaSeguaci, fondiSeguaci, capo, appSpente, appSpenteAggiorna,
   pool, q, SCHEMA, APPS, APP_KEYS, events, migrate, ensureOwner,
   cleanEmail, validEmail, cleanName, cleanDate, cleanFigura, FIGURE, cleanCf, validCf, cleanProv, cleanAlbo, appsOf, publicUser, getUser, findByEmail, createUser, setPassword,
-  setAppRole, livelliOf, deleteUser, usersWithApp, logoutEverywhere, createSession, endSession, check, verify,
+  setAppRole, livelliOf, sediNote, APPS_SEDI, deleteUser, usersWithApp, logoutEverywhere, createSession, endSession, check, verify,
   createPasswordLink, usePasswordLink, peekPasswordLink, confirmEmail, listSedi, SESSION_DAYS, sha, createTicket, redeemTicket,
 };

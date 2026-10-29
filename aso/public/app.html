@@ -470,7 +470,7 @@ function cardMis(r) {
   return `<article class="card mreq ${em ? 'emg' : ''} ${st === 'pianificata' ? 'fine' : ''} ${st === 'annullata' ? 'ann' : ''}">
     <div class="r1"><div style="flex:1 1 200px;min-width:0"><div class="n">${esc(r.cognome)} ${esc(r.nome)}</div><div class="lav">${esc(r.lavoro)}</div></div>
       ${em ? `<span class="tag ko">${ic('urg')}EMERGENZA</span>` : ''}${st === 'annullata' ? '<span class="tag plain">Annullata</span>' : st === 'pianificata' ? `<span class="tag ok">${ic('check')}Pianificata su DTX</span>` : ''}</div>
-    <div class="meta"><span>${ic('cal')}Intervento ${esc(fmtD(r.dataIntervento))} · ${traG(g)}</span><span>${ic('user')}${esc(r.medico)}</span>${S.st.misure.sedi.length > 1 ? `<span>${esc(r.sede)}</span>` : ''}<span>inviata da ${esc(r.creatoDa)} il ${esc(fmtDT(r.creatoIl))}</span></div>
+    <div class="meta"><span>${ic('cal')}Intervento ${esc(fmtD(r.dataIntervento))} · ${traG(g)}</span><span>${ic('user')}${esc(r.medico)}</span>${!em && (st === 'inviata' || st === 'in_carico') ? (() => { const sc = new Date(Date.parse(r.creatoIl) + 72 * 36e5), tardi = sc < new Date(); return `<span style="${tardi ? 'color:var(--danger);font-weight:700' : ''}">${tardi ? 'Oltre le 72 ore' : 'Risposta entro ' + esc(fmtDT(sc))}</span>`; })() : ''}${S.st.misure.sedi.length > 1 ? `<span>${esc(r.sede)}</span>` : ''}<span>inviata da ${esc(r.creatoDa)} il ${esc(fmtDT(r.creatoIl))}</span></div>
     ${st !== 'annullata' ? `<div class="steps"><span class="s on">Inviata<small>${esc(fmtDT(r.creatoIl))}</small></span><span class="s ${passo >= 2 ? 'on' : ''}">Presa in carico<small>${r.presaIl ? esc(fmtDT(r.presaIl)) : 'in attesa'}</small></span><span class="s ${passo >= 3 ? 'on' : ''}">Pianificata su DTX<small>${r.pianificataIl ? esc(fmtDT(r.pianificataIl)) : '—'}</small></span></div>` : ''}
     ${r.notaMedico ? `<div class="nota-med"><b>Nota del medico:</b> ${esc(r.notaMedico)}</div>` : ''}
     ${r.note ? `<div class="muted" style="font-size:13.5px">Note: ${esc(r.note)}</div>` : ''}
@@ -493,7 +493,8 @@ function formMis() {
         <button type="button" data-mis-tipo="emergenza" class="${em ? 'on ko' : ''}" aria-pressed="${em}">${ic('urg')}Emergenza</button></div></div>
     </div>
     ${c.blocco ? `<div class="blocco" role="alert">${ic('urg')}<span><b>${esc(c.blocco.t)}</b>${esc(c.blocco.s)}</span></div>` : ''}
-    ${em ? `<div class="avviso rosso" style="margin:-2px 0 12px">${ic('urg')}<span>Le emergenze seguono un regolamento definito: ogni abuso comporta sanzioni.</span></div>` : ''}
+    ${em ? `<div class="avviso rosso" style="margin:-2px 0 12px">${ic('urg')}<span>Emergenza: paziente entrato oggi per domani, oppure con dolore da vedere subito. Se dagli accertamenti non fosse così, sarai sanzionato/a.</span></div>`
+      : `<div class="avviso giallo" style="margin:-2px 0 12px;background:var(--accent-soft);color:var(--fg)">${ic('cal')}<span><b>Richiesta standard:</b> il medico risponde entro 72 ore.</span></div>`}
     <div class="field"><label for="mi-m">Medico a cui inviarla</label>${!med ? '<div class="muted">Carico i medici della sede…</div>'
       : med.length ? `<select id="mi-m" data-mf="medico"><option value="">Scegli il medico</option>${med.map(m => `<option value="${esc(m.id)}" ${f.medico === m.id ? 'selected' : ''}>${esc(m.nome)}</option>`).join('')}</select>`
       : '<div class="err">Nessun medico abilitato in questa sede. Chiedi all\'amministratore di assegnarlo in Gestione accessi (o nei Turni).</div>'}</div>
@@ -507,18 +508,20 @@ function formMis() {
 function regolamentoMis() {
   const f = S.mis;
   $('#dlg').innerHTML = `<div class="dh" style="--ac:var(--danger)"><span class="art">${ic('urg')}</span><div><h3>Richiesta di emergenza</h3><div class="muted" style="font-size:13px">${esc(f.cognome)} ${esc(f.nome)} · ${esc(f.lavoro)}</div></div></div>
-    <div class="db"><div class="regola" role="alert"><b>Attenzione</b>Le richieste di emergenza seguono un regolamento definito. Ogni abuso comporterà sanzioni.</div>
-    <p>Usa l'emergenza solo quando il caso non può attendere i tempi standard (${S.misI.giorniMin || 5} giorni). Il medico riceverà una notifica in rosso.</p>
-    <label class="flag" style="margin:0"><input type="checkbox" data-regok ${S.misRegOk ? 'checked' : ''}><span class="t">Ho letto il regolamento e confermo che è un'emergenza</span></label></div>
-    <div class="df"><button class="btn" data-a="dlg-chiudi">Torna indietro</button><button class="btn emg" data-a="mis-conferma" ${S.misRegOk && !S.busy ? '' : 'disabled'}>${ic('urg')}${S.busy ? 'Invio…' : 'Confermo e invio'}</button></div>`;
+    <div class="db"><div class="regola" role="alert"><b>Regolamento delle emergenze</b>È un'emergenza solo se il paziente:
+      <ul style="margin:8px 0 8px 18px;padding:0"><li>è entrato <strong>oggi per domani</strong>, oppure</li><li>ha <strong>dolore</strong> e deve essere visto <strong>subito</strong>.</li></ul>
+      Se dagli accertamenti non fosse così, sarai sanzionato/a.</div>
+    <p>Il medico riceverà una notifica in rosso. Le richieste standard hanno risposta entro 72 ore.</p>
+    <label class="flag" style="margin:0"><input type="checkbox" data-regok ${S.misRegOk ? 'checked' : ''}><span class="t">Ho letto il regolamento: è un'emergenza</span></label></div>
+    <div class="df"><button class="btn" data-a="dlg-chiudi">No, resta standard</button><button class="btn emg" data-a="mis-conferma" ${S.misRegOk ? '' : 'disabled'}>${ic('urg')}Confermo l'emergenza</button></div>`;
 }
 async function inviaMis(regolamento) {
-  const f = S.mis; S.busy = true; S.err = ''; if ($('#dlg').open) regolamentoMis(); else render();
+  const f = S.mis; S.busy = true; S.err = ''; render();
   try {
     const r = await api('POST', 'api/misure', { sede: f.sede, cognome: f.cognome.trim(), nome: f.nome.trim(), lavoro: f.lavoro.trim(), dataIntervento: f.data, tipo: f.tipo, medico: f.medico, note: f.note, dtx: !!f.dtx, regolamento });
-    S.busy = false; $('#dlg').open && $('#dlg').close(); S.mis = null;
+    S.busy = false; S.mis = null;
     toast(`Richiesta inviata a ${r.medico}${f.tipo === 'emergenza' ? ' in EMERGENZA' : ''}: riceverà una notifica.`, 4500); return load();
-  } catch (x) { S.busy = false; S.err = x.message; if ($('#dlg').open) $('#dlg').close(); render(); }
+  } catch (x) { S.busy = false; S.err = x.message; render(); }
 }
 
 /* ============ sterilizzazione: le sterilizzatrici ============ */
@@ -982,7 +985,11 @@ document.addEventListener('click', async e => {
   if (b.dataset.nuovoTest) { S.form = { tipo: 'test', test: b.dataset.nuovoTest, esito: '' }; S.err = ''; return render(); }
   if (b.dataset.esito && S.form) { S.form.esito = b.dataset.esito; return render(); }
   if (b.dataset.temp && S.form) { S.form.temperatura = +b.dataset.temp; return render(); }
-  if (b.dataset.misTipo && S.mis) { S.mis.tipo = b.dataset.misTipo; S.err = ''; return render(); }
+  if (b.dataset.misTipo && S.mis) {
+    S.err = '';
+    if (b.dataset.misTipo === 'emergenza' && S.mis.tipo !== 'emergenza') { S.misRegOk = false; regolamentoMis(); return $('#dlg').showModal(); }
+    S.mis.tipo = b.dataset.misTipo; S.mis.regolamento = false; return render();
+  }
   if (b.dataset.misAnnulla) {
     if (!confirm('Annullare questa richiesta? Il medico riceverà un avviso.')) return;
     try { await api('POST', 'api/misure/' + b.dataset.misAnnulla + '/annulla', {}); toast('Richiesta annullata.'); return load(); } catch (x) { return toast(x.message, 5000); }
@@ -1018,8 +1025,8 @@ document.addEventListener('click', async e => {
   if (a === 'esp-scarica') return scaricaEsp();
   if (a === 'mis-nuova') { const sede = S.st.misure.sedi[0]?.id || ''; S.mis = { sede, cognome: '', nome: '', lavoro: '', data: '', tipo: 'standard', medico: '', note: '', dtx: false }; S.err = ''; render(); mediciMis(sede).then(() => { if (S.misMed[sede]?.length === 1) S.mis.medico = S.misMed[sede][0].id; render(); }).catch(x => toast(x.message)); return setTimeout(() => $('#mi-c')?.focus(), 50); }
   if (a === 'mis-chiudi') { S.mis = null; S.err = ''; return render(); }
-  if (a === 'mis-invia') { if (!S.mis || !misControllo(S.mis).ok) return; if (S.mis.tipo === 'emergenza') { S.misRegOk = false; regolamentoMis(); return $('#dlg').showModal(); } return inviaMis(false); }
-  if (a === 'mis-conferma') return S.misRegOk && inviaMis(true);
+  if (a === 'mis-invia') { if (!S.mis || !misControllo(S.mis).ok) return; if (S.mis.tipo === 'emergenza' && !S.mis.regolamento) { S.misRegOk = false; regolamentoMis(); return $('#dlg').showModal(); } return inviaMis(S.mis.tipo === 'emergenza'); }
+  if (a === 'mis-conferma') { if (!S.misRegOk || !S.mis) return; S.mis.tipo = 'emergenza'; S.mis.regolamento = true; $('#dlg').close(); return render(); }
   if (a === 'lab-nuova') { const prec = perDente(S.pz.impianti, S.dente)[0] || S.pz.impianti[0];
     S.lab = { dataIntervento: prec?.dataIntervento || S.st.oggi, medico: prec?.medico || '' }; S.err = ''; return disegnaDente(); }
   if (a === 'lab-annulla') { S.lab = null; S.err = ''; return disegnaDente(); }
