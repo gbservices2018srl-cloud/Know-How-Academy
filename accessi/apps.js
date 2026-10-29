@@ -37,8 +37,8 @@ module.exports = [
     desc: 'Il flusso di lavoro dello studio con protocolli, procedure e assistente.' },
   // Comunicazioni: riquadro unico con Comunicazioni aziendali, Calendario eventi e (per i medici) Comunicazioni cliniche con ASO.
   // È "virtuale": compare a chi ha almeno una delle tre.
-  { key: 'area_comunicazioni', name: 'Comunicazioni', url: 'https://appgestione.it/c/area_comunicazioni', color: 'purple', virtuale: true,
-    gruppo: ['comunicazioni', 'calendario', 'clinica'],
+  { key: 'area_comunicazioni', name: 'Comunicazioni ed eventi', url: 'https://appgestione.it/c/area_comunicazioni', color: 'purple', virtuale: true,
+    gruppo: ['comunicazioni', 'clinica', 'calendario'],
     desc: 'Comunicazioni aziendali, calendario eventi e, per i medici, le comunicazioni cliniche con le ASO.' },
   { key: 'calendario', name: 'Calendario eventi', url: 'https://calendario.appgestione.it', color: 'purple',
     dentro: 'area_comunicazioni', // si apre dal riquadro Comunicazioni (e dal pulsante "Eventi" di Comunicazioni aziendali)

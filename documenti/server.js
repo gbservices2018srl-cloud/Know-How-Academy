@@ -335,7 +335,8 @@ app.get(['/vendor/pdf.min.mjs', '/vendor/pdf.worker.min.mjs'], (req, res) => {
 });
 // Visore dei Word con impaginazione originale (docx-preview + jszip, dai pacchetti installati)
 // (si cerca il file in più posti: alcuni pacchetti non lasciano risolvere package.json)
-const VENDOR = { 'docx-preview.min.js': ['docx-preview', ['dist/docx-preview.min.js', 'dist/docx-preview.js']], 'jszip.min.js': ['jszip', ['dist/jszip.min.js', 'dist/jszip.js']] };
+const VENDOR = { 'docx-preview.min.js': ['docx-preview', ['dist/docx-preview.min.js', 'dist/docx-preview.js']], 'jszip.min.js': ['jszip', ['dist/jszip.min.js', 'dist/jszip.js']],
+  'pdf-lib.min.js': ['pdf-lib', ['dist/pdf-lib.min.js', 'dist/pdf-lib.js']] }; // pdf-lib: il PDF compilato si crea nel browser (non arriva al server)
 function trovaVendor(pkg, files) {
   const dirs = [path.join(__dirname, '..', 'node_modules', pkg), path.join(process.cwd(), 'node_modules', pkg)];
   try { dirs.push(path.dirname(require.resolve(pkg + '/package.json'))); } catch {}
@@ -344,7 +345,7 @@ function trovaVendor(pkg, files) {
   console.warn(`Documenti: file del visore non trovato (${pkg}); cercato in ${dirs.join(', ')}`);
   return null;
 }
-app.get(['/vendor/docx-preview.min.js', '/vendor/jszip.min.js'], (req, res) => {
+app.get(['/vendor/docx-preview.min.js', '/vendor/jszip.min.js', '/vendor/pdf-lib.min.js'], (req, res) => {
   const [pkg, files] = VENDOR[path.basename(req.path)];
   const f = trovaVendor(pkg, files);
   if (!f) return res.status(404).end();
