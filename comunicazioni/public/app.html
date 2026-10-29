@@ -221,7 +221,7 @@ footer{max-width:1000px;margin:0 auto;padding:0 16px 30px;font-size:12.5px;color
   <div class="brand">
     <img class="logo" src="/logo.png" alt="To Smile" width="543" height="162">
     <span class="sep"></span>
-    <h1><button class="homebtn" data-go="home">Comunicazioni aziendali</button></h1>
+    <h1><button class="homebtn" data-go="ricevute">Comunicazioni aziendali</button></h1>
   </div>
   <nav class="tabs" id="tabs" aria-label="Sezioni"></nav>
   <div class="spacer"></div>
@@ -308,11 +308,13 @@ const S = {
 function renderTop() {
   const nuove = (S.ricevute || []).filter(m => !m.letto_il || m.risposte_nuove).length;
   const domande = (S.inviate || []).reduce((n, m) => n + (m.domande_nuove || 0), 0);
-  const tabs = [['home', 'back', 'Inizio', 0], ['ricevute', 'inbox', S.me.admin ? 'Ricevute' : 'Le mie comunicazioni', nuove]];
+  const tabs = [['ricevute', 'inbox', S.me.admin ? 'Ricevute' : 'Le mie comunicazioni', nuove]];
   if (S.me.admin) tabs.push(['inviate', 'send', 'Inviate', domande], ['nuova', 'plus', 'Nuova comunicazione', 0]);
   const attiva = { leggi: 'ricevute', gestisci: 'inviate' }[S.view] || S.view;
-  $('#tabs').hidden = S.view === 'home';
-  $('#tabs').innerHTML = tabs.map(([k, i, l, n]) => `<button class="tab ${attiva === k ? 'on' : ''}" data-tab="${k}" ${attiva === k ? 'aria-current="page"' : ''}>${ic(i)}${l}${n ? ` <span class="badge" aria-label="${n} da vedere">${n}</span>` : ''}</button>`).join('');
+  $('#tabs').hidden = false;
+  // "Inizio" riporta al riquadro Comunicazioni ed eventi (Comunicazioni aziendali, Comunicazioni cliniche con ASO, Calendario eventi)
+  const area = (S.links?.home || 'https://appgestione.it').replace(/\/$/, '') + '/c/area_comunicazioni';
+  $('#tabs').innerHTML = `<a class="tab" style="text-decoration:none;color:inherit" href="${esc(area)}">${ic('back')}Comunicazioni ed eventi</a>` + tabs.map(([k, i, l, n]) => `<button class="tab ${attiva === k ? 'on' : ''}" data-tab="${k}" ${attiva === k ? 'aria-current="page"' : ''}>${ic(i)}${l}${n ? ` <span class="badge" aria-label="${n} da vedere">${n}</span>` : ''}</button>`).join('');
   $('#who').innerHTML = `<span class="av ${S.me.admin ? 'admin' : ''}">${esc(iniziali(S.me.name))}</span><b>${esc(S.me.name)}</b>`;
   $('#menu').innerHTML = `<a role="menuitem" href="${esc(S.links?.home || 'https://appgestione.it')}">${ic('apps')}Le mie app</a>
     <a role="menuitem" href="${esc(S.links?.home || 'https://appgestione.it')}/#notif">${ic('bell')}Notifiche sul telefono</a>
@@ -761,8 +763,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && S.
   S.chatJump = location.hash === '#chat';
   if (m && p && S.me.admin) return go('gestisci', m, p);
   if (m) return go('leggi', m);
-  if (u.get('v') === 'comunicazioni') return go('ricevute');
-  go('home');
+  go('ricevute'); // si entra direttamente nelle comunicazioni
 })();
 </script>
 </body>
