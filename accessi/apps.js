@@ -15,10 +15,10 @@ module.exports = [
     desc: 'Andamento economico e dati finanziari del gruppo.' },
   { key: 'bilancio', name: 'Controllo di gestione · Bilancio', url: 'https://finanza.appgestione.it/bilancio', color: 'purple', dentro: 'controllo',
     desc: 'Dal bilancio a 4 sezioni: budget, consuntivo, scostamenti, costi fissi e variabili, break even, EBITDA e utile.' },
-  // HR: riquadro unico per gli strumenti delle risorse umane (per ora il Lettore I-Profile)
+  // HR: riquadro unico per le risorse umane: Turni (planning, ferie, buste paga) e Lettore I-Profile
   { key: 'hr', name: 'HR', url: 'https://appgestione.it/c/hr', color: 'purple', virtuale: true,
-    gruppo: ['iprofile'],
-    desc: 'Strumenti per le risorse umane: lettura dei profili I-Profile.' },
+    gruppo: ['turni', 'iprofile'],
+    desc: 'Risorse umane: turni, ferie e buste paga; lettura dei profili I-Profile.' },
   { key: 'iprofile', name: 'Lettore I-Profile', url: 'https://appgestione.it/hr/iprofile', color: 'purple', dentro: 'hr',
     desc: 'Carica il grafico I-Profile (foto o PDF) o scrivi i valori: il report mostra sindromi e scala dell\'ISP. Non si salva nulla.' },
   { key: 'laboratorio', name: 'Nuovalab', url: 'https://laboratorio.appgestione.it', color: 'purple',
@@ -96,7 +96,7 @@ module.exports = [
     desc: 'Le richieste cliniche delle ASO: misure implantari da prendere in carico e pianificare su DTX.' },
   { key: 'magazzino', name: 'Magazzino centrale', url: 'https://magazzino.appgestione.it', color: 'yellow', dentro: 'aso', autoFigura: 'ASO',
     desc: 'Disponibilità degli articoli, prenotazioni e riordino ai fornitori.' },
-  { key: 'turni', name: 'Turni', url: 'https://turni.appgestione.it', color: 'teal',
+  { key: 'turni', name: 'Turni', url: 'https://turni.appgestione.it', color: 'teal', dentro: 'hr',
     // La figura è quella della persona (Gestione accessi): con Dipendente o "Amministratore, anche in turno"
     // compare da sola nel Personale dei Turni
     livelli: [

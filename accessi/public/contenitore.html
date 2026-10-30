@@ -51,6 +51,7 @@ header p{margin:0;color:var(--muted);font-size:17px;max-width:62ch}
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ICONS = {
+  turni: '<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/><rect x="7" y="13" width="4" height="3.5" rx="1"/><rect x="13" y="13" width="4" height="3.5" rx="1"/>',
   hr: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14c2.3.6 3.5 2.8 3.5 6"/>',
   iprofile: '<path d="M4 20V4M4 20h16"/><rect x="7" y="11" width="2.6" height="6" rx=".6"/><rect x="11.5" y="7" width="2.6" height="10" rx=".6"/><rect x="16" y="13" width="2.6" height="4" rx=".6"/>',
   comunicazioni: '<path d="M3 11l18-8v18l-18-8z"/><path d="M7 12v6a2 2 0 0 0 4 0v-4"/>',
