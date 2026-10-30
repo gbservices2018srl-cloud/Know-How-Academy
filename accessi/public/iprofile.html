@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Lettore I-Profile · HR · To Smile</title>
+<link rel="stylesheet" href="/fonts/tosmile.css?f=fira-sans:600,700,800|figtree:400,500,600,700">
+<link rel="stylesheet" href="/static/accessi.css?v=3">
+<link rel="icon" href="/static/icon.svg">
+<meta name="theme-color" content="#8C6898">
+<style>
+/* Lettore I-Profile: dati del grafico a sinistra, report a destra; una colonna sul telefono. Niente viene salvato. */
+:root{--ink:var(--fg);--accent:var(--purple-ink);--crit:#B3261E;--crit-soft:#FBEAEA;--warn:#8A5A00;--warn-soft:#FBF3DA;--info:#3C5A8A;--info-soft:#E7ECF6;--okc:#2A7C7D;--ok-soft:#E5F3F3;--bar:#2B3033;--neg:#8A9499;--num:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace}
+@media (prefers-color-scheme: dark){:root{--crit:#F2B8B5;--crit-soft:#3A2222;--warn:#F0C070;--warn-soft:#352C17;--info:#A9C1EA;--info-soft:#1F2838;--okc:#6CC7C7;--ok-soft:#1F3436;--bar:#D5DADC;--neg:#7D8A92}}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.top .logo img{width:min(200px,50vw)}
+header p{margin:8px 0 0;color:var(--muted);max-width:72ch}
+.privacy{display:flex;gap:10px;align-items:flex-start;background:var(--surface-2);border:1px solid var(--line);border-radius:14px;padding:10px 14px;font-size:14px;color:var(--muted)}
+.privacy svg{width:20px;height:20px;flex:none;stroke:var(--purple-ink);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;margin-top:2px}
+.grid{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0;border-top:5px solid var(--purple)}
+.panel h2{font:700 13px/1.2 var(--f-display);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.upload{border:1.5px dashed var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+.upload.drag{border-color:var(--purple);background:color-mix(in srgb,var(--purple) 10%,transparent)}
+.upload p{margin:0;color:var(--muted);font-size:14px}
+.thumb{max-width:100%;border-radius:8px;border:1px solid var(--line)}
+.row-btns{display:flex;gap:8px;flex-wrap:wrap}
+.status{font-size:14px;color:var(--muted)}
+.status.err{color:var(--crit);font-weight:600}
+fieldset{border:0;padding:0;margin:0;display:grid;grid-template-columns:1fr 1fr;gap:8px 14px}
+@media (max-width:420px){fieldset{grid-template-columns:1fr}}
+legend{font:700 13px/1.2 var(--f-display);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:10px;padding:0}
+.f{display:flex;justify-content:space-between;align-items:center;gap:8px;min-width:0}
+.f label{font-size:14.5px;min-width:0}
+.f input[type=number]{width:76px;min-height:38px;font-family:var(--num);font-size:15px;padding:5px 8px;text-align:right;background:var(--surface-2)}
+.chk{grid-column:1/-1;display:flex;gap:8px;align-items:center;font-size:14.5px}
+.chk input{width:20px;min-height:20px;accent-color:var(--purple-ink)}
+.chart{overflow-x:auto}
+.chart svg{display:block;width:100%;min-width:520px;height:auto}
+.summary{display:flex;flex-wrap:wrap;gap:8px}
+.pill{font-size:13px;padding:4px 11px;border-radius:99px;font-weight:700}
+.pill.crit{background:var(--crit-soft);color:var(--crit)}.pill.warn{background:var(--warn-soft);color:var(--warn)}.pill.info{background:var(--info-soft);color:var(--info)}.pill.ok{background:var(--ok-soft);color:var(--okc)}
+.isp{border-left:5px solid var(--purple);background:color-mix(in srgb,var(--purple) 10%,var(--surface));padding:10px 14px;border-radius:0 12px 12px 0}
+.isp b{display:block;font-family:var(--f-display)}.isp span{font-size:14px;color:var(--muted)}
+.list{display:flex;flex-direction:column;gap:10px}
+.item{border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;border-left-width:5px}
+.item.crit{border-left-color:var(--crit)}.item.warn{border-left-color:var(--warn)}.item.info{border-left-color:var(--info)}.item.ok{border-left-color:var(--okc)}
+.item h3{margin:0;font:700 16.5px/1.3 var(--f-display);display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.item h3 small{font-weight:600;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+.item p{margin:0;max-width:72ch}
+.cond{font-family:var(--num);font-size:12.5px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 12px}
+.mgmt{font-size:14.5px}.mgmt b{color:var(--purple-ink)}
+.empty{color:var(--muted)}
+.pages{display:flex;gap:8px;overflow-x:auto;max-width:100%;padding-bottom:4px}
+.pg{flex:0 0 auto;border:2px solid var(--line);border-radius:8px;padding:2px;background:var(--surface-2);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;font:inherit;color:var(--muted);font-size:12px}
+.pg img{width:64px;height:auto;display:block;border-radius:4px}
+.pg[aria-pressed="true"]{border-color:var(--purple);color:var(--purple-ink);font-weight:700}
+.note{font-size:13px;color:var(--muted);max-width:80ch}
+.sec-title{margin-top:6px}
+.rhead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+@media print{
+  body{padding:0;background:#fff}
+  .top .btn,.privacy,#pannello-dati,.rhead .row-btns,.ts-home{display:none!important}
+  .grid{display:block}.panel{border:0;padding:0}
+  .item{break-inside:avoid}
+}
+</style>
+<script src="/static/resta-qui.js?v=2" defer></script>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <a class="logo" href="/" aria-label="To Smile, le tue app"><img src="/static/logo-tosmile.png" alt="To Smile · Persone, salute, sorrisi" width="548" height="165"></a>
+    <a class="btn small" href="/c/hr">← HR</a>
+  </div>
+  <header>
+    <h1>Lettore <span>I-Profile</span></h1>
+    <div class="rule" aria-hidden="true"></div>
+    <p>Carica la foto o il PDF del grafico oppure inserisci i valori a mano: il report elenca le sindromi presenti secondo le soglie del manuale (comportamenti speciali rilevanti e secondari, scala dell'ISP).</p>
+  </header>
+  <div class="privacy"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+    <span><b>Non si salva niente.</b> Foto, PDF e valori restano solo su questa pagina: quando la chiudi o la ricarichi spariscono. Per tenere il report usa «Stampa / PDF» o «Copia report».</span></div>
+
+  <div class="grid">
+    <section class="panel" id="pannello-dati" aria-labelledby="h-in">
+      <h2 id="h-in">Dati del grafico</h2>
+      <div class="upload" id="drop">
+        <p>Trascina qui l'immagine o il PDF del grafico, oppure sceglilo dal dispositivo (anche una foto dal telefono). I valori letti vanno sempre ricontrollati.</p>
+        <div class="row-btns">
+          <label class="btn small" for="file">Scegli immagine o PDF</label>
+          <input id="file" type="file" accept="image/*,application/pdf,.pdf" hidden>
+          <button class="btn small primary" id="read" disabled>Leggi i valori</button>
+        </div>
+        <div id="pages" class="pages" hidden></div>
+        <img id="thumb" class="thumb" alt="Anteprima del grafico caricato" hidden>
+        <div class="status" id="status" aria-live="polite"></div>
+      </div>
+      <form id="form" autocomplete="off">
+        <fieldset id="fs-traits"><legend>Tratti (barre del grafico)</legend></fieldset>
+        <fieldset id="fs-side" style="margin-top:16px"><legend>Indici laterali e dati del candidato</legend></fieldset>
+      </form>
+      <div class="row-btns">
+        <button class="btn small" id="reset" type="button">Svuota</button>
+        <button class="btn small" id="sample-data" type="button">Carica esempio</button>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="h-out">
+      <div class="rhead">
+        <h2 id="h-out">Report</h2>
+        <div class="row-btns"><button class="btn small" id="print" type="button">Stampa / PDF</button><button class="btn small" id="copy" type="button">Copia report</button></div>
+      </div>
+      <div id="example-tag" class="note"></div>
+      <div class="chart" id="chart"></div>
+      <div class="summary" id="summary"></div>
+      <div class="isp" id="isp"></div>
+      <h2 class="sec-title">Comportamenti speciali rilevanti</h2>
+      <div class="list" id="primary"></div>
+      <h2 class="sec-title">Comportamenti speciali secondari</h2>
+      <div class="list" id="secondary"></div>
+      <p class="note">Come ricorda il manuale stesso, il risultato di un test non basta da solo a etichettare una persona: usa il report come chiave di lettura e verifica con l'osservazione e il colloquio.</p>
+    </section>
+  </div>
+</div>
+<script>
+const TRAITS=[
+ ["org","Organizzazione"],["auto","Automotivazione"],["gp","Gestione Pressioni"],["ad","Autodisciplina"],["det","Determinazione"],
+ ["vend","Attitudine alla vendita"],["hr","HR Management"],["pro","Proattività"],["com","Comprensione"],["esp","Espansività"]];
+const SIDE=[
+ ["rc","Resistenza al cambiamento"],["fin","Finanze"],["suc","Successo"],["pri","Principi"],["lin","Leadership Indice Naturale"],
+ ["va","Vendita assistita"],["wi","Worker index"],["eta","Età del candidato"]];
+const EXAMPLE={org:55,auto:75,gp:10,ad:40,det:65,vend:65,hr:-100,pro:21,com:-45,esp:73,rc:60,fin:-90,suc:33,pri:72,lin:48,va:60,wi:29,eta:"",imp:false};
+
+const fsT=document.getElementById("fs-traits"), fsS=document.getElementById("fs-side");
+function field(parent,[k,l]){
+  const d=document.createElement("div");d.className="f";
+  d.innerHTML=`<label for="v-${k}">${l}</label><input type="number" id="v-${k}" min="${k==="eta"?0:-100}" max="${k==="eta"?99:100}" step="1">`;
+  parent.appendChild(d);
+}
+TRAITS.forEach(t=>field(fsT,t)); SIDE.forEach(t=>field(fsS,t));
+const chk=document.createElement("label");chk.className="chk";chk.innerHTML=`<input type="checkbox" id="v-imp"> La persona è un imprenditore`;fsS.appendChild(chk);
+
+let isExample=false;
+function setVals(v){
+  [...TRAITS,...SIDE].forEach(([k])=>{document.getElementById("v-"+k).value=(v[k]===undefined||v[k]===null)?"":v[k]});
+  document.getElementById("v-imp").checked=!!v.imp;
+}
+function getVals(){
+  const v={};[...TRAITS,...SIDE].forEach(([k])=>{const s=document.getElementById("v-"+k).value;v[k]=s===""?null:Number(s)});
+  v.imp=document.getElementById("v-imp").checked;return v;
+}
+
+/* ---------- regole del manuale ---------- */
+const has=(v,...k)=>k.every(x=>v[x]!==null&&!isNaN(v[x]));
+function c(lbl,ok){return {lbl,ok}}
+function evaluate(v){
+  const P=[],S=[];
+  const add=(arr,o)=>arr.push(o);
+  const tr=TRAITS.map(([k])=>k);
+  const allTraits=has(v,...tr);
+
+  // 1 Demotivante cronica
+  if(has(v,"hr","pro","com","esp")&&v.hr<0&&v.pro<0&&v.com<0&&v.esp<0)
+    add(P,{n:1,t:"Persona demotivante cronica",sev:"crit",cond:[`HR ${v.hr} < 0`,`Proattività ${v.pro} < 0`,`Comprensione ${v.com} < 0`,`Espansività ${v.esp} < 0`],
+      d:"Atteggiamento demotivante consolidato nel tempo: poco causativa, critica, poco tollerante e chiusa verso persone nuove. Può sembrare brillante finché le cose vanno bene; quando vanno male mette sotto accusa chi la segue.",
+      m:"Non seguirla come cliente né avviarla a formazione. Se chiede di migliorare, falle applicare i capitoli 4, 5 e 11 de I Nuovi Condottieri e procedi solo dopo un cambiamento deciso e dimostrato con azioni."});
+  // 2 SP
+  if(has(v,"auto","gp","com","rc")&&v.auto>=60&&v.gp<21&&v.com<=0&&v.rc>45)
+    add(P,{n:2,t:"SP – Persona soppressiva",sev:"crit",cond:[`Automotivazione ${v.auto} ≥ 60`,`Gestione Pressioni ${v.gp} < 21`,`Comprensione ${v.com} ≤ 0`,`Resistenza ${v.rc} > 45`],
+      d:"Sindrome Trouble più resistenza al cambiamento alta: usa la propria energia per bloccare. Rifiuta cambiamenti e attività migliorative, esclude chi è diverso da sé e si costruisce una realtà autoreferenziale. Può avere comportamenti poco etici.",
+      m:"In selezione sempre non idonea. Se interna, massima attenzione: tende a far fallire i progetti che prende in mano."});
+  // 3 Trouble
+  if(has(v,"auto","gp","com")&&v.auto>=60&&(v.gp<21||(v.rc!==null&&v.rc<-19))&&v.com<=0)
+    add(P,{n:3,t:"Trouble",sev:"crit",cond:[`Automotivazione ${v.auto} ≥ 60`,v.gp<21?`Gestione Pressioni ${v.gp} < 21`:`Resistenza ${v.rc} < -19`,`Comprensione ${v.com} ≤ 0`],
+      d:"Persona ISP con grande automotivazione e comprensione bassa: punta in alto e passa sopra regole, accordi e persone pur di ottenere ciò che vuole. Alti e bassi di umore e risultati; può creare cose notevoli ma anche rompere ciò che ha intorno.",
+      m:"In selezione idonea solo se in azienda c'è chi le fa fare un grande ciclo di azioni non efficienti. Se interna, ciclo di azioni non efficienti ogni tre mesi, altrimenti spostarla in ruoli di frontiera."});
+  // 4 Persona demotivante
+  if(has(v,"pro","com","esp")&&v.pro<=0&&v.com<=0&&v.esp<=0){
+    const amp=v.rc!==null&&v.rc>=45;
+    add(P,{n:4,t:"Persona demotivante",sev:"crit",cond:[`Proattività ${v.pro} ≤ 0`,`Comprensione ${v.com} ≤ 0`,`Espansività ${v.esp} ≤ 0`].concat(amp?[`amplificata da Resistenza ${v.rc} ≥ 45`]:[]),
+      d:"Agisce in modo demotivante verso chi la circonda, amplificandone le difficoltà. Anche se produttiva, crea tensione ed esercita “non poter avere” su sé stessa e sugli altri.",
+      m:"In selezione non idonea. Se interna: corso Leadership, corso Gestione Pressioni, allenamento su comunicazione; in alternativa capitoli di INC su causatività, apprezzamenti e lavoro sui lati positivi."});
+  }
+  // 5 Atteggiamento demotivante
+  if(has(v,"gp","pro","com")&&v.gp<=0&&v.pro<10&&v.com<=0)
+    add(P,{n:5,t:"Atteggiamento (valenza) demotivante",sev:"warn",cond:[`Gestione Pressioni ${v.gp} ≤ 0`,`Proattività ${v.pro} < 10`,`Comprensione ${v.com} ≤ 0`],
+      d:"Subisce una persona del suo ambiente e nei momenti di difficoltà mostra un carattere spigoloso e reattivo. In circa metà dei casi emergono anche situazioni etiche non ottimali (promesse non mantenute).",
+      m:"One to one con molto lavoro sulle sue azioni non efficienti, sulla sua etica e sulla capacità di mantenere rapporti. Prudenza nel darle fiducia."});
+  // 6 Etica
+  const eth=[];
+  if(has(v,"org","ad","pro","fin")&&v.org<31&&v.ad<0&&v.pro<15&&v.fin<0) eth.push(`a) Org ${v.org}<31, Autodisc. ${v.ad}<0, Proatt. ${v.pro}<15, Finanze ${v.fin}<0`);
+  if(has(v,"rc","fin","gp","ad","pri")&&v.rc<-14&&v.fin<31&&v.gp<0&&v.ad<40&&v.pri<70) eth.push(`b) Resist. ${v.rc}<-14, Fin ${v.fin}<31, GP ${v.gp}<0, AD ${v.ad}<40, Principi ${v.pri}<70`);
+  if(has(v,"rc","fin","gp","ad","pri")&&v.rc<-14&&v.fin<31&&v.gp>60&&v.ad<40&&v.pri<70) eth.push(`c) Resist. ${v.rc}<-14, Fin ${v.fin}<31, GP ${v.gp}>60, AD ${v.ad}<40, Principi ${v.pri}<70`);
+  if(has(v,"org","auto","ad")&&v.org<26&&v.auto<30&&v.ad<40&&((v.esp!==null&&v.esp>49)||(v.com!==null&&v.com>14))) eth.push(`d) “Avere più alto dell'Essere”: Org ${v.org}<26, Auto ${v.auto}<30, AD ${v.ad}<40, ${v.esp>49?`Esp ${v.esp}>49`:`Comp ${v.com}>14`}`);
+  if(has(v,"pro","com","esp","suc","pri","fin")&&v.pro>0&&v.com>0&&v.esp>0&&v.suc<69&&v.pri<40&&v.fin<30) eth.push(`e) Proatt./Comp./Esp. > 0, Successo ${v.suc}<69, Principi ${v.pri}<40, Finanze ${v.fin}<30`);
+  if(has(v,"pro","com")&&v.pro<-50&&v.com<-50) eth.push(`f) Proattività ${v.pro} e Comprensione ${v.com} < -50`);
+  if(eth.length) add(P,{n:6,t:"Potenziali problemi di etica",sev:"crit",cond:eth,
+      d:"Combinazioni che statisticamente segnalano atteggiamenti professionali non irreprensibili (attendibilità indicata intorno all'85%). Riguarda l'etica professionale, non quella personale in generale."+(eth.some(x=>x.startsWith("d)"))?" Variante d): la persona delude se le si affida un ruolo manageriale.":""),
+      m:"Usa molta cautela e fai analizzare con attenzione il lavoro della persona prima di trarre conclusioni."});
+  // 7 Creativo dispersivo
+  if(has(v,"org","rc")&&v.org<30&&v.rc<=14)
+    add(P,{n:7,t:"Creativo dispersivo",sev:"warn",cond:[`Organizzazione ${v.org} < 30`,`Resistenza ${v.rc} ≤ 14`],
+      d:"Creativo ma dispersivo: inizia un progetto e lo abbandona per l'idea successiva, concludendo poco.",
+      m:"Serve qualcuno vicino che lo tenga concentrato sui progetti in corso. Rimedio in MBS."});
+  // 8 RC < -29
+  if(has(v,"rc")&&v.rc<-29)
+    add(P,{n:8,t:"Resistenza al cambiamento inferiore a -29",sev:"warn",cond:[`Resistenza ${v.rc} < -29`],
+      d:"Vulcano di idee, coraggiosa e testarda, ma cambia strada spesso o insiste su progetti irrealistici. Imprevedibile, si affida all'istinto o a “salvatori della patria”.",
+      m:"Non lasciarla decidere da sola; affiancarle qualcuno che la tenga dritta. Non adatta a ruoli procedurali o di precisione (es. amministrazione)."});
+  // 9 Ghost
+  if(has(v,"org","auto","gp","ad","det","vend","pro")&&["org","auto","gp","ad","det","vend","pro"].every(k=>v[k]>44))
+    add(P,{n:9,t:"Ghost – persona teorica",sev:"warn",cond:["Organizzazione, Automotivazione, Gestione Pressioni, Autodisciplina, Determinazione, Vendita e Proattività tutti > 44"],
+      d:"Immagine di sé iper positiva, più maschera che realtà. Tende a essere teorica e poco produttiva: nell'80% dei casi rende meno di quanto il grafico promette.",
+      m:"In selezione verifica a fondo i risultati passati. Se interno: gestione tramite statistiche, fargli affrontare le cose, rimedi delle azioni non efficienti."});
+  // 10 Disaccordo n.2
+  if(has(v,"gp","pro","com","det")&&v.gp>49&&v.pro>39&&v.com<16&&(v.det>44||(v.det>35&&v.auto!==null&&v.auto>60)))
+    add(P,{n:10,t:"Tendenza al disaccordo n. 2",sev:"warn",cond:[`Gestione Pressioni ${v.gp} > 49`,`Proattività ${v.pro} > 39`,`Comprensione ${v.com} < 16`,v.det>44?`Determinazione ${v.det} > 44`:`Determinazione ${v.det} > 35 e Automotivazione ${v.auto} > 60`],
+      d:"Spesso in disaccordo con chi non la pensa come lei; attacca e critica chi non la vede allo stesso modo. Difficile smuoverla dalle sue convinzioni.",
+      m:"Con il resto del grafico buono può essere molto produttiva, ma la sua gestione sarà onerosa."});
+  // 11 Insuccesso commerciale
+  if(has(v,"vend","rc","suc","fin")&&v.vend>29&&v.rc>44&&v.suc<69&&v.fin<30){
+    const ageKnown=v.eta!==null;
+    if(!ageKnown||v.eta>39)
+      add(P,{n:11,t:ageKnown?"Insuccesso commerciale":"Insuccesso commerciale (da confermare con l'età)",sev:ageKnown?"warn":"info",cond:[`Vendita ${v.vend} > 29`,`Resistenza ${v.rc} > 44`,`Successo ${v.suc} < 69`,`Finanze ${v.fin} < 30`,ageKnown?`Età ${v.eta} > 39`:"età non indicata: vale solo se > 39"],
+        d:"Candidati con queste caratteristiche ottengono scarsi risultati in ruoli commerciali: non hanno raggiunto il successo e, essendo resistenti al cambiamento, difficilmente modificano gli atteggiamenti.",
+        m:"Sconsigliata per ruoli di venditore, agente o responsabile vendite (dato valido per il mercato europeo)."});
+  }
+  // 12 Disaccordo 1
+  if(has(v,"auto","det","vend","pro","com")&&v.auto>29&&v.det>29&&v.vend>49&&v.pro<30&&v.com<20)
+    add(P,{n:12,t:"Disaccordo 1",sev:"warn",cond:[`Automotivazione ${v.auto} > 29`,`Determinazione ${v.det} > 29`,`Vendita ${v.vend} > 49`,`Proattività ${v.pro} < 30`,`Comprensione ${v.com} < 20`],
+      d:"Genera disaccordi senza accorgersene. In posizione di comando demotiva i collaboratori; in posizione subordinata si risente facilmente e richiede interventi continui del responsabile.",
+      m:"Va formata e aiutata prima di affidarle posizioni di responsabilità."});
+  // 13 Robotismo al contrario
+  if(has(v,"auto")&&v.auto>=60){
+    const c1=v.gp!==null&&v.gp<21, c2=v.rc!==null&&v.rc<=-20;
+    if(c1||c2) add(P,{n:13,t:"Robotismo al contrario"+(c1&&c2?" (caso 1 e 2)":c1?" (caso 1)":" (caso 2)"),sev:"warn",cond:[`Automotivazione ${v.auto} ≥ 60`].concat(c1?[`Gestione Pressioni ${v.gp} < 21`]:[]).concat(c2?[`Resistenza ${v.rc} ≤ -20`]:[]),
+      d:"Per partito preso tende a fare il contrario di quanto le viene chiesto, anche da chi non è demotivante (azienda compresa).",
+      m:"Assumibile per la maggior parte delle mansioni, non come Capo Area o Direttore Vendite. Si cura con gestione ISP e ciclo di azioni inefficienti; non abbassare la guardia."});
+  }
+  // 14 RC < -19
+  if(has(v,"rc")&&v.rc<-19)
+    add(P,{n:14,t:"Resistenza al cambiamento inferiore a -19",sev:"warn",cond:[`Resistenza ${v.rc} < -19`],
+      d:"Persona ISP incoerente: in alcune aree della vita applica certi principi, in altre fa l'opposto. Ha incertezze legate a una relazione che mina le sue sicurezze; da giù diventa maestra del “non poter avere”.",
+      m:"Domanda utile: “Con chi ti senti incerto?”. Non adatta ad amministrazione o responsabile di produzione; se venditrice, gestione ISP obbligatoria."});
+  // 15 Fuori rotta
+  if(has(v,"suc","pri","fin")&&v.suc<69&&v.pri<40&&v.fin<30)
+    add(P,{n:15,t:"Fuori rotta",sev:"warn",cond:[`Successo ${v.suc} < 69`,`Principi ${v.pri} < 40`,`Finanze ${v.fin} < 30`],
+      d:"Non applica i principi corretti per la prosperità: si aspetta che l'azienda si faccia carico della sua crescita, non riesce a monetizzare il proprio valore e non ha trovato stabilità professionale.",
+      m:"Formazione, studio e frequentazione di persone che le facciano capire i principi del successo professionale."});
+  // 16 Poca precisione
+  if(has(v,"auto","vend")&&v.auto>59&&v.vend>69)
+    add(P,{n:16,t:"Poca precisione",sev:"info",cond:[`Automotivazione ${v.auto} > 59`,`Vendita ${v.vend} > 69`],
+      d:"Natura dinamica e orientata al contatto umano: in ruoli impiegatizi, amministrativi o ripetitivi si annoia e diventa via via meno precisa.",
+      m:"Più efficace in mansioni di relazione e contatto con il pubblico."});
+  // 17 Tutto basso
+  if(allTraits&&tr.every(k=>v[k]<=10))
+    add(P,{n:17,t:"Grafico tutto basso",sev:"crit",cond:["Tutti i tratti ≤ +10"],
+      d:"Condizione ISP con qualcuno nell'ambiente che causa ansia e difficoltà, anche se Gestione Pressioni non lo mostrasse. È la chiave di lettura di tutto il resto del profilo.",
+      m:"Intervento one to one (due giornate in azienda) per gestire la relazione demotivante, poi le altre attività formative."});
+  // 18 Brutto carattere
+  if(has(v,"pro","com")&&v.pro<10&&v.com<=0)
+    add(P,{n:18,t:"Brutto carattere",sev:"warn",cond:[`Proattività ${v.pro} < 10`,`Comprensione ${v.com} ≤ 0`],
+      d:"Carattere spigoloso: permalosa, ci rimane male per ciò che fanno gli altri; critica e netta nel giudizio (bianco o nero). Difficile soprattutto nei momenti di sovraccarico.",
+      m:"Lavorare su causatività ed etica personale; corso di comunicazione."});
+  // 19 GP tratto più alto
+  if(allTraits&&tr.filter(k=>k!=="gp").every(k=>v.gp>v[k])){
+    const nv=v.det<30;
+    add(P,{n:19,t:"Gestione Pressioni è il tratto più alto",sev:"warn",cond:[`Gestione Pressioni ${v.gp} supera tutti gli altri tratti`].concat(nv?[`Determinazione ${v.det} < 30`]:[]),
+      d:"Non affronta le situazioni per non scontrarsi: incassa le critiche della persona demotivante e finge che vada tutto bene, fino al punto di saturazione e allo scontro.",
+      m:nv?"Come venditore non è idonea (Determinazione < 30): va d'accordo con tutti senza vendere.":"Può essere penalizzata in ruoli commerciali o che richiedono richieste dirette."});
+  }
+  // 20 Ego
+  if(has(v,"org","auto","det","vend","lin","pro","com","esp")&&v.org<0&&v.auto>50&&v.det>44&&v.vend>44&&v.lin>44&&v.pro<0&&v.com<0&&v.esp>60)
+    add(P,{n:20,t:"Ego",sev:"info",cond:[`Org ${v.org}<0`,`Auto ${v.auto}>50`,`Det ${v.det}>44`,`Vend ${v.vend}>44`,`Leadership ${v.lin}>44`,`Proatt ${v.pro}<0`,`Comp ${v.com}<0`,`Esp ${v.esp}>60`],
+      d:"Iper considerazione di sé, più concentrata sull'apparire che sull'essere: cura immagine, credenziali e status, meno la valorizzazione delle persone intorno.",
+      m:"Può limitarne l'efficacia e attirarle antipatie."});
+  // 21 RC >= 45
+  if(has(v,"rc")&&v.rc>=45)
+    add(P,{n:21,t:"Resistenza al cambiamento 45 o superiore",sev:"warn",cond:[`Resistenza ${v.rc} ≥ 45`],
+      d:"Molto abitudinaria, rigida su posizioni e procedure, teorica più che pratica. Davanti all'imperfezione del fare si giustifica con teorie; probabilmente vive da tempo una situazione non ottimale che non riesce a cambiare.",
+      m:"Gestirla con numeri, statistiche e indici di performance, evitando discussioni infinite. Migliorarla richiede un grande sforzo."});
+  // 22 Finanze basse imprenditore
+  if(v.imp&&has(v,"fin")&&v.fin<30)
+    add(P,{n:22,t:"Finanze basse (imprenditore)"+(v.fin<=0?" – grave":""),sev:v.fin<=0?"crit":"warn",cond:[`Finanze ${v.fin} < 30`+(v.fin<=0?" (≤ 0)":"")],
+      d:"A livello finanziario non se la passa bene: non sta monetizzando il proprio valore. A monte possono esserci prodotto lacunoso, gestione superficiale, persone demotivanti, condizione ISP o idee sbagliate sul denaro.",
+      m:"Indagine approfondita sull'azienda e su tutte le sfere della sua vita; manuale “Guida alla Prosperità”."});
+  // 23 GP < 21
+  if(has(v,"gp")&&v.gp<21)
+    add(P,{n:23,t:"Gestione Pressioni inferiore a 21",sev:"warn",cond:[`Gestione Pressioni ${v.gp} < 21`],
+      d:"Relazione conflittuale con qualcuno nell'ambiente, probabilmente una persona demotivante. Alti e bassi di umore e performance, reattività alle comunicazioni percepite come offensive o pesanti.",
+      m:"One to one (due giornate in azienda) o corso Gestione Pressioni alla MBS."});
+
+  // ---- secondari
+  if(has(v,"ad","det")&&v.ad>44&&v.det<30)
+    add(S,{t:"Fa le cose in prima persona ma non le fa fare agli altri",sev:"info",cond:[`Autodisciplina ${v.ad} > 44`,`Determinazione ${v.det} < 30`],
+      d:"Disciplinata e responsabile, ma fatica a fare richieste dirette e a correggere gli altri, quindi preferisce fare da sé.",m:"Migliorare la Determinazione con corso comunicazione, delega efficace e principi del comando."});
+  if(has(v,"gp","com")&&v.gp<=0&&v.com<=0)
+    add(S,{t:"Disaccordo importante",sev:"warn",cond:[`Gestione Pressioni ${v.gp} ≤ 0`,`Comprensione ${v.com} ≤ 0`],
+      d:"Un disaccordo importante con qualcuno dell'ambiente amplifica le sue pressioni e la rende critica e poco comprensiva.",m:"Scoprire con chi ha il disaccordo e gestirlo; lavorare sulla tendenza critica portandola a vedere i lati positivi."});
+  if(has(v,"org","com")&&v.org>64&&v.com<0)
+    add(S,{t:"Perfezionista",sev:"info",cond:[`Organizzazione ${v.org} > 64`,`Comprensione ${v.com} < 0`],
+      d:"Si fissa su dettagli poco importanti perdendo di vista la scena generale.",m:"Riportarla sulle priorità e sul quadro d'insieme."});
+  if(has(v,"org","gp","pro")&&v.org>=30&&v.gp>=30&&v.pro>=20)
+    add(S,{t:"Esecutore",sev:"ok",cond:[`Organizzazione ${v.org} ≥ 30`,`Gestione Pressioni ${v.gp} ≥ 30`,`Proattività ${v.pro} ≥ 20`],
+      d:"Di norma buon operativo e discreto esecutore: non permaloso, ordinato, poco distratto.",m:"Indicato per ruoli operativi-esecutivi, soprattutto nelle aree produttive."});
+  if(has(v,"pro","det")&&v.pro>40&&v.det<35){
+    const g=v.com!==null&&v.com>=30;
+    add(S,{t:"Zerbino"+(g?" (aggravato)":""),sev:g?"warn":"info",cond:[`Proattività ${v.pro} > 40`,`Determinazione ${v.det} < 35`].concat(g?[`Comprensione ${v.com} ≥ 30`]:[]),
+      d:"Si fa carico dei problemi propri e del team senza chiedere agli altri di cambiare; rischia di lavorare per tutti e di farsi mettere i piedi in testa."+(g?" Con Comprensione alta qualcuno potrebbe abusare della sua disponibilità.":""),m:"Rafforzare la Determinazione."});
+  }
+  // valli
+  if(allTraits){
+    const vals=tr.map(k=>v[k]), valleys=[];
+    for(let i=0;i<vals.length;i++){
+      const L=i>0?vals[i-1]:null,R=i<vals.length-1?vals[i+1]:null;
+      const nb=[L,R].filter(x=>x!==null);
+      if(nb.length&&nb.every(x=>x-vals[i]>=30)) valleys.push(TRAITS[i][1]+" ("+vals[i]+")");
+    }
+    if(valleys.length) add(S,{t:"Valli sul grafico",sev:"info",cond:valleys,
+      d:"Un tratto che cade rispetto ai vicini si manifesta in genere molto più basso del valore indicato.",m:"Leggi questi tratti come più bassi di quanto appaiono e ricontrolla le sindromi vicine alle soglie."});
+  }
+
+  // Scala ISP
+  const ids=P.map(x=>x.n);
+  let isp=null;
+  if(ids.includes(1)) isp="Demotivante cronica";
+  else if(ids.includes(2)) isp="SP";
+  else if(ids.includes(4)) isp="Persona demotivante";
+  else if(ids.includes(3)) isp="Trouble";
+  else if(ids.includes(13)) isp="Robotismo al contrario";
+  else if(v.rc!==null&&v.rc<=-20) isp="Resistenza uguale o inferiore a -20";
+  else if(allTraits&&(v.gp>=69||tr.filter(k=>k!=="gp").every(k=>v.gp>v[k]))) isp="Tratto Gestione Pressioni alto";
+  else if(v.gp!==null&&v.gp<21) isp="Tratto Gestione Pressioni basso";
+  return {P,S,isp};
+}
+
+/* ---------- grafico ---------- */
+function drawChart(v){
+  const W=760,H=300,top=20,bot=60,left=36,right=10,ch=H-top-bot;
+  const y=val=>top+(100-val)/200*ch, colW=(W-left-right)/10;
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Grafico dei tratti inseriti"><g font-family="JetBrains Mono, monospace" font-size="10" fill="var(--muted)">`;
+  for(let t=-100;t<=100;t+=50){s+=`<line x1="${left}" x2="${W-right}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)" stroke-width="${t===0?1.5:1}" ${t===0?"":'stroke-dasharray="3 4"'}/><text x="${left-6}" y="${y(t)+3}" text-anchor="end">${t}</text>`}
+  s+=`<line x1="${left}" x2="${W-right}" y1="${y(30)}" y2="${y(30)}" stroke="var(--accent)" stroke-dasharray="2 3" opacity=".6"/>`;
+  TRAITS.forEach(([k,l],i)=>{
+    const x=left+i*colW+colW*.22,w=colW*.56,val=v[k];
+    if(val!==null&&!isNaN(val)){
+      const y0=y(0),y1=y(Math.max(-100,Math.min(100,val)));
+      s+=`<rect x="${x}" y="${Math.min(y0,y1)}" width="${w}" height="${Math.max(1,Math.abs(y1-y0))}" fill="${val<0?"var(--neg)":"var(--bar)"}" rx="2"/>`;
+      s+=`<text x="${x+w/2}" y="${val>=0?y1-5:y1+12}" text-anchor="middle" fill="var(--ink)" font-weight="600">${val}</text>`;
+    }
+    const short=l.replace("Attitudine alla vendita","Vendita").replace("Gestione Pressioni","Gest. Press.").replace("HR Management","HR Mgmt");
+    s+=`<text x="${x+w/2}" y="${H-bot+16}" text-anchor="end" transform="rotate(-35 ${x+w/2} ${H-bot+16})" fill="var(--ink)" font-family="Archivo, system-ui, sans-serif" font-size="11">${short}</text>`;
+  });
+  return s+"</g></svg>";
+}
+
+/* ---------- render ---------- */
+const SEVL={crit:"Critica",warn:"Attenzione",info:"Da considerare",ok:"Positiva"};
+let lastReport="";
+function itemHTML(o,num){
+  return `<article class="item ${o.sev}"><h3>${num?num+") ":""}${o.t}<small>${SEVL[o.sev]}</small></h3>
+  <div class="cond">${o.cond.map(x=>`<span>${x}</span>`).join("")}</div>
+  <p>${o.d}</p><p class="mgmt"><b>Come gestirla:</b> ${o.m}</p></article>`;
+}
+function render(){
+  const v=getVals();
+  document.getElementById("chart").innerHTML=drawChart(v);
+  document.getElementById("example-tag").textContent=isExample?"Dati di esempio (profilo SP tratto dal manuale). Sostituiscili con quelli del tuo grafico.":"";
+  const {P,S,isp}=evaluate(v);
+  const cnt={crit:0,warn:0,info:0,ok:0};[...P,...S].forEach(o=>cnt[o.sev]++);
+  document.getElementById("summary").innerHTML=
+    `<span class="pill crit">${cnt.crit} critiche</span><span class="pill warn">${cnt.warn} di attenzione</span><span class="pill info">${cnt.info} da considerare</span>`+(cnt.ok?`<span class="pill ok">${cnt.ok} positive</span>`:"");
+  document.getElementById("isp").innerHTML=isp?`<b>Scala dell'ISP: ${isp}</b><span>Livello più grave della scala riscontrato nel profilo.</span>`:`<b>Scala dell'ISP: nessun livello rilevato</b><span>Nessuna condizione ISP con i valori inseriti.</span>`;
+  document.getElementById("primary").innerHTML=P.length?P.map(o=>itemHTML(o,o.n)).join(""):`<p class="empty">Nessun comportamento speciale rilevante con i valori inseriti.</p>`;
+  document.getElementById("secondary").innerHTML=S.length?S.map(o=>itemHTML(o)).join(""):`<p class="empty">Nessun comportamento secondario.</p>`;
+  lastReport="REPORT I-PROFILE\n\nValori: "+[...TRAITS,...SIDE].filter(([k])=>v[k]!==null).map(([k,l])=>`${l} ${v[k]}`).join(", ")+
+    "\n\nScala ISP: "+(isp||"nessun livello")+"\n\nCOMPORTAMENTI SPECIALI RILEVANTI\n"+(P.length?P.map(o=>`- ${o.n}) ${o.t} [${SEVL[o.sev]}]\n  Condizioni: ${o.cond.join("; ")}\n  ${o.d}\n  Gestione: ${o.m}`).join("\n"):"- nessuno")+
+    "\n\nCOMPORTAMENTI SECONDARI\n"+(S.length?S.map(o=>`- ${o.t}\n  Condizioni: ${o.cond.join("; ")}\n  ${o.d}`).join("\n"):"- nessuno");
+}
+document.getElementById("form").addEventListener("input",()=>{isExample=false;render()});
+document.getElementById("reset").onclick=()=>{isExample=false;setVals({});render()};
+document.getElementById("sample-data").onclick=()=>{isExample=true;setVals(EXAMPLE);render()};
+document.getElementById("copy").onclick=async e=>{
+  const b=e.currentTarget;
+  try{await navigator.clipboard.writeText(lastReport);b.textContent="Copiato"}catch(err){
+    const ta=document.createElement("textarea");ta.value=lastReport;document.body.appendChild(ta);ta.select();
+    try{document.execCommand("copy");b.textContent="Copiato"}catch(_){b.textContent="Copia non riuscita"}ta.remove();}
+  setTimeout(()=>b.textContent="Copia report",1800);
+};
+
+document.getElementById("print").onclick=()=>window.print();
+
+/* ---------- lettura immagine o PDF (la foto va solo alla lettura e non viene conservata) ---------- */
+let file=null, pdfjs=null;
+const st=document.getElementById("status"), readBtn=document.getElementById("read"), drop=document.getElementById("drop");
+const pagesEl=document.getElementById("pages"), thumb=document.getElementById("thumb");
+function readyMsg(){st.className="status";st.textContent="Pronto. Premi “Leggi i valori”, oppure inserisci i valori a mano."}
+function useBlob(b){file=b;thumb.src=URL.createObjectURL(b);thumb.hidden=false;readBtn.disabled=false;readyMsg()}
+async function pick(f){
+  if(!f)return;
+  const isPdf=f.type==="application/pdf"||/\.pdf$/i.test(f.name||"");
+  pagesEl.hidden=true;pagesEl.innerHTML="";file=null;readBtn.disabled=true;
+  if(!isPdf&&!f.type.startsWith("image/")){st.textContent="Scegli un'immagine (JPG, PNG, WebP) o un PDF.";st.className="status err";return}
+  if(!isPdf){useBlob(f);return}
+  st.className="status";st.textContent="Apro il PDF…";
+  try{
+    if(!pdfjs){pdfjs=await import("/hr/vendor/pdf.min.mjs");pdfjs.GlobalWorkerOptions.workerSrc="/hr/vendor/pdf.worker.min.mjs"}
+    const pdf=await pdfjs.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;
+    const n=Math.min(pdf.numPages,60);
+    for(let i=1;i<=n;i++){
+      st.textContent=`Preparo le pagine… ${i}/${n}`;
+      const page=await pdf.getPage(i), vp0=page.getViewport({scale:1});
+      const vp=page.getViewport({scale:Math.min(2.5,1800/Math.max(vp0.width,vp0.height))});
+      const cv=document.createElement("canvas");cv.width=Math.round(vp.width);cv.height=Math.round(vp.height);
+      const ctx=cv.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,cv.width,cv.height);
+      await page.render({canvasContext:ctx,viewport:vp}).promise;
+      const b=await new Promise(r=>cv.toBlob(r,"image/jpeg",.9));
+      if(n>1){
+        const btn=document.createElement("button");btn.type="button";btn.className="pg";btn.setAttribute("aria-pressed",i===1?"true":"false");
+        btn.innerHTML=`<img alt="" src="${URL.createObjectURL(b)}"><span>Pag. ${i}</span>`;
+        btn.onclick=()=>{pagesEl.querySelectorAll(".pg").forEach(x=>x.setAttribute("aria-pressed","false"));btn.setAttribute("aria-pressed","true");useBlob(b)};
+        pagesEl.appendChild(btn);pagesEl.hidden=false;
+      }
+      if(i===1)useBlob(b);
+    }
+    readyMsg();
+    if(n>1)st.textContent=(pdf.numPages>60?`Mostro le prime 60 pagine su ${pdf.numPages}. `:"")+"Scegli la pagina con il grafico, poi premi “Leggi i valori”.";
+  }catch(e){st.className="status err";st.textContent="Non riesco ad aprire questo PDF (forse è protetto da password). Prova con uno screenshot della pagina."}
+}
+document.getElementById("file").onchange=e=>pick(e.target.files[0]);
+drop.addEventListener("dragover",e=>{e.preventDefault();drop.classList.add("drag")});
+drop.addEventListener("dragleave",()=>drop.classList.remove("drag"));
+drop.addEventListener("drop",e=>{e.preventDefault();drop.classList.remove("drag");pick(e.dataTransfer.files[0])});
+// la foto si rimpicciolisce (max 1800 px, JPEG) prima della lettura
+async function comeDataUrl(b){
+  const img=await createImageBitmap(b), s=Math.min(1,1800/Math.max(img.width,img.height));
+  const cv=document.createElement("canvas");cv.width=Math.round(img.width*s);cv.height=Math.round(img.height*s);
+  const ctx=cv.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,cv.width,cv.height);ctx.drawImage(img,0,0,cv.width,cv.height);
+  return cv.toDataURL("image/jpeg",.88);
+}
+readBtn.onclick=async()=>{
+  if(!file)return;
+  readBtn.disabled=true;st.className="status";st.textContent="Lettura del grafico in corso…";
+  try{
+    const r=await fetch("/api/hr/leggi",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({foto:await comeDataUrl(file)})});
+    if(r.status===401){location.href="/accedi?next=/hr/iprofile";return}
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(j.error||"Lettura non riuscita. Riprova o inserisci i valori a mano.");
+    const cur=getVals();const keys=[...TRAITS,...SIDE].map(([k])=>k).filter(k=>k!=="eta");let n=0;
+    keys.forEach(k=>{const x=j.valori&&j.valori[k];if(typeof x==="number"&&isFinite(x)){cur[k]=x;n++}else if(isExample)cur[k]=null});
+    if(isExample)cur.imp=false;
+    isExample=false;setVals(cur);render();
+    st.textContent=`Letti ${n} valori su ${keys.length}. Controllali con l'immagine e correggi dove serve; aggiungi l'età se la conosci.`;
+  }catch(e){st.className="status err";st.textContent=e.message}
+  finally{readBtn.disabled=!file}
+};
+
+/* avvio: si parte dall'esempio del manuale (niente di salvato) */
+isExample=true;setVals(EXAMPLE);render();
+</script>
+</body>
+</html>

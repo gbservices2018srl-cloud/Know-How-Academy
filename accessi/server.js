@@ -21,7 +21,8 @@ app.use((req, res, next) => {
   res.set({ 'X-Frame-Options': 'DENY', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin' });
   next();
 });
-app.use(express.json({ limit: '100kb' }));
+const jsonPiccolo = express.json({ limit: '100kb' }), jsonFoto = express.json({ limit: '12mb' });
+app.use((req, res, next) => (req.path === '/api/hr/leggi' ? jsonFoto : jsonPiccolo)(req, res, next)); // la foto del grafico I-Profile è più grande
 
 const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const bad = (res, code, msg) => res.status(code).json({ error: msg });
@@ -878,6 +879,46 @@ app.post('/api/notifiche/invia', needNotifyKey, wrap(async (req, res) => {
 const PUB = path.join(__dirname, 'public');
 const sendPage = file => (req, res) => { res.set('Cache-Control', 'no-store'); res.sendFile(path.join(PUB, file)); };
 app.get('/', (req, res) => req.user ? sendPage('home.html')(req, res) : res.redirect('/accedi'));
+/* ---------- HR · Lettore I-Profile: legge il grafico e fa il report. Non salva niente (né foto né valori). ---------- */
+const accessoHR = async req => { const r = req.user && req.apps?.iprofile; if (!r) return null; if (r !== 'admin' && !req.user.owner && (await store.appSpente()).has('iprofile')) return null; return r; };
+app.get(['/hr', '/hr/'], (req, res) => res.redirect('/c/hr'));
+app.get('/hr/iprofile', wrap(async (req, res) => {
+  if (!req.user) return res.redirect('/accedi?next=' + encodeURIComponent('/hr/iprofile'));
+  if (!await accessoHR(req)) return res.redirect('/?noaccess=iprofile');
+  sendPage('iprofile.html')(req, res);
+}));
+// lettore PDF (pdf.js) servito da qui, per aprire i PDF del grafico nel browser
+const PDFJS_DIR = (() => { try { return path.dirname(require.resolve('pdfjs-dist/package.json')); } catch { return null; } })();
+app.get(['/hr/vendor/pdf.min.mjs', '/hr/vendor/pdf.worker.min.mjs'], (req, res) => {
+  if (!PDFJS_DIR) return res.status(404).end();
+  res.set({ 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'public, max-age=604800' });
+  res.sendFile(path.join(PDFJS_DIR, 'build', path.basename(req.path)));
+});
+const IPROFILE_PROMPT = `L'immagine può essere una foto o la pagina di un documento con testo intorno; se contiene più grafici usa il primo. Il grafico è un I-Profile: 10 barre verticali su scala da -100 a +100 con il valore numerico scritto sopra o sotto ogni barra, nell'ordine: Organizzazione, Automotivazione, Gestione Pressioni (a volte "Stress"), Autodisciplina, Determinazione, Attitudine alla vendita, HR Management, Proattività, Comprensione, Espansività. A destra c'è una tabella con: Resistenza al cambiamento, Finanze, Successo, Principi, Dati sull'attendibilità, Leadership Indice Naturale, Vendita assistita, Worker index. Il grafico può essere in inglese (Sense of Organisation, Self-Motivation, Stress, Self-Discipline, Assertiveness, Aptitude for sales, HR Management, Proactivity, Tolerance, Expansiveness; Resistance to Change, Financial Management, Success, Principles, Leadership Natural Index, Inside sales, Worker Index).
+Leggi i numeri esattamente come scritti. Usa null per un valore illeggibile.
+Rispondi solo con un oggetto JSON con queste chiavi numeriche: {"org":0,"auto":0,"gp":0,"ad":0,"det":0,"vend":0,"hr":0,"pro":0,"com":0,"esp":0,"rc":0,"fin":0,"suc":0,"pri":0,"lin":0,"va":0,"wi":0}`;
+app.post('/api/hr/leggi', needUser, wrap(async (req, res) => {
+  if (!await accessoHR(req)) return bad(res, 403, 'Non sei abilitato a HR.');
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return bad(res, 400, 'La lettura automatica non è attiva: inserisci i valori a mano.');
+  const m = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(String(req.body?.foto || ''));
+  if (!m) return bad(res, 400, 'Immagine non valida: usa JPG o PNG.');
+  let r;
+  try {
+    r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST',
+      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: process.env.HR_AI_MODEL || process.env.ASO_AI_MODEL || 'claude-sonnet-5-5', max_tokens: 600,
+        messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } }, { type: 'text', text: IPROFILE_PROMPT }] }] }),
+      signal: AbortSignal.timeout(60000) });
+  } catch { return bad(res, 502, 'La lettura ha impiegato troppo. Riprova o inserisci i valori a mano.'); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { console.warn('HR I-Profile lettura:', r.status, JSON.stringify(j).slice(0, 200)); return bad(res, 502, 'La lettura automatica non ha risposto. Inserisci i valori a mano.'); }
+  const txt = (j.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
+  let o; try { o = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1)); } catch { return bad(res, 502, 'Non sono riuscito a leggere i numeri. Prova con una foto più nitida e dritta.'); }
+  const valori = {};
+  for (const k of ['org', 'auto', 'gp', 'ad', 'det', 'vend', 'hr', 'pro', 'com', 'esp', 'rc', 'fin', 'suc', 'pri', 'lin', 'va', 'wi']) { const x = Number(o[k]); if (o[k] !== null && o[k] !== '' && isFinite(x)) valori[k] = Math.max(-100, Math.min(100, Math.round(x))); }
+  res.json({ valori });
+}));
 // Riquadri "contenitore" (es. Controllo di gestione): pagina con le app che contiene, per chi ne ha almeno una
 app.get('/c/:key', (req, res, next) => {
   const v = APPS.find(a => a.key === req.params.key && a.virtuale);
