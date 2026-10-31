@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex">
-<title>Lettore I-Profile · HR · To Smile</title>
+<title>I-Profile OSM · HR · To Smile</title>
 <link rel="stylesheet" href="/fonts/tosmile.css?f=fira-sans:600,700,800|figtree:400,500,600,700">
 <link rel="stylesheet" href="/static/accessi.css?v=3">
 <link rel="icon" href="/static/icon.svg">
@@ -60,11 +60,14 @@ legend{font:700 13px/1.2 var(--f-display);text-transform:uppercase;letter-spacin
 .pg[aria-pressed="true"]{border-color:var(--purple);color:var(--purple-ink);font-weight:700}
 .note{font-size:13px;color:var(--muted);max-width:80ch}
 .sec-title{margin-top:6px}
+.scelta-s{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14.5px;cursor:pointer;width:fit-content}
+.scelta-s input{width:20px;min-height:20px;accent-color:var(--purple-ink)}
+@media print{.scelta-s{display:none!important}}
 .tratti{display:flex;flex-direction:column;gap:0;border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .tr{display:grid;grid-template-columns:minmax(0,190px) 52px minmax(0,1fr);gap:4px 12px;padding:10px 14px;border-top:1px solid var(--line);align-items:start}
 .tr:first-child{border-top:0}
 .tr .tn{font-weight:700;font-family:var(--f-display)}.tr .tn small{display:block;font-weight:500;color:var(--muted);font-size:12px;font-family:var(--f-body)}
-.tr .tv{font-family:var(--num);font-weight:700;text-align:right;padding:1px 6px;border-radius:6px}
+.tr .tv{font-family:var(--num);font-weight:700;text-align:right;padding:1px 6px;border-radius:6px;background:var(--surface-2)}
 .tr .tv.ok{background:var(--ok-soft);color:var(--okc)}.tr .tv.no{background:var(--warn-soft);color:var(--warn)}
 .tr .tt{font-size:14.5px}.tr .tt .in{display:block;font-size:12.5px;color:var(--muted);margin-top:3px}
 .tr.vuoto{color:var(--muted)}
@@ -92,7 +95,7 @@ legend{font:700 13px/1.2 var(--f-display);text-transform:uppercase;letter-spacin
     <a class="btn small" href="/c/hr">← HR</a>
   </div>
   <header>
-    <h1>Lettore <span>I-Profile</span></h1>
+    <h1>I-Profile <span>OSM</span></h1>
     <div class="rule" aria-hidden="true"></div>
     <p>Carica la foto o il PDF del grafico oppure inserisci i valori a mano: il report elenca le sindromi presenti secondo le soglie del manuale (comportamenti speciali rilevanti e secondari, scala dell'ISP).</p>
   </header>
@@ -130,15 +133,18 @@ legend{font:700 13px/1.2 var(--f-display);text-transform:uppercase;letter-spacin
         <div class="row-btns"><button class="btn small" id="print" type="button">Stampa / PDF</button><button class="btn small" id="copy" type="button">Copia report</button></div>
       </div>
       <div id="vista-report">
+      <label class="scelta-s"><input type="checkbox" id="con-sindromi" checked> Inserisci le sindromi nel report</label>
       <div id="example-tag" class="note"></div>
       <div class="chart" id="chart"></div>
+      <div id="blocco-sindromi" style="display:flex;flex-direction:column;gap:14px">
       <div class="summary" id="summary"></div>
       <div class="isp" id="isp"></div>
       <h2 class="sec-title">Comportamenti speciali rilevanti</h2>
       <div class="list" id="primary"></div>
       <h2 class="sec-title">Comportamenti speciali secondari</h2>
       <div class="list" id="secondary"></div>
-      <h2 class="sec-title">Gli altri tratti: come si comporta</h2>
+      </div>
+      <h2 class="sec-title" id="tit-tratti">Gli altri tratti: come si comporta</h2>
       <div class="tratti" id="tratti"></div>
       <p class="note">Come ricorda il manuale stesso, il risultato di un test non basta da solo a etichettare una persona: usa il report come chiave di lettura e verifica con l'osservazione e il colloquio.</p>
       </div>
@@ -397,23 +403,28 @@ function render(){
   document.getElementById("isp").innerHTML=isp?`<b>Scala dell'ISP: ${isp}</b><span>Livello più grave della scala riscontrato nel profilo.</span>`:`<b>Scala dell'ISP: nessun livello rilevato</b><span>Nessuna condizione ISP con i valori inseriti.</span>`;
   document.getElementById("primary").innerHTML=P.length?P.map(o=>itemHTML(o,o.n)).join(""):`<p class="empty">Nessun comportamento speciale rilevante con i valori inseriti.</p>`;
   document.getElementById("secondary").innerHTML=S.length?S.map(o=>itemHTML(o)).join(""):`<p class="empty">Nessun comportamento secondario.</p>`;
+  // sindromi nel report sì / no (scelta di chi stampa o copia)
+  const conS=document.getElementById("con-sindromi").checked;
+  document.getElementById("blocco-sindromi").hidden=!conS; document.getElementById("blocco-sindromi").style.display=conS?"flex":"none";
+  document.getElementById("tit-tratti").textContent=conS?"Gli altri tratti: come si comporta":"I tratti: come si comporta";
   // i singoli tratti, dopo le sindromi: fascia del manuale e in quali comportamenti speciali entrano
   const inSindr=k=>P.filter(o=>(window.IP_SINDR_TRATTI[o.n]||[]).includes(k)).map(o=>o.n+") "+o.t);
   const righeT=[...TRAITS,...SIDE].filter(([k])=>k!=="eta").map(([k,l])=>{
     const T=window.IP_TRATTI[k], f=window.IP_FASCIA(k,v[k]);
-    if(!f) return `<div class="tr vuoto"><span class="tn">${T.nome}<small>ottimale ${T.ottimoTxt}</small></span><span class="tv">–</span><span class="tt">Valore non inserito.</span></div>`;
-    const s=inSindr(k);
-    return `<div class="tr"><span class="tn">${T.nome}<small>ottimale ${T.ottimoTxt}</small></span><span class="tv ${f.ok?"ok":"no"}" title="${f.ok?"In fascia ottimale":"Fuori dalla fascia ottimale"}">${v[k]}</span><span class="tt">${f.testo}${s.length?`<span class="in">Entra in: ${s.join(" · ")}</span>`:""}</span></div>`;
+    if(!f) return `<div class="tr vuoto"><span class="tn">${T.nome}</span><span class="tv">–</span><span class="tt">Valore non inserito.</span></div>`;
+    const s=conS?inSindr(k):[];
+    return `<div class="tr"><span class="tn">${T.nome}</span><span class="tv">${v[k]}</span><span class="tt">${f.testo}${s.length?`<span class="in">Entra in: ${s.join(" · ")}</span>`:""}</span></div>`;
   });
   document.getElementById("tratti").innerHTML=righeT.join("");
   window.IP_ULTIMO={v,P,S,isp};
   if(window.IP_CONSEGNA&&!document.getElementById("vista-consegna").hidden) window.IP_CONSEGNA(document.getElementById("vista-consegna"),window.IP_ULTIMO);
-  lastReport="REPORT I-PROFILE\n\nValori: "+[...TRAITS,...SIDE].filter(([k])=>v[k]!==null).map(([k,l])=>`${l} ${v[k]}`).join(", ")+
+  lastReport="REPORT I-PROFILE OSM\n\nValori: "+[...TRAITS,...SIDE].filter(([k])=>v[k]!==null).map(([k,l])=>`${l} ${v[k]}`).join(", ")+(!conS?"\n\nI TRATTI\n"+[...TRAITS,...SIDE].filter(([k])=>k!=="eta"&&v[k]!==null).map(([k])=>`- ${window.IP_TRATTI[k].nome} ${v[k]}: ${window.IP_FASCIA(k,v[k]).testo}`).join("\n"):
     "\n\nScala ISP: "+(isp||"nessun livello")+"\n\nCOMPORTAMENTI SPECIALI RILEVANTI\n"+(P.length?P.map(o=>`- ${o.n}) ${o.t} [${SEVL[o.sev]}]\n  Condizioni: ${o.cond.join("; ")}\n  ${o.d}\n  Gestione: ${o.m}`).join("\n"):"- nessuno")+
     "\n\nCOMPORTAMENTI SECONDARI\n"+(S.length?S.map(o=>`- ${o.t}\n  Condizioni: ${o.cond.join("; ")}\n  ${o.d}`).join("\n"):"- nessuno")+
-    "\n\nGLI ALTRI TRATTI\n"+[...TRAITS,...SIDE].filter(([k])=>k!=="eta"&&v[k]!==null).map(([k])=>{const f=window.IP_FASCIA(k,v[k]);return `- ${window.IP_TRATTI[k].nome} ${v[k]}${f.ok?"":" (fuori fascia ottimale)"}: ${f.testo}`}).join("\n");
+    "\n\nGLI ALTRI TRATTI\n"+[...TRAITS,...SIDE].filter(([k])=>k!=="eta"&&v[k]!==null).map(([k])=>{const f=window.IP_FASCIA(k,v[k]);return `- ${window.IP_TRATTI[k].nome} ${v[k]}: ${f.testo}`}).join("\n"));
 }
 document.getElementById("form").addEventListener("input",()=>{isExample=false;render()});
+document.getElementById("con-sindromi").addEventListener("change",render);
 document.getElementById("reset").onclick=()=>{isExample=false;setVals({});render()};
 document.getElementById("sample-data").onclick=()=>{isExample=true;setVals(EXAMPLE);render()};
 document.getElementById("copy").onclick=async e=>{

@@ -15,16 +15,16 @@ module.exports = [
     desc: 'Andamento economico e dati finanziari del gruppo.' },
   { key: 'bilancio', name: 'Controllo di gestione · Bilancio', url: 'https://finanza.appgestione.it/bilancio', color: 'purple', dentro: 'controllo',
     desc: 'Dal bilancio a 4 sezioni: budget, consuntivo, scostamenti, costi fissi e variabili, break even, EBITDA e utile.' },
-  // HR: riquadro unico per le risorse umane: Turni (planning, ferie, buste paga) e Lettore I-Profile
+  // HR: riquadro unico per le risorse umane: Turni (planning, ferie, buste paga) e I-Profile OSM
   { key: 'hr', name: 'HR', url: 'https://appgestione.it/c/hr', color: 'purple', virtuale: true,
     gruppo: ['turni', 'iprofile'],
     desc: 'Risorse umane: turni, ferie e buste paga; lettura dei profili I-Profile.' },
-  { key: 'iprofile', name: 'Lettore I-Profile', url: 'https://appgestione.it/hr/iprofile', color: 'purple', dentro: 'hr',
+  { key: 'iprofile', name: 'I-Profile OSM', url: 'https://appgestione.it/hr/iprofile', color: 'purple', dentro: 'hr',
     desc: 'Carica il grafico I-Profile (foto o PDF) o scrivi i valori: il report mostra sindromi, scala dell\'ISP e come si comporta la persona tratto per tratto. Non si salva nulla.' },
   // Consegna I-Profile: sezione riservata dentro il Lettore I-Profile (traccia per consegnare il grafico alla persona).
   // Nessuno la riceve in automatico: la dà solo l'amministratore, persona per persona.
-  { key: 'iprofile_consegna', name: 'I-Profile · Consegna (riservata)', url: 'https://appgestione.it/hr/iprofile', color: 'purple', dentro: 'iprofile',
-    desc: 'Sezione riservata del Lettore I-Profile: traccia per consegnare il grafico alla persona (indagine, lati positivi, aree di miglioramento, azioni-rimedio).' },
+  { key: 'iprofile_consegna', name: 'I-Profile OSM · Consegna (riservata)', url: 'https://appgestione.it/hr/iprofile', color: 'purple', dentro: 'iprofile',
+    desc: 'Sezione riservata di I-Profile OSM: traccia per consegnare il grafico alla persona (indagine, lati positivi, aree di miglioramento, azioni-rimedio).' },
   { key: 'laboratorio', name: 'Nuovalab', url: 'https://laboratorio.appgestione.it', color: 'purple',
     sso: 'https://ncfsugpmqimukynuvzba.supabase.co/functions/v1/sso',
     autoFigura: 'Medico', // il medico appena attivato la trova già (come Utente: il medico di Nuovalab lo scegli poi tu)
