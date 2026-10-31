@@ -75,20 +75,15 @@
     const passo = (n, tit, corpo) => `<article class="item info" style="border-left-color:var(--purple)"><h3>${n}. ${tit}</h3>${corpo}</article>`;
     const li = a => `<ul style="margin:4px 0 0;padding-left:20px">${a.map(x => `<li style="margin:3px 0">${x}</li>`).join('')}</ul>`;
     const out = [];
-    out.push(`<div class="isp"><b>Traccia per la consegna</b><span>Circa un'ora. Segue il metodo del manuale: prima studi il grafico, poi indagine, lati positivi, aree di miglioramento, stimolazione, sintesi e azioni-rimedio. Ad uso riservato: non va data alla persona.</span></div>`);
-    out.push(passo(1, 'Prima della consegna: studia il grafico', li([
-      'Controlla che il questionario sia attendibile.',
-      'Metti in relazione il grafico con quello che sai già della persona: come va in azienda, le sue statistiche, cosa dice il responsabile, come comunica.',
-      'Immagina come il grafico si manifesta in questa persona; se hai dubbi chiariscili con il tuo responsabile prima di iniziare.',
-      ...(g.tuttoBasso ? ['<b>Grafico tutto basso:</b> è la chiave di lettura di tutto il profilo (qualcuno nell\'ambiente le causa ansia e difficoltà). Considera come positivi i tratti più alti, anche se non sono in fascia ottimale.'] : []),
-      ...(g.isp ? [`<b>Scala dell'ISP: ${esc(g.isp)}.</b> Tienilo presente in tutta la consegna.`] : []),
-    ])));
-    out.push(passo(2, 'Approccio e indagine', `<p>Una chiacchierata piacevole, non un interrogatorio: come sta andando il lavoro, come vede l'azienda, cosa le piace, quali difficoltà incontra. Appena ti è chiaro come il grafico si manifesta in lei, parti con la consegna (se l'indagine non porta da nessuna parte, parti comunque).</p>
+    out.push(`<div class="isp"><b>Traccia per la consegna</b><span>Circa un'ora. Segue il metodo del manuale: indagine, lati positivi, aree di miglioramento, stimolazione e chiusura. Ad uso riservato: non va data alla persona.</span></div>`);
+    let n = 0; const num = () => ++n;
+    out.push(passo(num(), 'Approccio e indagine', `<p>Una chiacchierata piacevole, non un interrogatorio: come sta andando il lavoro, come vede l'azienda, cosa le piace, quali difficoltà incontra. Appena ti è chiaro come il grafico si manifesta in lei, parti con la consegna (se l'indagine non porta da nessuna parte, parti comunque).</p>
       ${g.domande.length ? `<p style="margin-top:6px"><b>Domande utili per questo profilo:</b></p>${li(g.domande.map(esc))}` : ''}`));
-    out.push(passo(3, 'Consegna dei lati positivi', `<p>Apri così: <i>"Le 242 domande a cui ha risposto delineano 10 caratteristiche che vanno da +100 a -100… poi qui a lato ce ne sono altre."</i> Parti dai lati positivi o da quelli su cui è più facile trovare accordo.</p>
+    out.push(passo(num(), 'Consegna dei lati positivi', `<p>Apri così: <i>"Le 242 domande a cui ha risposto delineano 10 caratteristiche che vanno da +100 a -100… poi qui a lato ce ne sono altre."</i> Parti dai lati positivi o da quelli su cui è più facile trovare accordo.</p>
+      ${g.tuttoBasso ? '<p style="margin-top:6px"><b>Grafico tutto basso:</b> considera come positivi i tratti più alti, anche se non sono in fascia ottimale.</p>' : ''}
       ${li(g.positivi.map(k => `<b>${nome(k)}</b> ${val(k)}: ${esc(F(k, v[k]).testo)}`))}
       <p style="margin-top:6px">Ogni volta che non è d'accordo: dai riconoscimento (<i>"Ah, capisco…"</i>) e riformula con parole diverse finché non ottieni accordo. Chiudi con una breve sintesi dei lati positivi.</p>`));
-    out.push(passo(4, 'Consegna delle aree di miglioramento', `${g.aree.length ? li(g.aree.map(k => `<b>${nome(k)}</b> ${val(k)} <span class="muted">(ottimale ${esc(T()[k].ottimoTxt)})</span>: ${esc(F(k, v[k]).testo)}`)) : '<p>Nessun tratto fuori fascia.</p>'}
+    out.push(passo(num(), 'Consegna delle aree di miglioramento', `${g.aree.length ? li(g.aree.map(k => `<b>${nome(k)}</b> ${val(k)} <span class="muted">(ottimale ${esc(T()[k].ottimoTxt)})</span>: ${esc(F(k, v[k]).testo)}`)) : '<p>Nessun tratto fuori fascia.</p>'}
       ${g.P.length ? `<p style="margin-top:8px"><b>Comportamenti speciali da tenere presenti</b> (descrivi i comportamenti, non dare etichette alla persona):</p>${li(g.P.map(o => `<b>${o.n}) ${esc(o.t)}</b>: ${esc(o.m)}`))}` : ''}
       ${g.attenzioni.length ? `<p style="margin-top:8px"><b>Come dirlo:</b></p>${li(g.attenzioni)}` : ''}
       <p style="margin-top:6px">Ottieni accordo anche su queste, poi fai la sintesi delle aree di miglioramento.</p>`));
@@ -96,11 +91,8 @@
     if (v.rc !== null && v.rc >= 50) stim.push('<i>"Le voglio dire anche un\'altra cosa: oltre a quello di cui abbiamo parlato, dovrà fare uno sforzo molto grande, perché tenderà a rimanere com\'è e a giustificarsi."</i>');
     else if (v.rc !== null && v.rc < 15) stim.push('Resistenza al cambiamento bassa: valuta se parlarle del suo bisogno di una persona di riferimento, se può aiutarla a sbloccarsi.');
     if (v.fin !== null && v.fin < 30) stim.push('Finanze basse: mostrale che tutte queste aree, alla fine, la limitano nel guadagnare.');
-    if (stim.length) out.push(passo(5, 'Stimolazione', li(stim)));
-    out.push(passo(stim.length ? 6 : 5, 'Sintesi e prescrizione delle azioni-rimedio', `<p>Fai la grande sintesi e prescrivi le azioni per migliorare la produttività e ottenere più successo. Qui serve impatto: sii determinato e diretto.</p>
-      ${g.rimedi.length ? li(g.rimedi.map(({ k, r }) => `<b>${nome(k)}</b>: ${esc(r[0])}${r[1] ? `<br><span class="muted">Servizi: ${esc(r[1])}</span>` : ''}`)) : '<p>Nessuna azione-rimedio specifica: rinforza i punti di forza.</p>'}
-      <p style="margin-top:6px">Per tutti, dall'App OSM Corsi: audiolibri "Le 10 Regole del Successo" e "L'etica dell'Eccellenza", test di comprensione, contatto con il tutor.</p>`));
-    out.push(passo(stim.length ? 7 : 6, 'Chiusura', li(['Consegna la relazione.', 'Fai il follow-up con il suo responsabile: cosa è emerso, cosa ha accettato, quali azioni sono state concordate.'])));
+    if (stim.length) out.push(passo(num(), 'Stimolazione', li(stim)));
+    out.push(passo(num(), 'Chiusura', li(['Consegna la relazione.', 'Fai il follow-up con il suo responsabile: cosa è emerso, cosa ha accettato, quali azioni sono state concordate.'])));
     return out.join('');
   }
   function testo(g) {
@@ -110,8 +102,7 @@
       'Lati positivi: ' + g.positivi.map(k => `${n(k)} ${v[k]}`).join(', '),
       'Aree di miglioramento: ' + (g.aree.map(k => `${n(k)} ${v[k]}`).join(', ') || 'nessuna'),
       'Comportamenti speciali: ' + (g.P.map(o => `${o.n}) ${o.t}`).join(', ') || 'nessuno'), '',
-      'Domande per l\'indagine:', ...g.domande.map(d => '- ' + d), '',
-      'Azioni-rimedio:', ...g.rimedi.map(({ k, r }) => `- ${n(k)}: ${r[0]}${r[1] ? ' Servizi: ' + r[1] : ''}`)].join('\n');
+      'Domande per l\'indagine:', ...g.domande.map(d => '- ' + d)].join('\n');
   }
   window.IP_CONSEGNA = (box, dati) => {
     if (!dati) return;
