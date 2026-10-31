@@ -51,7 +51,16 @@ dialog form{padding:22px;display:flex;flex-direction:column;gap:14px}
 .row{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
 footer{color:var(--muted);font-size:13.5px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;border-top:1px solid var(--line);padding-top:18px}
 footer b{color:var(--fg);font-weight:600}
-.notif{padding:20px 22px;display:flex;flex-direction:column;gap:12px}
+.notif{padding:0;display:block}
+.notif details{padding:14px 18px}
+.notif summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:40px}
+.notif summary::-webkit-details-marker{display:none}
+.notif summary h2{font-size:17px;display:flex;align-items:center;gap:8px;margin:0}
+.notif summary .stato{font-size:13px;font-weight:700;padding:3px 10px;border-radius:99px;background:var(--surface-2);color:var(--muted)}
+.notif summary .stato.on{background:var(--ok-bg);color:var(--ok)}
+.notif summary .freccia{margin-left:auto;width:22px;height:22px;stroke:var(--muted);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s}
+.notif details[open] summary .freccia{transform:rotate(180deg)}
+.notif .corpo{display:flex;flex-direction:column;gap:12px;padding-top:12px}
 .notif-h{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 .notif-h h2{font-size:19px;display:flex;align-items:center;gap:8px}
 .notif p{margin:0;color:var(--muted);font-size:14.5px}
@@ -199,19 +208,24 @@ function notifRender() {
   const box = $('#notif'); box.hidden = false;
   const d = NT.dati;
   const testa = {
-    on: ['🔔 Notifiche attive su questo dispositivo', 'Ricevi gli avvisi anche con il telefono bloccato. Scegli da quali app:'],
+    on: ['🔔 Notifiche', 'Ricevi gli avvisi anche con il telefono bloccato. Scegli da quali app:'],
     off: ['🔔 Notifiche', 'Attivale una volta sola qui: ricevi gli avvisi di tutte le app che scegli, anche a telefono chiuso.'],
     bloccate: ['🔕 Notifiche bloccate', 'Le hai bloccate per appgestione.it: riattivale dalle impostazioni del browser (lucchetto accanto all\'indirizzo → Notifiche → Consenti), poi ricarica la pagina.'],
     ios: ['🔔 Notifiche su iPhone', 'Su iPhone le notifiche arrivano solo se To Smile è nella schermata Home:'],
     no: ['🔔 Notifiche', 'Questo browser non riceve notifiche. Su Android usa Chrome; su computer Chrome, Edge, Firefox o Safari.'],
   }[NT.stato] || ['🔔 Notifiche', ''];
-  box.innerHTML = `<div class="notif-h"><h2 id="notif-t">${testa[0]}</h2>
+  // chiusa in una tendina: si apre toccando la riga (resta aperta se l'avevi aperta tu)
+  let aperta = false; try { aperta = localStorage.getItem('notif-aperta') === '1'; } catch {}
+  if (location.hash === '#notif') aperta = true;
+  const stato = { on: `<span class="stato on">Attive · ${d.app.filter(a => a.attiva).length} app</span>`, off: '<span class="stato">Spente su questo dispositivo</span>', bloccate: '<span class="stato">Bloccate</span>' }[NT.stato] || '';
+  box.innerHTML = `<details ${aperta ? 'open' : ''}><summary><h2 id="notif-t">${testa[0]}</h2>${stato}<svg class="freccia" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary><div class="corpo"><div class="notif-h">
       ${NT.stato === 'off' ? '<button class="btn primary" id="nt-on">Attiva notifiche</button>' : ''}
       ${NT.stato === 'on' ? '<div class="row" style="justify-content:flex-start"><button class="btn small" id="nt-prova">Prova</button><button class="btn small" id="nt-off">Disattiva qui</button></div>' : ''}</div>
     <p>${testa[1]}</p>
     ${NT.stato === 'ios' ? `<ol class="passi"><li>Tocca il pulsante <b>Condividi</b> di Safari (il quadrato con la freccia).</li><li>Scegli <b>Aggiungi alla schermata Home</b> e conferma.</li><li>Apri <b>To Smile</b> dalla schermata Home e tocca <b>Attiva notifiche</b>.</li></ol><p style="font-size:13px">Serve iOS 16.4 o successivo.</p>` : ''}
     ${['on', 'off'].includes(NT.stato) ? `<div class="sw-list">${d.app.map(a => `<label class="sw">${esc(a.nome)}<input type="checkbox" role="switch" data-app="${esc(a.key)}" ${a.attiva ? 'checked' : ''} aria-label="Notifiche di ${esc(a.nome)}"></label>`).join('')}</div>
-      <p style="font-size:13px">Gli interruttori valgono per tutti i tuoi dispositivi.${d.dispositivi > 1 ? ` Hai le notifiche attive su ${d.dispositivi} dispositivi.` : ''}</p>` : ''}`;
+      <p style="font-size:13px">Gli interruttori valgono per tutti i tuoi dispositivi.${d.dispositivi > 1 ? ` Hai le notifiche attive su ${d.dispositivi} dispositivi.` : ''}</p>` : ''}</div></details>`;
+  box.querySelector('details').addEventListener('toggle', e => { try { localStorage.setItem('notif-aperta', e.target.open ? '1' : '0'); } catch {} });
   // arrivati da un'app con "Attiva le notifiche" (…/#notif): si va dritti al riquadro, evidenziato
   if (location.hash === '#notif' && !NT.saltato) { NT.saltato = true; box.scrollIntoView({ block: 'center' }); box.style.outline = '3px solid var(--accent, #2B8384)'; setTimeout(() => box.style.outline = '', 2500); }
   $('#nt-on')?.addEventListener('click', notifAttiva);
