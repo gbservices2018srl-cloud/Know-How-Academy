@@ -60,6 +60,20 @@ legend{font:700 13px/1.2 var(--f-display);text-transform:uppercase;letter-spacin
 .pg[aria-pressed="true"]{border-color:var(--purple);color:var(--purple-ink);font-weight:700}
 .note{font-size:13px;color:var(--muted);max-width:80ch}
 .sec-title{margin-top:6px}
+.tratti{display:flex;flex-direction:column;gap:0;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.tr{display:grid;grid-template-columns:minmax(0,190px) 52px minmax(0,1fr);gap:4px 12px;padding:10px 14px;border-top:1px solid var(--line);align-items:start}
+.tr:first-child{border-top:0}
+.tr .tn{font-weight:700;font-family:var(--f-display)}.tr .tn small{display:block;font-weight:500;color:var(--muted);font-size:12px;font-family:var(--f-body)}
+.tr .tv{font-family:var(--num);font-weight:700;text-align:right;padding:1px 6px;border-radius:6px}
+.tr .tv.ok{background:var(--ok-soft);color:var(--okc)}.tr .tv.no{background:var(--warn-soft);color:var(--warn)}
+.tr .tt{font-size:14.5px}.tr .tt .in{display:block;font-size:12.5px;color:var(--muted);margin-top:3px}
+.tr.vuoto{color:var(--muted)}
+@media (max-width:560px){.tr{grid-template-columns:minmax(0,1fr) 52px}.tr .tt{grid-column:1/-1}}
+.tabs-r{display:flex;gap:6px;flex-wrap:wrap}
+.tabs-r button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 14px;font:700 14px var(--f-body);color:var(--muted);cursor:pointer;min-height:38px}
+.tabs-r button.on{background:var(--purple-ink);border-color:var(--purple-ink);color:#fff}
+.tabs-r .priv{font-size:11px;font-weight:700;margin-left:6px;opacity:.8}
+#vista-consegna[hidden],#vista-report[hidden]{display:none!important}
 .rhead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 @media print{
   body{padding:0;background:#fff}
@@ -69,6 +83,7 @@ legend{font:700 13px/1.2 var(--f-display);text-transform:uppercase;letter-spacin
 }
 </style>
 <script src="/static/resta-qui.js?v=2" defer></script>
+<script src="/static/iprofile-tratti.js?v=1"></script>
 </head>
 <body>
 <div class="wrap">
@@ -110,9 +125,11 @@ legend{font:700 13px/1.2 var(--f-display);text-transform:uppercase;letter-spacin
 
     <section class="panel" aria-labelledby="h-out">
       <div class="rhead">
+        <div class="tabs-r" id="tabs-r" hidden><button type="button" class="on" data-vista="report">Report</button><button type="button" data-vista="consegna">Consegna I-Profile<span class="priv">· privato</span></button></div>
         <h2 id="h-out">Report</h2>
         <div class="row-btns"><button class="btn small" id="print" type="button">Stampa / PDF</button><button class="btn small" id="copy" type="button">Copia report</button></div>
       </div>
+      <div id="vista-report">
       <div id="example-tag" class="note"></div>
       <div class="chart" id="chart"></div>
       <div class="summary" id="summary"></div>
@@ -121,7 +138,11 @@ legend{font:700 13px/1.2 var(--f-display);text-transform:uppercase;letter-spacin
       <div class="list" id="primary"></div>
       <h2 class="sec-title">Comportamenti speciali secondari</h2>
       <div class="list" id="secondary"></div>
+      <h2 class="sec-title">Gli altri tratti: come si comporta</h2>
+      <div class="tratti" id="tratti"></div>
       <p class="note">Come ricorda il manuale stesso, il risultato di un test non basta da solo a etichettare una persona: usa il report come chiave di lettura e verifica con l'osservazione e il colloquio.</p>
+      </div>
+      <div id="vista-consegna" hidden></div>
     </section>
   </div>
 </div>
@@ -376,9 +397,21 @@ function render(){
   document.getElementById("isp").innerHTML=isp?`<b>Scala dell'ISP: ${isp}</b><span>Livello più grave della scala riscontrato nel profilo.</span>`:`<b>Scala dell'ISP: nessun livello rilevato</b><span>Nessuna condizione ISP con i valori inseriti.</span>`;
   document.getElementById("primary").innerHTML=P.length?P.map(o=>itemHTML(o,o.n)).join(""):`<p class="empty">Nessun comportamento speciale rilevante con i valori inseriti.</p>`;
   document.getElementById("secondary").innerHTML=S.length?S.map(o=>itemHTML(o)).join(""):`<p class="empty">Nessun comportamento secondario.</p>`;
+  // i singoli tratti, dopo le sindromi: fascia del manuale e in quali comportamenti speciali entrano
+  const inSindr=k=>P.filter(o=>(window.IP_SINDR_TRATTI[o.n]||[]).includes(k)).map(o=>o.n+") "+o.t);
+  const righeT=[...TRAITS,...SIDE].filter(([k])=>k!=="eta").map(([k,l])=>{
+    const T=window.IP_TRATTI[k], f=window.IP_FASCIA(k,v[k]);
+    if(!f) return `<div class="tr vuoto"><span class="tn">${T.nome}<small>ottimale ${T.ottimoTxt}</small></span><span class="tv">–</span><span class="tt">Valore non inserito.</span></div>`;
+    const s=inSindr(k);
+    return `<div class="tr"><span class="tn">${T.nome}<small>ottimale ${T.ottimoTxt}</small></span><span class="tv ${f.ok?"ok":"no"}" title="${f.ok?"In fascia ottimale":"Fuori dalla fascia ottimale"}">${v[k]}</span><span class="tt">${f.testo}${s.length?`<span class="in">Entra in: ${s.join(" · ")}</span>`:""}</span></div>`;
+  });
+  document.getElementById("tratti").innerHTML=righeT.join("");
+  window.IP_ULTIMO={v,P,S,isp};
+  if(window.IP_CONSEGNA&&!document.getElementById("vista-consegna").hidden) window.IP_CONSEGNA(document.getElementById("vista-consegna"),window.IP_ULTIMO);
   lastReport="REPORT I-PROFILE\n\nValori: "+[...TRAITS,...SIDE].filter(([k])=>v[k]!==null).map(([k,l])=>`${l} ${v[k]}`).join(", ")+
     "\n\nScala ISP: "+(isp||"nessun livello")+"\n\nCOMPORTAMENTI SPECIALI RILEVANTI\n"+(P.length?P.map(o=>`- ${o.n}) ${o.t} [${SEVL[o.sev]}]\n  Condizioni: ${o.cond.join("; ")}\n  ${o.d}\n  Gestione: ${o.m}`).join("\n"):"- nessuno")+
-    "\n\nCOMPORTAMENTI SECONDARI\n"+(S.length?S.map(o=>`- ${o.t}\n  Condizioni: ${o.cond.join("; ")}\n  ${o.d}`).join("\n"):"- nessuno");
+    "\n\nCOMPORTAMENTI SECONDARI\n"+(S.length?S.map(o=>`- ${o.t}\n  Condizioni: ${o.cond.join("; ")}\n  ${o.d}`).join("\n"):"- nessuno")+
+    "\n\nGLI ALTRI TRATTI\n"+[...TRAITS,...SIDE].filter(([k])=>k!=="eta"&&v[k]!==null).map(([k])=>{const f=window.IP_FASCIA(k,v[k]);return `- ${window.IP_TRATTI[k].nome} ${v[k]}${f.ok?"":" (fuori fascia ottimale)"}: ${f.testo}`}).join("\n");
 }
 document.getElementById("form").addEventListener("input",()=>{isExample=false;render()});
 document.getElementById("reset").onclick=()=>{isExample=false;setVals({});render()};
@@ -457,6 +490,23 @@ readBtn.onclick=async()=>{
   }catch(e){st.className="status err";st.textContent=e.message}
   finally{readBtn.disabled=!file}
 };
+
+/* Consegna I-Profile (privata): compare solo a chi l'amministratore l'ha data */
+document.getElementById("tabs-r").addEventListener("click",e=>{
+  const b=e.target.closest("[data-vista]"); if(!b) return;
+  document.querySelectorAll("#tabs-r button").forEach(x=>x.classList.toggle("on",x===b));
+  const c=b.dataset.vista==="consegna";
+  document.getElementById("vista-report").hidden=c; document.getElementById("vista-consegna").hidden=!c;
+  document.getElementById("h-out").textContent=c?"Consegna I-Profile":"Report";
+  document.querySelector(".rhead .row-btns").hidden=c;
+  if(c&&window.IP_CONSEGNA) window.IP_CONSEGNA(document.getElementById("vista-consegna"),window.IP_ULTIMO);
+});
+fetch("/api/hr/me",{credentials:"same-origin"}).then(r=>r.json()).then(j=>{
+  if(!j.consegna) return;
+  const s=document.createElement("script"); s.src="/hr/consegna.js"; s.onload=()=>{document.getElementById("tabs-r").hidden=false;document.getElementById("h-out").hidden=true};
+  document.body.appendChild(s);
+}).catch(()=>{});
+document.getElementById("h-out").hidden=false;
 
 /* avvio: si parte dall'esempio del manuale (niente di salvato) */
 isExample=true;setVals(EXAMPLE);render();

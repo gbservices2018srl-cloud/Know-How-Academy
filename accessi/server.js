@@ -882,6 +882,13 @@ app.get('/', (req, res) => req.user ? sendPage('home.html')(req, res) : res.redi
 /* ---------- HR · Lettore I-Profile: legge il grafico e fa il report. Non salva niente (né foto né valori). ---------- */
 const accessoHR = async req => { const r = req.user && req.apps?.iprofile; if (!r) return null; if (r !== 'admin' && !req.user.owner && (await store.appSpente()).has('iprofile')) return null; return r; };
 app.get(['/hr', '/hr/'], (req, res) => res.redirect('/c/hr'));
+// sezione riservata "Consegna": solo a chi l'amministratore l'ha data (oltre al Lettore I-Profile)
+const accessoConsegna = async req => !!(await accessoHR(req)) && (req.user.owner || !!req.apps?.iprofile_consegna) && (req.user.owner || req.apps.iprofile_consegna === 'admin' || !(await store.appSpente()).has('iprofile_consegna'));
+app.get('/api/hr/me', needUser, wrap(async (req, res) => res.json({ iprofile: !!await accessoHR(req), consegna: await accessoConsegna(req) })));
+app.get('/hr/consegna.js', wrap(async (req, res) => {
+  if (!req.user || !await accessoConsegna(req)) return res.status(403).type('js').send('/* non autorizzato */');
+  res.set('Cache-Control', 'no-store'); res.type('js').sendFile(path.join(__dirname, 'hr', 'consegna.js'));
+}));
 app.get('/hr/iprofile', wrap(async (req, res) => {
   if (!req.user) return res.redirect('/accedi?next=' + encodeURIComponent('/hr/iprofile'));
   if (!await accessoHR(req)) return res.redirect('/?noaccess=iprofile');

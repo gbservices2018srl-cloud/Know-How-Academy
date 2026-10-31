@@ -1,0 +1,125 @@
+/* I-Profile · lettura dei singoli tratti (spettro del tratto dal manuale di valutazione).
+   Per ogni tratto: valore ottimale e fasce con una spiegazione sintetica di come si comporta la persona. */
+window.IP_TRATTI = {
+  org: { nome: 'Organizzazione', ottimo: v => v > 40, ottimoTxt: '> 40', fasce: [
+    [41, 100, 'Ha le idee chiare e si programma bene nel breve e nel lungo periodo: ordinata, precisa, puntuale, consapevole delle priorità.'],
+    [25, 40, 'In genere si programma e sa cosa deve fare; quando il lavoro è tanto può diventare un po\' dispersiva.'],
+    [10, 24, 'Tende a disperdersi e a correre dietro alle urgenze: le servono piani di lavoro settimanali fatti con lei.'],
+    [-10, 9, 'Confusionaria e dispersiva: le serve una pianificazione giornaliera e va seguita da vicino.'],
+    [-100, -11, 'Molto disorganizzata e dispersiva.']] },
+  auto: { nome: 'Automotivazione', ottimo: v => v > 0, ottimoTxt: '> 0 (per i responsabili > 34)', fasce: [
+    [68, 100, 'Fortemente motivata, ma l\'altissima considerazione di sé può ostacolarla nelle relazioni (a volte senso di superiorità).'],
+    [35, 67, 'Molto motivata e ambiziosa, crede in sé e sa entusiasmare gli altri: livello ottimale per imprenditori, manager e venditori.'],
+    [0, 34, 'Si motiva da sola ma non accende gli altri: buon livello per dipendenti e ruoli interni.'],
+    [-15, -1, 'Ha bisogno di essere motivata, altrimenti si spegne.'],
+    [-30, -16, 'Ha spesso bisogno di carica, motivazione e apprezzamenti.'],
+    [-100, -31, 'Crede poco in sé; probabilmente il lavoro non è la sua priorità.']] },
+  gp: { nome: 'Gestione Pressioni', ottimo: v => v >= 21 && v <= 68, ottimoTxt: 'tra 21 e 68', fasce: [
+    [69, 100, 'Sembra serena e dice che va tutto bene, ma non affronta una persona che la mette in difficoltà: fa compromessi e ogni tanto esplode per motivi secondari.'],
+    [21, 68, 'Gestisce bene le pressioni: non subisce critiche e comunicazioni negative e resta concentrata sui suoi obiettivi.'],
+    [0, 20, 'C\'è una persona che la ostacola e la preoccupa: rischio di alti e bassi nell\'umore e nei risultati.'],
+    [-30, -1, 'Vive un conflitto che la destabilizza: umore altalenante, atteggiamenti mutevoli, possibili errori di giudizio.'],
+    [-70, -31, 'Forte stress per il conflitto con una o più persone: alti e bassi ed errori.'],
+    [-100, -71, 'Fortemente agitata e preoccupata da una situazione decisamente conflittuale.']] },
+  ad: { nome: 'Autodisciplina', ottimo: v => v > 39, ottimoTxt: '> 39', fasce: [
+    [60, 100, 'Molto affidabile e responsabile.'],
+    [40, 59, 'Coscienziosità decisamente sopra la media: affidabile e responsabile.'],
+    [28, 39, 'Abbastanza affidabile: in genere fa le cose, ma non cura a fondo alcuni aspetti del suo ruolo.'],
+    [20, 27, 'Spesso rimanda o trascura attività del ruolo: bisogna ricordarle le cose e seguirla. Fatica nei ruoli manageriali.'],
+    [10, 19, 'Le vanno ricordate le cose: tampona e mette pezze, le procedure nuove le segue una volta e poi le abbandona.'],
+    [-100, 9, 'Poco produttiva senza direttive e controllo costanti: lascia spesso cose non gestite.']] },
+  det: { nome: 'Determinazione', ottimo: v => v > 35, ottimoTxt: '> 35', fasce: [
+    [60, 100, 'Aperta e diretta: chiede con convinzione e in genere ottiene.'],
+    [40, 59, 'In genere convinta e convincente: ha impatto sulle persone.'],
+    [25, 39, 'Chiede le cose, ma non sempre è veramente assertiva.'],
+    [10, 24, 'Non sempre diretta: fa giri di parole, non affronta di petto alcune persone, si appoggia a mail o numeri per convincere.'],
+    [-10, 9, 'Non chiede le cose o le chiede in modo titubante, gira attorno ai problemi: inizia a essere inibita.'],
+    [-30, -11, 'Fatica ad affrontare le persone e a chiedere: molto inibita (può esserci una situazione di pressione).'],
+    [-100, -31, 'Decisamente inibita, introversa, ha paura degli altri.']] },
+  vend: { nome: 'Attitudine alla vendita', ottimo: v => v > 60, ottimoTxt: '> 60', fasce: [
+    [80, 100, 'Ottimo venditore: grande capacità di persuadere e influenzare gli altri.'],
+    [60, 79, 'Buon venditore: buone capacità di persuasione.'],
+    [40, 59, 'Discrete attitudini di persuasione: per vendere servono altri tratti a supporto.'],
+    [25, 39, 'Un po\' di predisposizione, non sempre sufficiente: tende a descrivere più che a emozionare.'],
+    [15, 24, 'Poche capacità di persuasione: non adatta a un ruolo commerciale puro.'],
+    [-100, 14, 'Vendere non è la sua vocazione.']] },
+  hr: { nome: 'HR Management', ottimo: v => v > 30, ottimoTxt: '> 30', fasce: [
+    [44, 100, 'Eccellenti capacità di far crescere le persone che guida.'],
+    [30, 43, 'Buona capacità di far crescere le persone.'],
+    [20, 29, 'Leggera capacità di far crescere le persone: nei momenti difficili non sempre ci riesce.'],
+    [0, 19, 'Non incide sulla crescita delle persone che guida.'],
+    [-20, -1, 'Impatto negativo: tende a demotivare e scoraggiare chi le sta intorno.'],
+    [-100, -21, 'Impatto fortemente negativo sulle persone che guida.']] },
+  pro: { nome: 'Proattività', ottimo: v => v > 29, ottimoTxt: '> 29', fasce: [
+    [60, 100, 'Propositiva e si fa carico dei problemi, ma pensa di essere più brava degli altri e lo fa notare: i suoi consigli possono risultare invadenti.'],
+    [30, 59, 'Si mette in discussione e cerca soluzioni: si sente causa di ciò che le succede.'],
+    [10, 29, 'Si mette in discussione, ma solo dopo aver reagito: permalosa, si contraria facilmente.'],
+    [-10, 9, 'Ci rimane male se gli altri non la pensano come lei: suscettibile, comincia a ragionare da "effetto".'],
+    [-29, -11, 'Molto permalosa: si sente "effetto" e dà la colpa agli altri.'],
+    [-100, -30, 'Subisce le cose e si sente delusa dagli altri: permalosa e gelosa.']] },
+  com: { nome: 'Comprensione', ottimo: v => v > 15, ottimoTxt: '> 15', fasce: [
+    [45, 100, 'Tollerante e comprensiva: mette le persone a proprio agio.'],
+    [30, 44, 'Si mette nei panni degli altri e li fa sentire compresi.'],
+    [16, 29, 'Comprende abbastanza bene le ragioni degli altri.'],
+    [0, 15, 'In genere comprende le persone, ma a volte è un po\' critica.'],
+    [-20, -1, 'Decisamente critica: non ascolta e non comprende gli altri.'],
+    [-44, -21, 'Molto critica, concentrata sui difetti e sulle mancanze delle persone.'],
+    [-100, -45, 'Fortemente diffidente e critica, orientata a dare torto agli altri.']] },
+  esp: { nome: 'Espansività', ottimo: v => v > 50, ottimoTxt: '> 50', fasce: [
+    [70, 100, 'Spigliata, disinibita e calorosa nel primo approccio.'],
+    [50, 69, 'Aperta e cordiale nel primo approccio.'],
+    [30, 49, 'Sa approcciare persone nuove ma è formale e selettiva: spesso resta sulle sue.'],
+    [0, 29, 'Selettiva con chi non conosce: traspare un po\' di timidezza.'],
+    [-40, -1, 'Non fa il primo passo per conoscere gli altri: resta sulle sue.'],
+    [-100, -41, 'Chiusa, ritirata e impacciata con le persone nuove.']] },
+  rc: { nome: 'Resistenza al cambiamento', ottimo: v => v >= -14 && v <= 44, ottimoTxt: 'tra -14 e 44', fasce: [
+    [70, 100, 'Ancorata a idee, abitudini e procedure: molto difficile farle cambiare idea; logica e tecnica più che motivante.'],
+    [45, 69, 'Difficile farle cambiare idea: approccio logico e razionale, tende a giustificare con spiegazioni logiche i risultati non ottimali.'],
+    [38, 44, 'A volte mostra un po\' di resistenza al cambiamento.'],
+    [15, 37, 'Costante e coerente, ma flessibile e aperta al cambiamento.'],
+    [-14, 14, 'Flessibile: si appoggia a una persona di riferimento da cui cerca consigli e sicurezza; rende se gestita in modo positivo.'],
+    [-19, -15, 'A volte si comporta in modo inaffidabile.'],
+    [-30, -20, 'Piuttosto incerta e incostante, probabilmente vive un conflitto: incoerente tra aree diverse della sua vita.'],
+    [-100, -31, 'Creativa ma fortemente incoerente e incostante: difficile da gestire, va guidata in modo direttivo.']] },
+  fin: { nome: 'Finanze', ottimo: v => v > 30, ottimoTxt: '> 30', fasce: [
+    [80, 100, 'Molto portata per le finanze: crea valore e lo monetizza rapidamente.'],
+    [55, 79, 'Abile nella gestione delle finanze personali.'],
+    [30, 54, 'Discreta predisposizione per la gestione delle finanze personali.'],
+    [0, 29, 'Ha aree di trascuratezza nella gestione finanziaria.'],
+    [-20, -1, 'Trascura molto la gestione finanziaria o non si è ancora creata un sistema efficace per mantenersi.'],
+    [-100, -21, 'Grande trascuratezza e assenza di principi di gestione del denaro, o non riesce ancora a guadagnare abbastanza.']] },
+  suc: { nome: 'Successo', ottimo: v => v > 69, ottimoTxt: '> 69', fasce: [
+    [70, 100, 'Sta ottenendo (o ha ottenuto) buoni risultati professionali.'],
+    [60, 69, 'Ottiene risultati sufficienti ma non sta crescendo.'],
+    [50, 59, 'Non ha fallito, ma non ha ottenuto i successi che si aspettava.'],
+    [30, 49, 'Non ha avuto successo nell\'attività attuale o nelle precedenti: le cose vanno più male che bene.'],
+    [-100, 29, 'È a inizio carriera, oppure ha un passato professionale discontinuo e con poco successo.']] },
+  pri: { nome: 'Principi', ottimo: v => v > 39, ottimoTxt: '> 39 (manager > 45)', fasce: [
+    [60, 100, 'Ha idee corrette su come affrontare il lavoro e crescere in azienda: lavora come se l\'azienda fosse sua.'],
+    [40, 59, 'Ha più idee corrette che sbagliate sul lavoro (sotto 45 è inadeguato per un manager).'],
+    [30, 39, 'Pensa che sia l\'azienda a doversi far carico del suo benessere.'],
+    [-100, 29, 'Pensa che l\'azienda debba farsi carico del suo benessere e può sostenerlo in modo polemico: atteggiamento molto "sindacale".']] },
+  lin: { nome: 'Leadership Indice Naturale', ottimo: v => v > 35, ottimoTxt: '> 35', fasce: [
+    [66, 100, 'Ha carisma ma sopravvaluta la sua influenza sugli altri: a volte suscita antipatie (potrebbe essere un grande venditore).'],
+    [50, 65, 'Sa accendere e motivare le persone.'],
+    [35, 49, 'È più manager che leader: gestisce con logica e procedure più che con emozione e coinvolgimento.'],
+    [20, 34, 'Non motiva le persone: si aspetta che siano gli altri a capire la sua posizione.'],
+    [0, 19, 'Fatica ad accendere e coinvolgere le persone.'],
+    [-100, -1, 'Non ha l\'idea di dover coinvolgere gli altri nei suoi progetti.']] },
+  va: { nome: 'Vendita assistita', ottimo: v => v > 75, ottimoTxt: '> 75', fasce: [
+    [75, 100, 'Molto brava ad assistere il cliente nell\'acquisto (commessi, banco, sala).'],
+    [61, 74, 'Predisposta ad assistere il cliente.'],
+    [45, 60, 'Tendenzialmente predisposta ad assistere il cliente.'],
+    [-100, 44, 'Sotto le fasce indicate dal manuale per la vendita assistita.']] },
+  wi: { nome: 'Worker index', ottimo: v => v > 70, ottimoTxt: '> 70', fasce: [
+    [70, 100, 'Ottima predisposizione ai lavori operativi e ripetitivi.'],
+    [55, 69, 'Buona predisposizione ai lavori operativi.'],
+    [28, 54, 'Predisposizione discreta, non sempre sufficiente.'],
+    [-100, 27, 'Bassa predisposizione ai lavori operativi (conta solo per ruoli operativi o produttivi).']] },
+};
+window.IP_FASCIA = (k, v) => { const t = window.IP_TRATTI[k]; if (!t || v === null || v === undefined || isNaN(v)) return null; const f = t.fasce.find(([a, b]) => v >= a && v <= b) || t.fasce[t.fasce.length - 1]; return { da: f[0], a: f[1], testo: f[2], ok: t.ottimo(v) }; };
+// quali tratti entrano in ciascun comportamento speciale (numero del manuale)
+window.IP_SINDR_TRATTI = { 1: ['hr', 'pro', 'com', 'esp'], 2: ['auto', 'gp', 'com', 'rc'], 3: ['auto', 'gp', 'com', 'rc'], 4: ['pro', 'com', 'esp', 'rc'], 5: ['gp', 'pro', 'com'],
+  6: ['org', 'ad', 'pro', 'fin', 'rc', 'gp', 'pri', 'auto', 'esp', 'com', 'suc'], 7: ['org', 'rc'], 8: ['rc'], 9: ['org', 'auto', 'gp', 'ad', 'det', 'vend', 'pro'], 10: ['gp', 'pro', 'com', 'det'],
+  11: ['vend', 'rc', 'suc', 'fin'], 12: ['auto', 'det', 'vend', 'pro', 'com'], 13: ['auto', 'gp', 'rc'], 14: ['rc'], 15: ['suc', 'pri', 'fin'], 16: ['auto', 'vend'],
+  17: ['org', 'auto', 'gp', 'ad', 'det', 'vend', 'hr', 'pro', 'com', 'esp'], 18: ['pro', 'com'], 19: ['gp', 'det'], 20: ['org', 'auto', 'det', 'vend', 'lin', 'pro', 'com', 'esp'], 21: ['rc'], 22: ['fin'], 23: ['gp'] };
