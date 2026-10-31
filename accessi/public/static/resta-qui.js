@@ -84,8 +84,9 @@
     'font:700 13.5px/1 "Fira Sans",system-ui,-apple-system,"Segoe UI",sans-serif;text-decoration:none;white-space:nowrap;box-shadow:0 1px 2px rgba(20,48,48,.08);margin-right:10px;vertical-align:middle;letter-spacing:0}' +
     '.ts-home:hover{background:#EAF4F4;border-color:#4CAAAA}.ts-home:focus-visible{outline:2px solid #2B8384;outline-offset:2px}' +
     '.ts-home svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}' +
-    '.ts-home.blocco{display:flex;margin:0 0 12px;justify-content:center;width:100%;box-sizing:border-box}' +
-    '.ts-home.vola{position:fixed;left:max(12px,env(safe-area-inset-left));top:max(10px,env(safe-area-inset-top));z-index:2147483000;margin:0}' +
+    '.ts-home.blocco{display:flex;margin:10px 14px 4px;justify-content:center;flex:none;box-sizing:border-box}' +
+    '@media (max-width:900px){.ts-home.blocco{margin:6px 4px 6px 10px;width:36px;padding:0}.ts-home.blocco span{display:none}}' +
+    '.ts-home.vola{position:fixed;left:max(12px,env(safe-area-inset-left));bottom:max(14px,env(safe-area-inset-bottom));z-index:900;margin:0;box-shadow:0 4px 14px rgba(20,48,48,.18)}' +
     '@media (max-width:700px){.ts-home:not(.blocco) span{display:none}.ts-home:not(.blocco){width:36px;padding:0;justify-content:center;margin-right:8px}}' +
     '@media (prefers-color-scheme:dark){.ts-home{background:#172121;border-color:#2A3939;color:#62C3C3}.ts-home:hover{background:#1D2929}}' +
     '@media print{.ts-home{display:none!important}}';
@@ -99,11 +100,20 @@
   function visibile(e) { if (!e) return false; var r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.top < 160; }
   function metti() {
     if (!document.body || document.body.getAttribute('data-ts-home') === 'no') return;
-    if (document.querySelector('a[data-ts-home]')) return;
+    var c = document.querySelector('a[data-ts-home]');
+    if (c && !c.classList.contains('vola')) return;
+    // il pulsante "di riserva" (in basso) lascia il posto a quello nella barra, appena la barra compare
+    if (c) { if (!trovaPosto()) return; c.remove(); }
     if (!document.getElementById('ts-home-css')) { var st = document.createElement('style'); st.id = 'ts-home-css'; st.textContent = css; document.head.appendChild(st); }
-    // barra laterale (Gestione finanziaria, Bilancio): sotto il logo, a tutta larghezza
+    var posto = trovaPosto();
+    if (posto) return posto();
+    if (pronta) document.body.appendChild(crea('vola')); // nessuna barra (pagina già caricata): pulsante in basso a sinistra
+  }
+  // dove mettere il pulsante: restituisce una funzione che lo inserisce, oppure null
+  function trovaPosto() {
+    // barra laterale (Gestione finanziaria, Bilancio): sotto il logo (sul telefono, se la barra diventa una riga, prima delle voci)
     var side = document.querySelector('#sidebar, aside.sidebar');
-    if (side && visibile(side) && side.querySelector('.brand')) { var b0 = side.querySelector('.brand'); b0.parentNode.insertBefore(crea('blocco'), b0.nextSibling); return; }
+    if (side && visibile(side) && side.querySelector('.brand')) { var b0 = side.querySelector('.brand'); return function () { b0.parentNode.insertBefore(crea('blocco'), b0.nextSibling); }; }
     // barra in alto: prima del logo / nome dell'app
     var bars = document.querySelectorAll('header, .top, .topbar, .navbar');
     for (var i = 0; i < bars.length; i++) {
@@ -111,14 +121,13 @@
       var brand = bar.querySelector('.brand, .navbar-brand, .hin, .top-in');
       if (brand && brand.matches('.hin, .top-in')) brand = brand.querySelector('.brand, a, img') || brand;
       if (brand && brand.closest('.brand, .navbar-brand') && brand.tagName !== 'DIV' && brand.tagName !== 'SPAN') brand = brand.closest('.brand, .navbar-brand');
-      if (brand) {
+      return (function (bar, brand) { return function () {
         // dentro il gruppo del logo (che è già una riga), come primo elemento; se il logo è un link o un'immagine, subito prima
-        if (/^(A|IMG|SPAN|B)$/.test(brand.tagName)) brand.parentNode.insertBefore(crea(), brand);
-        else brand.insertBefore(crea(), brand.firstChild);
-      } else bar.insertBefore(crea(), bar.firstChild);
-      return;
+        if (brand) { if (/^(A|IMG|SPAN|B)$/.test(brand.tagName)) brand.parentNode.insertBefore(crea(), brand); else brand.insertBefore(crea(), brand.firstChild); }
+        else bar.insertBefore(crea(), bar.firstChild);
+      }; })(bar, brand);
     }
-    if (pronta) document.body.appendChild(crea('vola')); // nessuna barra (pagina già caricata): pulsante fisso in alto a sinistra
+    return null;
   }
   var pronta = false;
   window.addEventListener('load', function () { setTimeout(function () { pronta = true; presto(); }, 1500); });
@@ -126,5 +135,5 @@
   function presto() { if (t) return; t = setTimeout(function () { t = null; try { metti(); } catch (e) {} }, 120); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', presto); else presto();
   window.addEventListener('load', presto);
-  new MutationObserver(function () { if (!document.querySelector('a[data-ts-home]')) presto(); }).observe(document.documentElement, { childList: true, subtree: true });
+  new MutationObserver(function () { var c = document.querySelector('a[data-ts-home]'); if (!c || c.classList.contains('vola')) presto(); }).observe(document.documentElement, { childList: true, subtree: true });
 })();
