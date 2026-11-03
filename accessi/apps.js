@@ -7,14 +7,17 @@
 // multi: la persona può lavorare in più studi (il primo è quello principale; nell'app sceglie lo studio in alto)
 // e la funzione "sso" crea o aggiorna il profilo nell'app, così la persona non deve avere un'altra password.
 module.exports = [
-  // Controllo di gestione: riquadro unico con Gestione finanziaria e l'App di bilancio (budget, consuntivo, scostamenti)
-  { key: 'controllo', name: 'Controllo di gestione', url: 'https://appgestione.it/c/controllo', color: 'teal', virtuale: true,
-    gruppo: ['finanza', 'bilancio'],
-    desc: 'Gestione finanziaria e bilancio: budget, consuntivo, scostamenti e indicatori.' },
+  // Gestione amministrativa (prima "Controllo di gestione"): Gestione finanziaria, App di bilancio e Raffronto prezzi
+  { key: 'controllo', name: 'Gestione amministrativa', url: 'https://appgestione.it/c/controllo', color: 'teal', virtuale: true,
+    gruppo: ['finanza', 'bilancio', 'prezzi'],
+    desc: 'Gestione finanziaria, bilancio e raffronto dei prezzi tra listini e fatture dei fornitori.' },
   { key: 'finanza', name: 'Gestione finanziaria', url: 'https://finanza.appgestione.it', color: 'teal', dentro: 'controllo',
     desc: 'Andamento economico e dati finanziari del gruppo.' },
   { key: 'bilancio', name: 'Controllo di gestione · Bilancio', url: 'https://finanza.appgestione.it/bilancio', color: 'purple', dentro: 'controllo',
     desc: 'Dal bilancio a 4 sezioni: budget, consuntivo, scostamenti, costi fissi e variabili, break even, EBITDA e utile.' },
+  // Raffronto prezzi: listini dei fornitori salvati; la fattura si confronta con il listino (della fattura non si salva niente)
+  { key: 'prezzi', name: 'Raffronto prezzi', url: 'https://appgestione.it/amm/prezzi', color: 'yellow', dentro: 'controllo',
+    desc: 'Carica i listini dei fornitori (PDF, foto o Excel) e confronta le fatture: voci corrette, più care, più economiche o non a listino.' },
   // HR: riquadro unico per le risorse umane: Turni (planning, ferie, buste paga) e I-Profile OSM
   { key: 'hr', name: 'HR', url: 'https://appgestione.it/c/hr', color: 'purple', virtuale: true,
     gruppo: ['turni', 'iprofile'],

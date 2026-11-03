@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Raffronto prezzi · Gestione amministrativa · To Smile</title>
+<link rel="stylesheet" href="/fonts/tosmile.css?f=fira-sans:600,700,800|figtree:400,500,600,700">
+<link rel="stylesheet" href="/static/accessi.css?v=3">
+<link rel="icon" href="/static/icon.svg">
+<meta name="theme-color" content="#4CAAAA">
+<style>
+/* Raffronto prezzi: listini dei fornitori (salvati) e confronto delle fatture (non salvato) */
+:root{--rosso:#B3261E;--rosso-bg:#FBEAEA;--verde:#1F7A4D;--verde-bg:#E3F3EA;--ambra:#8A5A00;--ambra-bg:#FBF3DA}
+@media (prefers-color-scheme: dark){:root{--rosso:#F2B8B5;--rosso-bg:#3A2222;--verde:#8FD09A;--verde-bg:#1C2E20;--ambra:#F0C070;--ambra-bg:#352C17}}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.top .logo img{width:min(200px,50vw)}
+header p{margin:8px 0 0;color:var(--muted);max-width:72ch}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tabs button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:9px 16px;font:700 15px var(--f-body);color:var(--muted);cursor:pointer;min-height:44px;display:inline-flex;gap:8px;align-items:center}
+.tabs button.on{background:var(--teal-ink);border-color:var(--teal-ink);color:#fff}
+.tabs svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:14px;border-top:5px solid var(--teal)}
+.panel h2{font:700 13px/1.2 var(--f-display);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.row>label.field{flex:1 1 220px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.lcard{border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:6px;background:var(--surface-2);cursor:pointer;text-align:left;font:inherit;color:inherit}
+.lcard:hover{border-color:var(--teal)}
+.lcard b{font:700 17px var(--f-display)}
+.lcard .m{font-size:13px;color:var(--muted)}
+.empty{color:var(--muted);padding:12px 0}
+.drop{border:1.5px dashed var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+.drop.drag{border-color:var(--teal);background:var(--ok-bg)}
+.drop p{margin:0;color:var(--muted);font-size:14px}
+.status{font-size:14px;color:var(--muted)}.status.err{color:var(--rosso);font-weight:700}
+.busy{display:inline-block;width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--teal-ink);border-radius:50%;animation:g 1s linear infinite;vertical-align:-3px;margin-right:6px}
+@keyframes g{to{transform:rotate(360deg)}}
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;max-height:70vh}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+th{position:sticky;top:0;background:var(--surface-2);font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);z-index:1}
+td.n,th.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.ed input{min-height:34px;padding:5px 8px;font-size:14px;border-radius:8px}
+.ed td.c input{width:110px}.ed td.u input{width:70px}.ed td.p input{width:100px;text-align:right}
+.x{border:0;background:none;color:var(--muted);cursor:pointer;font-size:18px;width:34px;height:34px;border-radius:8px}
+.x:hover{background:var(--rosso-bg);color:var(--rosso)}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:700;padding:3px 10px;border-radius:99px;white-space:nowrap}
+.chip.ok{background:var(--surface-2);color:var(--muted)}.chip.piu{background:var(--rosso-bg);color:var(--rosso)}.chip.meno{background:var(--verde-bg);color:var(--verde)}
+.chip.nuova,.chip.da_verificare{background:var(--ambra-bg);color:var(--ambra)}.chip.aggiunta{background:var(--ok-bg);color:var(--ok)}
+tr.piu td{background:color-mix(in srgb,var(--rosso-bg) 55%,transparent)}tr.meno td{background:color-mix(in srgb,var(--verde-bg) 55%,transparent)}tr.nuova td{background:color-mix(in srgb,var(--ambra-bg) 45%,transparent)}
+.d.piu{color:var(--rosso);font-weight:700}.d.meno{color:var(--verde);font-weight:700}
+.sum{display:flex;gap:10px;flex-wrap:wrap}
+.sum .s{flex:1 1 150px;border:1px solid var(--line);border-radius:14px;padding:12px 14px;background:var(--surface)}
+.sum .s b{display:block;font:800 24px var(--f-display)}.sum .s span{font-size:13px;color:var(--muted)}
+.sum .s.piu{border-color:color-mix(in srgb,var(--rosso) 40%,var(--line))}.sum .s.piu b{color:var(--rosso)}
+.sum .s.meno{border-color:color-mix(in srgb,var(--verde) 40%,var(--line))}.sum .s.meno b{color:var(--verde)}
+.sum .s.nuova b{color:var(--ambra)}
+.scelta{background:var(--warn-bg);border-radius:12px;padding:12px 14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.nuova-az{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.nota{font-size:12.5px;color:var(--muted)}
+.priv{display:flex;gap:10px;align-items:flex-start;background:var(--surface-2);border:1px solid var(--line);border-radius:14px;padding:10px 14px;font-size:14px;color:var(--muted)}
+.cerca{max-width:320px}
+[hidden]{display:none!important}
+@media print{
+  body{padding:0;background:#fff}
+  .top,.tabs,header p,.priv,#vista-listini,.noprint,.ts-home{display:none!important}
+  .panel{border:0;padding:0}.tbl-wrap{max-height:none;overflow:visible;border:0}
+  th{position:static}
+}
+</style>
+<script src="/static/resta-qui.js?v=3" defer></script>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <a class="logo" href="/" aria-label="To Smile, le tue app"><img src="/static/logo-tosmile.png" alt="To Smile · Persone, salute, sorrisi" width="548" height="165"></a>
+    <a class="btn small" href="/c/controllo">← Gestione amministrativa</a>
+  </div>
+  <header>
+    <h1>Raffronto <span>prezzi</span></h1>
+    <div class="rule" aria-hidden="true"></div>
+    <p>Carica i listini dei fornitori, poi confronta le loro fatture: vedi subito cosa è corretto, cosa ti fanno pagare di più o di meno e quali voci non sono a listino.</p>
+  </header>
+  <nav class="tabs" aria-label="Sezioni">
+    <button type="button" class="on" data-tab="listini"><svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8 10h8M8 14h8M8 18h5"/></svg>Listini</button>
+    <button type="button" data-tab="confronto"><svg viewBox="0 0 24 24"><path d="M4 7h11M4 7l3-3M4 7l3 3"/><path d="M20 17H9M20 17l-3-3M20 17l-3 3"/></svg>Confronta una fattura</button>
+  </nav>
+
+  <section class="panel" id="vista-listini" aria-label="Listini"></section>
+  <section class="panel" id="vista-confronto" aria-label="Confronto fattura" hidden></section>
+</div>
+<div class="toast" id="toast" role="status" hidden style="position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:11px 16px;border-radius:12px;font-weight:600;z-index:50"></div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const eur = v => v === null || v === undefined || isNaN(v) ? '–' : Number(v).toLocaleString('it-IT', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: Math.abs(v) < 10 && String(v).split('.')[1]?.length > 2 ? 4 : 2 });
+const pct = v => v === null || v === undefined || !isFinite(v) ? '' : (v > 0 ? '+' : '') + (v * 100).toLocaleString('it-IT', { maximumFractionDigits: 1 }) + '%';
+const dt = s => s ? new Date(s).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+const numIn = s => { s = String(s ?? '').replace(/[€\s]/g, ''); if (!s) return null; if (/,\d{1,4}$/.test(s)) s = s.replace(/\./g, '').replace(',', '.'); else s = s.replace(/,/g, ''); const n = parseFloat(s); return isFinite(n) ? n : null; };
+const numOut = v => v === null || v === undefined ? '' : String(v).replace('.', ',');
+let toastT; function toast(t, ms = 3500) { const e = $('#toast'); e.textContent = t; e.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => e.hidden = true, ms); }
+async function api(method, url, body) {
+  const isForm = body instanceof FormData;
+  const r = await fetch(url, { method, credentials: 'same-origin', headers: body && !isForm ? { 'Content-Type': 'application/json' } : {}, body: isForm ? body : body ? JSON.stringify(body) : undefined });
+  if (r.status === 401) { location.href = '/accedi?next=/amm/prezzi'; throw new Error('Accedi di nuovo'); }
+  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Operazione non riuscita'); return j;
+}
+const S = { tab: 'listini', listini: [], ai: true, ed: null, conf: null };
+const ACCEPT = '.pdf,.xlsx,.xlsm,.csv,image/*,application/pdf';
+
+document.querySelector('.tabs').addEventListener('click', e => {
+  const b = e.target.closest('[data-tab]'); if (!b) return;
+  if (S.ed?.sporco && !confirm('Ci sono modifiche al listino non salvate. Uscire lo stesso?')) return;
+  S.tab = b.dataset.tab; if (S.tab === 'listini') S.ed = null;
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
+  $('#vista-listini').hidden = S.tab !== 'listini'; $('#vista-confronto').hidden = S.tab !== 'confronto';
+  disegna();
+});
+async function caricaListini() { const r = await api('GET', '/api/prezzi/listini'); S.listini = r.listini; S.ai = r.ai; }
+function disegna() { S.tab === 'listini' ? disegnaListini() : disegnaConfronto(); }
+
+/* ============ LISTINI ============ */
+function disegnaListini() {
+  const box = $('#vista-listini');
+  if (S.ed) return disegnaEditor(box);
+  box.innerHTML = `<div class="row" style="justify-content:space-between;align-items:center"><h2>Listini salvati · ${S.listini.length}</h2><button class="btn primary" id="nuovo">+ Nuovo listino</button></div>
+    ${S.listini.length ? `<div class="cards">${S.listini.map(l => `<button class="lcard" data-apri="${esc(l.id)}"><b>${esc(l.fornitore)}</b>${l.nome ? `<span>${esc(l.nome)}</span>` : ''}<span class="m">${l.nVoci} voc${l.nVoci === 1 ? 'e' : 'i'} · aggiornato il ${esc(dt(l.aggiornatoIl))}${l.aggiornatoDa ? ' da ' + esc(l.aggiornatoDa) : ''}</span></button>`).join('')}</div>`
+      : '<p class="empty">Nessun listino ancora. Crea il primo con «Nuovo listino»: carica il PDF, la foto o il file Excel del fornitore e le voci si compilano da sole.</p>'}`;
+  $('#nuovo').onclick = () => { S.ed = { id: null, fornitore: '', nome: '', note: '', voci: [], sporco: false, filtro: '' }; disegna(); setTimeout(() => $('#ed-forn')?.focus(), 30); };
+  box.querySelectorAll('[data-apri]').forEach(b => b.onclick = async () => {
+    try { const r = await api('GET', '/api/prezzi/listini/' + b.dataset.apri); S.ed = { id: r.listino.id, fornitore: r.listino.fornitore, nome: r.listino.nome, note: r.listino.note, voci: r.voci, sporco: false, filtro: '' }; disegna(); }
+    catch (e) { toast(e.message, 5000); }
+  });
+}
+function disegnaEditor(box) {
+  const ed = S.ed, f = ed.filtro.toLowerCase();
+  const visibili = ed.voci.map((v, i) => [v, i]).filter(([v]) => !f || (v.descrizione + ' ' + v.codice).toLowerCase().includes(f));
+  box.innerHTML = `<div class="row" style="justify-content:space-between;align-items:center"><h2>${ed.id ? 'Listino' : 'Nuovo listino'}</h2><button class="btn small" id="chiudi">← Tutti i listini</button></div>
+    <div class="row"><label class="field">Fornitore<input id="ed-forn" value="${esc(ed.fornitore)}" autocomplete="off"></label><label class="field">Nome del listino (facoltativo)<input id="ed-nome" value="${esc(ed.nome)}" placeholder="es. Listino 2026" autocomplete="off"></label></div>
+    <div class="drop" id="drop"><p>Carica il listino o il preventivo del fornitore: <b>PDF, foto o Excel</b>. Le voci vengono lette in automatico: controllale e correggile prima di salvare.</p>
+      <div class="row"><label class="btn small" for="ed-file">Scegli il file</label><input type="file" id="ed-file" accept="${ACCEPT}" hidden><span class="nota" id="ed-nomefile"></span><button class="btn small primary" id="ed-leggi" disabled>Leggi le voci</button></div>
+      <div class="status" id="ed-stato" aria-live="polite">${S.ai ? '' : 'La lettura automatica non è attiva: puoi inserire le voci a mano.'}</div></div>
+    <div id="ed-scelta"></div>
+    <div class="row" style="justify-content:space-between;align-items:center"><h2>Voci · ${ed.voci.length}</h2>${ed.voci.length > 12 ? `<label class="field cerca"><span class="sr" style="position:absolute;left:-9999px">Cerca</span><input type="search" id="ed-filtro" placeholder="Cerca una voce" value="${esc(ed.filtro)}"></label>` : ''}</div>
+    ${ed.voci.length ? `<div class="tbl-wrap"><table class="ed"><thead><tr><th>Codice</th><th>Descrizione</th><th>U.m.</th><th class="n">Prezzo €</th><th></th></tr></thead><tbody>
+      ${visibili.map(([v, i]) => `<tr><td class="c"><input data-i="${i}" data-k="codice" value="${esc(v.codice)}" aria-label="Codice"></td><td><input data-i="${i}" data-k="descrizione" value="${esc(v.descrizione)}" aria-label="Descrizione" style="min-width:260px"></td><td class="u"><input data-i="${i}" data-k="um" value="${esc(v.um)}" aria-label="Unità di misura"></td><td class="p"><input data-i="${i}" data-k="prezzo" value="${esc(numOut(v.prezzo))}" inputmode="decimal" aria-label="Prezzo"></td><td><button class="x" data-del="${i}" title="Togli questa voce" aria-label="Togli questa voce">✕</button></td></tr>`).join('')}
+    </tbody></table></div>` : '<p class="empty">Nessuna voce: carica il file qui sopra oppure aggiungile a mano.</p>'}
+    <div class="row"><button class="btn small" id="ed-agg">+ Aggiungi voce</button></div>
+    <div class="row" style="justify-content:space-between;border-top:1px solid var(--line);padding-top:14px">
+      <div class="row">${ed.id ? '<button class="btn small danger" id="ed-elimina">Elimina listino</button>' : ''}</div>
+      <div class="row"><span class="nota" id="ed-sporco">${ed.sporco ? 'Modifiche non salvate' : ''}</span><button class="btn primary" id="ed-salva">Salva listino</button></div></div>`;
+  const sporco = () => { ed.sporco = true; $('#ed-sporco').textContent = 'Modifiche non salvate'; };
+  $('#ed-forn').oninput = e => { ed.fornitore = e.target.value; sporco(); };
+  $('#ed-nome').oninput = e => { ed.nome = e.target.value; sporco(); };
+  $('#chiudi').onclick = () => { if (ed.sporco && !confirm('Ci sono modifiche non salvate. Uscire lo stesso?')) return; S.ed = null; disegna(); };
+  box.querySelectorAll('table.ed input').forEach(inp => inp.oninput = () => { const v = ed.voci[+inp.dataset.i]; v[inp.dataset.k] = inp.dataset.k === 'prezzo' ? numIn(inp.value) : inp.value; sporco(); });
+  box.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { ed.voci.splice(+b.dataset.del, 1); ed.sporco = true; disegna(); });
+  $('#ed-agg').onclick = () => { ed.voci.push({ codice: '', descrizione: '', um: '', prezzo: null }); ed.sporco = true; ed.filtro = ''; disegna(); const ins = box.querySelectorAll('table.ed input[data-k="descrizione"]'); ins[ins.length - 1]?.focus(); };
+  const fl = $('#ed-filtro'); if (fl) fl.oninput = e => { ed.filtro = e.target.value; const pos = e.target.selectionStart; disegna(); const n = $('#ed-filtro'); n.focus(); n.setSelectionRange(pos, pos); };
+  // file
+  let file = null;
+  const scegli = f => { if (!f) return; file = f; $('#ed-nomefile').textContent = f.name; $('#ed-leggi').disabled = !S.ai; };
+  $('#ed-file').onchange = e => scegli(e.target.files[0]);
+  const d = $('#drop'); d.ondragover = e => { e.preventDefault(); d.classList.add('drag'); }; d.ondragleave = () => d.classList.remove('drag'); d.ondrop = e => { e.preventDefault(); d.classList.remove('drag'); scegli(e.dataTransfer.files[0]); };
+  $('#ed-leggi').onclick = async () => {
+    if (!file) return; const st = $('#ed-stato'); st.className = 'status'; st.innerHTML = '<span class="busy"></span>Leggo il listino… (può volerci un minuto)'; $('#ed-leggi').disabled = true;
+    try {
+      const fd = new FormData(); fd.append('file', file);
+      const r = await api('POST', '/api/prezzi/leggi-listino', fd);
+      if (!r.voci.length) { st.className = 'status err'; st.textContent = 'Non ho trovato voci con prezzo in questo file.'; return; }
+      if (!ed.fornitore && r.fornitore) ed.fornitore = r.fornitore;
+      const applica = modo => { ed.voci = modo === 'agg' ? ed.voci.concat(r.voci) : r.voci; ed.sporco = true; ed.filtro = ''; disegna(); $('#ed-stato').textContent = `Lette ${r.voci.length} voci. Controllale e premi «Salva listino».`; };
+      if (!ed.voci.length) return applica('sost');
+      $('#ed-scelta').innerHTML = `<div class="scelta"><span>Ho letto <b>${r.voci.length} voci</b>. Il listino ne ha già ${ed.voci.length}: cosa faccio?</span><button class="btn small primary" id="sc-sost">Sostituisci tutte le voci</button><button class="btn small" id="sc-agg">Aggiungile in fondo</button><button class="btn small" id="sc-no">Annulla</button></div>`;
+      $('#sc-sost').onclick = () => applica('sost'); $('#sc-agg').onclick = () => applica('agg'); $('#sc-no').onclick = () => { $('#ed-scelta').innerHTML = ''; st.textContent = ''; };
+      st.textContent = '';
+    } catch (e) { st.className = 'status err'; st.textContent = e.message; }
+    finally { const b = $('#ed-leggi'); if (b) b.disabled = !file || !S.ai; }
+  };
+  $('#ed-salva').onclick = async () => {
+    if (!ed.fornitore.trim()) { toast('Scrivi il nome del fornitore.'); return $('#ed-forn').focus(); }
+    const voci = ed.voci.filter(v => String(v.descrizione || '').trim());
+    try {
+      if (ed.id) await api('PUT', '/api/prezzi/listini/' + ed.id, { fornitore: ed.fornitore, nome: ed.nome, note: ed.note, voci });
+      else ed.id = (await api('POST', '/api/prezzi/listini', { fornitore: ed.fornitore, nome: ed.nome, note: ed.note, voci })).id;
+      ed.voci = voci; ed.sporco = false; await caricaListini(); toast(`Listino salvato: ${voci.length} voci.`); disegna();
+    } catch (e) { toast(e.message, 5000); }
+  };
+  const del = $('#ed-elimina'); if (del) del.onclick = async () => {
+    if (!confirm(`Eliminare il listino di ${ed.fornitore} con tutte le sue ${ed.voci.length} voci? Non si può annullare.`)) return;
+    try { await api('DELETE', '/api/prezzi/listini/' + ed.id); S.ed = null; await caricaListini(); toast('Listino eliminato.'); disegna(); } catch (e) { toast(e.message, 5000); }
+  };
+}
+window.addEventListener('beforeunload', e => { if (S.ed?.sporco) { e.preventDefault(); e.returnValue = ''; } });
+
+/* ============ CONFRONTO FATTURA (non si salva niente) ============ */
+const STATI = { ok: 'Corretta', piu: 'Più cara', meno: 'Più economica', nuova: 'Non a listino', da_verificare: 'Da verificare', aggiunta: 'Aggiunta al listino', ignorata: 'Non a listino · ignorata' };
+function disegnaConfronto() {
+  const box = $('#vista-confronto'), c = S.conf;
+  if (!S.listini.length) { box.innerHTML = '<p class="empty">Per confrontare una fattura serve prima il listino del fornitore: crealo nella scheda «Listini».</p>'; return; }
+  if (!c || !c.esito) {
+    box.innerHTML = `<h2>Confronta una fattura con il listino</h2>
+      <div class="priv">La fattura viene solo letta e confrontata: <b>&nbsp;non si salva niente</b>. Alla fine puoi stampare o scaricare il report.</div>
+      <div class="row"><label class="field">Listino del fornitore<select id="cf-list">${S.listini.map(l => `<option value="${esc(l.id)}" ${c?.listino === l.id ? 'selected' : ''}>${esc(l.fornitore)}${l.nome ? ' · ' + esc(l.nome) : ''} (${l.nVoci} voci)</option>`).join('')}</select></label></div>
+      <div class="drop" id="cf-drop"><p>Carica la fattura: <b>PDF, foto o Excel</b>.</p>
+        <div class="row"><label class="btn small" for="cf-file">Scegli la fattura</label><input type="file" id="cf-file" accept="${ACCEPT}" hidden><span class="nota" id="cf-nomefile"></span><button class="btn small primary" id="cf-vai" disabled>Confronta</button></div>
+        <div class="status" id="cf-stato" aria-live="polite">${S.ai ? '' : 'La lettura automatica non è attiva.'}</div></div>`;
+    let file = null;
+    const scegli = f => { if (!f) return; file = f; $('#cf-nomefile').textContent = f.name; $('#cf-vai').disabled = !S.ai; };
+    $('#cf-file').onchange = e => scegli(e.target.files[0]);
+    const d = $('#cf-drop'); d.ondragover = e => { e.preventDefault(); d.classList.add('drag'); }; d.ondragleave = () => d.classList.remove('drag'); d.ondrop = e => { e.preventDefault(); d.classList.remove('drag'); scegli(e.dataTransfer.files[0]); };
+    $('#cf-vai').onclick = async () => {
+      const st = $('#cf-stato'); st.className = 'status'; st.innerHTML = '<span class="busy"></span>Leggo la fattura e la confronto con il listino… (può volerci un minuto)'; $('#cf-vai').disabled = true;
+      try {
+        const fd = new FormData(); fd.append('file', file); fd.append('listino', $('#cf-list').value);
+        const r = await api('POST', '/api/prezzi/leggi-fattura', fd);
+        if (!r.righe.length) { st.className = 'status err'; st.textContent = 'Non ho trovato righe in questa fattura.'; return; }
+        S.conf = { listino: $('#cf-list').value, esito: r, file: file.name }; disegna(); window.scrollTo(0, 0);
+      } catch (e) { st.className = 'status err'; st.textContent = e.message; }
+      finally { const b = $('#cf-vai'); if (b) b.disabled = !file || !S.ai; }
+    };
+    return;
+  }
+  const r = c.esito, R = r.righe;
+  const n = k => R.filter(x => x.stato === k).length;
+  const piuTot = R.filter(x => x.stato === 'piu').reduce((a, x) => a + (x.diffTot || 0), 0), menoTot = R.filter(x => x.stato === 'meno').reduce((a, x) => a + (x.diffTot || 0), 0);
+  box.innerHTML = `<div class="row" style="justify-content:space-between;align-items:center"><h2>Report di confronto</h2><div class="row noprint"><button class="btn small" id="cf-stampa">Stampa / Salva PDF</button><button class="btn small" id="cf-csv">Scarica report (Excel)</button><button class="btn small" id="cf-esci">Esci senza salvare</button></div></div>
+    <div><b style="font:700 19px var(--f-display)">${esc(r.listino.fornitore)}</b> <span class="nota">· listino ${esc(r.listino.nome || '')} (${r.listino.nVoci} voci)</span><br>
+      <span class="nota">Fattura ${r.numero ? 'n. ' + esc(r.numero) : ''} ${r.data ? 'del ' + esc(r.data) : ''} ${r.fornitore && r.fornitore.toLowerCase() !== r.listino.fornitore.toLowerCase() ? '· intestata a ' + esc(r.fornitore) : ''} · file ${esc(c.file)} · confronto del ${new Date().toLocaleDateString('it-IT')}</span></div>
+    <div class="sum"><div class="s"><b>${n('ok')}</b><span>voci corrette</span></div>
+      <div class="s piu"><b>${n('piu')}</b><span>più care${piuTot ? ' · paghi ' + eur(piuTot) + ' in più' : ''}</span></div>
+      <div class="s meno"><b>${n('meno')}</b><span>più economiche${menoTot ? ' · risparmi ' + eur(-menoTot) : ''}</span></div>
+      <div class="s nuova"><b>${n('nuova') + n('da_verificare')}</b><span>non a listino o da verificare</span></div></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Voce in fattura</th><th class="n">Q.tà</th><th class="n">Prezzo fattura</th><th class="n">Prezzo listino</th><th class="n">Differenza</th><th>Esito</th></tr></thead><tbody>
+      ${R.map((x, i) => `<tr class="${x.stato}"><td><b>${esc(x.descrizione)}</b>${x.codice ? ` <span class="nota">cod. ${esc(x.codice)}</span>` : ''}${x.listino && x.listino.descrizione.toLowerCase() !== x.descrizione.toLowerCase() ? `<br><span class="nota">a listino: ${esc(x.listino.descrizione)}</span>` : ''}${x.nota ? `<br><span class="nota">${esc(x.nota)}</span>` : ''}
+          ${x.stato === 'nuova' ? `<div class="nuova-az noprint"><button class="btn small primary" data-agg="${i}">Aggiungi al listino</button><button class="btn small" data-ign="${i}">Prosegui senza aggiungere</button></div>` : ''}</td>
+        <td class="n">${x.quantita ?? ''} ${esc(x.um || '')}</td><td class="n">${eur(x.prezzo)}</td><td class="n">${x.listino ? eur(x.listino.prezzo) : '–'}</td>
+        <td class="n">${x.diff !== null && x.diff !== undefined && x.listino ? `<span class="d ${x.stato}">${x.diff > 0 ? '+' : ''}${eur(x.diff)} ${pct(x.diffPct)}</span>${x.diffTot && x.quantita && x.quantita !== 1 ? `<br><span class="nota">totale ${x.diffTot > 0 ? '+' : ''}${eur(x.diffTot)}</span>` : ''}` : ''}</td>
+        <td><span class="chip ${x.stato === 'ignorata' ? 'nuova' : x.stato}">${STATI[x.stato] || x.stato}</span></td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="nota">Rosso: ti stanno facendo pagare più del listino. Verde: meno del listino. Le differenze entro lo 0,5% sono considerate corrette. Controlla sempre le voci con unità di misura diverse.</p>`;
+  $('#cf-stampa').onclick = () => window.print();
+  $('#cf-esci').onclick = () => { if (!confirm('Uscire dal confronto? Della fattura non resta niente nel programma.')) return; S.conf = null; disegna(); };
+  $('#cf-csv').onclick = () => {
+    const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"', nn = v => v === null || v === undefined ? '' : String(v).replace('.', ',');
+    const righe = [['Fornitore', r.listino.fornitore], ['Fattura', r.numero || ''], ['Data', r.data || ''], [], ['Voce', 'Codice', 'Quantità', 'U.m.', 'Prezzo fattura', 'Voce a listino', 'Prezzo listino', 'Differenza unitaria', 'Differenza %', 'Differenza totale', 'Esito']]
+      .concat(R.map(x => [x.descrizione, x.codice, nn(x.quantita), x.um, nn(x.prezzo), x.listino?.descrizione || '', nn(x.listino?.prezzo), nn(x.diff !== null && x.diff !== undefined ? Math.round(x.diff * 10000) / 10000 : null), x.diffPct ? nn(Math.round(x.diffPct * 1000) / 10) : '', nn(x.diffTot !== null && x.diffTot !== undefined ? Math.round(x.diffTot * 100) / 100 : null), STATI[x.stato] || x.stato]));
+    const blob = new Blob(['﻿' + righe.map(rr => rr.map(q).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = ('Raffronto ' + r.listino.fornitore + (r.numero ? ' fattura ' + r.numero : '')).replace(/[^\w\s-]/g, '').trim() + '.csv'; document.body.append(a); a.click(); a.remove();
+  };
+  box.querySelectorAll('[data-agg]').forEach(b => b.onclick = async () => {
+    const x = R[+b.dataset.agg];
+    if (!confirm(`Aggiungere al listino di ${r.listino.fornitore} la voce «${x.descrizione}» a ${eur(x.prezzo)}? Dalla prossima fattura verrà riconosciuta.`)) return;
+    try { await api('POST', '/api/prezzi/listini/' + r.listino.id + '/voci', { codice: x.codice, descrizione: x.descrizione, um: x.um, prezzo: x.prezzo }); x.stato = 'aggiunta'; r.listino.nVoci++; await caricaListini(); toast('Voce aggiunta al listino.'); disegna(); }
+    catch (e) { toast(e.message, 5000); }
+  });
+  box.querySelectorAll('[data-ign]').forEach(b => b.onclick = () => { R[+b.dataset.ign].stato = 'ignorata'; disegna(); });
+}
+
+(async () => {
+  try { await caricaListini(); } catch (e) { $('#vista-listini').innerHTML = `<p class="status err">${esc(e.message)}</p>`; return; }
+  disegna();
+})();
+</script>
+</body>
+</html>

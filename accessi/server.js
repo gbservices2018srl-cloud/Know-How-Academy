@@ -22,7 +22,7 @@ app.use((req, res, next) => {
   next();
 });
 const jsonPiccolo = express.json({ limit: '100kb' }), jsonFoto = express.json({ limit: '12mb' });
-app.use((req, res, next) => (req.path === '/api/hr/leggi' ? jsonFoto : jsonPiccolo)(req, res, next)); // la foto del grafico I-Profile è più grande
+app.use((req, res, next) => (req.path === '/api/hr/leggi' || req.path.startsWith('/api/prezzi/') ? jsonFoto : jsonPiccolo)(req, res, next)); // foto del grafico I-Profile, listini con molte voci // la foto del grafico I-Profile è più grande
 
 const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const bad = (res, code, msg) => res.status(code).json({ error: msg });
@@ -879,6 +879,8 @@ app.post('/api/notifiche/invia', needNotifyKey, wrap(async (req, res) => {
 const PUB = path.join(__dirname, 'public');
 const sendPage = file => (req, res) => { res.set('Cache-Control', 'no-store'); res.sendFile(path.join(PUB, file)); };
 app.get('/', (req, res) => req.user ? sendPage('home.html')(req, res) : res.redirect('/accedi'));
+// Gestione amministrativa · Raffronto prezzi (listini e confronto delle fatture)
+require('./prezzi')(app, { store, needUser, wrap, bad, sendPage });
 /* ---------- HR · Lettore I-Profile: legge il grafico e fa il report. Non salva niente (né foto né valori). ---------- */
 const accessoHR = async req => { const r = req.user && req.apps?.iprofile; if (!r) return null; if (r !== 'admin' && !req.user.owner && (await store.appSpente()).has('iprofile')) return null; return r; };
 app.get(['/hr', '/hr/'], (req, res) => res.redirect('/c/hr'));
