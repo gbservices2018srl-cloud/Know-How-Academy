@@ -103,7 +103,7 @@ const numOut = v => v === null || v === undefined ? '' : String(v).replace('.', 
 let toastT; function toast(t, ms = 3500) { const e = $('#toast'); e.textContent = t; e.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => e.hidden = true, ms); }
 async function api(method, url, body) {
   const isForm = body instanceof FormData;
-  const r = await fetch(url, { method, credentials: 'same-origin', headers: body && !isForm ? { 'Content-Type': 'application/json' } : {}, body: isForm ? body : body ? JSON.stringify(body) : undefined });
+  const r = await fetch(url, { method, credentials: 'same-origin', headers: isForm ? { 'X-TS': '1' } : body ? { 'Content-Type': 'application/json' } : {}, body: isForm ? body : body ? JSON.stringify(body) : undefined });
   if (r.status === 401) { location.href = '/accedi?next=/amm/prezzi'; throw new Error('Accedi di nuovo'); }
   const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Operazione non riuscita'); return j;
 }

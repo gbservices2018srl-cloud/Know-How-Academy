@@ -78,7 +78,10 @@ const isAdmin = req => !!req.user && (req.user.owner || req.apps?.accessi === 'a
 const needUser = (req, res, next) => req.user ? next() : bad(res, 401, 'Accesso richiesto');
 const needAdmin = (req, res, next) => isAdmin(req) ? next() : bad(res, 403, 'Solo amministratori');
 // Le richieste che cambiano dati devono essere JSON: un modulo di un altro sito non può inviarle.
-const needJson = (req, res, next) => (['GET', 'HEAD', 'OPTIONS', 'DELETE'].includes(req.method) || req.is('application/json')) ? next() : bad(res, 415, 'Formato non valido');
+// le richieste che cambiano dati sono JSON (un modulo di un altro sito non può inviarle); fanno eccezione i caricamenti
+// di file del Raffronto prezzi, che però devono avere l'intestazione X-TS (un altro sito non può aggiungerla)
+const caricamentoOk = req => req.path.startsWith('/prezzi/leggi-') && req.is('multipart/form-data') && req.get('X-TS') === '1';
+const needJson = (req, res, next) => (['GET', 'HEAD', 'OPTIONS', 'DELETE'].includes(req.method) || req.is('application/json') || caricamentoOk(req)) ? next() : bad(res, 415, 'Formato non valido');
 app.use('/api', needJson);
 
 // Le app dei sottodomini possono chiedere "chi sono" dal browser (con il cookie).
