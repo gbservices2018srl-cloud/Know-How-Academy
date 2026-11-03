@@ -52,7 +52,8 @@ td.n,th.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 tr.piu td{background:color-mix(in srgb,var(--rosso-bg) 55%,transparent)}tr.meno td{background:color-mix(in srgb,var(--verde-bg) 55%,transparent)}tr.nuova td{background:color-mix(in srgb,var(--ambra-bg) 45%,transparent)}
 .d.piu{color:var(--rosso);font-weight:700}.d.meno{color:var(--verde);font-weight:700}
 .sum{display:flex;gap:10px;flex-wrap:wrap}
-.sum .s{flex:1 1 150px;border:1px solid var(--line);border-radius:14px;padding:12px 14px;background:var(--surface)}
+.sum .s{flex:1 1 150px;border:1px solid var(--line);border-radius:14px;padding:12px 14px;background:var(--surface);text-align:left;font:inherit;color:inherit;cursor:pointer}
+.sum .s:hover{border-color:var(--teal)}.sum .s.sel{box-shadow:0 0 0 3px color-mix(in srgb,var(--teal) 45%,transparent);border-color:var(--teal-ink)}
 .sum .s b{display:block;font:800 24px var(--f-display)}.sum .s span{font-size:13px;color:var(--muted)}
 .sum .s.piu{border-color:color-mix(in srgb,var(--rosso) 40%,var(--line))}.sum .s.piu b{color:var(--rosso)}
 .sum .s.meno{border-color:color-mix(in srgb,var(--verde) 40%,var(--line))}.sum .s.meno b{color:var(--verde)}
@@ -223,30 +224,37 @@ function disegnaConfronto() {
     };
     return;
   }
-  const r = c.esito, R = r.righe;
+  const r = c.esito, R = r.righe, fil = c.filtro || []; // riquadri scelti (anche più di uno)
+  const GRUPPO = { ok: ['ok'], piu: ['piu'], meno: ['meno'], nuova: ['nuova', 'da_verificare', 'ignorata', 'aggiunta'] };
+  const visibile = x => !fil.length || fil.some(f => GRUPPO[f].includes(x.stato));
   const n = k => R.filter(x => x.stato === k).length;
   const piuTot = R.filter(x => x.stato === 'piu').reduce((a, x) => a + (x.diffTot || 0), 0), menoTot = R.filter(x => x.stato === 'meno').reduce((a, x) => a + (x.diffTot || 0), 0);
   box.innerHTML = `<div class="row" style="justify-content:space-between;align-items:center"><h2>Report di confronto</h2><div class="row noprint"><button class="btn small" id="cf-stampa">Stampa / Salva PDF</button><button class="btn small" id="cf-csv">Scarica report (Excel)</button><button class="btn small" id="cf-esci">Esci senza salvare</button></div></div>
     <div><b style="font:700 19px var(--f-display)">${esc(r.listino.fornitore)}</b> <span class="nota">· listino ${esc(r.listino.nome || '')} (${r.listino.nVoci} voci)</span><br>
       <span class="nota">Fattura ${r.numero ? 'n. ' + esc(r.numero) : ''} ${r.data ? 'del ' + esc(r.data) : ''} ${r.fornitore && r.fornitore.toLowerCase() !== r.listino.fornitore.toLowerCase() ? '· intestata a ' + esc(r.fornitore) : ''} · file ${esc(c.file)} · confronto del ${new Date().toLocaleDateString('it-IT')}</span></div>
-    <div class="sum"><div class="s"><b>${n('ok')}</b><span>voci corrette</span></div>
-      <div class="s piu"><b>${n('piu')}</b><span>più care${piuTot ? ' · paghi ' + eur(piuTot) + ' in più' : ''}</span></div>
-      <div class="s meno"><b>${n('meno')}</b><span>più economiche${menoTot ? ' · risparmi ' + eur(-menoTot) : ''}</span></div>
-      <div class="s nuova"><b>${n('nuova') + n('da_verificare')}</b><span>non a listino o da verificare</span></div></div>
+    <div class="sum">
+      <button type="button" class="s ${fil.includes('ok') ? 'sel' : ''}" data-fil="ok" aria-pressed="${fil.includes('ok')}"><b>${n('ok')}</b><span>voci corrette</span></button>
+      <button type="button" class="s piu ${fil.includes('piu') ? 'sel' : ''}" data-fil="piu" aria-pressed="${fil.includes('piu')}"><b>${n('piu')}</b><span>più care${piuTot ? ' · paghi ' + eur(piuTot) + ' in più' : ''}</span></button>
+      <button type="button" class="s meno ${fil.includes('meno') ? 'sel' : ''}" data-fil="meno" aria-pressed="${fil.includes('meno')}"><b>${n('meno')}</b><span>più economiche${menoTot ? ' · risparmi ' + eur(-menoTot) : ''}</span></button>
+      <button type="button" class="s nuova ${fil.includes('nuova') ? 'sel' : ''}" data-fil="nuova" aria-pressed="${fil.includes('nuova')}"><b>${GRUPPO.nuova.reduce((a, k) => a + n(k), 0)}</b><span>non a listino o da verificare</span></button></div>
+    ${fil.length ? `<div class="row" style="align-items:center"><span class="nota">Report solo di: <b>${fil.map(f => ({ ok: 'voci corrette', piu: 'voci più care', meno: 'voci più economiche', nuova: 'voci non a listino o da verificare' })[f]).join(', ')}</b></span><button class="btn small noprint" data-fil="">Mostra tutte</button></div>` : ''}
     <div class="tbl-wrap"><table><thead><tr><th>Voce in fattura</th><th class="n">Q.tà</th><th class="n">Prezzo fattura</th><th class="n">Prezzo listino</th><th class="n">Differenza</th><th>Esito</th></tr></thead><tbody>
-      ${R.map((x, i) => `<tr class="${x.stato}"><td><b>${esc(x.descrizione)}</b>${x.codice ? ` <span class="nota">cod. ${esc(x.codice)}</span>` : ''}${x.listino && x.listino.descrizione.toLowerCase() !== x.descrizione.toLowerCase() ? `<br><span class="nota">a listino: ${esc(x.listino.descrizione)}</span>` : ''}${x.nota ? `<br><span class="nota">${esc(x.nota)}</span>` : ''}
+      ${R.map((x, i) => !visibile(x) ? '' : `<tr class="${x.stato}"><td><b>${esc(x.descrizione)}</b>${x.codice ? ` <span class="nota">cod. ${esc(x.codice)}</span>` : ''}${x.listino && x.listino.descrizione.toLowerCase() !== x.descrizione.toLowerCase() ? `<br><span class="nota">a listino: ${esc(x.listino.descrizione)}</span>` : ''}${x.nota ? `<br><span class="nota">${esc(x.nota)}</span>` : ''}
           ${x.stato === 'nuova' ? `<div class="nuova-az noprint"><button class="btn small primary" data-agg="${i}">Aggiungi al listino</button><button class="btn small" data-ign="${i}">Prosegui senza aggiungere</button></div>` : ''}</td>
         <td class="n">${x.quantita ?? ''} ${esc(x.um || '')}</td><td class="n">${eur(x.prezzo)}</td><td class="n">${x.listino ? eur(x.listino.prezzo) : '–'}</td>
         <td class="n">${x.diff !== null && x.diff !== undefined && x.listino ? `<span class="d ${x.stato}">${x.diff > 0 ? '+' : ''}${eur(x.diff)} ${pct(x.diffPct)}</span>${x.diffTot && x.quantita && x.quantita !== 1 ? `<br><span class="nota">totale ${x.diffTot > 0 ? '+' : ''}${eur(x.diffTot)}</span>` : ''}` : ''}</td>
         <td><span class="chip ${x.stato === 'ignorata' ? 'nuova' : x.stato}">${STATI[x.stato] || x.stato}</span></td></tr>`).join('')}
     </tbody></table></div>
+    ${fil.length && !R.some(visibile) ? '<p class="empty">Nessuna voce in questa categoria.</p>' : ''}
     <p class="nota">Rosso: ti stanno facendo pagare più del listino. Verde: meno del listino. Le differenze entro lo 0,5% sono considerate corrette. Controlla sempre le voci con unità di misura diverse.</p>`;
   $('#cf-stampa').onclick = () => window.print();
+  // i quattro riquadri filtrano le voci, anche più di uno insieme (un secondo tocco lo toglie; «Mostra tutte» li toglie tutti). Stampa e report seguono il filtro
+  box.querySelectorAll('[data-fil]').forEach(b => b.onclick = () => { const k = b.dataset.fil; c.filtro = !k ? [] : fil.includes(k) ? fil.filter(x => x !== k) : fil.concat(k); disegna(); });
   $('#cf-esci').onclick = () => { if (!confirm('Uscire dal confronto? Della fattura non resta niente nel programma.')) return; S.conf = null; disegna(); };
   $('#cf-csv').onclick = () => {
     const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"', nn = v => v === null || v === undefined ? '' : String(v).replace('.', ',');
-    const righe = [['Fornitore', r.listino.fornitore], ['Fattura', r.numero || ''], ['Data', r.data || ''], [], ['Voce', 'Codice', 'Quantità', 'U.m.', 'Prezzo fattura', 'Voce a listino', 'Prezzo listino', 'Differenza unitaria', 'Differenza %', 'Differenza totale', 'Esito']]
-      .concat(R.map(x => [x.descrizione, x.codice, nn(x.quantita), x.um, nn(x.prezzo), x.listino?.descrizione || '', nn(x.listino?.prezzo), nn(x.diff !== null && x.diff !== undefined ? Math.round(x.diff * 10000) / 10000 : null), x.diffPct ? nn(Math.round(x.diffPct * 1000) / 10) : '', nn(x.diffTot !== null && x.diffTot !== undefined ? Math.round(x.diffTot * 100) / 100 : null), STATI[x.stato] || x.stato]));
+    const righe = [['Fornitore', r.listino.fornitore], ['Fattura', r.numero || ''], ['Data', r.data || ''], ...(fil.length ? [['Solo', fil.map(f => ({ ok: 'corrette', piu: 'più care', meno: 'più economiche', nuova: 'non a listino o da verificare' })[f]).join(', ')]] : []), [], ['Voce', 'Codice', 'Quantità', 'U.m.', 'Prezzo fattura', 'Voce a listino', 'Prezzo listino', 'Differenza unitaria', 'Differenza %', 'Differenza totale', 'Esito']]
+      .concat(R.filter(visibile).map(x => [x.descrizione, x.codice, nn(x.quantita), x.um, nn(x.prezzo), x.listino?.descrizione || '', nn(x.listino?.prezzo), nn(x.diff !== null && x.diff !== undefined ? Math.round(x.diff * 10000) / 10000 : null), x.diffPct ? nn(Math.round(x.diffPct * 1000) / 10) : '', nn(x.diffTot !== null && x.diffTot !== undefined ? Math.round(x.diffTot * 100) / 100 : null), STATI[x.stato] || x.stato]));
     const blob = new Blob(['﻿' + righe.map(rr => rr.map(q).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = ('Raffronto ' + r.listino.fornitore + (r.numero ? ' fattura ' + r.numero : '')).replace(/[^\w\s-]/g, '').trim() + '.csv'; document.body.append(a); a.click(); a.remove();
   };
