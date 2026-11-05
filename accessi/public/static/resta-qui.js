@@ -137,3 +137,164 @@
   window.addEventListener('load', presto);
   new MutationObserver(function () { var c = document.querySelector('a[data-ts-home]'); if (!c || c.classList.contains('vola')) presto(); }).observe(document.documentElement, { childList: true, subtree: true });
 })();
+
+/* Campi numerici (tutte le app): niente freccine su/giù dentro il campo; con le frecce della tastiera
+   ci si muove come in un foglio di calcolo: ← → dentro il numero e, arrivati in fondo, al campo vicino;
+   ↑ ↓ al campo sopra/sotto (stessa colonna della tabella, altrimenti il campo prima/dopo). */
+(function () {
+  if (window.__tsCampi) return; window.__tsCampi = true;
+  var st = document.createElement('style');
+  st.textContent = 'input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;appearance:none;margin:0}input[type=number]{-moz-appearance:textfield;appearance:textfield}';
+  (document.head || document.documentElement).appendChild(st);
+  var D = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+  var PROP = ['width', 'height', 'box-sizing', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left', 'font-family', 'font-size', 'font-weight', 'text-align', 'color', 'background-color',
+    'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width', 'border-top-style', 'border-right-style', 'border-bottom-style', 'border-left-style',
+    'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color', 'border-radius', 'min-height', 'letter-spacing', 'font-variant-numeric'];
+  function eReact(el) { for (var k in el) if (k.indexOf('__react') === 0) return true; return false; }
+  function numerico(el) {
+    if (!el || el.tagName !== 'INPUT' || el.disabled || el.readOnly) return false;
+    if (el.type === 'number' || el.getAttribute('data-ts-num') != null) return true;
+    var im = el.getAttribute('inputmode'); return el.type === 'text' && (im === 'decimal' || im === 'numeric');
+  }
+  function norm(v) { v = String(v == null ? '' : v).trim().replace(/\s/g, ''); if (v.indexOf(',') >= 0) v = v.replace(/\./g, '').replace(',', '.'); return v; }
+  // Mentre lo si scrive, il campo numerico diventa di testo (così il cursore si muove dentro il numero);
+  // all'uscita torna numerico. Il valore letto dall'app resta sempre un numero valido (la virgola vale come punto).
+  document.addEventListener('focusin', function (e) {
+    var el = e.target;
+    if (!el || el.tagName !== 'INPUT' || el.type !== 'number' || el.disabled || el.readOnly || eReact(el)) return;
+    // l'aspetto resta identico anche se le regole di stile dell'app valgono solo per i campi numerici
+    var cs = getComputedStyle(el), salva = {};
+    PROP.forEach(function (k) { salva[k] = el.style.getPropertyValue(k); el.style.setProperty(k, cs.getPropertyValue(k)); });
+    el.__tsStile = salva;
+    el.setAttribute('data-ts-num', ''); el.type = 'text'; if (!el.getAttribute('inputmode')) { el.setAttribute('inputmode', 'decimal'); el.__tsIm = true; }
+    Object.defineProperty(el, 'value', { configurable: true, get: function () { return norm(D.get.call(this)); }, set: function (v) { D.set.call(this, v); } });
+    Object.defineProperty(el, 'valueAsNumber', { configurable: true, get: function () { var n = parseFloat(this.value); return isNaN(n) ? NaN : n; } });
+    try { el.select(); } catch (x) {}
+  }, true);
+  document.addEventListener('focusout', function (e) {
+    var el = e.target; if (!el || el.getAttribute == null || el.getAttribute('data-ts-num') == null) return;
+    var v = norm(D.get.call(el));
+    delete el.value; delete el.valueAsNumber;
+    el.removeAttribute('data-ts-num'); if (el.__tsIm) { el.removeAttribute('inputmode'); el.__tsIm = false; }
+    el.type = 'number'; D.set.call(el, isNaN(parseFloat(v)) ? '' : v);
+    if (el.__tsStile) { var sv = el.__tsStile; PROP.forEach(function (k) { if (sv[k]) el.style.setProperty(k, sv[k]); else el.style.removeProperty(k); }); el.__tsStile = null; }
+  }, true);
+  function campi() { return Array.prototype.filter.call(document.querySelectorAll('input'), function (x) { return numerico(x) && x.offsetParent !== null; }); }
+  function vai(el) { if (!el) return false; el.focus(); try { el.select(); } catch (x) {} return true; }
+  function nellaRiga(cella, el, dir) {
+    var row = cella.parentElement, celle = Array.prototype.slice.call(row.children), i = celle.indexOf(cella) + dir;
+    // stessa cella con più campi: prima quelli
+    var dentro = Array.prototype.filter.call(cella.querySelectorAll('input'), numerico), j = dentro.indexOf(el) + dir;
+    if (j >= 0 && j < dentro.length) return dentro[j];
+    for (; i >= 0 && i < celle.length; i += dir) { var c = Array.prototype.filter.call(celle[i].querySelectorAll('input'), numerico); if (c.length) return dir > 0 ? c[0] : c[c.length - 1]; }
+    return null;
+  }
+  function inColonna(cella, dir) {
+    var row = cella.parentElement, col = 0, celle = row.children;
+    for (var k = 0; k < celle.length && celle[k] !== cella; k++) col += celle[k].colSpan || 1;
+    var tab = cella.closest('table'), righe = Array.prototype.slice.call(tab.rows), r = righe.indexOf(row) + dir;
+    for (; r >= 0 && r < righe.length; r += dir) {
+      var pos = 0, cs = righe[r].cells;
+      for (var m = 0; m < cs.length; m++) { if (pos <= col && col < pos + (cs[m].colSpan || 1)) { var c = Array.prototype.filter.call(cs[m].querySelectorAll('input'), numerico); if (c.length) return c[0]; break; } pos += cs[m].colSpan || 1; }
+    }
+    return null;
+  }
+  function vicino(el, dir) { var l = campi(), i = l.indexOf(el); return i < 0 ? null : l[i + dir] || null; }
+  // il campo più vicino sopra/sotto sullo schermo (es. la tabella successiva)
+  function sottoSopra(el, dir) {
+    var r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, best = null, bd = 1e9;
+    campi().forEach(function (x) {
+      if (x === el) return; var q = x.getBoundingClientRect(), y = q.top + q.height / 2, dy = (y - cy) * dir;
+      if (dy < r.height / 2) return;
+      var dx = Math.abs(q.left + q.width / 2 - cx), d = dy * 3 + dx; if (d < bd) { bd = d; best = x; }
+    });
+    return best;
+  }
+  document.addEventListener('keydown', function (e) {
+    var el = e.target, k = e.key;
+    if (!numerico(el) || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if (k !== 'ArrowUp' && k !== 'ArrowDown' && k !== 'ArrowLeft' && k !== 'ArrowRight') return;
+    var cella = el.closest('td, th'), dir = (k === 'ArrowUp' || k === 'ArrowLeft') ? -1 : 1, dest = null;
+    if (k === 'ArrowUp' || k === 'ArrowDown') {
+      e.preventDefault(); // niente +1/-1 sul numero
+      dest = (cella && cella.closest('table') && inColonna(cella, dir)) || sottoSopra(el, dir);
+      return vai(dest);
+    }
+    var s = null, f = null; try { s = el.selectionStart; f = el.selectionEnd; } catch (x) {}
+    var len = D.get.call(el).length;
+    if (s != null) {
+      if (s !== f) return;                          // numero selezionato: la freccia entra nel numero
+      if (dir < 0 && s > 0) return; if (dir > 0 && s < len) return; // il cursore si muove dentro il numero
+    }
+    dest = (cella && nellaRiga(cella, el, dir)) || vicino(el, dir);
+    if (dest) { e.preventDefault(); vai(dest); }
+  }, true);
+})();
+
+/* Grafici (tutte le app con Chart.js): un clic su un punto o una barra apre un riquadro con i valori;
+   un clic sul riquadro porta ai dati da cui nascono (se il grafico lo prevede). */
+(function () {
+  if (window.__tsGrafici) return; window.__tsGrafici = true;
+  var pop = null, chiudiT = 0;
+  var aperto = null; // il grafico col riquadro aperto: intanto il suo fumetto al passaggio è spento
+  function chiudi() {
+    if (pop) { pop.remove(); pop = null; }
+    if (aperto) { try { if (aperto.canvas && aperto.canvas.isConnected) { aperto.options.plugins.tooltip.enabled = aperto.__tsTip !== false; aperto.update('none'); } } catch (x) {} aperto = null; }
+  }
+  function css() {
+    if (document.getElementById('ts-chpop-css')) return;
+    var st = document.createElement('style'); st.id = 'ts-chpop-css';
+    st.textContent = '.ts-chpop{position:fixed;z-index:99999;min-width:170px;max-width:min(320px,calc(100vw - 24px));background:#241A29;color:#fff;border-radius:12px;padding:10px 12px;box-shadow:0 10px 30px rgba(0,0,0,.25);font:500 13.5px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}'
+      + '.ts-chpop b.t{display:block;font-weight:700;margin-bottom:4px}.ts-chpop .r{display:flex;gap:7px;align-items:center}.ts-chpop .q{width:10px;height:10px;border-radius:3px;flex:none}'
+      + '.ts-chpop .vai{display:block;margin-top:8px;padding:7px 10px;border-radius:9px;background:#2F8F9E;color:#fff;font-weight:700;text-align:center}.ts-chpop.link{cursor:pointer}.ts-chpop.link:hover .vai{background:#3aa5b5}'
+      + '.ts-chpop .x{position:absolute;top:4px;right:8px;color:#bbb;cursor:pointer;font-size:16px;line-height:1}';
+    document.head.appendChild(st);
+  }
+  function testo(v) { return String(v).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function apri(chart, els, ev) {
+    chiudi(); css();
+    var tt = chart.tooltip, titolo = [], righe = [];
+    try {
+      tt.setActiveElements(els, { x: ev.x, y: ev.y });
+      titolo = tt.title || []; (tt.body || []).forEach(function (b, i) { (b.lines || []).forEach(function (l) { righe.push({ t: l, c: (tt.labelColors && tt.labelColors[i] && (tt.labelColors[i].backgroundColor || tt.labelColors[i].borderColor)) || '#2F8F9E' }); }); });
+      tt.setActiveElements([], { x: 0, y: 0 });
+      chart.__tsTip = chart.options.plugins.tooltip.enabled; chart.options.plugins.tooltip.enabled = false; chart.update('none'); aperto = chart;
+    } catch (x) {}
+    if (!titolo.length && !righe.length) return;
+    var vai = chart.options.onClick;
+    pop = document.createElement('div'); pop.className = 'ts-chpop' + (vai ? ' link' : '');
+    pop.innerHTML = '<span class="x" title="Chiudi">×</span>' + (titolo.length ? '<b class="t">' + titolo.map(testo).join('<br>') + '</b>' : '')
+      + righe.map(function (r) { return '<div class="r"><span class="q" style="background:' + testo(r.c) + '"></span><span>' + testo(r.t) + '</span></div>'; }).join('')
+      + (vai ? '<span class="vai">Vai ai dati →</span>' : '');
+    document.body.appendChild(pop);
+    var n = ev.native, cx = n && n.clientX != null ? n.clientX : (n && n.changedTouches && n.changedTouches[0] ? n.changedTouches[0].clientX : 0), cy = n && n.clientY != null ? n.clientY : (n && n.changedTouches && n.changedTouches[0] ? n.changedTouches[0].clientY : 0);
+    var w = pop.offsetWidth, h = pop.offsetHeight, x = cx + 14, y = cy - h - 12;
+    if (x + w > innerWidth - 8) x = cx - w - 14; if (x < 8) x = 8; if (y < 8) y = cy + 16; if (y + h > innerHeight - 8) y = innerHeight - h - 8;
+    pop.style.left = x + 'px'; pop.style.top = y + 'px';
+    pop.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (e.target.classList.contains('x')) return chiudi();
+      chiudi(); if (vai) try { vai.call(chart, ev, els, chart); } catch (x) { console.warn(x); }
+    });
+    chiudiT = Date.now();
+  }
+  var plugin = {
+    id: 'tsRiquadro',
+    beforeEvent: function (chart, args) {
+      var e = args.event; if (!e) return;
+      if (pop && (e.type === 'mousemove' || e.type === 'mouseout')) return false; // col riquadro aperto niente fumetto al passaggio
+      if (e.type !== 'click') return;
+      var o = chart.options.interaction || {};
+      var els = [];
+      try { els = chart.getElementsAtEventForMode(e.native, o.mode || 'nearest', { intersect: o.intersect !== false, axis: o.axis }, false); } catch (x) {}
+      if (!els.length) { chiudi(); return false; }
+      apri(chart, els, e);
+      return false; // il clic sul grafico apre il riquadro; è il clic sul riquadro che porta ai dati
+    }
+  };
+  document.addEventListener('click', function (e) { if (pop && !pop.contains(e.target) && Date.now() - chiudiT > 300 && e.target.tagName !== 'CANVAS') chiudi(); }, true);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') chiudi(); });
+  window.addEventListener('scroll', function () { if (pop && Date.now() - chiudiT > 400) chiudi(); }, { passive: true });
+  function registra() { if (window.Chart && window.Chart.register && !window.Chart.__tsRiq) { window.Chart.register(plugin); window.Chart.__tsRiq = true; return true; } return false; }
+  if (!registra()) { var tent = 0, iv = setInterval(function () { if (registra() || ++tent > 40) clearInterval(iv); }, 250); document.addEventListener('DOMContentLoaded', registra); }
+})();
