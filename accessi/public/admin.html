@@ -137,6 +137,7 @@ dialog form{padding:22px;display:flex;flex-direction:column;gap:14px}
 .oprow.ann{opacity:.55;text-decoration:line-through}
 .undo{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 @media (max-width:560px){.approw{grid-template-columns:minmax(0,1fr) auto}.approw .actions{grid-column:1/-1}}
+.nt-dev{list-style:none;margin:0;padding:0;display:grid;gap:8px}.nt-dev li{display:grid;gap:2px;padding:9px 12px;border:1px solid var(--line,#e5e5e5);border-radius:10px}.nt-dev .muted{font-size:13px}
 </style>
 <!-- dopo una modifica la pagina resta dov'era (comune a tutte le app To Smile) -->
 <script src="/static/resta-qui.js?v=3" defer></script>
@@ -299,6 +300,7 @@ function card(u, homonym) {
       ? `<button class="btn small" data-act="disable" data-u="${u.id}">Disattiva</button>`
       : `<button class="btn small" data-act="enable" data-u="${u.id}">Riattiva</button>`) +
     `<button class="btn small" data-act="pw" data-u="${u.id}">Password</button><button class="btn small danger" data-act="delete" data-u="${u.id}">Elimina</button>`;
+  if (u.status === 'active') actions = `<button class="btn small" data-act="notif" data-u="${u.id}">Notifiche</button>` + actions;
   actions = `<button class="btn small" data-act="edit" data-u="${u.id}">Modifica</button>` + (u.emailVerificata ? '' : `<button class="btn small" data-act="verify" data-u="${u.id}">Rimanda conferma email</button>`) + actions;
   const open = aperti.has(u.id), nApp = Object.keys(u.apps).filter(k => k !== 'accessi').length;
   const row = `<button class="urow" data-toggle="${u.id}" aria-expanded="${open}" aria-controls="ub-${u.id}">
@@ -491,6 +493,7 @@ document.addEventListener('click', async e => {
       if (r.link) linkResult(r.link, u.firstName, 'per confermare la sua email'); else toast(`Email di conferma rimandata a ${u.email}`);
     } else if (act === 'edit') openEdit(u);
     else if (act === 'pw') openPassword(u);
+    else if (act === 'notif') openNotifiche(u);
   } catch (err) { b.disabled = false; toast(err.message); }
 });
 $('#q').addEventListener('input', render);
@@ -565,6 +568,26 @@ function openEdit(u) {
     const r = await api('PATCH', '/api/admin/users/' + u.id, body);
     Object.assign(u, r.user); render(); dlg.close(); avvisa(r, 'Dati salvati e aggiornati nelle app');
   });
+}
+async function openNotifiche(u) {
+  const quando = d => d ? new Date(d).toLocaleString('it-IT', {day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'}) : 'mai';
+  const disegna = (d, esito = '') => {
+    const lista = d.dispositivi.length
+      ? `<ul class="nt-dev">${d.dispositivi.map(x => `<li><b>${esc(x.nome)}</b><span class="muted">attivato il ${quando(x.creata)} · ultima notifica arrivata al servizio: ${quando(x.ultimoOk)}</span></li>`).join('')}</ul>`
+      : `<p class="msg warn" style="margin:0">${esc(u.firstName)} non ha nessun dispositivo iscritto: le notifiche non possono arrivargli. Deve aprire To Smile sul telefono o sul PC e attivarle dal riquadro Notifiche della home (su iPhone prima va aggiunta l’icona alla schermata Home).</p>`;
+    const spente = d.spente.length ? `<p class="muted" style="margin:0">Ha spento le notifiche di: ${d.spente.map(esc).join(', ')}.</p>` : '';
+    open(`<h2>Notifiche di ${esc(fullName(u))}</h2>${lista}${spente}${esito}
+      <div class="msg err" role="alert"></div><div class="row"><button class="btn" value="cancel" formnovalidate>Chiudi</button>${d.dispositivi.length ? '<button class="btn primary" value="prova">Invia notifica di prova</button>' : ''}</div>`, async v => {
+      if (v !== 'prova') return;
+      const r = await api('POST', `/api/admin/users/${u.id}/notifiche/prova`, {});
+      const nuovo = await api('GET', `/api/admin/users/${u.id}/notifiche`);
+      const testo = r.inviate
+        ? `<p class="msg ok" style="margin:0">Inviata a ${r.inviate} dispositiv${r.inviate === 1 ? 'o' : 'i'}. Se ${esc(u.firstName)} non la vede entro un minuto, il blocco è sul suo dispositivo (permessi del telefono o del browser, risparmio batteria, “Non disturbare”).</p>`
+        : `<p class="msg warn" style="margin:0">Non inviata${r.tolti ? `: ${r.tolti} dispositiv${r.tolti === 1 ? 'o non è più valido ed è stato tolto' : 'i non sono più validi e sono stati tolti'}. ${esc(u.firstName)} deve riattivare le notifiche dalla home` : r.errori ? ': il servizio delle notifiche (Apple, Google o Microsoft) non ha risposto. Riprova tra qualche minuto' : ''}.</p>`;
+      disegna(nuovo, testo);
+    });
+  };
+  disegna(await api('GET', `/api/admin/users/${u.id}/notifiche`));
 }
 function openPassword(u) {
   open(`<h2>Password di ${esc(fullName(u))}</h2>

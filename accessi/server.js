@@ -859,6 +859,42 @@ app.post('/api/notifiche/prova', needUser, wrap(async (req, res) => {
   }
   res.json({ ok: ok > 0, dispositivi: ok });
 }));
+// Pannello admin: i dispositivi di una persona e una notifica di prova, per capire perché non le arrivano.
+function nomeDispositivo(ua, endpoint) {
+  ua = String(ua || ''); const host = (() => { try { return new URL(endpoint).host; } catch { return ''; } })();
+  const so = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'PC Windows'
+    : /Macintosh|Mac OS X/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'PC Linux' : 'Dispositivo';
+  const br = /Edg\//.test(ua) ? 'Edge' : /SamsungBrowser/.test(ua) ? 'Samsung Internet' : /Firefox|FxiOS/.test(ua) ? 'Firefox' : /Chrome|CriOS/.test(ua) ? 'Chrome' : /Safari/.test(ua) ? 'Safari' : '';
+  const app = (so === 'iPhone' || so === 'iPad') && host.includes('apple') ? ' (icona sulla Home)' : '';
+  return so + (br ? ' · ' + br : '') + app;
+}
+app.get('/api/admin/users/:id/notifiche', needAdmin, wrap(async (req, res) => {
+  const u = await store.getUser(req.params.id);
+  if (!u) return bad(res, 404, 'Utente non trovato');
+  const { rows } = await store.q('select endpoint, device, creata_il, ultimo_ok from notif_subs where user_id = $1 order by creata_il desc', [u.id]);
+  const spente = (await store.q('select app from notif_prefs where user_id = $1 and not attiva', [u.id])).rows.map(r => notifiche.APP_NOTIFICHE[r.app] || r.app);
+  res.json({ dispositivi: rows.map(r => ({ nome: nomeDispositivo(r.device, r.endpoint), creata: r.creata_il, ultimoOk: r.ultimo_ok })), spente });
+}));
+app.post('/api/admin/users/:id/notifiche/prova', needAdmin, wrap(async (req, res) => {
+  const u = await store.getUser(req.params.id);
+  if (!u) return bad(res, 404, 'Utente non trovato');
+  const k = await notifiche.chiavi();
+  const { rows } = await store.q('select endpoint, p256dh, auth from notif_subs where user_id = $1', [u.id]);
+  const webpush = require('web-push');
+  let ok = 0, tolti = 0, errori = 0;
+  for (const s of rows) {
+    try {
+      await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+        JSON.stringify({ title: 'Notifica di prova', body: `Ciao ${u.first_name || u.firstName || ''}, se leggi questo messaggio le notifiche di To Smile funzionano su questo dispositivo.`.replace(/\s+,/, ','), url: PUBLIC_URL() + '/', tag: 'prova-admin' }),
+        { TTL: 3600, urgency: 'high', vapidDetails: { subject: 'https://appgestione.it', publicKey: k.publicKey, privateKey: k.privateKey } });
+      ok++; store.q('update notif_subs set ultimo_ok = now() where endpoint = $1', [s.endpoint]).catch(() => {});
+    } catch (e) {
+      if (e.statusCode === 404 || e.statusCode === 410) { tolti++; await store.q('delete from notif_subs where endpoint = $1', [s.endpoint]).catch(() => {}); }
+      else { errori++; console.warn('Prova notifica (admin) non inviata:', e.statusCode || e.message); }
+    }
+  }
+  res.json({ totale: rows.length, inviate: ok, tolti, errori });
+}));
 // Le app su altri servizi (Nuovalab, Ticket) mandano qui gli avvisi: chiave NOTIFY_KEY, persone per id dell'accesso unico o email.
 function needNotifyKey(req, res, next) {
   const key = process.env.NOTIFY_KEY || '';
