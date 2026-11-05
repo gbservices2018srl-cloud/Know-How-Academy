@@ -138,53 +138,26 @@
   new MutationObserver(function () { var c = document.querySelector('a[data-ts-home]'); if (!c || c.classList.contains('vola')) presto(); }).observe(document.documentElement, { childList: true, subtree: true });
 })();
 
-/* Campi numerici (tutte le app): niente freccine su/giù dentro il campo; con le frecce della tastiera
-   ci si muove come in un foglio di calcolo: ← → dentro il numero e, arrivati in fondo, al campo vicino;
-   ↑ ↓ al campo sopra/sotto (stessa colonna della tabella, altrimenti il campo prima/dopo). */
+/* Campi numerici (tutte le app): niente freccine su/giù dentro il campo; frecce della tastiera come in un foglio di calcolo.
+   - ↑ ↓: al campo sopra/sotto (stessa colonna della tabella, altrimenti il più vicino sullo schermo); il numero non cambia.
+   - ← →: se sei arrivato nel campo con le frecce (numero tutto selezionato) passano al campo accanto;
+     se hai cliccato dentro il numero o stai scrivendo, muovono il cursore dentro il numero.
+   Il campo non viene mai trasformato: si scrive e si salva esattamente come prima. */
 (function () {
   if (window.__tsCampi) return; window.__tsCampi = true;
-  return; // sospeso: da ricontrollare (segnalato che non si riuscivano a modificare i dati)
   var st = document.createElement('style');
   st.textContent = 'input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;appearance:none;margin:0}input[type=number]{-moz-appearance:textfield;appearance:textfield}';
   (document.head || document.documentElement).appendChild(st);
-  var D = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
-  var PROP = ['width', 'height', 'box-sizing', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left', 'font-family', 'font-size', 'font-weight', 'text-align', 'color', 'background-color',
-    'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width', 'border-top-style', 'border-right-style', 'border-bottom-style', 'border-left-style',
-    'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color', 'border-radius', 'min-height', 'letter-spacing', 'font-variant-numeric'];
-  function eReact(el) { for (var k in el) if (k.indexOf('__react') === 0) return true; return false; }
   function numerico(el) {
     if (!el || el.tagName !== 'INPUT' || el.disabled || el.readOnly) return false;
-    if (el.type === 'number' || el.getAttribute('data-ts-num') != null) return true;
+    if (el.type === 'number') return true;
     var im = el.getAttribute('inputmode'); return el.type === 'text' && (im === 'decimal' || im === 'numeric');
   }
-  function norm(v) { v = String(v == null ? '' : v).trim().replace(/\s/g, ''); if (v.indexOf(',') >= 0) v = v.replace(/\./g, '').replace(',', '.'); return v; }
-  // Mentre lo si scrive, il campo numerico diventa di testo (così il cursore si muove dentro il numero);
-  // all'uscita torna numerico. Il valore letto dall'app resta sempre un numero valido (la virgola vale come punto).
-  document.addEventListener('focusin', function (e) {
-    var el = e.target;
-    if (!el || el.tagName !== 'INPUT' || el.type !== 'number' || el.disabled || el.readOnly || eReact(el)) return;
-    // l'aspetto resta identico anche se le regole di stile dell'app valgono solo per i campi numerici
-    var cs = getComputedStyle(el), salva = {};
-    PROP.forEach(function (k) { salva[k] = el.style.getPropertyValue(k); el.style.setProperty(k, cs.getPropertyValue(k)); });
-    el.__tsStile = salva;
-    el.setAttribute('data-ts-num', ''); el.type = 'text'; if (!el.getAttribute('inputmode')) { el.setAttribute('inputmode', 'decimal'); el.__tsIm = true; }
-    Object.defineProperty(el, 'value', { configurable: true, get: function () { return norm(D.get.call(this)); }, set: function (v) { D.set.call(this, v); } });
-    Object.defineProperty(el, 'valueAsNumber', { configurable: true, get: function () { var n = parseFloat(this.value); return isNaN(n) ? NaN : n; } });
-    try { el.select(); } catch (x) {}
-  }, true);
-  document.addEventListener('focusout', function (e) {
-    var el = e.target; if (!el || el.getAttribute == null || el.getAttribute('data-ts-num') == null) return;
-    var v = norm(D.get.call(el));
-    delete el.value; delete el.valueAsNumber;
-    el.removeAttribute('data-ts-num'); if (el.__tsIm) { el.removeAttribute('inputmode'); el.__tsIm = false; }
-    el.type = 'number'; D.set.call(el, isNaN(parseFloat(v)) ? '' : v);
-    if (el.__tsStile) { var sv = el.__tsStile; PROP.forEach(function (k) { if (sv[k]) el.style.setProperty(k, sv[k]); else el.style.removeProperty(k); }); el.__tsStile = null; }
-  }, true);
+  var arrivo = null; // il campo raggiunto con le frecce, finché non ci si scrive o clicca dentro
   function campi() { return Array.prototype.filter.call(document.querySelectorAll('input'), function (x) { return numerico(x) && x.offsetParent !== null; }); }
-  function vai(el) { if (!el) return false; el.focus(); try { el.select(); } catch (x) {} return true; }
+  function vai(el) { if (!el) return false; el.focus(); try { el.select(); } catch (x) {} arrivo = el; return true; }
   function nellaRiga(cella, el, dir) {
     var row = cella.parentElement, celle = Array.prototype.slice.call(row.children), i = celle.indexOf(cella) + dir;
-    // stessa cella con più campi: prima quelli
     var dentro = Array.prototype.filter.call(cella.querySelectorAll('input'), numerico), j = dentro.indexOf(el) + dir;
     if (j >= 0 && j < dentro.length) return dentro[j];
     for (; i >= 0 && i < celle.length; i += dir) { var c = Array.prototype.filter.call(celle[i].querySelectorAll('input'), numerico); if (c.length) return dir > 0 ? c[0] : c[c.length - 1]; }
@@ -201,7 +174,6 @@
     return null;
   }
   function vicino(el, dir) { var l = campi(), i = l.indexOf(el); return i < 0 ? null : l[i + dir] || null; }
-  // il campo più vicino sopra/sotto sullo schermo (es. la tabella successiva)
   function sottoSopra(el, dir) {
     var r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, best = null, bd = 1e9;
     campi().forEach(function (x) {
@@ -211,22 +183,25 @@
     });
     return best;
   }
+  document.addEventListener('mousedown', function (e) { if (e.target === arrivo) arrivo = null; }, true);
+  document.addEventListener('input', function (e) { if (e.target === arrivo) arrivo = null; }, true);
+  document.addEventListener('focusout', function (e) { if (e.target === arrivo) arrivo = null; }, true);
   document.addEventListener('keydown', function (e) {
     var el = e.target, k = e.key;
-    if (!numerico(el) || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if (!numerico(el) || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.isComposing) return;
     if (k !== 'ArrowUp' && k !== 'ArrowDown' && k !== 'ArrowLeft' && k !== 'ArrowRight') return;
-    var cella = el.closest('td, th'), dir = (k === 'ArrowUp' || k === 'ArrowLeft') ? -1 : 1, dest = null;
+    var cella = el.closest('td, th'), dir = (k === 'ArrowUp' || k === 'ArrowLeft') ? -1 : 1, dest;
     if (k === 'ArrowUp' || k === 'ArrowDown') {
       e.preventDefault(); // niente +1/-1 sul numero
-      dest = (cella && cella.closest('table') && inColonna(cella, dir)) || sottoSopra(el, dir);
-      return vai(dest);
+      return vai((cella && cella.closest('table') && inColonna(cella, dir)) || sottoSopra(el, dir));
     }
-    var s = null, f = null; try { s = el.selectionStart; f = el.selectionEnd; } catch (x) {}
-    var len = D.get.call(el).length;
-    if (s != null) {
-      if (s !== f) return;                          // numero selezionato: la freccia entra nel numero
-      if (dir < 0 && s > 0) return; if (dir > 0 && s < len) return; // il cursore si muove dentro il numero
+    // ← →: dentro il numero, salvo quando ci si è appena arrivati con le frecce (o il campo è vuoto, o il cursore è già in fondo)
+    var salta = arrivo === el || el.value === '';
+    if (!salta && el.type !== 'number') {
+      var s = null, f = null; try { s = el.selectionStart; f = el.selectionEnd; } catch (x) {}
+      if (s != null && s === f && ((dir < 0 && s === 0) || (dir > 0 && s === el.value.length))) salta = true;
     }
+    if (!salta) return;
     dest = (cella && nellaRiga(cella, el, dir)) || vicino(el, dir);
     if (dest) { e.preventDefault(); vai(dest); }
   }, true);
