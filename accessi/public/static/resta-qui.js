@@ -143,6 +143,7 @@
    ↑ ↓ al campo sopra/sotto (stessa colonna della tabella, altrimenti il campo prima/dopo). */
 (function () {
   if (window.__tsCampi) return; window.__tsCampi = true;
+  return; // sospeso: da ricontrollare (segnalato che non si riuscivano a modificare i dati)
   var st = document.createElement('style');
   st.textContent = 'input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;appearance:none;margin:0}input[type=number]{-moz-appearance:textfield;appearance:textfield}';
   (document.head || document.documentElement).appendChild(st);
