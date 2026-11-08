@@ -93,7 +93,7 @@ app.get('/api/stato', needUser, wrap(async (req, res) => {
   const p = req.me.perm;
   res.json({ me: { id: req.me.id, nome: req.me.nome },
     sterilizzazione: p.sterilizzazione || null, udi: p.registro_udi || null, manutenzione: p.manutenzione || null, misure: p.misure || null, clinica: req.me.clinica, voci: VOCI, magazzino: req.me.magazzino ? 'https://magazzino.appgestione.it' : null,
-    ai: !!process.env.ANTHROPIC_API_KEY, oggi: oggi(), home: accessi.publicUrl() });
+    ai: !!(process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY), oggi: oggi(), home: accessi.publicUrl() });
 }));
 
 /* ============ COMPLIANCE STERILIZZAZIONE ============ */
@@ -437,22 +437,12 @@ app.get('/api/steri/macchine/:id/esportazioni', needUser, need(ST), wrap(async (
 
 // Lettura della foto (vapor line o stampa dell'autoclave) con l'AI: numero di ciclo, temperatura, viraggio
 async function chiediAI(dataUrl, prompt) {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw fail(400, 'La lettura automatica delle foto non è attiva.');
+  if (!process.env.ANTHROPIC_API_KEY && !process.env.GEMINI_API_KEY) throw fail(400, 'La lettura automatica delle foto non è attiva.');
   const m = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(String(dataUrl || ''));
   if (!m) throw fail(400, 'Foto non valida.');
-  let r;
-  try {
-    r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST', headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: process.env.ASO_AI_MODEL || process.env.MAG_AI_MODEL || 'claude-sonnet-5-5', max_tokens: 800,
-        messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } }, { type: 'text', text: prompt }] }] }),
-      signal: AbortSignal.timeout(60000),
-    });
-  } catch { throw fail(502, 'La lettura ha impiegato troppo. Riprova o compila a mano.'); }
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) { console.warn('ASO lettura foto:', r.status, JSON.stringify(j).slice(0, 200)); throw fail(502, 'La lettura automatica non ha risposto. Compila a mano.'); }
-  const txt = (j.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
+  let txt;
+  try { txt = await require('../lib/consumo').chiedi('aso_foto', null, [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } }, { type: 'text', text: prompt }] }], 800, 'Lettura foto', { model: process.env.ASO_AI_MODEL || process.env.MAG_AI_MODEL, timeout: 60000 }); }
+  catch (e) { throw fail(e.status === 403 ? 400 : 502, e.status === 403 ? e.message : 'La lettura automatica non ha risposto. Compila a mano.'); }
   try { return JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1)); } catch { throw fail(502, 'Non sono riuscito a leggere la foto. Compila a mano.'); }
 }
 app.post('/api/steri/leggi-ciclo', needUser, need(ST), wrap(async (req, res) => {

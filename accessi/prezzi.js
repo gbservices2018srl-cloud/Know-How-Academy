@@ -70,23 +70,7 @@ async function contenuto(file) {
   throw Object.assign(new Error('Carica un PDF, una foto (JPG, PNG) o un file Excel (.xlsx o .csv).'), { status: 400 });
 }
 async function chiediAI(blocchi, prompt, maxTokens = 16000) {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw Object.assign(new Error('La lettura automatica non è attiva (manca la chiave dell\'AI su Render).'), { status: 400 });
-  let r;
-  try {
-    r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST', headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: process.env.PREZZI_AI_MODEL || process.env.ASO_AI_MODEL || 'claude-sonnet-5-5', max_tokens: maxTokens,
-        messages: [{ role: 'user', content: [...blocchi, { type: 'text', text: prompt }] }] }),
-      signal: AbortSignal.timeout(170000),
-    });
-  } catch { throw Object.assign(new Error('La lettura ha impiegato troppo. Riprova (o dividi il file in parti più piccole).'), { status: 502 }); }
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) {
-    console.warn('Raffronto prezzi, lettura:', r.status, JSON.stringify(j).slice(0, 300));
-    throw Object.assign(new Error(r.status === 413 || /too large|size/i.test(JSON.stringify(j)) ? 'Il file è troppo grande per la lettura: prova con meno pagine.' : 'La lettura automatica non ha risposto. Riprova tra poco.'), { status: 502 });
-  }
-  const txt = (j.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
+  const txt = await require('../lib/consumo').chiedi('prezzi_letture', null, [{ role: 'user', content: [...blocchi, { type: 'text', text: prompt }] }], maxTokens, 'Lettura listini e fatture', { model: process.env.PREZZI_AI_MODEL || process.env.ASO_AI_MODEL, timeout: 170000 });
   try { return JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1)); }
   catch { throw Object.assign(new Error('Non sono riuscito a leggere le voci del documento. Prova con un file più nitido.'), { status: 502 }); }
 }
@@ -174,7 +158,7 @@ module.exports = function (app, { store, needUser, wrap, bad, sendPage }) {
   app.get('/api/prezzi/listini', needUser, need, wrap(async (req, res) => {
     await migra;
     const { rows } = await store.q('select l.*, (select count(*) from prezzi_voci v where v.listino_id = l.id) as n_voci from prezzi_listini l order by lower(l.fornitore), lower(l.nome)');
-    res.json({ listini: rows.map(shapeL), ai: !!process.env.ANTHROPIC_API_KEY });
+    res.json({ listini: rows.map(shapeL), ai: !!(process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY) });
   }));
   app.get('/api/prezzi/listini/:id', needUser, need, wrap(async (req, res) => {
     const { rows: [l] } = await store.q('select * from prezzi_listini where id = $1', [str(req.params.id, 60)]);

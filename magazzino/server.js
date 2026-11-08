@@ -100,7 +100,7 @@ app.get('/api/state', needUser, wrap(async (req, res) => {
     db.q(`${ARTICOLI_SQL} ${admin ? '' : 'where a.attivo'} order by a.nome`),
   ]);
   const out = {
-    me: req.user, links: sso.links(), bollaAttiva: admin && !!process.env.ANTHROPIC_API_KEY,
+    me: req.user, links: sso.links(), bollaAttiva: admin && !!(process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY),
     categorie: cat.rows, articoli: art.rows.map(a => shapeArticolo(a, admin)),
     prenotazioni: await prenotazioni(admin ? `where p.stato = 'in_attesa' or p.creata_il > now() - interval '60 days'` : 'where p.utente_id = $1',
       admin ? [] : [req.user.id]),

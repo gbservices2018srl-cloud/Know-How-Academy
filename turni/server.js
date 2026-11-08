@@ -448,8 +448,6 @@ app.post('/api/privacy/accetta', needUser, wrap(async (req, res) => {
 
 /* ---------- regole scritte con l'AI ---------- */
 app.post('/api/ai/regola', needAdmin, wrap(async (req, res) => {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return bad(res, 400, "L'AI non è attiva: manca ANTHROPIC_API_KEY su Render.");
   const testo = str(req.body.testo, 2000), scope = str(req.body.scope, 64) || null;
   if (!testo) return bad(res, 400, 'Scrivi prima la regola.');
   const { m } = await motoreCompleto();
@@ -482,21 +480,9 @@ Rispondi SOLO con un oggetto JSON:
 {"riassunto":"una frase in italiano semplice che dice cosa farà l'app","azioni":[...],"dubbi":["domande brevi se qualcosa è ambiguo"]}
 
 REGOLA: """${testo}"""`;
-  let r;
-  try {
-    r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: process.env.TURNI_AI_MODEL || 'claude-sonnet-5-5', max_tokens: 1500, messages: [{ role: 'user', content: prompt }] }),
-      signal: AbortSignal.timeout(60000),
-    });
-  } catch (e) { return bad(res, 502, "L'AI non ha risposto in tempo. Riprova."); }
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) {
-    console.warn('Turni AI:', r.status, JSON.stringify(j).slice(0, 300));
-    return bad(res, 502, r.status === 429 ? 'Troppe richieste ravvicinate: riprova tra poco.' : r.status === 401 ? 'La chiave ANTHROPIC_API_KEY non è valida.' : "L'AI non ha risposto. Riprova tra poco.");
-  }
-  const txt = (j.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
+  let txt;
+  try { txt = await require('../lib/consumo').chiedi('turni_regole', null, prompt, 1500, 'Regole del planning', { model: process.env.TURNI_AI_MODEL, timeout: 60000 }); }
+  catch (e) { return bad(res, e.status === 403 ? 400 : 502, e.message); }
   let out;
   try { out = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1)); }
   catch { return bad(res, 502, 'La risposta non era leggibile. Riprova o scrivi la regola in modo più semplice.'); }

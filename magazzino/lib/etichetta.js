@@ -82,28 +82,9 @@ Regole:
 - Se un dato non c'è o non si legge, lascia vuoto e scrivi il motivo in "dubbi" (breve, in italiano).`;
 
 async function leggiEtichetta(files, codice) {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw Object.assign(new Error("La lettura delle etichette non è attiva: manca ANTHROPIC_API_KEY su Render."), { status: 400 });
   const content = files.map(f => ({ type: 'image', source: { type: 'base64', media_type: f.tipo, data: f.dati } }));
   content.push({ type: 'text', text: PROMPT(codice) });
-  if ((await require('../../lib/consumo').stato('mag_letture')) === 'off') throw Object.assign(new Error('La lettura delle etichette automatica è spenta dall’amministratore: scrivi i dati a mano.'), { status: 400 });
-  let r;
-  try {
-    r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: process.env.MAG_AI_MODEL || process.env.TURNI_AI_MODEL || 'claude-sonnet-5-5', max_tokens: 1500,
-        messages: [{ role: 'user', content }] }),
-      signal: AbortSignal.timeout(60000),
-    });
-  } catch { throw Object.assign(new Error("La lettura ha impiegato troppo. Riprova con una foto più nitida."), { status: 502 }); }
-  const j = await r.json().catch(() => ({}));
-  require('../../lib/consumo').registra('magazzino', 'Lettura etichette', process.env.MAG_AI_MODEL || process.env.TURNI_AI_MODEL || 'claude-sonnet-5-5', j.usage);
-  if (!r.ok) {
-    console.warn('Magazzino etichetta:', r.status, JSON.stringify(j).slice(0, 300));
-    throw Object.assign(new Error(r.status === 429 ? 'Troppe richieste ravvicinate: riprova tra poco.' : "Il servizio di lettura non ha risposto. Riprova tra poco."), { status: 502 });
-  }
-  const txt = (j.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
+  const txt = await require('../../lib/consumo').chiedi('mag_letture', null, [{ role: 'user', content }], 1500, 'Lettura etichette', { model: process.env.MAG_AI_MODEL || process.env.TURNI_AI_MODEL, timeout: 60000 });
   let o;
   try { o = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1)); }
   catch { throw Object.assign(new Error("Non sono riuscito a leggere l'etichetta. Riprova con una foto più vicina e dritta."), { status: 502 }); }

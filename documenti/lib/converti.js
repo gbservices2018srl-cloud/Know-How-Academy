@@ -109,29 +109,18 @@ Regole:
 Rispondi SOLO con JSON valido, senza altro testo:
 {"titolo":"titolo del documento","blocchi":[{"t":"h","x":"titolo di sezione"},{"t":"p","x":"paragrafo"},{"t":"li","x":"punto elenco"},{"t":"li","x":"punto numerato","n":true},{"t":"t","rows":[["intestazione 1","intestazione 2"],["cella","cella"]]}]}`;
 async function pdfConAI(buffer) {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return null;
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: process.env.DOC_AI_MODEL || process.env.TURNI_AI_MODEL || 'claude-sonnet-5-5', max_tokens: 32000,
-      messages: [{ role: 'user', content: [
+  const { text: txt, troncato } = await require('../../lib/consumo').chiedi('doc_pdf', null, [{ role: 'user', content: [
         { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: Buffer.from(buffer).toString('base64') } },
-        { type: 'text', text: PROMPT } ] }] }),
-    signal: AbortSignal.timeout(240000),
-  });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(`API ${r.status} ${j?.error?.message || ''}`.trim());
-  const txt = (j.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
+        { type: 'text', text: PROMPT } ] }], 32000, 'Conversione PDF', { model: process.env.DOC_AI_MODEL || process.env.TURNI_AI_MODEL, timeout: 240000, completo: true });
   const out = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1));
-  return { titolo: String(out.titolo || '').slice(0, 200), blocchi: pulisci(out.blocchi), troncato: j.stop_reason === 'max_tokens' };
+  return { titolo: String(out.titolo || '').slice(0, 200), blocchi: pulisci(out.blocchi), troncato };
 }
 
 // PDF → blocchi: con l'AI se c'è (fino a 60 pagine), altrimenti dal testo. Restituisce anche come è stato letto.
 async function daPdf(buffer) {
   const { testo, pagine } = await testoPdf(buffer).catch(() => ({ testo: '', pagine: 0 }));
   const conTesto = testo.replace(/\s+/g, '').length > 40;
-  if (process.env.ANTHROPIC_API_KEY && pagine <= 60) {
+  if ((process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY) && pagine <= 60) {
     try {
       const a = await pdfConAI(buffer);
       if (a && a.blocchi.length) return { ...a, pagine, come: 'ai' };

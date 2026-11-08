@@ -21,8 +21,6 @@ Regole:
 - Se un dato non c'è o non si legge, lascia la stringa vuota e scrivi il motivo in "dubbi" (breve, in italiano).`;
 
 async function leggi(files) {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw Object.assign(new Error("La lettura delle bolle non è attiva: manca ANTHROPIC_API_KEY su Render."), { status: 400 });
   const content = [];
   for (const f of files) {
     if (!TIPI.has(f.tipo)) throw Object.assign(new Error('Formato non supportato: usa una foto (JPG, PNG) o un PDF.'), { status: 400 });
@@ -31,26 +29,7 @@ async function leggi(files) {
       : { type: 'image', source: { type: 'base64', media_type: f.tipo, data: f.dati } });
   }
   content.push({ type: 'text', text: PROMPT });
-  if ((await require('../../lib/consumo').stato('mag_letture')) === 'off') throw Object.assign(new Error('La lettura delle bolle automatica è spenta dall’amministratore: scrivi i dati a mano.'), { status: 400 });
-  let r;
-  try {
-    r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: process.env.MAG_AI_MODEL || process.env.TURNI_AI_MODEL || 'claude-sonnet-5-5', max_tokens: 6000,
-        messages: [{ role: 'user', content }] }),
-      signal: AbortSignal.timeout(120000),
-    });
-  } catch { throw Object.assign(new Error('La lettura ha impiegato troppo. Riprova, magari con una foto più nitida.'), { status: 502 }); }
-  const j = await r.json().catch(() => ({}));
-  require('../../lib/consumo').registra('magazzino', 'Lettura bolle', process.env.MAG_AI_MODEL || process.env.TURNI_AI_MODEL || 'claude-sonnet-5-5', j.usage);
-  if (!r.ok) {
-    console.warn('Magazzino bolla:', r.status, JSON.stringify(j).slice(0, 300));
-    const msg = r.status === 429 ? 'Troppe richieste ravvicinate: riprova tra poco.' : r.status === 401 ? 'La chiave ANTHROPIC_API_KEY non è valida.'
-      : r.status === 400 ? 'Il file non si riesce a leggere: prova con una foto JPG più piccola o un PDF.' : 'Il servizio di lettura non ha risposto. Riprova tra poco.';
-    throw Object.assign(new Error(msg), { status: 502 });
-  }
-  const txt = (j.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
+  const txt = await require('../../lib/consumo').chiedi('mag_letture', null, [{ role: 'user', content }], 6000, 'Lettura bolle', { model: process.env.MAG_AI_MODEL || process.env.TURNI_AI_MODEL, timeout: 120000 });
   let out;
   try { out = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1)); }
   catch { throw Object.assign(new Error('Non sono riuscito a leggere la bolla. Riprova con una foto più nitida e dritta.'), { status: 502 }); }

@@ -58,7 +58,7 @@ async function docVisibile(req, id) {
 app.get('/api/stato', needUser, wrap(async (req, res) => {
   const { rows: dev } = await db.q(`select count(*)::int n from ${ACC}.notif_subs where user_id = $1`, [req.user.id]);
   const { rows: pr } = await db.q(`select attiva from ${ACC}.notif_prefs where user_id = $1 and app = 'documenti'`, [req.user.id]);
-  res.json({ me: { id: req.user.id, name: req.user.name, admin: !!req.user.admin }, ai: !!process.env.ANTHROPIC_API_KEY,
+  res.json({ me: { id: req.user.id, name: req.user.name, admin: !!req.user.admin }, ai: !!(process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY),
     notifiche: { dispositivi: dev[0].n, attiva: pr[0]?.attiva !== false }, links: sso.links() });
 }));
 app.get('/api/destinatari', needAdmin, wrap(async (req, res) => {
@@ -220,7 +220,7 @@ app.post('/api/carica', needAdmin, upload.single('file'), wrap(async (req, res) 
       else if (blocchi[0]?.t === 'h') { const t = blocchi[0].x; titolo = (t === t.toUpperCase() ? t.charAt(0) + t.slice(1).toLowerCase() : t).slice(0, 160); blocchi = blocchi.slice(1); }
       if (blocchi[0]?.t === 'h' && blocchi[0].x.toLowerCase() === titolo.toLowerCase()) blocchi = blocchi.slice(1);
       origine = `Da «${nome}» · ${oggi}` + (r.come === 'ai' ? ' · letto con l\'AI' : '');
-      if (r.come === 'vuoto') avviso = 'Il PDF non contiene testo leggibile (forse è una scansione)' + (process.env.ANTHROPIC_API_KEY ? ' e la lettura automatica non è riuscita' : ' e la lettura automatica non è attiva') + ': scegli «Mantieni l\'impaginazione originale» oppure scrivi il testo qui.';
+      if (r.come === 'vuoto') avviso = 'Il PDF non contiene testo leggibile (forse è una scansione)' + ((process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY) ? ' e la lettura automatica non è riuscita' : ' e la lettura automatica non è attiva') + ': scegli «Mantieni l\'impaginazione originale» oppure scrivi il testo qui.';
       else if (r.come === 'testo') avviso = 'Letto dal testo del PDF: controlla titoli ed elenchi prima di pubblicare.';
       if (r.troncato) avviso = 'Il documento è molto lungo: l\'ultima parte potrebbe mancare, controlla la fine prima di pubblicare.';
     }

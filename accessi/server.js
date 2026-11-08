@@ -957,21 +957,11 @@ Leggi i numeri esattamente come scritti. Usa null per un valore illeggibile.
 Rispondi solo con un oggetto JSON con queste chiavi numeriche: {"org":0,"auto":0,"gp":0,"ad":0,"det":0,"vend":0,"hr":0,"pro":0,"com":0,"esp":0,"rc":0,"fin":0,"suc":0,"pri":0,"lin":0,"va":0,"wi":0}`;
 app.post('/api/hr/leggi', needUser, wrap(async (req, res) => {
   if (!await accessoHR(req)) return bad(res, 403, 'Non sei abilitato a HR.');
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return bad(res, 400, 'La lettura automatica non è attiva: inserisci i valori a mano.');
   const m = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(String(req.body?.foto || ''));
   if (!m) return bad(res, 400, 'Immagine non valida: usa JPG o PNG.');
-  let r;
-  try {
-    r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST',
-      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: process.env.HR_AI_MODEL || process.env.ASO_AI_MODEL || 'claude-sonnet-5-5', max_tokens: 600,
-        messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } }, { type: 'text', text: IPROFILE_PROMPT }] }] }),
-      signal: AbortSignal.timeout(60000) });
-  } catch { return bad(res, 502, 'La lettura ha impiegato troppo. Riprova o inserisci i valori a mano.'); }
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) { console.warn('HR I-Profile lettura:', r.status, JSON.stringify(j).slice(0, 200)); return bad(res, 502, 'La lettura automatica non ha risposto. Inserisci i valori a mano.'); }
-  const txt = (j.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
+  let txt;
+  try { txt = await require('../lib/consumo').chiedi('hr_iprofile', null, [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } }, { type: 'text', text: IPROFILE_PROMPT }] }], 600, 'Lettura I-Profile', { model: process.env.HR_AI_MODEL || process.env.ASO_AI_MODEL, timeout: 60000 }); }
+  catch (e) { return bad(res, e.status === 403 ? 400 : 502, e.status === 403 ? e.message : 'La lettura automatica non ha risposto. Inserisci i valori a mano.'); }
   let o; try { o = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1)); } catch { return bad(res, 502, 'Non sono riuscito a leggere i numeri. Prova con una foto più nitida e dritta.'); }
   const valori = {};
   for (const k of ['org', 'auto', 'gp', 'ad', 'det', 'vend', 'hr', 'pro', 'com', 'esp', 'rc', 'fin', 'suc', 'pri', 'lin', 'va', 'wi']) { const x = Number(o[k]); if (o[k] !== null && o[k] !== '' && isFinite(x)) valori[k] = Math.max(-100, Math.min(100, Math.round(x))); }
