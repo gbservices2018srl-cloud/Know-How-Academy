@@ -232,7 +232,7 @@ const I = {
 };
 let S = null, me = null, view = '', q = '', toastT;
 const isAdmin = () => me && me.role === 'admin';
-const adminArea = () => MODE === 'admin' && isAdmin();
+const adminArea = () => isAdmin(); // l'amministratore vede solo l'area admin, l'utente solo la sua
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const fmtD = s => s ? s.split('-').reverse().join('/') : '';
 const figNome = id => (S.figure.find(f => f.id === id) || {}).nome || id;
@@ -929,10 +929,10 @@ function bottoneChat(){
     if (MODE === 'admin' && !isAdmin()) { location.href = '/'; return; }
     if (!isAdmin()) proteggi();
     const iniz = (me.name || me.username || '?').split(/\s+/).map(x => x[0]).slice(0, 2).join('').toUpperCase();
-    document.getElementById('who').innerHTML = `${isAdmin() ? (MODE === 'admin' ? '<a class="btn small" href="/">Vista utente</a>' : '<a class="btn small" href="/admin">Area admin</a>') : ''}
-      <span class="txt"><b>${esc(me.name || me.username)}</b><span>${esc(isAdmin() ? 'Amministratore' : (me.figura ? figNome(me.figura) : 'Collaboratore'))}</span></span><span class="av">${esc(iniz)}</span>`;
+    if (isAdmin() && MODE !== 'admin') history.replaceState(null, '', '/admin');
+    document.getElementById('who').innerHTML = `<span class="txt"><b>${esc(me.name || me.username)}</b><span>${esc(isAdmin() ? 'Amministratore' : (me.figura ? figNome(me.figura) : 'Collaboratore'))}</span></span><span class="av">${esc(iniz)}</span>`;
     view = adminArea() ? 'contenitore' : (new URLSearchParams(location.search).get('v') === 'test' ? 'mieitest' : 'prot');
-    render(); bottoneChat();
+    render(); if (!isAdmin()) bottoneChat();
   } catch (e) { document.getElementById('main').innerHTML = `<div class="card empty">${esc(e.message)}</div>`; }
 })();
 async function refresh(){ const [p, f] = await Promise.all([api('GET', '/api/p/state'), api('GET', '/api/state')]); S = p; S.flows = f.flows; S.figureAcc = f.figure || []; render(); }
