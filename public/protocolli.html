@@ -58,7 +58,7 @@ h1,h2,h3{font-family:var(--f-display);letter-spacing:-.01em}
 @media (max-width:1100px){.who .txt{display:none}}
 @media (max-width:760px){.top-in{flex-wrap:wrap}.nav{order:3;flex-basis:100%}}
 
-main{max-width:1240px;margin:0 auto;padding:18px 16px 60px;display:flex;flex-direction:column;gap:16px}
+main{max-width:1240px;margin:0 auto;padding:18px 16px 100px;display:flex;flex-direction:column;gap:16px}
 .search{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:0 14px;min-height:50px;max-width:760px}
 .search input{flex:1;min-width:0;border:0;outline:none;background:transparent;font-size:15.5px;min-height:46px}
 .search .x{border:0;background:none;color:var(--muted);font-size:20px;line-height:1;padding:4px 6px}
@@ -191,6 +191,18 @@ mark{background:var(--n-fase);color:var(--n-fg);border-radius:3px;padding:0 2px}
 
 .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 18px;border-radius:999px;font-size:14px;font-weight:600;z-index:200;box-shadow:var(--shadow);max-width:calc(100% - 32px);text-align:center}
 .empty{padding:28px 16px;text-align:center;color:var(--muted)}
+
+/* assistente */
+.fab{position:fixed;right:18px;bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:30;display:inline-flex;align-items:center;gap:8px;border:0;border-radius:999px;background:var(--accent);color:var(--accent-fg);font-weight:700;font-size:15px;padding:13px 18px;box-shadow:var(--shadow)}
+.chat-list{display:flex;flex-direction:column;gap:10px}
+.msg{max-width:88%;padding:11px 14px;border-radius:14px;font-size:15px;line-height:1.55}
+.msg.u{align-self:flex-end;background:var(--accent);color:var(--accent-fg);border-bottom-right-radius:4px;white-space:pre-line}
+.msg.a{align-self:flex-start;background:var(--surface-2);border-bottom-left-radius:4px}
+.msg.a p{margin:0 0 8px}.msg.a p:last-child{margin:0}.msg.a ul,.msg.a ol{margin:0 0 8px;padding-left:20px}
+.cit{border:0;background:var(--accent-soft);color:var(--accent);font-weight:800;font-size:12px;border-radius:6px;padding:0 6px;margin:0 1px;vertical-align:1px}
+.modal.chat{height:min(760px,92vh)}
+.chat-in{display:flex;gap:8px;align-items:flex-end;width:100%}
+.chat-in textarea{flex:1;min-height:46px;max-height:140px}
 
 /* protezione dei contenuti per chi non è amministratore */
 body.protetto{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
@@ -865,6 +877,49 @@ function dettaglioInvio(id){
   draw();
 }
 
+/* ---------- assistente in chat ---------- */
+const CHAT = { msgs: [] };
+function mdLite(src, fonti){
+  const inl = t => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\[(\d+(?:\s*,\s*\d+)*)\]/g, (m, g) => g.split(/\s*,\s*/).map(n => fonti && fonti[+n - 1] ? `<button class="cit" data-prot="${fonti[+n - 1].id}" title="${esc(fonti[+n - 1].titolo)}">${n}</button>` : '').join(''));
+  let html = '', list = null;
+  const chiudi = () => { if (list) { html += `</${list}>`; list = null; } };
+  for (const l of String(src || '').split('\n')) {
+    let m;
+    if ((m = l.match(/^\s*[-*•]\s+(.*)/))) { if (list !== 'ul') { chiudi(); html += '<ul>'; list = 'ul'; } html += `<li>${inl(m[1])}</li>`; continue; }
+    if ((m = l.match(/^\s*\d+[.)]\s+(.*)/))) { if (list !== 'ol') { chiudi(); html += '<ol>'; list = 'ol'; } html += `<li>${inl(m[1])}</li>`; continue; }
+    chiudi(); if (l.trim()) html += `<p>${inl(l.replace(/^#+\s*/, ''))}</p>`;
+  }
+  chiudi(); return html;
+}
+function apriChat(){
+  const l = layer(`<div class="modal-h"><div class="eyebrow">Risponde solo dai protocolli che puoi vedere</div><h2>Assistente</h2><button class="x-btn" data-x aria-label="Chiudi">${I.x}</button></div>
+    <div class="modal-b"><div class="chat-list"></div></div>
+    <div class="modal-f"><div class="chat-in"><textarea class="inp" rows="1" data-dom placeholder="Fai una domanda sui protocolli…"></textarea><button class="btn primary" data-invia>Invia</button></div></div>`, 'wide chat');
+  const lista = l.querySelector('.chat-list'), box = l.querySelector('.modal-b'), ta = l.querySelector('[data-dom]');
+  const draw = (attesa) => {
+    lista.innerHTML = (CHAT.msgs.length ? '' : '<p class="muted">Chiedi qualcosa sui protocolli: la risposta indica con un numero da quale protocollo arriva. Tocca il numero per aprirlo.</p>')
+      + CHAT.msgs.map(m => m.role === 'user' ? `<div class="msg u">${esc(m.content)}</div>` : `<div class="msg a">${mdLite(m.content, m.fonti)}</div>`).join('')
+      + (attesa ? '<div class="msg a"><span class="spin" style="width:16px;height:16px;border-width:2px"></span> Cerco nei protocolli…</div>' : '');
+    box.scrollTop = box.scrollHeight;
+  };
+  async function invia(){
+    const t = ta.value.trim(); if (!t) return;
+    CHAT.msgs.push({ role: 'user', content: t }); ta.value = ''; draw(true);
+    try { const j = await api('POST', '/api/p/chat', { messages: CHAT.msgs.map(m => ({ role: m.role, content: m.content })) }); CHAT.msgs.push({ role: 'assistant', content: j.text, fonti: j.fonti }); }
+    catch (e) { CHAT.msgs.pop(); ta.value = t; toast(e.message); }
+    draw(false);
+  }
+  l.addEventListener('click', e => { if (e.target.closest('[data-invia]')) invia(); const c = e.target.closest('[data-prot]'); if (c) apriProt(c.dataset.prot); });
+  ta.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); invia(); } });
+  draw(false); setTimeout(() => ta.focus(), 50);
+}
+function bottoneChat(){
+  if (document.querySelector('.fab')) return;
+  const b = document.createElement('button'); b.className = 'fab';
+  b.innerHTML = '<svg class="i" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Assistente';
+  b.onclick = apriChat; document.body.append(b);
+}
+
 /* ---------- avvio: protocolli + flussi (API esistente) ---------- */
 (async () => {
   try {
@@ -876,8 +931,8 @@ function dettaglioInvio(id){
     const iniz = (me.name || me.username || '?').split(/\s+/).map(x => x[0]).slice(0, 2).join('').toUpperCase();
     document.getElementById('who').innerHTML = `${isAdmin() ? (MODE === 'admin' ? '<a class="btn small" href="/">Vista utente</a>' : '<a class="btn small" href="/admin">Area admin</a>') : ''}
       <span class="txt"><b>${esc(me.name || me.username)}</b><span>${esc(isAdmin() ? 'Amministratore' : (me.figura ? figNome(me.figura) : 'Collaboratore'))}</span></span><span class="av">${esc(iniz)}</span>`;
-    view = adminArea() ? 'contenitore' : 'prot';
-    render();
+    view = adminArea() ? 'contenitore' : (new URLSearchParams(location.search).get('v') === 'test' ? 'mieitest' : 'prot');
+    render(); bottoneChat();
   } catch (e) { document.getElementById('main').innerHTML = `<div class="card empty">${esc(e.message)}</div>`; }
 })();
 async function refresh(){ const [p, f] = await Promise.all([api('GET', '/api/p/state'), api('GET', '/api/state')]); S = p; S.flows = f.flows; S.figureAcc = f.figure || []; render(); }
