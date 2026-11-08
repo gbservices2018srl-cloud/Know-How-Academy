@@ -59,6 +59,17 @@ h1,h2,h3{font-family:var(--f-display);letter-spacing:-.01em}
 @media (max-width:760px){.top-in{flex-wrap:wrap}.nav{order:3;flex-basis:100%}}
 
 main{max-width:1240px;margin:0 auto;padding:18px 16px 100px;display:flex;flex-direction:column;gap:16px}
+/* area amministratore: menu laterale */
+.shell{display:flex;align-items:flex-start;max-width:1440px;margin:0 auto}
+.shell main{flex:1;min-width:0;max-width:none;margin:0}
+.sidemenu{position:sticky;top:57px;flex:0 0 240px;height:calc(100vh - 57px);overflow-y:auto;padding:16px 10px;border-right:1px solid var(--line);background:var(--surface)}
+.sidemenu .nav{flex-direction:column;overflow:visible;padding:0;gap:4px}
+.sidemenu .nav button{width:100%;justify-content:flex-start;border-color:transparent;background:transparent;min-height:44px;font-size:14.5px}
+.sidemenu .nav button:hover{background:var(--surface-2)}
+.sidemenu .nav button.on{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.sidemenu .sidemenu-h{font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;font-weight:700;color:var(--muted);padding:4px 12px 10px}
+@media (max-width:760px){.shell{flex-direction:column;align-items:stretch}.sidemenu{position:static;height:auto;flex:none;border-right:0;border-bottom:1px solid var(--line);padding:8px 10px}
+  .sidemenu .nav{flex-direction:row;overflow-x:auto}.sidemenu .nav button{width:auto;white-space:nowrap}.sidemenu .sidemenu-h{display:none}}
 .search{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:0 14px;min-height:50px;max-width:760px}
 .search input{flex:1;min-width:0;border:0;outline:none;background:transparent;font-size:15.5px;min-height:46px}
 .search .x{border:0;background:none;color:var(--muted);font-size:20px;line-height:1;padding:4px 6px}
@@ -957,6 +968,13 @@ function bottoneChat(){
     if (!isAdmin()) proteggi();
     const iniz = (me.name || me.username || '?').split(/\s+/).map(x => x[0]).slice(0, 2).join('').toUpperCase();
     if (isAdmin() && MODE !== 'admin') history.replaceState(null, '', '/admin');
+    if (isAdmin()) { // amministratore: le sezioni in un menu laterale
+      const nav = document.getElementById('nav'), main = document.getElementById('main');
+      const shell = document.createElement('div'); shell.className = 'shell';
+      const side = document.createElement('aside'); side.className = 'sidemenu'; side.setAttribute('aria-label', 'Menu amministratore');
+      side.innerHTML = '<div class="sidemenu-h">Amministrazione</div>';
+      main.parentNode.insertBefore(shell, main); side.append(nav); shell.append(side, main);
+    }
     document.getElementById('who').innerHTML = `<span class="txt"><b>${esc(me.name || me.username)}</b><span>${esc(isAdmin() ? 'Amministratore' : (me.figura ? figNome(me.figura) : 'Collaboratore'))}</span></span><span class="av">${esc(iniz)}</span>`;
     view = adminArea() ? 'contenitore' : (new URLSearchParams(location.search).get('v') === 'test' ? 'mieitest' : 'prot');
     render(); if (!isAdmin() && S.chat) bottoneChat();
