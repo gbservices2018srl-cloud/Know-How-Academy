@@ -289,15 +289,14 @@ async function aBranche(m){
   await caricaInfo();
   const S2 = INFO;
   if (!sedeBr || !S2.tutteSedi.some(s => s.id === sedeBr)) sedeBr = S2.tutteSedi[0]?.id;
-  const ms = S2.tuttiMedici.filter(x => x.sedi.includes(sedeBr)), altri = S2.tuttiMedici.filter(x => !x.sedi.includes(sedeBr));
+  const ms = S2.tuttiMedici.filter(x => x.sedi.includes(sedeBr));
   const brDi = x => S2.medici.find(y => y.id === x.id)?.branche[sedeBr] || [];
   m.innerHTML = `<h1>Branche medici</h1><p class="sub">Scegli la sede e spunta le branche per cui ogni medico è abilitato. Si salva da solo. I medici vedono le loro abilitazioni in Info utili.</p>
     <div class="chips" style="margin-bottom:14px">${S2.tutteSedi.map(s => `<button class="chip" data-s="${s.id}" aria-pressed="${s.id === sedeBr}">${esc(s.nome)} · ${S2.tuttiMedici.filter(x => x.sedi.includes(s.id)).length}</button>`).join('')}</div>
-    <div class="card">${ms.length ? `<div class="tw"><table class="br"><thead><tr><th>Branca</th>${ms.map(x => `<th>${esc(x.nome)}<div class="th-acts"><button data-tutte="${x.id}">Tutte</button>·<button data-nessuna="${x.id}">Nessuna</button>·<button data-fuori="${x.id}" title="Togli il medico da questa sede">Togli</button></div></th>`).join('')}</tr></thead>
+    <div class="card">${ms.length ? `<div class="tw"><table class="br"><thead><tr><th>Branca</th>${ms.map(x => `<th>${esc(x.nome)}<div class="th-acts"><button data-tutte="${x.id}">Tutte</button>·<button data-nessuna="${x.id}">Nessuna</button></div></th>`).join('')}</tr></thead>
       <tbody>${S2.branche.map(b => `<tr><td>${esc(b)}</td>${ms.map(x => `<td><input type="checkbox" class="cb" data-m="${x.id}" data-b="${esc(b)}" ${brDi(x).includes(b) ? 'checked' : ''} aria-label="${esc(x.nome)} – ${esc(b)}"></td>`).join('')}</tr>`).join('')}</tbody></table></div>`
       : '<p class="muted">Nessun medico in questa sede.</p>'}
-      <div class="row" style="margin-top:14px">${altri.length ? `<select id="aggMed"><option value="">Aggiungi un medico a questa sede…</option>${altri.map(x => `<option value="${x.id}">${esc(x.nome)}</option>`).join('')}</select><button class="btn small" id="aggBtn">Aggiungi</button>` : ''}
-      <span class="muted small">I medici sono quelli con figura “Medico odontoiatra” nel pannello accessi.</span></div></div>`;
+      <p class="muted small" style="margin:14px 0 0">I medici e le loro sedi arrivano in automatico dal pannello accessi: sono quelli assegnati in Nuovalab con il livello «Medico», ognuno nello studio della sua sede. Per aggiungere o togliere un medico da una sede cambialo lì.</p></div>`;
   const salva = async (id, lista) => {
     let med = S2.medici.find(y => y.id === id); if (!med) { med = {id, branche: {}, sedi: []}; S2.medici.push(med); }
     await api('PUT', `/api/scheda/branche/${id}/${sedeBr}`, {branche: lista}); med.branche[sedeBr] = lista;
@@ -309,15 +308,10 @@ async function aBranche(m){
   };
   m.onclick = async e => {
     const s = e.target.closest('[data-s]'); if (s) { sedeBr = s.dataset.s; return aBranche(m); }
-    const t = e.target.closest('[data-tutte]'), n = e.target.closest('[data-nessuna]'), f = e.target.closest('[data-fuori]');
+    const t = e.target.closest('[data-tutte]'), n = e.target.closest('[data-nessuna]');
     try {
       if (t) { await salva(t.dataset.tutte, [...S2.branche]); aBranche(m); }
       if (n) { await salva(n.dataset.nessuna, []); aBranche(m); }
-      if (f) { const x = S2.tuttiMedici.find(y => y.id === f.dataset.fuori);
-        if (!confirm(`Togliere ${x.nome} da questa sede? Le branche spuntate restano salvate se lo rimetti.`)) return;
-        await api('PUT', `/api/scheda/medici/${x.id}/sedi`, {sedi: x.sedi.filter(y => y !== sedeBr)}); AD.persone = null; aBranche(m); }
-      if (e.target.id === 'aggBtn') { const id = $('#aggMed').value; if (!id) return; const x = S2.tuttiMedici.find(y => y.id === id);
-        await api('PUT', `/api/scheda/medici/${x.id}/sedi`, {sedi: [...x.sedi, sedeBr]}); AD.persone = null; aBranche(m); }
     } catch (er) { toast(er.message); }
   };
 }

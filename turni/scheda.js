@@ -41,22 +41,22 @@ module.exports = function scheda(app, { db, needUser, needAdmin, wrap, bad, uplo
     return { ssoId: u.sso_id, nome: `${p.first_name || ''} ${p.last_name || ''}`.trim() || u.name, figura: p.figura || '' };
   }
   async function sedi() { return (await store.listSedi()).filter(s => s.attiva); }
-  async function medici() {
-    const { rows } = await store.q(`select id, first_name, last_name from users where status = 'active' and figura = $1 order by last_name, first_name`, [MEDICO]);
-    return rows.map(r => ({ id: r.id, nome: `${r.first_name || ''} ${r.last_name || ''}`.trim() }));
-  }
-  // la prima volta: per ogni medico, le sedi già assegnate nel pannello accessi
+  // Medici e loro sedi: sempre dal pannello accessi, dall'assegnazione di Nuovalab (livello "Medico" con uno o più
+  // medici, ognuno legato a uno studio = una sede). Si cambia solo lì; vale anche per i medici nuovi.
+  const normSede = x => String(x || '').toLowerCase().replace(/to\s*smile|studio|sede|ambulatorio/g, '').replace(/[^a-z0-9]/g, '');
   async function sediMedici() {
-    await migrate();
-    const lista = await medici();
-    const { rows } = await db.q('select medico_id, sedi from sch_medici');
-    const noti = new Map(rows.map(r => [r.medico_id, r.sedi]));
-    for (const m of lista) if (!noti.has(m.id)) {
-      const s = (await store.sediNote(m.id)).map(e => e.id).filter(Boolean);
-      await db.q('insert into sch_medici (medico_id, sedi) values ($1,$2) on conflict do nothing', [m.id, JSON.stringify(s)]);
-      noti.set(m.id, s);
-    }
-    return lista.map(m => ({ ...m, sedi: noti.get(m.id) || [] }));
+    const [ss, { rows }] = await Promise.all([sedi(), store.q(`select u.id, u.first_name, u.last_name, ua.enti, ua.ente_nome from users u
+      left join user_apps ua on ua.user_id = u.id and ua.app = 'laboratorio' and ua.livello = 'MEDICO'
+      where u.status = 'active' and not u.owner and (u.figura = $1 or ua.user_id is not null) order by u.last_name, u.first_name`, [MEDICO])]);
+    const sedeDi = nome => {
+      const n = normSede(String(nome || '').split(' · ').slice(1).join(' · '));
+      if (!n) return null;
+      return (ss.find(s => normSede(s.nome) === n) || ss.find(s => normSede(s.nome).length >= 3 && (n.includes(normSede(s.nome)) || normSede(s.nome).includes(n))))?.id || null;
+    };
+    return rows.map(r => {
+      const enti = Array.isArray(r.enti) && r.enti.length ? r.enti : r.ente_nome ? [{ nome: r.ente_nome }] : [];
+      return { id: r.id, nome: `${r.first_name || ''} ${r.last_name || ''}`.trim(), sedi: [...new Set(enti.map(e => sedeDi(e.nome)).filter(Boolean))] };
+    });
   }
   async function orari() {
     await migrate();
@@ -130,13 +130,7 @@ module.exports = function scheda(app, { db, needUser, needAdmin, wrap, bad, uplo
     await db.q('insert into sch_orari (sede_id, orari, aggiornato) values ($1,$2,now()) on conflict (sede_id) do update set orari = excluded.orari, aggiornato = now()', [req.params.sede, JSON.stringify(pulito)]);
     res.json({ ok: true });
   }));
-  app.put('/api/scheda/medici/:id/sedi', needAdmin, wrap(async (req, res) => {
-    const validi = new Set((await sedi()).map(s => s.id));
-    const s = (Array.isArray(req.body.sedi) ? req.body.sedi : []).map(String).filter(x => validi.has(x));
-    await migrate();
-    await db.q('insert into sch_medici (medico_id, sedi, aggiornato) values ($1,$2,now()) on conflict (medico_id) do update set sedi = excluded.sedi, aggiornato = now()', [req.params.id, JSON.stringify(s)]);
-    res.json({ ok: true });
-  }));
+  app.put('/api/scheda/medici/:id/sedi', needAdmin, (req, res) => bad(res, 400, 'Le sedi dei medici si cambiano nel pannello accessi (Nuovalab, livello Medico).'));
   app.put('/api/scheda/branche/:medico/:sede', needAdmin, wrap(async (req, res) => {
     const b = [...new Set((Array.isArray(req.body.branche) ? req.body.branche : []).map(String).filter(x => BRANCHE.includes(x)))];
     await migrate();
