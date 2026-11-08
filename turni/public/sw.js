@@ -5,7 +5,7 @@ self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 self.addEventListener('push', e => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch { d = { body: e.data && e.data.text() }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'Turni · To Smile', {
+  e.waitUntil(self.registration.showNotification(d.title || 'Scheda personale · To Smile', {
     body: d.body || '', icon: '/icon.svg', badge: '/icon.svg', tag: d.tag, renotify: !!d.tag,
     data: { url: d.url || '/' },
   }));

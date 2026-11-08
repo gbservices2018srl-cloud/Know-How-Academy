@@ -115,7 +115,12 @@ module.exports = function scheda(app, { db, needUser, needAdmin, wrap, bad, uplo
   }));
 
   /* ---- amministratore ---- */
-  app.put('/api/scheda/attiva', needAdmin, wrap(async (req, res) => { await setImp('attiva', !!req.body.attiva); res.json({ ok: true }); }));
+  app.put('/api/scheda/attiva', needAdmin, wrap(async (req, res) => {
+    await setImp('attiva', !!req.body.attiva);
+    // da quando è attiva si controllano le mancate timbrature (mai sui giorni prima)
+    if (req.body.attiva && !(await imp('avvio'))) await setImp('avvio', new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' }));
+    res.json({ ok: true });
+  }));
   const ORA = /^([01]\d|2[0-3]):[0-5]\d$/;
   app.put('/api/scheda/orari/:sede', needAdmin, wrap(async (req, res) => {
     const o = Array.isArray(req.body.orari) ? req.body.orari : [];
@@ -204,13 +209,19 @@ module.exports = function scheda(app, { db, needUser, needAdmin, wrap, bad, uplo
     res.json({ persone: pp.map(p => ({ nome: `${p.first_name || ''} ${p.last_name || ''}`.trim(), figura: p.figura || '', letto: lm.get(p.id) || null })) });
   }));
 
-  // pagina
-  app.get('/scheda', wrap(async (req, res) => {
+  // pagina: la Scheda personale è la pagina principale di turni.appgestione.it (anche /nfc/<codice> dei tag)
+  app.get('/sp/:f', (req, res) => {
+    if (!/^[a-z]+\.js$/.test(req.params.f)) return res.status(404).end();
+    res.set('Cache-Control', 'no-cache');
+    res.sendFile(path.join(PUB, 'sp', req.params.f), err => { if (err && !res.headersSent) res.status(404).end(); });
+  });
+  app.get(['/', '/scheda', '/nfc/:cod'], (req, res) => {
     res.set('Cache-Control', 'no-store');
     if (!req.user) return req.ssoDenied ? sso.toDenied(res) : sso.toLogin(req, res);
-    if (!(await vede(req))) return res.redirect('/');
     res.sendFile(path.join(PUB, 'scheda.html'));
-  }));
+  });
 
-  return { migrate };
+  return { migrate, imp, setImp, vede, persona, sedi, orari, sediMedici, isAdmin };
 };
+module.exports.MEDICO = MEDICO;
+module.exports.SEZIONI_MEDICO = SEZIONI_MEDICO;

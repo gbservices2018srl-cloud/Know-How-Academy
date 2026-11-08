@@ -103,7 +103,7 @@ module.exports = [
     desc: 'Le richieste cliniche delle ASO: misure implantari da prendere in carico e pianificare su DTX.' },
   { key: 'magazzino', name: 'Magazzino centrale', url: 'https://magazzino.appgestione.it', color: 'yellow', dentro: 'aso', autoFigura: 'ASO',
     desc: 'Disponibilità degli articoli, prenotazioni e riordino ai fornitori.' },
-  { key: 'turni', name: 'Turni', url: 'https://turni.appgestione.it', color: 'teal', dentro: 'hr',
+  { key: 'turni', name: 'Scheda personale', url: 'https://turni.appgestione.it', color: 'teal', dentro: 'hr',
     // La figura è quella della persona (Gestione accessi): con Dipendente o "Amministratore, anche in turno"
     // compare da sola nel Personale dei Turni
     livelli: [
@@ -111,7 +111,7 @@ module.exports = [
       { key: 'admin', label: 'Amministratore, anche in turno', role: 'admin' },
       { key: 'admin_no', label: 'Amministratore, non in turno', role: 'admin' },
     ],
-    desc: 'Planning delle sedi, ferie e permessi, sostituzioni e buste paga.' },
+    desc: 'Timbratura, turni, ferie e permessi, buste paga e documenti, info utili.' },
   { key: 'comunicazioni', name: 'Comunicazioni aziendali', url: 'https://comunicazioni.appgestione.it', color: 'purple', dentro: 'area_comunicazioni',
     // ogni persona attiva riceve da sola l'accesso come Utente, una volta sola (anche chi viene approvato dopo):
     // dal pannello si può poi togliere o cambiare in Amministratore (chi scrive le comunicazioni)

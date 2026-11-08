@@ -778,11 +778,8 @@ app.post('/api/logout', wrap(async (req, res) => { await sso.logout(req, res); r
 const PUB = path.join(__dirname, 'public');
 // Scheda personale (fase 1: Info utili + Branche medici). Spenta finché l'amministratore non la attiva.
 const scheda = require('./scheda')(app, { db, needUser, needAdmin, wrap, bad, upload, PUB, sso });
-app.get('/', (req, res) => {
-  res.set('Cache-Control', 'no-store');
-  if (!req.user) return req.ssoDenied ? sso.toDenied(res) : sso.toLogin(req, res);
-  res.sendFile(path.join(PUB, 'app.html'));
-});
+const sp = require('./sp')(app, { db, needUser, needAdmin, wrap, bad, upload, push, sch: scheda });
+// La vecchia app Turni (planning automatico) è stata sostituita dalla Scheda personale: i suoi dati restano nel database.
 app.get(['/admin', '/login'], (req, res) => res.redirect('/'));
 app.get('/motore.js', (req, res) => { res.set('Cache-Control', 'no-cache'); res.sendFile(path.join(PUB, 'motore.js')); });
 app.get('/sw.js', (req, res) => { res.set({ 'Cache-Control': 'no-cache', 'Service-Worker-Allowed': '/' }); res.sendFile(path.join(PUB, 'sw.js')); });
@@ -800,5 +797,5 @@ app.use((err, req, res, next) => {
   bad(res, 500, 'Errore del server. Riprova.');
 });
 
-async function start() { await db.migrate(); await scheda.migrate(); }
+async function start() { await db.migrate(); await scheda.migrate(); await sp.migrate(); }
 module.exports = { app, start };

@@ -10,7 +10,7 @@ const q = (t, p) => store.q(t, p);
 
 // App che possono mandare notifiche (chiave = quella dei permessi)
 const APP_NOTIFICHE = {
-  calendario: 'Eventi aziendali', turni: 'Turni', magazzino: 'Magazzino centrale',
+  calendario: 'Eventi aziendali', turni: 'Scheda personale', magazzino: 'Magazzino centrale',
   laboratorio: 'Nuovalab', ticket: 'Ticket assistenza', comunicazioni: 'Comunicazioni aziendali ed eventi', documenti: 'Documenti di studio', protocolli: 'Protocolli e test', sistema: 'Avvisi tecnici (AI)',
   misure: 'Misure implantari', clinica: 'Comunicazioni cliniche con ASO',
 };
