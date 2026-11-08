@@ -194,9 +194,10 @@ function cleanFlow(b) {
   const nodes = (Array.isArray(b.nodes) ? b.nodes : []).map(n => ({
     id: String(n.id).slice(0, 64), label: String(n.label ?? '').slice(0, 200), sub: (Array.isArray(n.sub) ? n.sub : []).map(s => String(s).slice(0, 300)).slice(0, 20),
     c: String(n.c || 'op').slice(0, 10), x: Math.round(+n.x || 0), y: Math.round(+n.y || 0), ...(n.z && +n.z !== 1 ? { z: +(+n.z).toFixed(3) } : {}),
+    ...(n.chi ? { chi: String(n.chi).slice(0, 40) } : {}), ...(n.prot ? { prot: String(n.prot).slice(0, 64) } : {}),
   }));
   const ids = new Set(nodes.map(n => n.id));
-  const edges = (Array.isArray(b.edges) ? b.edges : []).filter(e => Array.isArray(e) && ids.has(e[0]) && ids.has(e[1])).map(e => e.slice(0, 3));
+  const edges = (Array.isArray(b.edges) ? b.edges : []).filter(e => Array.isArray(e) && ids.has(e[0]) && ids.has(e[1])).map(e => { const o = [String(e[0]), String(e[1])]; if (e[2] && typeof e[2] === 'object') o.push(e[2]); else if (e[2]) o.push(String(e[2]).slice(0, 40)); return o; });
   return { nodes, edges, manual: !!b.manual };
 }
 app.post('/api/flows', needAdmin, wrap(async (req, res) => {
@@ -348,6 +349,9 @@ app.put('/api/users/:id/access/:flowId', needAdmin, wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
+/* ---------- protocolli (nuova struttura: contenitore, modello, test) ---------- */
+const protocolli = require('./lib/protocolli')(app, { needUser, needAdmin, wrap, bad, upload, FIGURE, sso, localProfile });
+
 /* ---------- assistente AI ---------- */
 const chatHits = new Map();
 app.post('/api/chat', needUser, wrap(async (req, res) => {
@@ -419,8 +423,11 @@ app.get('/login', (req, res, next) => {
   sso.toLogin(req, res, nx.startsWith('/') && !nx.startsWith('//') ? nx : '/');
 }, page('login.html'));
 app.get('/admin/login', (req, res) => res.redirect('/login?next=/admin'));
-app.get('/', page('app.html', 'view'));
-app.get('/admin', page('app.html', 'admin'));
+app.get('/', page('protocolli.html', 'view'));
+app.get('/admin', page('protocolli.html', 'admin'));
+// La vecchia mappa resta raggiungibile (dati intatti): /mappa in lettura, /admin/mappa per l'amministratore
+app.get('/mappa', page('app.html', 'view'));
+app.get('/admin/mappa', page('app.html', 'admin'));
 app.get('/healthz', (req, res) => res.send('ok'));
 app.use('/static', express.static(path.join(__dirname, 'public', 'static'), { maxAge: '1h' }));
 
@@ -436,6 +443,7 @@ async function start() {
   await rag.migrate();
   await db.ensureEnvAdmin();
   await db.seedIfEmpty();
+  await protocolli.migrate();
   rag.indexAll().then(() => console.log('Documenti indicizzati per la ricerca.')).catch(e => console.warn('Indicizzazione:', e.message));
 }
 module.exports = { app, start };

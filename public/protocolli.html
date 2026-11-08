@@ -1,0 +1,886 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Protocolli</title>
+<link rel="stylesheet" href="/fonts/tosmile.css?f=bricolage-grotesque:600,700|figtree:400,500,600,700,800">
+<style>
+:root{
+  --bg:#E9EFEE; --dot:#C3CFCD; --surface:#FFFFFF; --surface-2:#F3F7F6; --fg:#13201F; --muted:#586866;
+  --line:#D3DDDB; --accent:#0B6B63; --accent-soft:#D6ECE9; --accent-fg:#FFFFFF; --edge:#33423F;
+  --danger:#B42318; --danger-soft:#FBE3E0; --ok:#1D6B3A; --ok-soft:#DDF1E3; --warn:#7A5200; --warn-soft:#FFF1CF;
+  --shadow:0 1px 2px rgba(16,32,30,.06),0 8px 28px rgba(16,32,30,.10);
+  --n-mkt:#F3AE66; --n-fase:#F5D568; --n-op:#8EC7F0; --n-ok:#8DD09D; --n-ko:#EF8C80; --n-care:#EF8DB9; --n-dec:#FFE29A; --n-fg:#171A19;
+  --f-display:"Bricolage Grotesque", "Figtree", system-ui, sans-serif;
+  --f-body:"Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --r:12px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E1615; --dot:#23312F; --surface:#162120; --surface-2:#1C2928; --fg:#E3EDEB; --muted:#94A6A3;
+  --line:#2A3A38; --accent:#4DBDB0; --accent-soft:#16312E; --accent-fg:#06201D; --edge:#9FB2AF;
+  --danger:#FF8A7A; --danger-soft:#3A1D1A; --ok:#7FD39A; --ok-soft:#173022; --warn:#F2C76B; --warn-soft:#3A2F12;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
+  --n-mkt:#E39A50; --n-fase:#E2C052; --n-op:#79B5E0; --n-ok:#78BD89; --n-ko:#E07A6E; --n-care:#DE7BA8; --n-dec:#E8C35A; --n-fg:#121514; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1615; --dot:#23312F; --surface:#162120; --surface-2:#1C2928; --fg:#E3EDEB; --muted:#94A6A3;
+  --line:#2A3A38; --accent:#4DBDB0; --accent-soft:#16312E; --accent-fg:#06201D; --edge:#9FB2AF;
+  --danger:#FF8A7A; --danger-soft:#3A1D1A; --ok:#7FD39A; --ok-soft:#173022; --warn:#F2C76B; --warn-soft:#3A2F12;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
+  --n-mkt:#E39A50; --n-fase:#E2C052; --n-op:#79B5E0; --n-ok:#78BD89; --n-ko:#E07A6E; --n-care:#DE7BA8; --n-dec:#E8C35A; --n-fg:#121514; color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--f-body);min-height:100vh}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+svg.i{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+h1,h2,h3{font-family:var(--f-display);letter-spacing:-.01em}
+
+/* barra in alto con i pulsanti delle sezioni */
+.top{position:sticky;top:0;z-index:20;background:var(--surface);border-bottom:1px solid var(--line)}
+.top-in{max-width:1240px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:10px 16px}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand-mark{width:32px;height:32px;border-radius:9px;background:var(--accent);display:grid;place-items:center;color:var(--accent-fg);flex:none}
+.brand-mark svg{width:18px;height:18px}
+.brand h1{font-size:19px;line-height:1.1;margin:0;white-space:nowrap}
+.nav{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;flex:1 1 auto;min-width:0;padding:2px}.nav::-webkit-scrollbar{display:none}
+.nav button{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--surface);padding:8px 14px;border-radius:10px;font-weight:600;font-size:14px;white-space:nowrap;min-height:40px}
+.nav button:hover{background:var(--surface-2)}
+.nav button.on{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.nav .badge{background:var(--n-fase);color:var(--n-fg);border-radius:999px;padding:0 7px;font-size:12px;font-weight:700}
+.who{display:flex;align-items:center;gap:8px;margin-left:auto;font-size:13px;line-height:1.15}
+.who b{display:block;font-weight:700}
+.who span{color:var(--muted)}
+.av{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:12px;background:var(--accent-soft);color:var(--accent);flex:none}
+@media (max-width:1100px){.who .txt{display:none}}
+@media (max-width:760px){.top-in{flex-wrap:wrap}.nav{order:3;flex-basis:100%}}
+
+main{max-width:1240px;margin:0 auto;padding:18px 16px 60px;display:flex;flex-direction:column;gap:16px}
+.search{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:0 14px;min-height:50px;max-width:760px}
+.search input{flex:1;min-width:0;border:0;outline:none;background:transparent;font-size:15.5px;min-height:46px}
+.search .x{border:0;background:none;color:var(--muted);font-size:20px;line-height:1;padding:4px 6px}
+.page-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.page-h h2{font-size:24px;margin:0;flex:1 1 auto}
+.sub{color:var(--muted);margin:-6px 0 0;font-size:14px;max-width:880px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px}
+.card h3{font-size:16px;margin:0 0 8px}
+a.btn{text-decoration:none;color:inherit}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--line);background:var(--surface);padding:8px 14px;border-radius:10px;font-weight:600;font-size:14px;white-space:nowrap;min-height:40px}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,transparent)}
+.btn.danger.armed{background:var(--danger);color:var(--surface);border-color:var(--danger)}
+.btn.small{min-height:34px;padding:5px 11px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;color:var(--muted);min-height:34px}
+.chip.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.muted{color:var(--muted)}
+.note{font-size:13.5px;color:var(--muted);background:var(--surface-2);border-radius:10px;padding:10px 12px}
+.tag{display:inline-block;font-size:12px;font-weight:700;padding:3px 8px;border-radius:7px;white-space:nowrap}
+.tag.ok{background:var(--ok-soft);color:var(--ok)} .tag.warn{background:var(--warn-soft);color:var(--warn)} .tag.no{background:var(--danger-soft);color:var(--danger)} .tag.info{background:var(--accent-soft);color:var(--accent)}
+.eyebrow{font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;font-weight:700;color:var(--muted)}
+label.f{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;color:var(--muted)}
+.inp{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 12px;font-size:15px;color:var(--fg);width:100%}
+textarea.inp{resize:vertical;min-height:90px;line-height:1.5}
+
+/* elenchi */
+.group{display:flex;flex-direction:column;gap:8px}
+.group-h{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:6px 2px 0}
+.item{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:13px 14px;text-align:left;width:100%;min-height:58px}
+.item:hover{border-color:var(--accent)}
+.item .t{font-weight:600;font-size:15.5px}
+.item .s{font-size:13px;color:var(--muted)}
+.item .grow{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:8px}
+.res .snip{font-size:13.5px;color:var(--muted);line-height:1.45}
+mark{background:var(--n-fase);color:var(--n-fg);border-radius:3px;padding:0 2px}
+
+/* tabelle */
+.tbl{width:100%;border-collapse:collapse;font-size:14px}
+.tbl th{text-align:left;font-size:12px;color:var(--muted);font-weight:700;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl td{padding:10px 12px;border-top:1px solid var(--line);vertical-align:middle}
+.tbl tr:first-child td{border-top:0}
+.scroll{overflow-x:auto}
+.cell-btn{width:40px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-weight:800;font-size:17px}
+.cell-btn.on{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+
+/* finestre */
+.layer{position:fixed;inset:0;z-index:50;background:rgba(10,20,19,.45);display:flex;align-items:center;justify-content:center;padding:16px}
+.modal{background:var(--surface);border-radius:18px;box-shadow:var(--shadow);width:min(640px,100%);max-height:100%;display:flex;flex-direction:column;overflow:hidden;position:relative}
+.modal.wide{width:min(1000px,100%)}
+.modal.full{width:100%;height:100%;max-width:none;border-radius:16px}
+.modal-h{padding:16px 20px 12px;border-bottom:1px solid var(--line)}
+.modal-h h2{font-size:21px;line-height:1.2;margin:4px 44px 0 0}
+.modal-h p{margin:4px 0 0;color:var(--muted);font-size:14px}
+.modal-b{padding:16px 20px;overflow:auto;display:flex;flex-direction:column;gap:14px;flex:1}
+.modal-f{padding:12px 20px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.x-btn{position:absolute;top:12px;right:12px;width:40px;height:40px;border-radius:10px;border:0;background:var(--surface-2);display:grid;place-items:center}
+@media (max-width:640px){.layer{padding:0;align-items:flex-end}.modal{border-radius:18px 18px 0 0;max-height:96%}.modal.full{border-radius:0;max-height:100%}}
+
+/* lettore */
+.doc-wrap{position:relative;flex:1;overflow:auto;background:var(--surface)}
+.doc-body{padding:20px 22px 40px;max-width:76ch;margin:0 auto;display:flex;flex-direction:column;gap:12px;position:relative;z-index:1}
+.sez{background:var(--surface-2);border-radius:12px;padding:13px 16px}
+.sez h4{margin:0 0 6px;font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--accent);font-family:var(--f-body);font-weight:800}
+.sez .t{font-size:16.5px;line-height:1.65;white-space:pre-line}
+.protected .doc-body{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.shield .doc-body{filter:blur(10px)}
+.readonly{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);padding:9px 20px;border-top:1px solid var(--line)}
+.pdf-page{display:block;width:100%;margin:0 0 10px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+
+/* flussi */
+.fl-tool{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.fl-wrap{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start}
+.canvas{flex:999 1 560px;min-width:0;height:min(76vh,860px);overflow:auto;border:1px solid var(--line);border-radius:14px;background-color:var(--surface);
+  background-image:radial-gradient(var(--dot) 1.2px,transparent 1.3px);background-size:22px 22px;position:relative;touch-action:pan-x pan-y}
+.world-box{position:relative}
+.world{position:absolute;left:0;top:0;transform-origin:0 0}
+.world svg.edges{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
+.world svg.edges path{fill:none;stroke:var(--edge);stroke-width:1.8}
+.world svg.edges polygon{fill:var(--edge)}
+.elab{position:absolute;font-size:12px;font-weight:800;padding:2px 8px;border-radius:7px;transform:translate(-50%,-50%);pointer-events:none;white-space:nowrap}
+.elab.si{background:var(--ok-soft);color:var(--ok)} .elab.no{background:var(--danger-soft);color:var(--danger)} .elab.alt{background:var(--surface-2);color:var(--fg);border:1px solid var(--line)}
+.fn{position:absolute;transform:translate(-50%,-50%);width:180px;min-height:46px;border:0;border-radius:11px;padding:9px 12px 10px;background:var(--n-op);color:var(--n-fg);text-align:center;
+  box-shadow:0 1px 0 rgba(0,0,0,.08),0 3px 10px rgba(0,0,0,.08);user-select:none;-webkit-user-select:none;display:flex;flex-direction:column;align-items:center;gap:3px;font-family:var(--f-body)}
+.fn .l{font-weight:700;font-size:14px;line-height:1.25}
+.fn .sb{font-size:12px;line-height:1.3;opacity:.85}
+.fn .ch{font-size:11px;font-weight:800;background:rgba(255,255,255,.65);border-radius:6px;padding:1px 7px;color:#1b2422}
+.fn .pi{position:absolute;top:-8px;right:-8px;width:24px;height:24px;border-radius:50%;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.fn .pi svg{width:13px;height:13px}
+.fn.c-mkt{background:var(--n-mkt)} .fn.c-fase{background:var(--n-fase)} .fn.c-op{background:var(--n-op)} .fn.c-ok{background:var(--n-ok)} .fn.c-ko{background:var(--n-ko)} .fn.c-care{background:var(--n-care)}
+.fn.c-ini,.fn.c-fine{background:var(--accent);color:var(--accent-fg);border-radius:999px;width:160px}
+.fn.c-dec{background:none;box-shadow:none;width:190px;min-height:120px;justify-content:center;padding:18px 34px}
+.fn.c-dec::before{content:"";position:absolute;inset:0;background:var(--n-dec);clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);z-index:-1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.12))}
+.fn.c-dec{isolation:isolate}
+.fn.locked{opacity:.45;filter:grayscale(.6)}
+.fn.sel{outline:3px solid var(--accent);outline-offset:3px}
+.fn.from{outline:3px dashed var(--accent);outline-offset:3px}
+.edit .fn{cursor:grab}
+.side{flex:1 1 280px;display:flex;flex-direction:column;gap:12px}
+.zoom{position:sticky;left:10px;top:10px;z-index:3;display:inline-flex;gap:4px;margin:10px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:3px}
+.zoom button{width:34px;height:34px;border:0;background:none;border-radius:8px;font-size:18px;font-weight:700}
+.guida{max-width:640px;display:flex;flex-direction:column;gap:12px}
+.g-card{border-radius:16px;padding:20px;background:var(--surface);border:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.g-card.dec{background:var(--warn-soft);border-color:transparent}
+.g-card .q{font:700 22px/1.3 var(--f-display)}
+.g-btn{min-height:54px;border-radius:12px;font-size:16px;font-weight:700;border:0;background:var(--accent);color:var(--accent-fg)}
+.g-btn.no{background:var(--surface);color:var(--danger);border:2px solid color-mix(in srgb,var(--danger) 45%,transparent)}
+.g-btn.alt{background:var(--fg);color:var(--bg)}
+.crumbs{display:flex;flex-wrap:wrap;gap:6px}
+.crumbs span{font-size:12px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:3px 8px}
+
+/* test */
+.prog{height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden}
+.prog i{display:block;height:100%;background:var(--accent)}
+.opt{display:flex;align-items:center;gap:12px;text-align:left;min-height:56px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:15.5px;width:100%}
+.opt b{width:30px;height:30px;border-radius:50%;flex:none;display:grid;place-items:center;background:var(--surface-2);font-size:13px}
+.opt.on{border:2px solid var(--accent);background:var(--accent-soft)}
+.opt.on b{background:var(--accent);color:var(--accent-fg)}
+.opt.giusta{border:2px solid var(--ok);background:var(--ok-soft)}
+.big-score{font:800 64px/1 var(--f-display)}
+.esito{border-radius:16px;padding:28px 20px;text-align:center;display:flex;flex-direction:column;gap:8px;align-items:center}
+.esito.ok{background:var(--ok-soft);color:var(--ok)} .esito.no{background:var(--danger-soft);color:var(--danger)}
+.spin{width:22px;height:22px;border-radius:50%;border:3px solid var(--accent-soft);border-top-color:var(--accent);animation:sp 1s linear infinite;display:inline-block;vertical-align:middle}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 18px;border-radius:999px;font-size:14px;font-weight:600;z-index:200;box-shadow:var(--shadow);max-width:calc(100% - 32px);text-align:center}
+.empty{padding:28px 16px;text-align:center;color:var(--muted)}
+
+/* protezione dei contenuti per chi non è amministratore */
+body.protetto{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+body.protetto input,body.protetto textarea{-webkit-user-select:text;user-select:text}
+.filigrana{position:fixed;inset:0;pointer-events:none;z-index:9999;background-repeat:repeat}
+.stampa-no{display:none}
+@media print{body.protetto>*{display:none!important}body.protetto>.stampa-no{display:block!important;font:16px sans-serif;padding:40px}}
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in">
+  <div class="brand"><div class="brand-mark"><svg class="i" viewBox="0 0 24 24"><path d="M9 4h6l1 2h3v15H5V6h3z"/><path d="M9 12l2 2 4-4"/></svg></div><h1>Protocolli</h1></div>
+  <nav class="nav" id="nav" aria-label="Sezioni"></nav>
+  <div class="who" id="who"></div>
+</div></header>
+<main id="main"><p class="muted">Carico…</p></main>
+<script src="https://appgestione.it/static/resta-qui.js?v=6" defer></script>
+<script>
+'use strict';
+const MODE = location.pathname.startsWith('/admin') ? 'admin' : 'view';
+const I = {
+  doc: '<svg class="i" viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/></svg>',
+  lock: '<svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
+  x: '<svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  search: '<svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
+  right: '<svg class="i" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>',
+};
+let S = null, me = null, view = '', q = '', toastT;
+const isAdmin = () => me && me.role === 'admin';
+const adminArea = () => MODE === 'admin' && isAdmin();
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const fmtD = s => s ? s.split('-').reverse().join('/') : '';
+const figNome = id => (S.figure.find(f => f.id === id) || {}).nome || id;
+function toast(m){ let t = document.querySelector('.toast'); if (!t) { t = document.createElement('div'); t.className = 'toast'; document.body.append(t); } t.textContent = m; clearTimeout(toastT); toastT = setTimeout(() => t.remove(), 3200); }
+async function api(method, url, body, isForm){
+  const o = { method, credentials: 'same-origin', headers: {} };
+  if (body !== undefined) { if (isForm) o.body = body; else { o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(body); } }
+  const r = await fetch(url, o);
+  let j = {}; try { j = await r.json(); } catch (e) {}
+  if (r.status === 401) { location.reload(); throw new Error('Accesso scaduto'); }
+  if (!r.ok) throw new Error(j.error || 'Errore ' + r.status);
+  return j;
+}
+function layer(html, cls){
+  const l = document.createElement('div'); l.className = 'layer';
+  l.innerHTML = `<div class="modal ${cls || ''}" role="dialog" aria-modal="true">${html}</div>`;
+  document.body.append(l);
+  l.addEventListener('click', e => { if (e.target === l || e.target.closest('[data-x]')) closeLayer(l); });
+  return l;
+}
+function closeLayer(l){ l.remove(); if (l._onClose) l._onClose(); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { const ls = document.querySelectorAll('.layer'); if (ls.length) closeLayer(ls[ls.length - 1]); } });
+function armed(btn, label){ if (btn.classList.contains('armed')) return true; btn.classList.add('armed'); btn.textContent = label || 'Conferma'; setTimeout(() => btn.isConnected && btn.classList.remove('armed'), 4000); return false; }
+
+function navItems(){
+  if (adminArea()) return [['contenitore', 'Contenitore protocolli'], ['modello', 'Modello e guida'], ['assegna', 'Assegnazioni'], ['flussi', 'Flussi di lavoro'], ['test', 'Test'], ['letture', 'Chi ha letto']];
+  const daFare = S.test.filter(t => t.stato !== 'consegnato').length;
+  return [['prot', 'Protocolli'], ['flussi', 'Flussi di lavoro'], ['mieitest', 'Test' + (daFare ? ` <span class="badge">${daFare}</span>` : '')]];
+}
+function render(){
+  document.getElementById('nav').innerHTML = navItems().map(([k, l]) => `<button data-v="${k}" class="${view === k ? 'on' : ''}">${l}</button>`).join('');
+  const m = document.getElementById('main');
+  const cerca = `<label class="search">${I.search}<input id="q" type="text" autocomplete="off" placeholder="Cerca un argomento, anche dentro i testi dei protocolli e dei flussi" value="${esc(q)}" aria-label="Cerca">${q ? '<button class="x" data-clear aria-label="Cancella">×</button>' : ''}</label>`;
+  m.innerHTML = cerca + '<div id="v"></div>';
+  const v = m.querySelector('#v');
+  if (q.trim().length >= 2) renderRicerca(v);
+  else ({ prot: renderProt, flussi: renderFlussi, mieitest: renderMieiTest, contenitore: renderContenitore, modello: renderModello, assegna: renderAssegna, test: renderTest, letture: renderLetture })[view](v);
+}
+document.getElementById('nav').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (!b) return; view = b.dataset.v; q = ''; render(); window.scrollTo(0, 0); });
+document.getElementById('main').addEventListener('input', e => {
+  if (e.target.id !== 'q') return;
+  q = e.target.value; const pos = e.target.selectionStart;
+  render(); const i = document.getElementById('q'); i.focus(); i.setSelectionRange(pos, pos);
+});
+document.getElementById('main').addEventListener('click', e => { if (e.target.closest('[data-clear]')) { q = ''; render(); } });
+
+/* ---------- ricerca nei titoli e nei testi ---------- */
+const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+function snippet(txt, term){
+  const n = norm(txt), i = n.indexOf(norm(term)); if (i < 0) return null;
+  const a = Math.max(0, i - 60), b = Math.min(txt.length, i + term.length + 90);
+  return (a ? '…' : '') + esc(txt.slice(a, i)).replace(/\n/g, ' ') + '<mark>' + esc(txt.slice(i, i + term.length)) + '</mark>' + esc(txt.slice(i + term.length, b)).replace(/\n/g, ' ') + (b < txt.length ? '…' : '');
+}
+function flowTesto(f){ return f.name + '\n' + f.nodes.filter(n => !n.locked).map(n => [n.label, ...(n.sub || []), n.chi ? figNome(n.chi) : ''].join('\n')).join('\n'); }
+function renderRicerca(v){
+  const term = q.trim(), out = [];
+  const tutti = term.split(/\s+/).filter(Boolean);
+  for (const p of S.prot) {
+    const testo = p.titolo + '\n' + (p.testo || '');
+    if (tutti.every(t => norm(testo).includes(norm(t)))) out.push({ k: 'p', id: p.id, tipo: 'Protocollo · ' + p.cartella, titolo: p.titolo, snip: snippet(testo, tutti[0]) || '' });
+  }
+  for (const f of (S.flows || [])) {
+    const testo = flowTesto(f);
+    if (tutti.every(t => norm(testo).includes(norm(t)))) out.push({ k: 'f', id: f.id, tipo: 'Flusso di lavoro', titolo: f.name, snip: snippet(testo, tutti[0]) || '' });
+  }
+  v.innerHTML = `<p class="muted" style="margin:0 0 10px">${out.length ? out.length + (out.length === 1 ? ' risultato' : ' risultati') : 'Nessun risultato'} per “${esc(term)}”</p>
+    <div class="group">${out.map((r, i) => `<button class="item res" data-r="${i}"><span class="grow"><span class="eyebrow">${esc(r.tipo)}</span><span class="t">${esc(r.titolo)}</span><span class="snip">${r.snip}</span></span>${I.right}</button>`).join('')}</div>`;
+  v.onclick = e => { const b = e.target.closest('[data-r]'); if (!b) return; const r = out[+b.dataset.r]; if (r.k === 'p') apriProt(r.id, tutti); else apriFlusso(r.id); };
+}
+
+/* ---------- protocolli: elenco per l'utente ---------- */
+function perCartella(list){ const m = {}; list.forEach(p => (m[p.cartella] = m[p.cartella] || []).push(p)); return Object.keys(m).sort((a, b) => a.localeCompare(b, 'it')).map(k => [k, m[k]]); }
+function renderProt(v){
+  if (!S.prot.length) { v.innerHTML = `<div class="card empty">Non ci sono ancora protocolli assegnati alla tua mansione${me.figura ? ' (' + esc(figNome(me.figura)) + ')' : ''}.</div>`; return; }
+  v.innerHTML = perCartella(S.prot).map(([c, l]) => `<div class="group"><div class="group-h">${esc(c)}</div><div class="grid2">${l.map(p =>
+    `<button class="item" data-p="${p.id}"><span class="grow"><span class="t">${esc(p.titolo)}</span><span class="s">Aggiornato il ${fmtD(p.agg)}</span></span>${p.nuovo ? '<span class="tag warn">Da leggere</span>' : ''}${I.right}</button>`).join('')}</div></div>`).join('<div style="height:8px"></div>');
+  v.onclick = e => { const b = e.target.closest('[data-p]'); if (b) apriProt(b.dataset.p); };
+}
+
+/* ---------- lettore protetto ---------- */
+function watermarkCss(){
+  const t = `${me.name || me.username} · ${new Date().toLocaleDateString('it-IT')} · Riservato`;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='380' height='230'><text x='190' y='120' text-anchor='middle' transform='rotate(-24 190 115)' font-family='Figtree, sans-serif' font-weight='600' font-size='13' fill='rgba(110,120,118,0.10)'>${esc(t)}</text></svg>`;
+  return `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}")`;
+}
+let pdfjsReady = null;
+function loadPdfJs(){
+  if (pdfjsReady) return pdfjsReady;
+  pdfjsReady = new Promise((ok, ko) => {
+    const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload = () => { window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; ok(window.pdfjsLib); };
+    s.onerror = () => { pdfjsReady = null; ko(new Error('Lettore PDF non disponibile')); };
+    document.head.append(s);
+  });
+  return pdfjsReady;
+}
+async function renderPdf(id, host){
+  host.innerHTML = '<p class="muted">Apro il documento…</p>';
+  try {
+    const [lib, buf] = await Promise.all([loadPdfJs(), fetch(`/api/p/prot/${id}/file`, {credentials: 'same-origin'}).then(r => { if (!r.ok) throw new Error('Documento non disponibile'); return r.arrayBuffer(); })]);
+    const pdf = await lib.getDocument({data: buf}).promise;
+    host.innerHTML = '';
+    const width = Math.min(host.clientWidth || 700, 900), ratio = Math.min(devicePixelRatio || 1, 2);
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const v1 = page.getViewport({scale: 1}), vpt = page.getViewport({scale: width / v1.width * ratio});
+      const c = document.createElement('canvas'); c.width = vpt.width; c.height = vpt.height; c.className = 'pdf-page';
+      host.append(c);
+      await page.render({canvasContext: c.getContext('2d'), viewport: vpt}).promise;
+      if (!host.isConnected) return;
+    }
+  } catch (e) { host.innerHTML = `<p class="note">${esc(e.message)}</p>`; }
+}
+function evidenzia(html, terms){
+  if (!terms || !terms.length) return html;
+  let out = html;
+  terms.filter(t => t.length >= 2).forEach(t => { const re = new RegExp('(' + esc(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi'); out = out.replace(/>([^<]+)</g, (m, txt) => '>' + txt.replace(re, '<mark>$1</mark>') + '<'); });
+  return out;
+}
+function apriProt(id, terms){
+  const p = S.prot.find(x => x.id === id); if (!p) return;
+  const prot = !isAdmin();
+  const corpo = (p.sezioni || []).length ? p.sezioni.map(s => `<section class="sez"><h4>${esc(s.h)}</h4><div class="t">${esc(s.t)}</div></section>`).join('') : '';
+  const l = layer(`<div class="modal-h"><div class="eyebrow">${esc(p.cartella)}</div><h2>${esc(p.titolo)}</h2><p>Aggiornato il ${fmtD(p.agg)}</p><button class="x-btn" data-x aria-label="Chiudi">${I.x}</button></div>
+    <div class="doc-wrap ${prot ? 'protected' : ''}" style="background-image:${watermarkCss()}"><div class="doc-body">${evidenzia(corpo, terms)}${!corpo && p.hasFile ? '<div class="pdfh"></div>' : ''}${!corpo && !p.hasFile ? '<p class="muted">Protocollo senza testo.</p>' : ''}</div></div>
+    <div class="readonly">${I.lock}${prot ? 'Solo lettura · riservato a ' + esc(me.name || me.username) : 'Vista amministratore: i collaboratori lo vedono in sola lettura, con la loro filigrana'}</div>`, 'wide full');
+  const w = l.querySelector('.doc-wrap');
+  if (!corpo && p.hasFile) renderPdf(p.id, l.querySelector('.pdfh'));
+  if (prot) ['copy', 'cut', 'contextmenu', 'dragstart', 'selectstart'].forEach(ev => w.addEventListener(ev, e => e.preventDefault()));
+  const first = l.querySelector('mark'); if (first) setTimeout(() => first.scrollIntoView({block: 'center'}), 60);
+  if (!isAdmin()) api('POST', '/api/p/letto/' + p.id).then(() => { if (p.nuovo) { p.nuovo = false; if (view === 'prot' && !q) render(); } }).catch(() => {});
+}
+document.addEventListener('visibilitychange', () => document.querySelectorAll('.doc-wrap.protected').forEach(w => w.classList.toggle('shield', document.hidden)));
+function proteggi(){
+  if (document.body.classList.contains('protetto')) return;
+  document.body.classList.add('protetto');
+  const testo = () => `${me.name || ''} · ${me.username || ''} · ${new Date().toLocaleString('it-IT', {day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'})}`;
+  const fil = document.createElement('div'); fil.className = 'filigrana'; fil.setAttribute('aria-hidden', 'true');
+  const disegna = () => {
+    const t = esc(testo());
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="440" height="240"><text x="20" y="140" transform="rotate(-24 220 120)" font-family="sans-serif" font-size="14" font-weight="600" fill="rgba(110,110,110,0.09)">${t}</text></svg>`;
+    fil.style.backgroundImage = `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}")`;
+  };
+  disegna(); setInterval(disegna, 60000);
+  document.body.appendChild(fil);
+  const avviso = document.createElement('div'); avviso.className = 'stampa-no'; avviso.textContent = 'La stampa dei protocolli non è consentita.';
+  document.body.appendChild(avviso);
+  const campo = el => el && el.closest && el.closest('input,textarea,[contenteditable="true"]');
+  document.addEventListener('contextmenu', e => { if (!campo(e.target)) e.preventDefault(); });
+  ['copy', 'cut', 'dragstart'].forEach(ev => document.addEventListener(ev, e => { if (!campo(e.target)) e.preventDefault(); }));
+  document.addEventListener('keydown', e => {
+    const k = (e.key || '').toLowerCase();
+    if ((e.ctrlKey || e.metaKey) && (k === 'p' || k === 's' || (['c', 'x', 'a'].includes(k) && !campo(e.target)))) { e.preventDefault(); toast('Copia e stampa dei protocolli non sono consentite'); }
+  });
+  document.addEventListener('keyup', e => { if (e.key === 'PrintScreen') { navigator.clipboard?.writeText('').catch(() => {}); toast('Le immagini dei protocolli sono riservate'); } });
+}
+
+/* ---------- flussi di lavoro: disegno ---------- */
+const TIPI = [['op', 'Passo'], ['dec', 'Decisione Sì/No'], ['ini', 'Inizio'], ['fine', 'Fine'], ['fase', 'Fase'], ['ok', 'Esito positivo'], ['ko', 'Esito negativo'], ['care', 'Cura'], ['mkt', 'Marketing']];
+let FL = null; // stato del disegno aperto: {flow, el, zoom, edit, sel, from, drag}
+function protDelNodo(f, n){
+  const out = []; const ids = new Set();
+  if (n.prot) { const p = S.prot.find(x => x.id === n.prot); if (p) { out.push(p); ids.add(p.id); } }
+  S.prot.filter(p => p.srcFlow === f.id && p.srcNode === n.id && !ids.has(p.id)).forEach(p => out.push(p));
+  return out;
+}
+function disegna(host, f, opts){
+  const nodes = f.nodes;
+  const xs = nodes.map(n => n.x), ys = nodes.map(n => n.y);
+  const minX = (xs.length ? Math.min(...xs) : 0) - 140, minY = (ys.length ? Math.min(...ys) : 0) - 100, maxX = Math.max(minX + 600, ...xs) + 160, maxY = Math.max(minY + 400, ...ys) + 140;
+  const W = maxX - minX, H = maxY - minY;
+  if (!opts.zoom) opts.zoom = Math.max(0.35, Math.min(1, ((host.clientWidth || 800) - 24) / W));
+  const z = opts.zoom;
+  host.innerHTML = `<div class="zoom"><button data-z="-" aria-label="Riduci">−</button><button data-z="0" aria-label="Adatta alla finestra" title="Adatta" style="font-size:12px;width:auto;padding:0 8px">${Math.round(z * 100)}%</button><button data-z="+" aria-label="Ingrandisci">+</button></div>
+    <div class="world-box" style="width:${W * z}px;height:${H * z}px"><div class="world" style="width:${W}px;height:${H}px;transform:scale(${z})">
+    <svg class="edges" width="${W}" height="${H}"></svg>
+    ${nodes.map(n => {
+      const pr = protDelNodo(f, n);
+      const c = TIPI.some(t => t[0] === n.c) ? n.c : 'op';
+      return `<button class="fn c-${c} ${n.locked ? 'locked' : ''} ${opts.sel === n.id ? 'sel' : ''} ${opts.from === n.id ? 'from' : ''}" data-n="${esc(n.id)}" style="left:${n.x - minX}px;top:${n.y - minY}px">
+        <span class="l">${esc(n.label || (c === 'dec' ? 'Domanda?' : ''))}</span>${(n.sub || []).length && c !== 'dec' ? `<span class="sb">${(n.sub || []).map(esc).join('<br>')}</span>` : ''}
+        ${n.chi ? `<span class="ch">${esc(n.chi)}</span>` : ''}${pr.length && !n.locked ? `<span class="pi" title="Protocollo collegato">${I.doc}</span>` : ''}</button>`;
+    }).join('')}
+    </div></div>`;
+  host._off = { minX, minY };
+  frecce(host, f);
+}
+function frecce(host, f){
+  const world = host.querySelector('.world'), svg = world.querySelector('svg.edges');
+  const box = {};
+  world.querySelectorAll('.fn').forEach(el => { box[el.dataset.n] = { x: parseFloat(el.style.left), y: parseFloat(el.style.top), w: el.offsetWidth, h: el.offsetHeight, dec: el.classList.contains('c-dec') }; });
+  world.querySelectorAll('.elab').forEach(x => x.remove());
+  let paths = '';
+  f.edges.forEach(e => {
+    const s = box[e[0]], t = box[e[1]]; if (!s || !t) return;
+    const lab = typeof e[2] === 'string' && e[2] !== 'loop' ? e[2] : '';
+    let d, lx, ly, tx = t.x, ty = t.y - t.h / 2, dir = 1;
+    if (ty < s.y + s.h / 2 - 4) { // il punto di arrivo sta sopra: entra dal lato
+      const da = tx >= s.x ? 1 : -1; const sx = s.x + da * s.w / 2, sy = s.y;
+      const ex = t.x - da * t.w / 2, ey = t.y; const mx = (sx + ex) / 2;
+      d = `M${sx} ${sy} H${mx} V${ey} H${ex - da * 2}`; lx = sx + da * 22; ly = sy - 12; dir = 0;
+      paths += `<path d="${d}"/><polygon points="${ex - da * 11},${ey - 6} ${ex - da * 11},${ey + 6} ${ex},${ey}"/>`;
+    } else if (s.dec && Math.abs(tx - s.x) > 60) {
+      const sx = tx > s.x ? s.x + s.w / 2 : s.x - s.w / 2, sy = s.y;
+      d = `M${sx} ${sy} H${tx} V${ty - 2}`; lx = sx + (tx > s.x ? 24 : -24); ly = sy - 13;
+      paths += `<path d="${d}"/><polygon points="${tx - 6},${ty - 11} ${tx + 6},${ty - 11} ${tx},${ty}"/>`;
+    } else {
+      const sx = s.x, sy = s.y + s.h / 2, my = Math.round((sy + ty) / 2);
+      d = Math.abs(sx - tx) < 2 ? `M${sx} ${sy} V${ty - 2}` : `M${sx} ${sy} V${my} H${tx} V${ty - 2}`; lx = sx + 18; ly = sy + 14;
+      paths += `<path d="${d}"/><polygon points="${tx - 6},${ty - 11} ${tx + 6},${ty - 11} ${tx},${ty}"/>`;
+    }
+    if (lab) { const sp = document.createElement('span'); sp.className = 'elab ' + (/^s[iì]$/i.test(lab) ? 'si' : /^no$/i.test(lab) ? 'no' : 'alt'); sp.textContent = lab; sp.style.left = lx + 'px'; sp.style.top = ly + 'px'; world.append(sp); }
+  });
+  svg.innerHTML = paths;
+}
+
+/* ---------- flussi: utente ---------- */
+function renderFlussi(v){
+  if (adminArea()) return renderFlussiAdmin(v);
+  const fl = S.flows || [];
+  if (!fl.length) { v.innerHTML = '<div class="card empty">Nessun flusso di lavoro disponibile per la tua mansione.</div>'; return; }
+  v.innerHTML = `<div class="grid2">${fl.map(f => { const dec = f.nodes.filter(n => n.c === 'dec').length;
+    return `<button class="item" data-f="${esc(f.id)}"><span class="grow"><span class="t">${esc(f.name)}</span><span class="s">${f.nodes.length} elementi${dec ? ' · ' + dec + (dec === 1 ? ' decisione' : ' decisioni') : ''}</span></span>${I.right}</button>`; }).join('')}</div>`;
+  v.onclick = e => { const b = e.target.closest('[data-f]'); if (b) apriFlusso(b.dataset.f); };
+}
+function apriFlusso(id){
+  const f = (S.flows || []).find(x => x.id === id); if (!f) return;
+  let vista = 'schema', zoom = null, cur = null, strada = [];
+  const l = layer(`<div class="modal-h"><div class="eyebrow">Flusso di lavoro · solo visualizzazione</div><h2>${esc(f.name)}</h2>
+    <div class="row" style="margin-top:10px"><button class="btn small" data-vista="schema">Schema</button><button class="btn small" data-vista="guida">Guidami passo passo</button></div><button class="x-btn" data-x aria-label="Chiudi">${I.x}</button></div>
+    <div class="modal-b" style="padding:12px"><div class="host"></div></div>`, 'wide full');
+  const host = l.querySelector('.host');
+  const radici = () => { const entra = new Set(f.edges.map(e => e[1])); const r = f.nodes.filter(n => !entra.has(n.id) && !n.locked); return r.length ? r : f.nodes.slice(0, 1); };
+  function draw(){
+    l.querySelectorAll('[data-vista]').forEach(b => b.classList.toggle('primary', b.dataset.vista === vista));
+    if (vista === 'schema') {
+      host.innerHTML = '<div class="canvas" style="height:calc(100vh - 210px)"></div><p class="muted" style="font-size:13px;margin:8px 0 0">Tocca un elemento con l\'icona del documento per aprire il protocollo collegato.</p>';
+      const o = { zoom }; disegna(host.firstChild, f, o); zoom = o.zoom;
+      return;
+    }
+    const nodo = cur ? f.nodes.find(n => n.id === cur) : null;
+    if (!nodo) {
+      const r = radici();
+      if (r.length === 1) { cur = r[0].id; return draw(); }
+      host.innerHTML = `<div class="guida"><p class="muted">Da dove parti?</p>${r.map(n => `<button class="g-btn alt" data-vai="${esc(n.id)}">${esc(n.label)}</button>`).join('')}</div>`;
+      return;
+    }
+    const usc = f.edges.filter(e => e[0] === nodo.id).map(e => ({ to: f.nodes.find(n => n.id === e[1]), lab: typeof e[2] === 'string' && e[2] !== 'loop' ? e[2] : '' })).filter(x => x.to && !x.to.locked);
+    const pr = protDelNodo(f, nodo);
+    const tipo = nodo.c === 'dec' ? 'Decisione' : nodo.c === 'ini' ? 'Inizio' : nodo.c === 'fine' ? 'Fine' : 'Passo';
+    host.innerHTML = `<div class="guida">${strada.length ? `<div class="crumbs">${strada.slice(-4).map(s => `<span>${esc(s)}</span>`).join('')}</div>` : ''}
+      <div class="g-card ${nodo.c === 'dec' ? 'dec' : ''}"><span class="eyebrow">${tipo}</span><span class="q">${esc(nodo.label)}</span>
+        ${(nodo.sub || []).length ? `<span class="muted">${(nodo.sub || []).map(esc).join('<br>')}</span>` : ''}
+        ${nodo.chi ? `<span>Chi lo fa: <b>${esc(figNome(nodo.chi))}</b></span>` : ''}
+        ${pr.map(p => `<button class="btn small" style="align-self:flex-start" data-prot="${p.id}">${I.doc}${esc(p.titolo)}</button>`).join('')}</div>
+      ${usc.map((u, i) => `<button class="g-btn ${/^no$/i.test(u.lab) ? 'no' : /^s[iì]$/i.test(u.lab) ? '' : usc.length > 1 ? 'alt' : ''}" data-u="${i}">${esc(u.lab || (usc.length > 1 ? u.to.label : 'Avanti'))}</button>`).join('')}
+      ${!usc.length ? '<p class="muted">Fine del flusso.</p><button class="btn" data-reset>Ricomincia</button>' : ''}</div>`;
+    host.onclick = e => {
+      const u = e.target.closest('[data-u]'); if (u) { const x = usc[+u.dataset.u]; strada.push(nodo.label + (x.lab ? ' → ' + x.lab : '')); cur = x.to.id; draw(); }
+      if (e.target.closest('[data-reset]')) { cur = null; strada = []; draw(); }
+    };
+  }
+  l.addEventListener('click', e => {
+    const b = e.target.closest('[data-vista]'); if (b) { vista = b.dataset.vista; draw(); }
+    const z = e.target.closest('[data-z]'); if (z) { zoom = z.dataset.z === '+' ? Math.min(2, zoom + 0.15) : z.dataset.z === '-' ? Math.max(0.3, zoom - 0.15) : null; draw(); }
+    const vai = e.target.closest('[data-vai]'); if (vai) { cur = vai.dataset.vai; draw(); }
+    const pp = e.target.closest('[data-prot]'); if (pp) apriProt(pp.dataset.prot);
+    const n = e.target.closest('.fn'); if (n && vista === 'schema') { const nd = f.nodes.find(x => x.id === n.dataset.n); const pr = nd && !nd.locked ? protDelNodo(f, nd) : []; if (pr.length === 1) apriProt(pr[0].id); else if (pr.length > 1) scegliProt(pr); }
+  });
+  draw();
+}
+function scegliProt(pr){
+  const l = layer(`<div class="modal-h"><h2>Protocolli collegati</h2><button class="x-btn" data-x aria-label="Chiudi">${I.x}</button></div><div class="modal-b">${pr.map(p => `<button class="item" data-p="${p.id}"><span class="grow"><span class="t">${esc(p.titolo)}</span></span>${I.right}</button>`).join('')}</div>`);
+  l.addEventListener('click', e => { const b = e.target.closest('[data-p]'); if (b) { closeLayer(l); apriProt(b.dataset.p); } });
+}
+
+/* ---------- test: utente ---------- */
+function renderMieiTest(v){
+  const t = S.test;
+  if (!t.length) { v.innerHTML = '<div class="card empty">Non hai test da fare.</div>'; return; }
+  v.innerHTML = `<div class="group">${t.map(x => {
+    const fatto = x.stato === 'consegnato';
+    return `<div class="card row" style="justify-content:space-between"><div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+      <span class="eyebrow">${fatto ? 'Consegnato il ' + fmtD(x.consegnato) : x.stato === 'in_corso' ? 'In corso' : 'Da fare' + (x.scadenza ? ' entro il ' + fmtD(x.scadenza) : '')}</span>
+      <b style="font-size:16px">${esc(x.titolo)}</b><span class="muted" style="font-size:13.5px">${x.n} domande · si supera con almeno ${S.soglia}/${x.n}</span></div>
+      ${fatto ? `<span class="tag ${x.esito === 'superato' ? 'ok' : 'no'}">${x.punti}/${x.n} · ${x.esito === 'superato' ? 'superato' : 'da ripetere'}</span><button class="btn" data-esito="${x.id}">Vedi esito</button>`
+        : `<button class="btn primary" data-fai="${x.id}">${x.stato === 'in_corso' ? 'Continua' : 'Inizia il test'}</button>`}</div>`; }).join('')}</div>`;
+  v.onclick = e => { const a = e.target.closest('[data-fai]'); if (a) faiTest(a.dataset.fai); const b = e.target.closest('[data-esito]'); if (b) mostraEsito(b.dataset.esito); };
+}
+function faiTest(id){
+  const t = S.test.find(x => x.id === id); if (!t) return;
+  const risp = Object.assign({}, t.risposte || {}); let n = 0, salvaT;
+  const l = layer('<div class="modal-h"><div class="eyebrow"></div><h2></h2><div class="prog" style="margin-top:10px"><i></i></div><button class="x-btn" data-x aria-label="Chiudi">' + I.x + '</button></div><div class="modal-b"></div><div class="modal-f"></div>', 'full');
+  const salva = () => { clearTimeout(salvaT); salvaT = setTimeout(() => api('PUT', `/api/p/invio/${id}/risposte`, { risposte: risp }).catch(() => {}), 600); };
+  l._onClose = () => { clearTimeout(salvaT); api('PUT', `/api/p/invio/${id}/risposte`, { risposte: risp }).then(refresh).catch(() => {}); };
+  function draw(){
+    const d = t.domande[n];
+    l.querySelector('.eyebrow').textContent = esc(t.titolo);
+    l.querySelector('h2').textContent = `Domanda ${n + 1} di ${t.domande.length}`;
+    l.querySelector('.prog i').style.width = Math.round(100 * (n + 1) / t.domande.length) + '%';
+    l.querySelector('.modal-b').innerHTML = `<div style="max-width:720px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:12px">
+      <span class="eyebrow">${d.tipo === 'mc' ? 'Scelta multipla' : 'Risposta aperta'}</span><div style="font:700 20px/1.35 var(--f-display)">${esc(d.t)}</div>
+      ${d.tipo === 'mc' ? d.o.map((o, i) => `<button class="opt ${risp[n] === i ? 'on' : ''}" data-o="${i}"><b>${'ABCD'[i]}</b><span>${esc(o)}</span></button>`).join('')
+        : `<textarea class="inp" rows="6" data-a placeholder="Scrivi la tua risposta con parole tue">${esc(risp[n] || '')}</textarea>`}</div>`;
+    const ult = n === t.domande.length - 1;
+    l.querySelector('.modal-f').innerHTML = `<span class="muted" style="margin-right:auto;font-size:13px;align-self:center">${Object.keys(risp).filter(k => risp[k] !== '' && risp[k] !== undefined).length} risposte date su ${t.domande.length}</span>
+      <button class="btn" data-prev ${n ? '' : 'disabled'}>Indietro</button><button class="btn primary" data-next>${ult ? 'Consegna il test' : 'Avanti'}</button>`;
+  }
+  l.addEventListener('click', async e => {
+    const o = e.target.closest('[data-o]'); if (o) { risp[n] = +o.dataset.o; salva(); draw(); }
+    if (e.target.closest('[data-prev]') && n > 0) { n--; draw(); }
+    const nx = e.target.closest('[data-next]');
+    if (nx) {
+      if (n < t.domande.length - 1) { n++; draw(); return; }
+      const mancano = t.domande.length - Object.keys(risp).filter(k => risp[k] !== '' && risp[k] !== undefined).length;
+      if (mancano && !armed(nx, `Mancano ${mancano} risposte: consegna lo stesso`)) return;
+      nx.disabled = true; l.querySelector('.modal-b').innerHTML = '<div class="empty"><span class="spin"></span><p>Correzione in corso…</p></div>'; l.querySelector('.modal-f').innerHTML = '';
+      try { clearTimeout(salvaT); await api('POST', `/api/p/invio/${id}/consegna`, { risposte: risp }); l._onClose = null; closeLayer(l); await refresh(); mostraEsito(id); }
+      catch (err) { toast(err.message); draw(); }
+    }
+  });
+  l.addEventListener('input', e => { if (e.target.matches('[data-a]')) { risp[n] = e.target.value; salva(); } });
+  draw();
+}
+async function mostraEsito(id){
+  let r; try { r = await api('GET', `/api/p/invio/${id}/esito`); } catch (e) { return toast(e.message); }
+  const ok = r.esito === 'superato';
+  const l = layer(`<div class="modal-h"><div class="eyebrow">Esito del test</div><h2>${ok ? 'Test superato' : 'Da ripetere'}</h2><button class="x-btn" data-x aria-label="Chiudi">${I.x}</button></div>
+    <div class="modal-b"><div class="esito ${ok ? 'ok' : 'no'}"><span class="big-score">${r.punti}<span style="font-size:28px">/${r.totale}</span></span>
+      <b style="font-size:17px">${ok ? 'Hai raggiunto la soglia di ' + S.soglia + '/' + r.totale + '.' : 'Servono almeno ' + S.soglia + '/' + r.totale + '. Ripassa i protocolli qui sotto: troverai un nuovo test da rifare.'}</b></div>
+      ${r.errori.length ? '<h3 style="margin:6px 0 0;font-size:16px">Da ripassare</h3>' : ''}
+      ${r.errori.map(x => `<div class="card" style="display:flex;flex-direction:column;gap:6px"><b>${esc(x.t)}</b>${x.giusta ? `<span class="muted">Risposta giusta: ${esc(x.giusta)}</span>` : x.nota ? `<span class="muted">${esc(x.nota)}</span>` : ''}
+        ${S.prot.some(p => p.id === x.prot) ? `<button class="btn small" style="align-self:flex-start" data-prot="${x.prot}">${I.doc}Rileggi: ${esc(x.protT)}</button>` : ''}</div>`).join('')}</div>`, 'wide');
+  l.addEventListener('click', e => { const p = e.target.closest('[data-prot]'); if (p) apriProt(p.dataset.prot); });
+}
+
+/* ======================= AREA AMMINISTRATORE ======================= */
+let filtroCart = 'Tutte';
+function lettiDa(p){
+  const pers = S.persone.filter(u => u.role !== 'admin' && u.figura && (p.mansioni || []).includes(u.figura));
+  const agg = new Date(p.agg + 'T00:00:00');
+  const letti = pers.filter(u => S.letture.some(l => l.u === u.id && l.p === p.id && new Date(l.t) >= agg));
+  return { pers, letti };
+}
+function renderContenitore(v){
+  const cart = ['Tutte', ...new Set([...S.prot.map(p => p.cartella), ...(S.cartelle || [])])];
+  const list = S.prot.filter(p => filtroCart === 'Tutte' || p.cartella === filtroCart);
+  const daRiad = S.prot.filter(p => !p.conforme).length;
+  v.innerHTML = `<div class="page-h"><h2>Contenitore protocolli</h2><button class="btn" data-nuovo>+ Scrivi protocollo</button><label class="btn primary" style="position:relative">+ Carica file e riadegua<input type="file" accept=".pdf,.docx,.txt,.md" data-file style="position:absolute;inset:0;opacity:0;cursor:pointer"></label></div>
+    <p class="sub">Ogni file caricato viene riscritto nel modello che hai impostato in “Modello e guida”: controlli e approvi prima di pubblicarlo.${daRiad ? ` <b>${daRiad} protocolli</b> sono da riadeguare al modello.` : ''}</p>
+    <div class="chips">${cart.map(c => `<button class="chip ${filtroCart === c ? 'on' : ''}" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div>
+    <div class="card scroll" style="padding:4px 0"><table class="tbl"><thead><tr><th>Protocollo</th><th>Cartella</th><th>Mansioni</th><th>Modello</th><th>Aggiornato</th><th>Letto da</th><th></th></tr></thead><tbody>
+    ${list.map(p => { const L = lettiDa(p); return `<tr><td><button class="btn small" style="border:0;padding:0;background:none;font-weight:700;text-align:left;white-space:normal" data-apri="${p.id}">${esc(p.titolo)}</button></td><td>${esc(p.cartella)}</td>
+      <td style="font-size:13px">${(p.mansioni || []).map(esc).join(', ') || '<span class="muted">nessuna</span>'}</td><td><span class="tag ${p.conforme ? 'ok' : 'warn'}">${p.conforme ? 'Conforme' : 'Da riadeguare'}</span></td>
+      <td class="muted">${fmtD(p.agg)}</td><td>${L.pers.length ? L.letti.length + ' su ' + L.pers.length : '<span class="muted">—</span>'}</td>
+      <td style="white-space:nowrap;text-align:right"><button class="btn small" data-mod="${p.id}">Modifica</button> <button class="btn small" data-riad="${p.id}" ${S.ai ? '' : 'disabled title="Manca la chiave AI"'}>Riadegua</button> <button class="btn small danger" data-del="${p.id}">Elimina</button></td></tr>`; }).join('') || '<tr><td colspan="7" class="empty">Nessun protocollo in questa cartella.</td></tr>'}
+    </tbody></table></div>`;
+  v.onclick = async e => {
+    const c = e.target.closest('[data-c]'); if (c) { filtroCart = c.dataset.c; render(); return; }
+    if (e.target.closest('[data-nuovo]')) editor(null);
+    const a = e.target.closest('[data-apri]'); if (a) apriProt(a.dataset.apri);
+    const m = e.target.closest('[data-mod]'); if (m) editor(S.prot.find(p => p.id === m.dataset.mod));
+    const r = e.target.closest('[data-riad]');
+    if (r) { r.disabled = true; r.innerHTML = '<span class="spin" style="width:14px;height:14px;border-width:2px"></span> Riscrivo…';
+      try { const j = await api('POST', `/api/p/prot/${r.dataset.riad}/riadegua`); editor(S.prot.find(p => p.id === r.dataset.riad), j); } catch (err) { toast(err.message); } render(); }
+    const d = e.target.closest('[data-del]');
+    if (d) { if (!armed(d, 'Conferma eliminazione')) return; try { await api('DELETE', '/api/p/prot/' + d.dataset.del); toast('Protocollo eliminato'); await refresh(); } catch (err) { toast(err.message); } }
+  };
+  v.querySelector('[data-file]').onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    if (!S.ai) return toast('Manca la chiave AI su Render: il file non può essere riadeguato.');
+    const w = layer(`<div class="modal-b"><div class="empty"><span class="spin"></span><p>Leggo “${esc(f.name)}” e lo riscrivo nel modello…<br><span class="muted" style="font-size:13px">Può richiedere fino a un minuto.</span></p></div></div>`);
+    const fd = new FormData(); fd.append('file', f);
+    try { const j = await api('POST', '/api/p/carica', fd, true); closeLayer(w); editor(null, j); } catch (err) { closeLayer(w); toast(err.message); }
+  };
+}
+function editor(p, bozza){
+  const mod = S.modello || [];
+  let sez = bozza ? bozza.sezioni : p ? (p.sezioni || []).map(s => ({ ...s })) : mod.filter(s => s.obbl).map(s => ({ h: s.nome, t: '' }));
+  let mans = new Set(p ? p.mansioni : []);
+  const titolo0 = bozza ? (p ? p.titolo : bozza.titolo) : p ? p.titolo : '';
+  const cartelle = [...new Set([...S.prot.map(x => x.cartella), ...(S.cartelle || [])])];
+  const mancanti = new Set((bozza && bozza.mancanti) || []);
+  const l = layer(`<div class="modal-h"><div class="eyebrow">${bozza ? 'Riadeguato al modello · controlla e approva' : p ? 'Modifica protocollo' : 'Nuovo protocollo'}</div><h2>${esc(titolo0 || 'Nuovo protocollo')}</h2><button class="x-btn" data-x aria-label="Chiudi">${I.x}</button></div>
+    <div class="modal-b"><div class="fl-wrap">
+      ${bozza ? `<div style="flex:1 1 320px;display:flex;flex-direction:column;gap:6px"><span class="eyebrow">Testo originale${bozza.nomeFile ? ' · ' + esc(bozza.nomeFile) : ''}</span><div class="note" style="white-space:pre-line;max-height:70vh;overflow:auto;font-size:13.5px;line-height:1.55">${esc(bozza.originale || '')}</div></div>` : ''}
+      <div style="flex:2 1 420px;display:flex;flex-direction:column;gap:12px">
+        <label class="f">Titolo<input class="inp" data-tit value="${esc(titolo0)}"></label>
+        <label class="f">Cartella<input class="inp" data-cart list="cartl" value="${esc(p ? p.cartella : 'Generale')}"><datalist id="cartl">${cartelle.map(c => `<option value="${esc(c)}">`).join('')}</datalist></label>
+        <div class="sezs"></div>
+        <div class="row"><select class="inp" data-addsel style="width:auto">${mod.map(s => `<option>${esc(s.nome)}</option>`).join('')}<option value="">Altra sezione…</option></select><button class="btn small" data-addsez>+ Aggiungi sezione</button></div>
+        <div><span class="eyebrow">Mansioni che lo vedono</span><div class="chips mans" style="margin-top:8px"></div></div>
+      </div></div></div>
+    <div class="modal-f"><button class="btn" data-x>Annulla</button><button class="btn primary" data-salva>${bozza ? 'Approva e pubblica' : 'Salva'}</button></div>`, 'wide full');
+  function drawSez(){
+    l.querySelector('.sezs').innerHTML = sez.map((s, i) => `<div class="card" style="padding:12px;display:flex;flex-direction:column;gap:8px;${mancanti.has(s.h) ? 'border-color:var(--warn)' : ''}">
+      <div class="row"><input class="inp" style="flex:1;font-weight:700" data-h="${i}" value="${esc(s.h)}">${mancanti.has(s.h) ? '<span class="tag warn">Da completare</span>' : ''}
+      <button class="btn small" data-up="${i}" aria-label="Sposta su">↑</button><button class="btn small danger" data-rm="${i}">Togli</button></div>
+      <textarea class="inp" rows="${Math.min(14, Math.max(3, (s.t || '').split('\n').length + 1))}" data-t="${i}">${esc(s.t)}</textarea></div>`).join('');
+    l.querySelector('.mans').innerHTML = S.figure.map(f => `<button class="chip ${mans.has(f.id) ? 'on' : ''}" data-m="${esc(f.id)}">${esc(f.id)}</button>`).join('');
+  }
+  l.addEventListener('input', e => { const h = e.target.dataset.h, t = e.target.dataset.t; if (h !== undefined) sez[+h].h = e.target.value; if (t !== undefined) sez[+t].t = e.target.value; });
+  l.addEventListener('click', async e => {
+    const m = e.target.closest('[data-m]'); if (m) { mans.has(m.dataset.m) ? mans.delete(m.dataset.m) : mans.add(m.dataset.m); drawSez(); }
+    const up = e.target.closest('[data-up]'); if (up && +up.dataset.up > 0) { const i = +up.dataset.up; [sez[i - 1], sez[i]] = [sez[i], sez[i - 1]]; drawSez(); }
+    const rm = e.target.closest('[data-rm]'); if (rm) { sez.splice(+rm.dataset.rm, 1); drawSez(); }
+    if (e.target.closest('[data-addsez]')) { const v = l.querySelector('[data-addsel]').value; sez.push({ h: v || 'Nuova sezione', t: '' }); drawSez(); }
+    const sv = e.target.closest('[data-salva]');
+    if (sv) {
+      const titolo = l.querySelector('[data-tit]').value.trim(); if (!titolo) return toast('Manca il titolo.');
+      sv.disabled = true;
+      try {
+        await api('POST', '/api/p/prot', { id: p ? p.id : undefined, titolo, cartella: l.querySelector('[data-cart]').value, sezioni: sez, mansioni: [...mans],
+          conforme: bozza ? true : p ? p.conforme : true, ...(bozza ? { originale: bozza.originale || '' } : {}) });
+        closeLayer(l); toast('Protocollo salvato'); await refresh();
+      } catch (err) { sv.disabled = false; toast(err.message); }
+    }
+  });
+  drawSez();
+}
+function renderModello(v){
+  let mod = (S.modello || []).map(s => ({ ...s })), guida = S.guida || '';
+  v.innerHTML = `<div class="page-h"><h2>Modello e guida di scrittura</h2></div>
+    <p class="sub">Qui decidi come deve essere fatto ogni protocollo. I file caricati vengono riscritti da Claude seguendo queste sezioni e questa guida; poi controlli e approvi.</p>
+    <div class="fl-wrap"><div class="card" style="flex:1 1 340px"><h3>Sezioni del modello</h3><div class="ml"></div>
+      <div class="row" style="margin-top:10px"><input class="inp" data-nuova placeholder="Nuova sezione" style="flex:1"><button class="btn small" data-add>+ Aggiungi</button></div></div>
+      <div class="card" style="flex:1 1 400px;display:flex;flex-direction:column;gap:10px"><h3 style="margin:0">Guida di scrittura</h3>
+      <span class="muted" style="font-size:13.5px">Incolla qui le istruzioni del GPT che ti hanno condiviso (o scrivi le tue regole): verranno usate per riorganizzare ogni protocollo.</span>
+      <textarea class="inp" data-guida rows="14" placeholder="Esempio: una sola azione per riga, verbo all'imperativo; indica sempre chi fa cosa; niente abbreviazioni senza spiegazione…">${esc(guida)}</textarea></div></div>
+    <div class="row"><button class="btn primary" data-salva>Salva modello e guida</button></div>`;
+  const draw = () => { v.querySelector('.ml').innerHTML = mod.map((s, i) => `<div class="row" style="padding:8px 0;border-top:1px solid var(--line)"><b style="width:22px;color:var(--muted)">${i + 1}</b>
+    <input class="inp" style="flex:1;min-width:140px" data-n="${i}" value="${esc(s.nome)}"><button class="chip ${s.obbl ? 'on' : ''}" data-o="${i}">${s.obbl ? 'Obbligatoria' : 'Se serve'}</button>
+    <button class="btn small" data-up="${i}" aria-label="Sposta su">↑</button><button class="btn small danger" data-rm="${i}">Togli</button></div>`).join(''); };
+  v.oninput = e => { if (e.target.dataset.n !== undefined) mod[+e.target.dataset.n].nome = e.target.value; if (e.target.matches('[data-guida]')) guida = e.target.value; };
+  v.onclick = async e => {
+    const o = e.target.closest('[data-o]'); if (o) { mod[+o.dataset.o].obbl = !mod[+o.dataset.o].obbl; draw(); }
+    const up = e.target.closest('[data-up]'); if (up && +up.dataset.up > 0) { const i = +up.dataset.up; [mod[i - 1], mod[i]] = [mod[i], mod[i - 1]]; draw(); }
+    const rm = e.target.closest('[data-rm]'); if (rm) { mod.splice(+rm.dataset.rm, 1); draw(); }
+    if (e.target.closest('[data-add]')) { const n = v.querySelector('[data-nuova]').value.trim(); if (n) { mod.push({ nome: n, obbl: false }); v.querySelector('[data-nuova]').value = ''; draw(); } }
+    if (e.target.closest('[data-salva]')) { try { await api('PUT', '/api/p/impostazioni', { modello: mod, guida }); toast('Modello e guida salvati'); await refresh(); } catch (err) { toast(err.message); } }
+  };
+  draw();
+}
+function renderAssegna(v){
+  v.innerHTML = `<div class="page-h"><h2>Assegnazioni per mansione</h2></div><p class="sub">Tocca una casella per dare o togliere un protocollo a una mansione. Ogni persona vede i protocolli della sua mansione.</p>
+    <div class="card scroll" style="padding:4px 0"><table class="tbl"><thead><tr><th>Protocollo</th>${S.figure.map(f => `<th style="text-align:center" title="${esc(f.nome)}">${esc(f.id)}</th>`).join('')}</tr></thead><tbody>
+    ${S.prot.map(p => `<tr><td style="font-weight:600;min-width:220px">${esc(p.titolo)}<div class="muted" style="font-size:12px;font-weight:500">${esc(p.cartella)}</div></td>${S.figure.map(f => { const on = (p.mansioni || []).includes(f.id);
+      return `<td style="text-align:center"><button class="cell-btn ${on ? 'on' : ''}" data-p="${p.id}" data-f="${esc(f.id)}" aria-label="${on ? 'Togli' : 'Assegna'} ${esc(p.titolo)} a ${esc(f.id)}">${on ? '✓' : ''}</button></td>`; }).join('')}</tr>`).join('')}
+    </tbody></table></div>`;
+  v.onclick = async e => {
+    const b = e.target.closest('[data-p]'); if (!b) return;
+    const p = S.prot.find(x => x.id === b.dataset.p), f = b.dataset.f, m = new Set(p.mansioni || []);
+    m.has(f) ? m.delete(f) : m.add(f); p.mansioni = [...m];
+    b.classList.toggle('on', m.has(f)); b.textContent = m.has(f) ? '✓' : '';
+    try { await api('PUT', `/api/p/prot/${p.id}/mansioni`, { mansioni: p.mansioni }); } catch (err) { toast(err.message); refresh(); }
+  };
+}
+function renderLetture(v){
+  let sel = renderLetture.sel && S.prot.some(p => p.id === renderLetture.sel) ? renderLetture.sel : (S.prot[0] || {}).id;
+  if (!sel) { v.innerHTML = '<div class="card empty">Nessun protocollo.</div>'; return; }
+  const p = S.prot.find(x => x.id === sel), L = lettiDa(p);
+  v.innerHTML = `<div class="page-h"><h2>Chi ha letto</h2></div><p class="sub">Ogni apertura viene registrata. “Da leggere” vuol dire che la persona non ha aperto il protocollo dopo l'ultimo aggiornamento.</p>
+    <label class="f" style="max-width:520px">Protocollo<select class="inp" data-sel>${S.prot.map(x => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${esc(x.titolo)}</option>`).join('')}</select></label>
+    <div class="card scroll" style="padding:4px 0"><table class="tbl"><thead><tr><th>Persona</th><th>Mansione</th><th>Ultima apertura</th><th></th></tr></thead><tbody>
+    ${L.pers.map(u => { const l = S.letture.find(x => x.u === u.id && x.p === p.id); const ok = L.letti.includes(u);
+      return `<tr><td style="font-weight:600">${esc(u.name)}</td><td>${esc(u.figura)}</td><td class="muted">${l ? new Date(l.t).toLocaleString('it-IT', {day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'}) : '—'}</td><td><span class="tag ${ok ? 'ok' : 'no'}">${ok ? 'Letto' : 'Da leggere'}</span></td></tr>`; }).join('') || '<tr><td colspan="4" class="empty">Nessuna persona con le mansioni di questo protocollo.</td></tr>'}
+    </tbody></table></div>`;
+  v.querySelector('[data-sel]').onchange = e => { renderLetture.sel = e.target.value; render(); };
+}
+
+/* ---------- flussi: editor ---------- */
+let flSel = null;
+function renderFlussiAdmin(v){
+  const fl = S.flows || [];
+  if (!flSel || !fl.some(f => f.id === flSel)) flSel = fl[0] ? fl[0].id : null;
+  v.innerHTML = `<div class="page-h"><h2>Flussi di lavoro</h2><button class="btn" data-new>+ Nuovo flusso</button></div>
+    <div class="chips">${fl.map(f => `<button class="chip ${f.id === flSel ? 'on' : ''}" data-f="${esc(f.id)}">${esc(f.name)}</button>`).join('')}</div>
+    ${flSel ? '<div class="ed"></div>' : '<div class="card empty">Nessun flusso. Creane uno con “+ Nuovo flusso”.</div>'}`;
+  v.onclick = async e => {
+    const b = e.target.closest('.chips [data-f]'); if (b) { flSel = b.dataset.f; FL = null; render(); return; }
+    if (e.target.closest('[data-new]')) {
+      try { const nodes = [{ id: 'n1', label: 'Inizio', sub: [], c: 'ini', x: 300, y: 60 }, { id: 'n2', label: 'Primo passo', sub: [], c: 'op', x: 300, y: 180 }];
+        const j = await api('POST', '/api/flows', { name: 'Nuovo flusso', nodes, edges: [['n1', 'n2']] }); flSel = j.id; FL = null; await refreshFlows(); } catch (err) { toast(err.message); }
+    }
+  };
+  if (flSel) editorFlusso(v.querySelector('.ed'), fl.find(f => f.id === flSel));
+}
+async function refreshFlows(){ const j = await api('GET', '/api/state'); S.flows = j.flows; S.figureAcc = j.figure || []; render(); }
+function accFigura(flowId, fig){ const f = (S.figureAcc || []).find(x => x.id === fig); return f && f.access[flowId] ? f.access[flowId].mode : 'none'; }
+function editorFlusso(host, f){
+  if (!FL || FL.id !== f.id) FL = { id: f.id, zoom: null, sel: null, from: null, collega: false };
+  const st = FL;
+  host.innerHTML = `<div class="card fl-tool" style="padding:10px 12px;margin-bottom:12px">
+      <input class="inp" data-nome value="${esc(f.name)}" style="max-width:280px;font-weight:700">
+      <button class="btn small" data-add="op">+ Passo</button><button class="btn small" data-add="dec" style="background:var(--warn-soft)">+ Decisione Sì/No</button>
+      <button class="btn small" data-add="ini">+ Inizio</button><button class="btn small" data-add="fine">+ Fine</button>
+      <button class="btn small ${st.collega ? 'primary' : ''}" data-collega>${st.collega ? 'Collega: attivo' : 'Collega con freccia'}</button>
+      <span class="muted" style="font-size:12.5px;flex:1;min-width:200px">${st.collega ? (st.from ? 'Ora tocca l\'elemento di arrivo. Da una decisione la prima freccia è “Sì”, la seconda “No”.' : 'Tocca l\'elemento di partenza.') : 'Trascina gli elementi per spostarli; tocca per modificarli. Si salva da solo.'}</span>
+      <button class="btn small danger" data-delflow>Elimina flusso</button></div>
+    <div class="fl-wrap"><div class="canvas edit"></div><div class="side"></div></div>`;
+  const cv = host.querySelector('.canvas');
+  const draw = () => { const sx = cv.scrollLeft, sy = cv.scrollTop; const o = { zoom: st.zoom, sel: st.sel, from: st.from }; disegna(cv, f, o); st.zoom = o.zoom; cv.scrollLeft = sx; cv.scrollTop = sy; side(); };
+  let saveT; const salva = () => { clearTimeout(saveT); saveT = setTimeout(async () => { try { await api('PUT', '/api/flows/' + f.id, { name: f.name, nodes: f.nodes.map(({ locked, ...n }) => n), edges: f.edges, manual: !!f.manual }); } catch (err) { toast('Salvataggio non riuscito: ' + err.message); } }, 500); };
+  function side(){
+    const sp = host.querySelector('.side'), n = f.nodes.find(x => x.id === st.sel);
+    const figs = S.figure.map(x => `<button class="chip ${accFigura(f.id, x.id) !== 'none' ? 'on' : ''}" data-vis="${esc(x.id)}">${esc(x.id)}</button>`).join('');
+    sp.innerHTML = `<div class="card" style="display:flex;flex-direction:column;gap:10px">${n ? `<h3 style="margin:0">Elemento selezionato</h3>
+      <label class="f">Testo<input class="inp" data-lab value="${esc(n.label)}"></label>
+      <label class="f">Note (una per riga)<textarea class="inp" rows="3" data-sub>${esc((n.sub || []).join('\n'))}</textarea></label>
+      <div><span class="eyebrow">Tipo</span><div class="chips" style="margin-top:6px">${TIPI.map(t => `<button class="chip ${n.c === t[0] ? 'on' : ''}" data-tipo="${t[0]}">${t[1]}</button>`).join('')}</div></div>
+      <div><span class="eyebrow">Chi lo fa</span><div class="chips" style="margin-top:6px"><button class="chip ${!n.chi ? 'on' : ''}" data-chi="">Nessuno</button>${S.figure.map(x => `<button class="chip ${n.chi === x.id ? 'on' : ''}" data-chi="${esc(x.id)}">${esc(x.id)}</button>`).join('')}</div></div>
+      <label class="f">Protocollo collegato<select class="inp" data-prot><option value="">Nessuno</option>${S.prot.map(p => `<option value="${p.id}" ${n.prot === p.id ? 'selected' : ''}>${esc(p.titolo)}</option>`).join('')}</select></label>
+      <div><span class="eyebrow">Frecce in uscita</span>${f.edges.map((e, i) => e[0] === n.id ? `<div class="row" style="margin-top:6px"><span style="flex:1;font-size:13.5px">→ ${esc((f.nodes.find(x => x.id === e[1]) || {}).label || '')}</span>
+        <input class="inp" style="width:90px" data-elab="${i}" value="${esc(typeof e[2] === 'string' && e[2] !== 'loop' ? e[2] : '')}" placeholder="etichetta"><button class="btn small danger" data-edel="${i}">Togli</button></div>` : '').join('') || '<div class="muted" style="font-size:13px">Nessuna</div>'}</div>
+      <button class="btn danger" data-ndel>Elimina elemento</button>` : '<span class="muted">Tocca un elemento per modificarlo. Trascinalo per spostarlo.</span>'}</div>
+      <div class="card"><h3>Chi vede questo flusso</h3><div class="chips">${figs}</div></div>`;
+  }
+  // trascinamento
+  let drag = null, mosso = false;
+  cv.addEventListener('pointerdown', e => {
+    const el = e.target.closest('.fn'); if (!el || st.collega) return;
+    const n = f.nodes.find(x => x.id === el.dataset.n); drag = { n, el, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y }; mosso = false;
+    el.setPointerCapture(e.pointerId);
+  });
+  cv.addEventListener('pointermove', e => {
+    if (!drag) return; const dx = (e.clientX - drag.sx) / st.zoom, dy = (e.clientY - drag.sy) / st.zoom;
+    if (Math.abs(dx) + Math.abs(dy) > 3) mosso = true; if (!mosso) return;
+    drag.n.x = Math.round(drag.ox + dx); drag.n.y = Math.round(drag.oy + dy);
+    drag.el.style.left = (drag.n.x - cv._off.minX) + 'px'; drag.el.style.top = (drag.n.y - cv._off.minY) + 'px';
+    frecce(cv, f);
+  });
+  cv.addEventListener('pointerup', () => { if (drag && mosso) { salva(); const sx = cv.scrollLeft, sy = cv.scrollTop; draw(); cv.scrollLeft = sx; cv.scrollTop = sy; } drag = null; });
+  cv.addEventListener('click', e => {
+    const z = e.target.closest('[data-z]'); if (z) { st.zoom = z.dataset.z === '+' ? Math.min(2, st.zoom + 0.15) : z.dataset.z === '-' ? Math.max(0.3, st.zoom - 0.15) : null; draw(); return; }
+    const el = e.target.closest('.fn'); if (!el) return;
+    if (mosso) { mosso = false; return; }
+    const id = el.dataset.n;
+    if (!st.collega) { st.sel = id; draw(); return; }
+    if (!st.from) { st.from = id; draw(); host.querySelector('.fl-tool span.muted').textContent = 'Ora tocca l\'elemento di arrivo.'; return; }
+    if (st.from === id) { st.from = null; draw(); return; }
+    const src = f.nodes.find(x => x.id === st.from), usc = f.edges.filter(x => x[0] === st.from).length;
+    f.edges.push(src.c === 'dec' ? [st.from, id, usc === 0 ? 'Sì' : 'No'] : [st.from, id]);
+    st.from = null; salva(); draw();
+  });
+  host.addEventListener('input', e => {
+    const n = f.nodes.find(x => x.id === st.sel);
+    if (e.target.matches('[data-nome]')) { f.name = e.target.value; salva(); return; }
+    if (!n) return;
+    if (e.target.matches('[data-lab]')) { n.label = e.target.value; salva(); const el = cv.querySelector(`.fn[data-n="${CSS.escape(n.id)}"] .l`); if (el) el.textContent = n.label; frecce(cv, f); }
+    if (e.target.matches('[data-sub]')) { n.sub = e.target.value.split('\n').map(s => s.trim()).filter(Boolean); salva(); }
+    if (e.target.dataset.elab !== undefined) { const ed = f.edges[+e.target.dataset.elab]; if (e.target.value) ed[2] = e.target.value; else ed.length = 2; salva(); frecce(cv, f); }
+  });
+  host.addEventListener('change', e => { const n = f.nodes.find(x => x.id === st.sel); if (n && e.target.matches('[data-prot]')) { if (e.target.value) n.prot = e.target.value; else delete n.prot; salva(); draw(); } if (e.target.matches('[data-sub]')) draw(); });
+  host.addEventListener('click', async e => {
+    const n = f.nodes.find(x => x.id === st.sel);
+    const add = e.target.closest('[data-add]');
+    if (add) {
+      const c = add.dataset.add, id = 'n' + Date.now().toString(36);
+      const x = Math.round((cv.scrollLeft + cv.clientWidth / 2) / st.zoom + (cv._off ? cv._off.minX : 0)), y = Math.round((cv.scrollTop + 120) / st.zoom + (cv._off ? cv._off.minY : 0));
+      f.nodes.push({ id, label: c === 'dec' ? 'Nuova domanda?' : c === 'ini' ? 'Inizio' : c === 'fine' ? 'Fine' : 'Nuovo passo', sub: [], c, x, y });
+      st.sel = id; salva(); draw(); return;
+    }
+    if (e.target.closest('[data-collega]')) { st.collega = !st.collega; st.from = null; editorFlusso(host, f); return; }
+    const tp = e.target.closest('[data-tipo]'); if (tp && n) { n.c = tp.dataset.tipo; salva(); draw(); }
+    const ch = e.target.closest('[data-chi]'); if (ch && n) { if (ch.dataset.chi) n.chi = ch.dataset.chi; else delete n.chi; salva(); draw(); }
+    const ed = e.target.closest('[data-edel]'); if (ed) { f.edges.splice(+ed.dataset.edel, 1); salva(); draw(); }
+    const nd = e.target.closest('[data-ndel]'); if (nd && n) { if (!armed(nd, 'Conferma: elimina elemento')) return; f.nodes = f.nodes.filter(x => x.id !== n.id); f.edges = f.edges.filter(x => x[0] !== n.id && x[1] !== n.id); st.sel = null; salva(); draw(); }
+    const vis = e.target.closest('[data-vis]');
+    if (vis) { const fig = vis.dataset.vis, on = accFigura(f.id, fig) !== 'none';
+      try { await api('PUT', `/api/figure/${encodeURIComponent(fig)}/access/${f.id}`, { mode: on ? 'none' : 'all', hide: false, nodes: [] }); const a = (S.figureAcc || []).find(x => x.id === fig); if (a) a.access[f.id] = { mode: on ? 'none' : 'all' }; side(); } catch (err) { toast(err.message); } }
+    const df = e.target.closest('[data-delflow]');
+    if (df) { if (!armed(df, 'Conferma: elimina il flusso')) return; try { await api('DELETE', '/api/flows/' + f.id); flSel = null; FL = null; await refreshFlows(); toast('Flusso eliminato'); } catch (err) { toast(err.message); } }
+  });
+  draw();
+}
+
+/* ---------- test: amministratore ---------- */
+let TA = { tab: 'crea', fig: null, prot: null, test: null, dest: null, scad: '' };
+function renderTest(v){
+  const fig = TA.fig || (S.figure.find(f => S.prot.some(p => (p.mansioni || []).includes(f.id))) || S.figure[0]).id;
+  TA.fig = fig;
+  const protF = S.prot.filter(p => (p.mansioni || []).includes(fig));
+  if (!TA.prot || TA.prot.fig !== fig) TA.prot = { fig, ids: new Set(protF.map(p => p.id)) };
+  const pers = S.persone.filter(u => u.figura === fig && u.role !== 'admin');
+  if (!TA.dest || TA.dest.fig !== fig) TA.dest = { fig, ids: new Set(pers.map(u => u.id)) };
+  const t = TA.test;
+  v.innerHTML = `<div class="page-h"><h2>Test</h2></div><div class="row"><button class="btn ${TA.tab === 'crea' ? 'primary' : ''}" data-tab="crea">Crea e invia</button><button class="btn ${TA.tab === 'ris' ? 'primary' : ''}" data-tab="ris">Risultati</button></div>
+    ${TA.tab === 'crea' ? `<div class="card" style="display:flex;flex-direction:column;gap:12px">
+      <h3 style="margin:0">1 · Per quale mansione?</h3><div class="chips">${S.figure.map(f => `<button class="chip ${f.id === fig ? 'on' : ''}" data-fig="${esc(f.id)}">${esc(f.id)}</button>`).join('')}</div>
+      <h3 style="margin:6px 0 0">2 · Da quali protocolli?</h3><div class="chips">${protF.map(p => `<button class="chip ${TA.prot.ids.has(p.id) ? 'on' : ''}" data-pp="${p.id}">${esc(p.titolo)}</button>`).join('') || '<span class="muted">Nessun protocollo assegnato a questa mansione.</span>'}</div>
+      <div class="row"><button class="btn primary" data-gen ${S.ai && protF.length ? '' : 'disabled'}>${t ? 'Rigenera tutto il test' : 'Genera il test con Claude'}</button><span class="muted" style="font-size:13.5px">30 domande: 25 a scelta multipla (4 risposte) e 5 aperte. Si supera con almeno ${S.soglia}/30.${S.ai ? '' : ' <b>Manca la chiave AI su Render.</b>'}</span></div></div>
+    ${t ? `<div class="card" style="display:flex;flex-direction:column;gap:4px"><div class="row" style="margin-bottom:6px"><h3 style="margin:0;flex:1">3 · Controlla le domande</h3><span class="tag ok">${t.domande.filter(d => d.tipo === 'mc').length} scelta multipla</span><span class="tag warn">${t.domande.filter(d => d.tipo !== 'mc').length} aperte</span></div>
+      ${t.domande.map((d, i) => `<div class="row" style="align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)"><b style="width:26px;color:var(--muted)">${i + 1}</b><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px"><b>${esc(d.t)}</b>
+        ${d.tipo === 'mc' ? `<span class="muted" style="font-size:13px">${d.o.map((o, k) => k === d.ok ? `<b style="color:var(--ok)">✓ ${esc(o)}</b>` : esc(o)).join(' · ')}</span>` : `<span class="muted" style="font-size:13px">Aperta · punti richiesti: ${esc(d.criteri)}</span>`}
+        <span class="muted" style="font-size:12px">da: ${esc((S.prot.find(p => p.id === d.prot) || {}).titolo || '')}</span></div><button class="btn small" data-rig="${i}">Rigenera</button></div>`).join('')}</div>
+      <div class="card" style="display:flex;flex-direction:column;gap:10px"><h3 style="margin:0">4 · A chi lo mandi</h3><div class="chips">${pers.map(u => `<button class="chip ${TA.dest.ids.has(u.id) ? 'on' : ''}" data-u="${u.id}">${esc(u.name)}</button>`).join('') || '<span class="muted">Nessuna persona con questa mansione.</span>'}</div>
+        <div class="row"><label class="f" style="flex-direction:row;align-items:center;gap:8px">Da fare entro<input class="inp" type="date" data-scad value="${esc(TA.scad)}" style="width:auto"></label><button class="btn primary" data-invia ${TA.dest.ids.size ? '' : 'disabled'}>Invia a ${TA.dest.ids.size} ${TA.dest.ids.size === 1 ? 'persona' : 'persone'}</button></div></div>` : ''}`
+    : risultati()}`;
+  v.onclick = async e => {
+    const tb = e.target.closest('[data-tab]'); if (tb) { TA.tab = tb.dataset.tab; render(); return; }
+    const f = e.target.closest('[data-fig]'); if (f) { TA.fig = f.dataset.fig; TA.test = null; render(); return; }
+    const pp = e.target.closest('[data-pp]'); if (pp) { TA.prot.ids.has(pp.dataset.pp) ? TA.prot.ids.delete(pp.dataset.pp) : TA.prot.ids.add(pp.dataset.pp); TA.test = null; render(); return; }
+    const u = e.target.closest('[data-u]'); if (u) { TA.dest.ids.has(u.dataset.u) ? TA.dest.ids.delete(u.dataset.u) : TA.dest.ids.add(u.dataset.u); render(); return; }
+    const g = e.target.closest('[data-gen]');
+    if (g) { if (!TA.prot.ids.size) return toast('Scegli almeno un protocollo.'); g.disabled = true; g.innerHTML = '<span class="spin" style="width:16px;height:16px;border-width:2px"></span> Genero le domande… (circa un minuto)';
+      try { const j = await api('POST', '/api/p/test/genera', { figura: fig, protIds: [...TA.prot.ids] }); TA.test = { id: j.id, domande: j.domande }; } catch (err) { toast(err.message); } render(); }
+    const r = e.target.closest('[data-rig]');
+    if (r) { r.disabled = true; r.textContent = '…'; try { const j = await api('POST', `/api/p/test/${TA.test.id}/rigenera/${r.dataset.rig}`); TA.test.domande[+r.dataset.rig] = j.domanda; } catch (err) { toast(err.message); } render(); }
+    const inv = e.target.closest('[data-invia]');
+    if (inv) { inv.disabled = true; try { const j = await api('POST', `/api/p/test/${TA.test.id}/invia`, { userIds: [...TA.dest.ids], scadenza: TA.scad }); toast(`Test inviato a ${j.inviati} ${j.inviati === 1 ? 'persona' : 'persone'}`); TA.test = null; TA.tab = 'ris'; await refresh(); } catch (err) { inv.disabled = false; toast(err.message); } }
+    const d = e.target.closest('[data-dett]'); if (d) dettaglioInvio(d.dataset.dett);
+  };
+  v.onchange = e => { if (e.target.matches('[data-scad]')) TA.scad = e.target.value; };
+}
+function risultati(){
+  const nome = id => (S.persone.find(u => u.id === id) || {}).name || '—';
+  const test = id => S.tests.find(t => t.id === id) || {};
+  if (!S.invii.length) return '<div class="card empty">Nessun test inviato.</div>';
+  return `<div class="card scroll" style="padding:4px 0"><table class="tbl"><thead><tr><th>Persona</th><th>Test</th><th>Stato</th><th>Punteggio</th><th>Esito</th><th></th></tr></thead><tbody>
+    ${S.invii.map(i => { const t = test(i.test_id), n = (t.domande || []).length;
+      return `<tr><td style="font-weight:600">${esc(nome(i.user_id))}</td><td>${esc(t.titolo || '')}</td><td class="muted">${i.stato === 'consegnato' ? 'Consegnato il ' + esc(i.consegnato) : i.stato === 'in_corso' ? 'In corso' : 'Non ancora iniziato'}</td>
+      <td style="font-weight:700">${i.punti != null ? i.punti + '/' + n : '—'}</td><td>${i.esito ? `<span class="tag ${i.esito === 'superato' ? 'ok' : 'no'}">${i.esito === 'superato' ? 'Superato' : 'Da ripetere'}</span>` : '<span class="tag info">In attesa</span>'}</td>
+      <td style="text-align:right">${i.stato === 'consegnato' ? `<button class="btn small" data-dett="${i.id}">Risposte</button>` : ''}</td></tr>`; }).join('')}
+    </tbody></table></div><p class="muted" style="font-size:13px">Chi resta sotto ${S.soglia}/30 riceve in automatico un nuovo test con domande diverse sugli stessi protocolli.</p>`;
+}
+function dettaglioInvio(id){
+  const i = S.invii.find(x => x.id === id), t = S.tests.find(x => x.id === i.test_id), nome = (S.persone.find(u => u.id === i.user_id) || {}).name || '';
+  const l = layer(`<div class="modal-h"><div class="eyebrow">${esc(t.titolo)}</div><h2>${esc(nome)} · <span class="pt">${i.punti}</span>/${t.domande.length}</h2><button class="x-btn" data-x aria-label="Chiudi">${I.x}</button></div><div class="modal-b"></div>`, 'wide');
+  const draw = () => {
+    l.querySelector('.pt').textContent = i.punti;
+    l.querySelector('.modal-b').innerHTML = t.domande.map((d, n) => {
+      const r = i.risposte[n], v = i.valutazioni[n] || {};
+      if (d.tipo === 'mc') { const ok = r === d.ok; return `<div class="card" style="display:flex;flex-direction:column;gap:4px"><div class="row"><b style="flex:1">${n + 1}. ${esc(d.t)}</b><span class="tag ${ok ? 'ok' : 'no'}">${ok ? 'Giusta' : 'Sbagliata'}</span></div>
+        <span class="muted" style="font-size:13.5px">Risposta: ${r != null ? esc(d.o[r]) : '—'}${ok ? '' : ' · giusta: ' + esc(d.o[d.ok])}</span></div>`; }
+      return `<div class="card" style="display:flex;flex-direction:column;gap:6px;border-color:var(--warn)"><div class="row"><b style="flex:1">${n + 1}. ${esc(d.t)}</b><span class="tag ${v.ok ? 'ok' : 'no'}">${v.ok ? 'Corretta' : 'Non corretta'}</span></div>
+        <div class="note" style="color:var(--fg)">“${esc(r || '—')}”</div><span class="muted" style="font-size:13px">${v.da === 'admin' ? 'Giudizio cambiato dall\'amministratore.' : 'Claude: ' + esc(v.motivo || '')} · Punti richiesti: ${esc(d.criteri)}</span>
+        <div class="row"><button class="btn small" data-val="${n}" data-ok="${v.ok ? 0 : 1}">${v.ok ? 'Segna come non corretta' : 'Segna come corretta'}</button></div></div>`;
+    }).join('');
+  };
+  l.addEventListener('click', async e => { const b = e.target.closest('[data-val]'); if (!b) return; b.disabled = true;
+    try { const j = await api('POST', `/api/p/invio/${id}/valuta`, { n: +b.dataset.val, ok: b.dataset.ok === '1' }); i.valutazioni[+b.dataset.val] = { ...(i.valutazioni[+b.dataset.val] || {}), ok: b.dataset.ok === '1', da: 'admin' }; i.punti = j.punti; i.esito = j.esito; draw(); refresh(); } catch (err) { toast(err.message); b.disabled = false; } });
+  draw();
+}
+
+/* ---------- avvio: protocolli + flussi (API esistente) ---------- */
+(async () => {
+  try {
+    const [p, f] = await Promise.all([api('GET', '/api/p/state'), api('GET', '/api/state')]);
+    S = p; S.flows = f.flows; S.figureAcc = f.figure || [];
+    me = S.me;
+    if (MODE === 'admin' && !isAdmin()) { location.href = '/'; return; }
+    if (!isAdmin()) proteggi();
+    const iniz = (me.name || me.username || '?').split(/\s+/).map(x => x[0]).slice(0, 2).join('').toUpperCase();
+    document.getElementById('who').innerHTML = `${isAdmin() ? (MODE === 'admin' ? '<a class="btn small" href="/">Vista utente</a>' : '<a class="btn small" href="/admin">Area admin</a>') : ''}
+      <span class="txt"><b>${esc(me.name || me.username)}</b><span>${esc(isAdmin() ? 'Amministratore' : (me.figura ? figNome(me.figura) : 'Collaboratore'))}</span></span><span class="av">${esc(iniz)}</span>`;
+    view = adminArea() ? 'contenitore' : 'prot';
+    render();
+  } catch (e) { document.getElementById('main').innerHTML = `<div class="card empty">${esc(e.message)}</div>`; }
+})();
+async function refresh(){ const [p, f] = await Promise.all([api('GET', '/api/p/state'), api('GET', '/api/state')]); S = p; S.flows = f.flows; S.figureAcc = f.figure || []; render(); }
+</script>
+</body>
+</html>
