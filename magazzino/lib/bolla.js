@@ -31,6 +31,7 @@ async function leggi(files) {
       : { type: 'image', source: { type: 'base64', media_type: f.tipo, data: f.dati } });
   }
   content.push({ type: 'text', text: PROMPT });
+  if ((await require('../../lib/consumo').stato('mag_letture')) === 'off') throw Object.assign(new Error('La lettura delle bolle automatica è spenta dall’amministratore: scrivi i dati a mano.'), { status: 400 });
   let r;
   try {
     r = await fetch('https://api.anthropic.com/v1/messages', {

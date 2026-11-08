@@ -86,6 +86,7 @@ async function leggiEtichetta(files, codice) {
   if (!key) throw Object.assign(new Error("La lettura delle etichette non è attiva: manca ANTHROPIC_API_KEY su Render."), { status: 400 });
   const content = files.map(f => ({ type: 'image', source: { type: 'base64', media_type: f.tipo, data: f.dati } }));
   content.push({ type: 'text', text: PROMPT(codice) });
+  if ((await require('../../lib/consumo').stato('mag_letture')) === 'off') throw Object.assign(new Error('La lettura delle etichette automatica è spenta dall’amministratore: scrivi i dati a mano.'), { status: 400 });
   let r;
   try {
     r = await fetch('https://api.anthropic.com/v1/messages', {

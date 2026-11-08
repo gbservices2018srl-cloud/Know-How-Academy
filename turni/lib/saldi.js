@@ -2,6 +2,46 @@
 // Ogni consulente impagina il cedolino a modo suo e le ferie possono essere in ore o in giorni:
 // si legge il residuo con l'unità scritta nel cedolino e si mostra così, senza conversioni.
 const UNITA = new Set(['ore', 'giorni']);
+const crypto = require('crypto');
+const consumo = require('../../lib/consumo');
+
+/* Formati già conosciuti: il cedolino della stessa consulente ha sempre la stessa impaginazione.
+   La prima volta lo legge l'AI; poi si impara in quale posizione stanno i residui e le buste con la stessa
+   impaginazione si leggono da sole, gratis. L'AI torna a servire solo se l'impaginazione cambia. */
+const MESI = /^(gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre|gen|feb|mar|apr|mag|giu|lug|ago|set|ott|nov|dic)\.?$/i;
+const parole = t => String(t || '').split(' ').filter(Boolean);
+const numero = w => { const m = String(w).match(/-?\d+(?:[.,]\d+)?/); if (!m) return null; const n = Number(m[0].replace(',', '.')); return Number.isFinite(n) ? n : null; };
+const impronta = t => crypto.createHash('sha256').update(parole(t).map(w => /\d/.test(w) ? '#' : MESI.test(w) ? 'MESE' : w.toLowerCase()).join(' ')).digest('hex');
+let dbT = null; const db = () => dbT || (dbT = require('./db'));
+let pronto = null;
+const prepara = () => pronto || (pronto = db().q('create table if not exists buste_formati (chiave text primary key, regola jsonb not null, creato timestamptz not null default now(), usi int not null default 0)').catch(e => { pronto = null; throw e; }));
+async function formatoNoto(t) {
+  await prepara();
+  const { rows } = await db().q('select regola from buste_formati where chiave = $1', [impronta(t)]);
+  if (!rows[0]) return null;
+  const w = parole(t), out = { dubbi: [], letto: new Date().toISOString(), formato: 'noto' };
+  for (const v of ['ferie', 'rol', 'exfest']) {
+    const r = rows[0].regola[v];
+    if (!r) { out[v] = { residuo: null, unita: null }; continue; }
+    const n = numero(w[r.i]); if (n === null) return null; // qualcosa non torna: meglio far leggere all'AI
+    out[v] = { residuo: Math.round(n * 100) / 100, unita: r.unita || null };
+  }
+  db().q('update buste_formati set usi = usi + 1 where chiave = $1', [impronta(t)]).catch(() => {});
+  return out;
+}
+async function impara(t, s) {
+  try {
+    const w = parole(t), regola = {};
+    for (const v of ['ferie', 'rol', 'exfest']) {
+      if (s[v].residuo == null) { regola[v] = null; continue; }
+      const pos = w.map((x, i) => [x, i]).filter(([x]) => numero(x) === s[v].residuo).map(([, i]) => i);
+      if (pos.length !== 1) return; // posizione ambigua: non si impara, la prossima busta la rilegge l'AI
+      regola[v] = { i: pos[0], unita: s[v].unita };
+    }
+    await prepara();
+    await db().q('insert into buste_formati (chiave, regola) values ($1,$2) on conflict (chiave) do nothing', [impronta(t), JSON.stringify(regola)]);
+  } catch (e) { console.warn('Turni, formato del cedolino non salvato:', e.message); }
+}
 
 const PROMPT = `Questo è il testo estratto da un cedolino paga italiano (busta paga) di un dipendente. Trova i RESIDUI a fine mese di:
 - ferie
@@ -43,11 +83,14 @@ function ritaglia(testo, togli = []) {
 
 async function leggi(testoCompleto, togli = []) {
   const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return null;
   const t = ritaglia(testoCompleto, togli);
   const vuoti = { ferie: { residuo: null, unita: null }, rol: { residuo: null, unita: null }, exfest: { residuo: null, unita: null } };
   if (String(testoCompleto || '').replace(/\s+/g, ' ').trim().length < 80) return { ...vuoti, vuoto: true, dubbi: ['Il cedolino non contiene testo leggibile (forse è una scansione): scrivi i residui a mano.'], letto: new Date().toISOString() };
   if (t.length < 15) return { ...vuoti, vuoto: true, dubbi: ['Nel cedolino non trovo la tabella di ferie e permessi: scrivi i residui a mano.'], letto: new Date().toISOString() };
+  const noto = await formatoNoto(t).catch(() => null);
+  if (noto) return noto.ferie.residuo == null && noto.rol.residuo == null && noto.exfest.residuo == null ? { ...noto, vuoto: true } : noto;
+  if (!key) return null;
+  if ((await consumo.stato('turni_buste')) === 'off') return { ...vuoti, vuoto: true, dubbi: ['Impaginazione nuova e lettura automatica spenta: scrivi i residui a mano.'], letto: new Date().toISOString() };
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
@@ -66,6 +109,7 @@ async function leggi(testoCompleto, togli = []) {
   };
   const s = { ferie: voce(out.ferie), rol: voce(out.rol), exfest: voce(out.exfest),
     dubbi: (Array.isArray(out.dubbi) ? out.dubbi : []).slice(0, 5).map(x => String(x).slice(0, 200)), letto: new Date().toISOString() };
+  if (!s.dubbi.length) impara(t, s);
   return s.ferie.residuo == null && s.rol.residuo == null && s.exfest.residuo == null ? { ...s, vuoto: true } : s;
 }
 

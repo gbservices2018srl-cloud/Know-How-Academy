@@ -870,7 +870,13 @@ function nomeDispositivo(ua, endpoint) {
 }
 // Consumo di Claude (API Anthropic) delle app di questo servizio, mese per mese
 app.get('/api/admin/consumo-ai', needAdmin, wrap(async (req, res) => {
-  res.json({ ...(await require('../lib/consumo').riepilogo(String(req.query.mese || ''))), chatLimite: Math.max(1, parseInt(process.env.PROT_CHAT_LIMITE || '20', 10) || 20) });
+  const consumo = require('../lib/consumo');
+  res.json({ ...(await consumo.riepilogo(String(req.query.mese || ''))), chatLimite: Math.max(1, parseInt(process.env.PROT_CHAT_LIMITE || '20', 10) || 20),
+    interruttori: await consumo.elenco(), gemini: !!process.env.GEMINI_API_KEY, claude: !!process.env.ANTHROPIC_API_KEY });
+}));
+app.put('/api/admin/ai-interruttori', needAdmin, wrap(async (req, res) => {
+  await require('../lib/consumo').imposta(String(req.body.k || ''), String(req.body.v || ''));
+  res.json({ ok: true });
 }));
 app.get('/api/admin/users/:id/notifiche', needAdmin, wrap(async (req, res) => {
   const u = await store.getUser(req.params.id);

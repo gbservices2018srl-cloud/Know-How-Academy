@@ -401,7 +401,20 @@ async function caricaAi(mese) {
     <div style="border:1px solid var(--line,#e5e5e5);border-radius:14px;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:14px"><thead><tr style="text-align:left;font-size:12px;color:#666"><th style="padding:10px 12px">App</th><th style="padding:10px 12px">Funzione</th><th style="padding:10px 12px">Richieste</th><th style="padding:10px 12px">Costo</th></tr></thead><tbody>
       ${r.voci.map(v => `<tr style="border-top:1px solid var(--line,#e5e5e5)"><td style="padding:10px 12px;font-weight:700">${esc(v.appNome)}</td><td style="padding:10px 12px">${esc(v.funzione)}</td><td style="padding:10px 12px">${v.chiamate}</td><td style="padding:10px 12px;font-weight:700">${usd(v.costo)}</td></tr>`).join('') || '<tr><td colspan="4" style="padding:14px 12px" class="muted">Nessun consumo registrato.</td></tr>'}
     </tbody></table></div>
-    <p class="muted" style="font-size:13px;margin:0">Risparmi attivi: assistente dei Protocolli con limite di ${r.chatLimite} domande al giorno per persona e risposte salvate (le domande già fatte non costano); i test da ripetere usano domande di riserva preparate insieme al test.</p></div>`;
+    <div style="border:1px solid var(--line,#e5e5e5);border-radius:14px;padding:6px 16px 10px">
+      <h3 style="margin:10px 0 2px;font-size:17px">Interruttori</h3>
+      <p class="muted" style="font-size:13px;margin:0 0 6px">Per ogni funzione scegli chi la fa. <b>Gemini</b> si può usare solo dove non ci sono dati personali${r.gemini ? '' : ' (per attivarlo serve la variabile <b>GEMINI_API_KEY</b> su Render)'}. <b>Spento</b>: la funzione si fa a mano.</p>
+      ${r.interruttori.map(x => `<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--line,#e5e5e5)">
+        <div style="flex:1;min-width:220px"><b>${esc(x.nome)}</b><div class="muted" style="font-size:12.5px">Se spenta: ${esc(x.senza)}</div></div>
+        <div class="seg" role="group" aria-label="${esc(x.nome)}" style="margin:0">${[['claude', 'Claude'], ['gemini', 'Gemini'], ['off', 'Spento']].map(([v, l]) => {
+          const no = v === 'gemini' && (!x.gemini || !r.gemini);
+          return `<button data-ai-k="${x.k}" data-ai-v="${v}" aria-pressed="${x.v === v}" aria-selected="${x.v === v}" ${no ? `disabled title="${x.gemini ? 'Manca GEMINI_API_KEY su Render' : 'Dati personali: solo Claude o Spento'}"` : ''} style="${no ? 'opacity:.4;cursor:not-allowed' : ''}">${l}</button>`; }).join('')}</div></div>`).join('')}
+    </div>
+    <p class="muted" style="font-size:13px;margin:0">Risparmi attivi: assistente con limite di ${r.chatLimite} domande al giorno per persona e risposte salvate; test pescati da una banca di domande per mansione; buste paga con impaginazione già conosciuta lette senza AI.</p></div>`;
+  box.querySelectorAll('[data-ai-k]').forEach(b => b.onclick = async () => {
+    if (b.disabled) return;
+    try { await api('PUT', '/api/admin/ai-interruttori', { k: b.dataset.aiK, v: b.dataset.aiV }); toast('Salvato'); caricaAi(r.mese); } catch (e) { toast(e.message); }
+  });
   $('#aiMese').onchange = e => caricaAi(e.target.value);
 }
 async function caricaSedi() { try { SEDI = (await api('GET', '/api/admin/sedi')).sedi; } catch (e) { toast(e.message); SEDI = []; } renderSedi(); }

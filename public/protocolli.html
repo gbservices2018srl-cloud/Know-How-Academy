@@ -518,7 +518,7 @@ function renderMieiTest(v){
     return `<div class="card row" style="justify-content:space-between"><div style="display:flex;flex-direction:column;gap:3px;min-width:0">
       <span class="eyebrow">${fatto ? 'Consegnato il ' + fmtD(x.consegnato) : x.stato === 'in_corso' ? 'In corso' : 'Da fare' + (x.scadenza ? ' entro il ' + fmtD(x.scadenza) : '')}</span>
       <b style="font-size:16px">${esc(x.titolo)}</b><span class="muted" style="font-size:13.5px">${x.n} domande · si supera con almeno ${S.soglia}/${x.n}</span></div>
-      ${fatto ? `<span class="tag ${x.esito === 'superato' ? 'ok' : 'no'}">${x.punti}/${x.n} · ${x.esito === 'superato' ? 'superato' : 'da ripetere'}</span><button class="btn" data-esito="${x.id}">Vedi esito</button>`
+      ${fatto && x.esito === 'in_correzione' ? '<span class="tag warn">In correzione</span>' : fatto ? `<span class="tag ${x.esito === 'superato' ? 'ok' : 'no'}">${x.punti}/${x.n} · ${x.esito === 'superato' ? 'superato' : 'da ripetere'}</span><button class="btn" data-esito="${x.id}">Vedi esito</button>`
         : `<button class="btn primary" data-fai="${x.id}">${x.stato === 'in_corso' ? 'Continua' : 'Inizia il test'}</button>`}</div>`; }).join('')}</div>`;
   v.onclick = e => { const a = e.target.closest('[data-fai]'); if (a) faiTest(a.dataset.fai); const b = e.target.closest('[data-esito]'); if (b) mostraEsito(b.dataset.esito); };
 }
@@ -550,7 +550,7 @@ function faiTest(id){
       const mancano = t.domande.length - Object.keys(risp).filter(k => risp[k] !== '' && risp[k] !== undefined).length;
       if (mancano && !armed(nx, `Mancano ${mancano} risposte: consegna lo stesso`)) return;
       nx.disabled = true; l.querySelector('.modal-b').innerHTML = '<div class="empty"><span class="spin"></span><p>Correzione in corso…</p></div>'; l.querySelector('.modal-f').innerHTML = '';
-      try { clearTimeout(salvaT); await api('POST', `/api/p/invio/${id}/consegna`, { risposte: risp }); l._onClose = null; closeLayer(l); await refresh(); mostraEsito(id); }
+      try { clearTimeout(salvaT); const j = await api('POST', `/api/p/invio/${id}/consegna`, { risposte: risp }); l._onClose = null; closeLayer(l); await refresh(); if (j.esito === 'in_correzione') toast('Test consegnato: l’esito arriva appena sono corrette le risposte aperte.'); else mostraEsito(id); }
       catch (err) { toast(err.message); draw(); }
     }
   });
@@ -588,7 +588,7 @@ function renderContenitore(v){
     ${list.map(p => { const L = lettiDa(p); return `<tr><td><button class="btn small" style="border:0;padding:0;background:none;font-weight:700;text-align:left;white-space:normal" data-apri="${p.id}">${esc(p.titolo)}</button></td><td>${esc(p.cartella)}</td>
       <td style="font-size:13px">${(p.mansioni || []).map(esc).join(', ') || '<span class="muted">nessuna</span>'}</td><td><span class="tag ${p.conforme ? 'ok' : 'warn'}">${p.conforme ? 'Conforme' : 'Da riadeguare'}</span></td>
       <td class="muted">${fmtD(p.agg)}</td><td>${L.pers.length ? L.letti.length + ' su ' + L.pers.length : '<span class="muted">—</span>'}</td>
-      <td style="white-space:nowrap;text-align:right"><button class="btn small" data-mod="${p.id}">Modifica</button> <button class="btn small" data-riad="${p.id}" ${S.ai ? '' : 'disabled title="Manca la chiave AI"'}>Riadegua</button> <button class="btn small danger" data-del="${p.id}">Elimina</button></td></tr>`; }).join('') || '<tr><td colspan="7" class="empty">Nessun protocollo in questa cartella.</td></tr>'}
+      <td style="white-space:nowrap;text-align:right"><button class="btn small" data-mod="${p.id}">Modifica</button> <button class="btn small" data-riad="${p.id}" ${(S.ai || {}).prot_riadegua !== 'off' ? '' : 'disabled title="Riscrittura spenta negli interruttori AI"'}>Riadegua</button> <button class="btn small danger" data-del="${p.id}">Elimina</button></td></tr>`; }).join('') || '<tr><td colspan="7" class="empty">Nessun protocollo in questa cartella.</td></tr>'}
     </tbody></table></div>`;
   v.onclick = async e => {
     const c = e.target.closest('[data-c]'); if (c) { filtroCart = c.dataset.c; render(); return; }
@@ -603,7 +603,7 @@ function renderContenitore(v){
   };
   v.querySelector('[data-file]').onchange = async e => {
     const f = e.target.files[0]; if (!f) return;
-    if (!S.ai) return toast('Manca la chiave AI su Render: il file non può essere riadeguato.');
+    if ((S.ai || {}).prot_riadegua === 'off') return toast('La riscrittura automatica è spenta negli interruttori AI: usa “Scrivi protocollo” e incolla il testo.');
     const w = layer(`<div class="modal-b"><div class="empty"><span class="spin"></span><p>Leggo “${esc(f.name)}” e lo riscrivo nel modello…<br><span class="muted" style="font-size:13px">Può richiedere fino a un minuto.</span></p></div></div>`);
     const fd = new FormData(); fd.append('file', f);
     try { const j = await api('POST', '/api/p/carica', fd, true); closeLayer(w); editor(null, j); } catch (err) { closeLayer(w); toast(err.message); }
@@ -810,7 +810,8 @@ function editorFlusso(host, f){
 }
 
 /* ---------- test: amministratore ---------- */
-let TA = { tab: 'crea', fig: null, prot: null, test: null, dest: null, scad: '' };
+let TA = { tab: 'crea', fig: null, prot: null, test: null, dest: null, scad: '', banca: null, vedi: false };
+let bancaPoll = null;
 function renderTest(v){
   const fig = TA.fig || (S.figure.find(f => S.prot.some(p => (p.mansioni || []).includes(f.id))) || S.figure[0]).id;
   TA.fig = fig;
@@ -818,29 +819,52 @@ function renderTest(v){
   if (!TA.prot || TA.prot.fig !== fig) TA.prot = { fig, ids: new Set(protF.map(p => p.id)) };
   const pers = S.persone.filter(u => u.figura === fig && u.role !== 'admin');
   if (!TA.dest || TA.dest.fig !== fig) TA.dest = { fig, ids: new Set(pers.map(u => u.id)) };
-  const t = TA.test;
-  v.innerHTML = `<div class="page-h"><h2>Test</h2></div><div class="row"><button class="btn ${TA.tab === 'crea' ? 'primary' : ''}" data-tab="crea">Crea e invia</button><button class="btn ${TA.tab === 'ris' ? 'primary' : ''}" data-tab="ris">Risultati</button></div>
+  const t = TA.test, B = (S.banche || {})[fig] || { n: 0, mc: 0, stato: null }, st = B.stato || {};
+  const inCorso = st.stato === 'in_corso', genOn = (S.ai || {}).prot_banca !== 'off';
+  const daCorr = S.invii.filter(i => i.esito === 'in_correzione').length;
+  clearTimeout(bancaPoll); if (inCorso && view === 'test') bancaPoll = setTimeout(refresh, 5000);
+  const titolo = id => (S.prot.find(p => p.id === id) || {}).titolo || '';
+  v.innerHTML = `<div class="page-h"><h2>Test</h2></div><div class="row"><button class="btn ${TA.tab === 'crea' ? 'primary' : ''}" data-tab="crea">Crea e invia</button><button class="btn ${TA.tab === 'ris' ? 'primary' : ''}" data-tab="ris">Risultati${daCorr ? ` <span class="tag warn" style="margin-left:4px">${daCorr} da correggere</span>` : ''}</button></div>
     ${TA.tab === 'crea' ? `<div class="card" style="display:flex;flex-direction:column;gap:12px">
-      <h3 style="margin:0">1 · Per quale mansione?</h3><div class="chips">${S.figure.map(f => `<button class="chip ${f.id === fig ? 'on' : ''}" data-fig="${esc(f.id)}">${esc(f.id)}</button>`).join('')}</div>
-      <h3 style="margin:6px 0 0">2 · Da quali protocolli?</h3><div class="chips">${protF.map(p => `<button class="chip ${TA.prot.ids.has(p.id) ? 'on' : ''}" data-pp="${p.id}">${esc(p.titolo)}</button>`).join('') || '<span class="muted">Nessun protocollo assegnato a questa mansione.</span>'}</div>
-      <div class="row"><button class="btn primary" data-gen ${S.ai && protF.length ? '' : 'disabled'}>${t ? 'Rigenera tutto il test' : 'Genera il test con Claude'}</button><span class="muted" style="font-size:13.5px">30 domande: 25 a scelta multipla (4 risposte) e 5 aperte. Si supera con almeno ${S.soglia}/30.${S.ai ? '' : ' <b>Manca la chiave AI su Render.</b>'}</span></div></div>
-    ${t ? `<div class="card" style="display:flex;flex-direction:column;gap:4px"><div class="row" style="margin-bottom:6px"><h3 style="margin:0;flex:1">3 · Controlla le domande</h3><span class="tag ok">${t.domande.filter(d => d.tipo === 'mc').length} scelta multipla</span><span class="tag warn">${t.domande.filter(d => d.tipo !== 'mc').length} aperte</span></div>
+      <h3 style="margin:0">1 · Mansione</h3><div class="chips">${S.figure.map(f => `<button class="chip ${f.id === fig ? 'on' : ''}" data-fig="${esc(f.id)}">${esc(f.id)}</button>`).join('')}</div></div>
+    <div class="card" style="display:flex;flex-direction:column;gap:10px">
+      <div class="row"><h3 style="margin:0;flex:1">2 · Banca domande ${esc(fig)}</h3>${B.n ? `<span class="tag ok">${B.n} domande · ${B.mc} a scelta multipla · ${B.n - B.mc} aperte</span>` : '<span class="tag warn">Vuota</span>'}</div>
+      <p class="muted" style="margin:0;font-size:13.5px">La banca si prepara una volta dai protocolli assegnati a questa mansione (circa 300 domande, costo stimato 0,50–1 $ con Claude). Ogni test e ogni ripetizione pescano 30 domande a caso da qui, senza costi. Rigenerala solo quando cambiano i protocolli.</p>
+      ${inCorso ? `<div class="note"><span class="spin" style="width:16px;height:16px;border-width:2px"></span> Preparazione in corso: ${st.fatte || 0} domande su circa ${st.totale || 300}. Puoi lasciare la pagina, continua da sola.</div>` : ''}
+      ${st.stato === 'errore' ? `<div class="note" style="color:var(--danger)">${esc(st.msg || 'Generazione non riuscita.')}</div>` : ''}
+      <div class="row"><button class="btn ${B.n ? '' : 'primary'}" data-banca ${inCorso || !genOn || !protF.length ? 'disabled' : ''}>${B.n ? 'Rigenera la banca' : 'Genera la banca (circa 300 domande)'}</button>
+        ${B.n ? `<button class="btn" data-vedi>${TA.vedi ? 'Nascondi le domande' : 'Vedi le domande'}</button>` : ''}
+        ${!genOn ? '<span class="muted" style="font-size:13px">Generazione spenta negli interruttori AI (pannello accessi → Consumo AI).</span>' : ''}</div>
+      ${TA.vedi && TA.banca && TA.banca.fig === fig ? `<div style="max-height:420px;overflow:auto;border-top:1px solid var(--line)">${TA.banca.domande.map(d => `<div class="row" style="align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--line)"><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><b style="font-size:14px">${esc(d.t)}</b>
+        <span class="muted" style="font-size:12.5px">${d.tipo === 'mc' ? d.o.map((o, k) => k === d.ok ? `<b style="color:var(--ok)">✓ ${esc(o)}</b>` : esc(o)).join(' · ') : 'Aperta · punti richiesti: ' + esc(d.criteri)} · da: ${esc(titolo(d.prot))}</span></div><button class="btn small danger" data-togli="${d.bid}">Togli</button></div>`).join('')}</div>` : ''}
+    </div>
+    <div class="card" style="display:flex;flex-direction:column;gap:12px">
+      <h3 style="margin:0">3 · Componi il test</h3><span class="muted" style="font-size:13.5px">Da quali protocolli pescare:</span>
+      <div class="chips">${protF.map(p => `<button class="chip ${TA.prot.ids.has(p.id) ? 'on' : ''}" data-pp="${p.id}">${esc(p.titolo)}</button>`).join('') || '<span class="muted">Nessun protocollo assegnato a questa mansione.</span>'}</div>
+      <div class="row"><button class="btn primary" data-comp ${B.n ? '' : 'disabled'}>${t ? 'Ricomponi' : 'Componi il test dalla banca'}</button><span class="muted" style="font-size:13.5px">30 domande a caso: 25 a scelta multipla e 5 aperte. Si supera con almeno ${S.soglia}/30. Gratis.</span></div></div>
+    ${t ? `<div class="card" style="display:flex;flex-direction:column;gap:4px"><div class="row" style="margin-bottom:6px"><h3 style="margin:0;flex:1">4 · Controlla le domande</h3><span class="tag ok">${t.domande.filter(d => d.tipo === 'mc').length} scelta multipla</span><span class="tag warn">${t.domande.filter(d => d.tipo !== 'mc').length} aperte</span></div>
       ${t.domande.map((d, i) => `<div class="row" style="align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)"><b style="width:26px;color:var(--muted)">${i + 1}</b><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px"><b>${esc(d.t)}</b>
         ${d.tipo === 'mc' ? `<span class="muted" style="font-size:13px">${d.o.map((o, k) => k === d.ok ? `<b style="color:var(--ok)">✓ ${esc(o)}</b>` : esc(o)).join(' · ')}</span>` : `<span class="muted" style="font-size:13px">Aperta · punti richiesti: ${esc(d.criteri)}</span>`}
-        <span class="muted" style="font-size:12px">da: ${esc((S.prot.find(p => p.id === d.prot) || {}).titolo || '')}</span></div><button class="btn small" data-rig="${i}">Rigenera</button></div>`).join('')}</div>
-      <div class="card" style="display:flex;flex-direction:column;gap:10px"><h3 style="margin:0">4 · A chi lo mandi</h3><div class="chips">${pers.map(u => `<button class="chip ${TA.dest.ids.has(u.id) ? 'on' : ''}" data-u="${u.id}">${esc(u.name)}</button>`).join('') || '<span class="muted">Nessuna persona con questa mansione.</span>'}</div>
+        <span class="muted" style="font-size:12px">da: ${esc(titolo(d.prot))}</span></div><button class="btn small" data-rig="${i}">Cambia</button></div>`).join('')}</div>
+      <div class="card" style="display:flex;flex-direction:column;gap:10px"><h3 style="margin:0">5 · A chi lo mandi</h3><div class="chips">${pers.map(u => `<button class="chip ${TA.dest.ids.has(u.id) ? 'on' : ''}" data-u="${u.id}">${esc(u.name)}</button>`).join('') || '<span class="muted">Nessuna persona con questa mansione.</span>'}</div>
         <div class="row"><label class="f" style="flex-direction:row;align-items:center;gap:8px">Da fare entro<input class="inp" type="date" data-scad value="${esc(TA.scad)}" style="width:auto"></label><button class="btn primary" data-invia ${TA.dest.ids.size ? '' : 'disabled'}>Invia a ${TA.dest.ids.size} ${TA.dest.ids.size === 1 ? 'persona' : 'persone'}</button></div></div>` : ''}`
     : risultati()}`;
   v.onclick = async e => {
     const tb = e.target.closest('[data-tab]'); if (tb) { TA.tab = tb.dataset.tab; render(); return; }
-    const f = e.target.closest('[data-fig]'); if (f) { TA.fig = f.dataset.fig; TA.test = null; render(); return; }
+    const f = e.target.closest('[data-fig]'); if (f) { TA.fig = f.dataset.fig; TA.test = null; TA.vedi = false; render(); return; }
     const pp = e.target.closest('[data-pp]'); if (pp) { TA.prot.ids.has(pp.dataset.pp) ? TA.prot.ids.delete(pp.dataset.pp) : TA.prot.ids.add(pp.dataset.pp); TA.test = null; render(); return; }
     const u = e.target.closest('[data-u]'); if (u) { TA.dest.ids.has(u.dataset.u) ? TA.dest.ids.delete(u.dataset.u) : TA.dest.ids.add(u.dataset.u); render(); return; }
-    const g = e.target.closest('[data-gen]');
-    if (g) { if (!TA.prot.ids.size) return toast('Scegli almeno un protocollo.'); g.disabled = true; g.innerHTML = '<span class="spin" style="width:16px;height:16px;border-width:2px"></span> Genero le domande… (circa un minuto)';
-      try { const j = await api('POST', '/api/p/test/genera', { figura: fig, protIds: [...TA.prot.ids] }); TA.test = { id: j.id, domande: j.domande }; } catch (err) { toast(err.message); } render(); }
+    const bb = e.target.closest('[data-banca]');
+    if (bb) { if (B.n && !armed(bb, 'Conferma: rigenera (sostituisce la banca attuale)')) return; bb.disabled = true;
+      try { await api('POST', `/api/p/banca/${encodeURIComponent(fig)}/genera`); toast('Preparazione della banca avviata'); TA.vedi = false; await refresh(); } catch (err) { toast(err.message); bb.disabled = false; } }
+    if (e.target.closest('[data-vedi]')) { TA.vedi = !TA.vedi; if (TA.vedi) { try { const j = await api('GET', `/api/p/banca/${encodeURIComponent(fig)}`); TA.banca = { fig, domande: j.domande }; } catch (err) { toast(err.message); } } render(); }
+    const tg = e.target.closest('[data-togli]');
+    if (tg) { if (!armed(tg, 'Conferma')) return; try { await api('DELETE', '/api/p/banca/domanda/' + tg.dataset.togli); TA.banca.domande = TA.banca.domande.filter(d => d.bid !== tg.dataset.togli); await refresh(); } catch (err) { toast(err.message); } }
+    const c = e.target.closest('[data-comp]');
+    if (c) { if (!TA.prot.ids.size) return toast('Scegli almeno un protocollo.'); c.disabled = true;
+      try { const j = await api('POST', '/api/p/test/componi', { figura: fig, protIds: [...TA.prot.ids] }); TA.test = { id: j.id, domande: j.domande }; } catch (err) { toast(err.message); } render(); }
     const r = e.target.closest('[data-rig]');
-    if (r) { r.disabled = true; r.textContent = '…'; try { const j = await api('POST', `/api/p/test/${TA.test.id}/rigenera/${r.dataset.rig}`); TA.test.domande[+r.dataset.rig] = j.domanda; } catch (err) { toast(err.message); } render(); }
+    if (r) { r.disabled = true; try { const j = await api('POST', `/api/p/test/${TA.test.id}/rigenera/${r.dataset.rig}`); TA.test.domande[+r.dataset.rig] = j.domanda; } catch (err) { toast(err.message); } render(); }
     const inv = e.target.closest('[data-invia]');
     if (inv) { inv.disabled = true; try { const j = await api('POST', `/api/p/test/${TA.test.id}/invia`, { userIds: [...TA.dest.ids], scadenza: TA.scad }); toast(`Test inviato a ${j.inviati} ${j.inviati === 1 ? 'persona' : 'persone'}`); TA.test = null; TA.tab = 'ris'; await refresh(); } catch (err) { inv.disabled = false; toast(err.message); } }
     const d = e.target.closest('[data-dett]'); if (d) dettaglioInvio(d.dataset.dett);
@@ -854,22 +878,23 @@ function risultati(){
   return `<div class="card scroll" style="padding:4px 0"><table class="tbl"><thead><tr><th>Persona</th><th>Test</th><th>Stato</th><th>Punteggio</th><th>Esito</th><th></th></tr></thead><tbody>
     ${S.invii.map(i => { const t = test(i.test_id), n = (t.domande || []).length;
       return `<tr><td style="font-weight:600">${esc(nome(i.user_id))}</td><td>${esc(t.titolo || '')}</td><td class="muted">${i.stato === 'consegnato' ? 'Consegnato il ' + esc(i.consegnato) : i.stato === 'in_corso' ? 'In corso' : 'Non ancora iniziato'}</td>
-      <td style="font-weight:700">${i.punti != null ? i.punti + '/' + n : '—'}</td><td>${i.esito ? `<span class="tag ${i.esito === 'superato' ? 'ok' : 'no'}">${i.esito === 'superato' ? 'Superato' : 'Da ripetere'}</span>` : '<span class="tag info">In attesa</span>'}</td>
+      <td style="font-weight:700">${i.punti != null ? i.punti + '/' + n : '—'}</td><td>${i.esito === 'in_correzione' ? '<span class="tag warn">Da correggere</span>' : i.esito ? `<span class="tag ${i.esito === 'superato' ? 'ok' : 'no'}">${i.esito === 'superato' ? 'Superato' : 'Da ripetere'}</span>` : '<span class="tag info">In attesa</span>'}</td>
       <td style="text-align:right">${i.stato === 'consegnato' ? `<button class="btn small" data-dett="${i.id}">Risposte</button>` : ''}</td></tr>`; }).join('')}
     </tbody></table></div><p class="muted" style="font-size:13px">Chi resta sotto ${S.soglia}/30 riceve in automatico un nuovo test con domande diverse sugli stessi protocolli.</p>`;
 }
 function dettaglioInvio(id){
   const i = S.invii.find(x => x.id === id), t = S.tests.find(x => x.id === i.test_id), nome = (S.persone.find(u => u.id === i.user_id) || {}).name || '';
-  const l = layer(`<div class="modal-h"><div class="eyebrow">${esc(t.titolo)}</div><h2>${esc(nome)} · <span class="pt">${i.punti}</span>/${t.domande.length}</h2><button class="x-btn" data-x aria-label="Chiudi">${I.x}</button></div><div class="modal-b"></div>`, 'wide');
+  const l = layer(`<div class="modal-h"><div class="eyebrow">${esc(t.titolo)}</div><h2>${esc(nome)} · <span class="pt">${i.punti ?? '…'}</span>/${t.domande.length}</h2><button class="x-btn" data-x aria-label="Chiudi">${I.x}</button></div><div class="modal-b"></div>`, 'wide');
   const draw = () => {
-    l.querySelector('.pt').textContent = i.punti;
+    l.querySelector('.pt').textContent = i.punti ?? '…';
     l.querySelector('.modal-b').innerHTML = t.domande.map((d, n) => {
       const r = i.risposte[n], v = i.valutazioni[n] || {};
       if (d.tipo === 'mc') { const ok = r === d.ok; return `<div class="card" style="display:flex;flex-direction:column;gap:4px"><div class="row"><b style="flex:1">${n + 1}. ${esc(d.t)}</b><span class="tag ${ok ? 'ok' : 'no'}">${ok ? 'Giusta' : 'Sbagliata'}</span></div>
         <span class="muted" style="font-size:13.5px">Risposta: ${r != null ? esc(d.o[r]) : '—'}${ok ? '' : ' · giusta: ' + esc(d.o[d.ok])}</span></div>`; }
-      return `<div class="card" style="display:flex;flex-direction:column;gap:6px;border-color:var(--warn)"><div class="row"><b style="flex:1">${n + 1}. ${esc(d.t)}</b><span class="tag ${v.ok ? 'ok' : 'no'}">${v.ok ? 'Corretta' : 'Non corretta'}</span></div>
-        <div class="note" style="color:var(--fg)">“${esc(r || '—')}”</div><span class="muted" style="font-size:13px">${v.da === 'admin' ? 'Giudizio cambiato dall\'amministratore.' : 'Claude: ' + esc(v.motivo || '')} · Punti richiesti: ${esc(d.criteri)}</span>
-        <div class="row"><button class="btn small" data-val="${n}" data-ok="${v.ok ? 0 : 1}">${v.ok ? 'Segna come non corretta' : 'Segna come corretta'}</button></div></div>`;
+      const att = v.ok === null || v.ok === undefined;
+      return `<div class="card" style="display:flex;flex-direction:column;gap:6px;border-color:var(--warn)"><div class="row"><b style="flex:1">${n + 1}. ${esc(d.t)}</b><span class="tag ${att ? 'warn' : v.ok ? 'ok' : 'no'}">${att ? 'Da correggere' : v.ok ? 'Corretta' : 'Non corretta'}</span></div>
+        <div class="note" style="color:var(--fg)">“${esc(r || '—')}”</div><span class="muted" style="font-size:13px">${att ? 'Da correggere a mano' : v.da === 'admin' ? 'Giudizio dell\'amministratore' : v.da === 'auto' ? 'Nessuna risposta' : 'Claude: ' + esc(v.motivo || '')} · Punti richiesti: ${esc(d.criteri)}</span>
+        <div class="row">${att ? `<button class="btn small primary" data-val="${n}" data-ok="1">Corretta</button><button class="btn small danger" data-val="${n}" data-ok="0">Non corretta</button>` : `<button class="btn small" data-val="${n}" data-ok="${v.ok ? 0 : 1}">${v.ok ? 'Segna come non corretta' : 'Segna come corretta'}</button>`}</div></div>`;
     }).join('');
   };
   l.addEventListener('click', async e => { const b = e.target.closest('[data-val]'); if (!b) return; b.disabled = true;
@@ -934,7 +959,7 @@ function bottoneChat(){
     if (isAdmin() && MODE !== 'admin') history.replaceState(null, '', '/admin');
     document.getElementById('who').innerHTML = `<span class="txt"><b>${esc(me.name || me.username)}</b><span>${esc(isAdmin() ? 'Amministratore' : (me.figura ? figNome(me.figura) : 'Collaboratore'))}</span></span><span class="av">${esc(iniz)}</span>`;
     view = adminArea() ? 'contenitore' : (new URLSearchParams(location.search).get('v') === 'test' ? 'mieitest' : 'prot');
-    render(); if (!isAdmin()) bottoneChat();
+    render(); if (!isAdmin() && S.chat) bottoneChat();
   } catch (e) { document.getElementById('main').innerHTML = `<div class="card empty">${esc(e.message)}</div>`; }
 })();
 async function refresh(){ const [p, f] = await Promise.all([api('GET', '/api/p/state'), api('GET', '/api/state')]); S = p; S.flows = f.flows; S.figureAcc = f.figure || []; render(); }
