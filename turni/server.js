@@ -776,6 +776,8 @@ app.post('/api/logout', wrap(async (req, res) => { await sso.logout(req, res); r
 
 /* ---------- pagine ---------- */
 const PUB = path.join(__dirname, 'public');
+// Scheda personale (fase 1: Info utili + Branche medici). Spenta finché l'amministratore non la attiva.
+const scheda = require('./scheda')(app, { db, needUser, needAdmin, wrap, bad, upload, PUB, sso });
 app.get('/', (req, res) => {
   res.set('Cache-Control', 'no-store');
   if (!req.user) return req.ssoDenied ? sso.toDenied(res) : sso.toLogin(req, res);
@@ -798,5 +800,5 @@ app.use((err, req, res, next) => {
   bad(res, 500, 'Errore del server. Riprova.');
 });
 
-async function start() { await db.migrate(); }
+async function start() { await db.migrate(); await scheda.migrate(); }
 module.exports = { app, start };

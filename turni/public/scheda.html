@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Scheda personale · To Smile</title>
+<link rel="stylesheet" href="/fonts/tosmile.css?f=fira-sans:600,700,800|figtree:400,500,600,700,800">
+<link rel="icon" href="/icon.svg">
+<meta name="theme-color" content="#4CAAAA">
+<style>
+:root{
+  --teal:#4CAAAA; --teal-ink:#2A7C7D; --purple:#8C6898;
+  --bg:#FBFBF8; --surface:#FFFFFF; --sunken:#F4F4EF; --fg:#2B3033; --muted:#6B7276; --line:#E6E6DF; --edge:#D9D9D0;
+  --ok:#2E7D4F; --ok-soft:#E3F2E8; --warn:#9A6200; --warn-soft:#FCEFD6; --bad:#B3261E; --bad-soft:#FBEAEA;
+  --shadow:0 1px 2px rgba(43,48,51,.05),0 6px 20px rgba(43,48,51,.06);
+  --f-display:"Fira Sans","Figtree",system-ui,sans-serif; --f-body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --logo-bg:transparent; --rad:16px;
+}
+@media (prefers-color-scheme:dark){:root{
+  --teal-ink:#6CC7C7; --bg:#15191B; --surface:#1D2326; --sunken:#252C30; --fg:#ECEFF0; --muted:#A3AAAE; --line:#2F383C; --edge:#3A4448;
+  --ok:#7FD3A0; --ok-soft:#1B3326; --warn:#F2C26B; --warn-soft:#3A2E16; --bad:#F2B8B5; --bad-soft:#3A2222; --shadow:none; --logo-bg:#FFFFFF; color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:15.5px/1.5 var(--f-body);min-height:100vh;-webkit-font-smoothing:antialiased}
+a{color:var(--teal-ink)}
+button,input,select{font:inherit;color:inherit}
+header.top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:max(10px,env(safe-area-inset-top)) 16px 10px}
+.hin{max-width:1180px;margin:0 auto;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--fg)}
+.brand .logo{display:inline-flex;background:var(--logo-bg);border-radius:10px}
+.brand img{display:block;height:36px;width:auto}
+@media (prefers-color-scheme:dark){.brand .logo{padding:4px 8px}}
+.brand .app{font:800 20px var(--f-display);padding-left:12px;border-left:2px solid var(--line);line-height:1.1}
+.brand .app small{display:block;font:600 12px var(--f-body);color:var(--muted)}
+.who{display:flex;gap:8px;align-items:center;font-size:13.5px;color:var(--muted);font-weight:600}
+.who b{color:var(--fg)}
+.pill{font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:7px;background:color-mix(in srgb,var(--teal) 16%,transparent);color:var(--teal-ink)}
+.shell{max-width:1180px;margin:0 auto;padding:20px 16px 64px;display:flex;gap:24px;align-items:flex-start}
+main{flex:1 1 auto;min-width:0}
+.sidemenu{position:sticky;top:78px;flex:0 0 230px;background:var(--surface);border:1px solid var(--line);border-radius:var(--rad);padding:10px;box-shadow:var(--shadow)}
+.sidemenu-h{font:700 11.5px var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:6px 10px 8px}
+.sidemenu button{display:flex;width:100%;align-items:center;gap:10px;border:0;background:none;text-align:left;padding:10px 12px;border-radius:10px;font-weight:700;color:var(--muted);cursor:pointer}
+.sidemenu button:hover{background:var(--sunken);color:var(--fg)}
+.sidemenu button[aria-selected="true"]{background:color-mix(in srgb,var(--teal) 16%,transparent);color:var(--teal-ink)}
+@media (max-width:760px){.shell{flex-direction:column;gap:14px}.sidemenu{position:static;width:100%;flex:none;display:flex;overflow-x:auto;padding:6px}.sidemenu-h{display:none}.sidemenu button{flex:none;width:auto;white-space:nowrap}}
+h1{font:800 26px/1.15 var(--f-display);margin:0 0 4px}
+h2{font:800 19px var(--f-display);margin:0 0 10px}
+h3{font:700 16px var(--f-body);margin:0 0 8px}
+.sub{color:var(--muted);margin:0 0 18px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--rad);padding:18px;box-shadow:var(--shadow);margin-bottom:16px}
+.muted{color:var(--muted)}
+.small{font-size:13.5px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.grow{flex:1 1 auto;min-width:0}
+.btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--edge);background:var(--surface);border-radius:11px;padding:9px 14px;font-weight:700;cursor:pointer}
+.btn:hover{background:var(--sunken)}
+.btn.primary{background:var(--teal-ink);border-color:var(--teal-ink);color:#fff}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.small{padding:6px 10px;font-size:13.5px;border-radius:9px}
+.btn.danger{color:var(--bad)}
+.btn:disabled{opacity:.55;cursor:default}
+input[type=text],input[type=time],select{border:1px solid var(--edge);background:var(--surface);border-radius:10px;padding:8px 10px}
+.banner{border-radius:12px;padding:12px 14px;margin-bottom:16px;font-weight:600}
+.banner.warn{background:var(--warn-soft);color:var(--warn)}
+.banner.ok{background:var(--ok-soft);color:var(--ok)}
+.tag{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:7px;background:var(--sunken);color:var(--muted)}
+.tag.ok{background:var(--ok-soft);color:var(--ok)}
+.tag.warn{background:var(--warn-soft);color:var(--warn)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--edge);background:var(--surface);border-radius:999px;padding:6px 12px;font-weight:700;font-size:14px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--teal-ink);border-color:var(--teal-ink);color:#fff}
+/* orari */
+table.orari{border-collapse:collapse;width:100%;max-width:520px}
+table.orari td{padding:6px 8px;border-bottom:1px solid var(--line)}
+table.orari td:first-child{font-weight:700;width:120px}
+.chiuso{color:var(--muted)}
+/* branche */
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+table.br{border-collapse:separate;border-spacing:0;min-width:100%}
+table.br th,table.br td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:center;white-space:nowrap}
+table.br th:first-child,table.br td:first-child{text-align:left;position:sticky;left:0;background:var(--surface);z-index:1;font-weight:700}
+table.br thead th{background:var(--sunken);font-size:13.5px;vertical-align:bottom}
+table.br thead th:first-child{background:var(--sunken)}
+table.br tr:hover td{background:color-mix(in srgb,var(--teal) 6%,var(--surface))}
+.cb{width:22px;height:22px;accent-color:var(--teal-ink);cursor:pointer}
+.th-acts{display:flex;gap:4px;justify-content:center;margin-top:4px}
+.th-acts button{border:0;background:none;color:var(--teal-ink);font-size:12px;font-weight:700;cursor:pointer;padding:0 2px}
+.lista{display:flex;flex-direction:column;gap:8px}
+.item{display:flex;align-items:center;gap:12px;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:12px 14px;text-align:left;width:100%}
+button.item{cursor:pointer}
+button.item:hover{border-color:var(--edge);background:var(--sunken)}
+.item .t{font-weight:700;display:block}
+.item .s{font-size:13px;color:var(--muted);display:block}
+.medlist{display:flex;flex-direction:column;gap:6px}
+.med{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--line)}
+.med:last-child{border-bottom:0}
+.med b{min-width:160px}
+/* lettore protetto */
+.viewer{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column}
+.viewer-h{display:flex;gap:10px;align-items:center;padding:max(10px,env(safe-area-inset-top)) 16px 10px;border-bottom:1px solid var(--line);background:var(--surface)}
+.viewer-b{flex:1;overflow:auto;padding:18px 16px 40px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.doc{max-width:900px;margin:0 auto;background-repeat:repeat}
+.doc .testo{white-space:pre-wrap;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:22px}
+.pdf-page{display:block;width:100%;height:auto;margin:0 auto 12px;border:1px solid var(--line);border-radius:6px;background:#fff}
+.viewer-f{padding:12px 16px max(12px,env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--surface);display:flex;justify-content:flex-end;gap:10px}
+body.nascosto .viewer-b{filter:blur(18px)}
+@media print{body{display:none}}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:700;z-index:99;box-shadow:var(--shadow)}
+</style>
+</head>
+<body>
+<header class="top"><div class="hin">
+  <a class="brand" href="/scheda"><span class="logo"><img src="/logo-tosmile.png" alt="To Smile" width="548" height="165"></span><span class="app">Scheda personale<small id="sottotitolo">info utili</small></span></a>
+  <div class="who" id="who"></div>
+</div></header>
+<div class="shell" id="shell"><main id="main"><p class="muted">Carico…</p></main></div>
+<div id="viewer" class="viewer" hidden></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtD = d => d ? new Date(d).toLocaleDateString('it-IT', {day:'numeric', month:'long', year:'numeric'}) : '';
+async function api(m, u, b, form) {
+  const o = {method: m, credentials: 'same-origin', headers: {}};
+  if (form) o.body = form; else if (b !== undefined) { o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(b); }
+  const r = await fetch(u, o); const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || 'Errore');
+  return j;
+}
+function toast(t){ const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.append(d); setTimeout(() => d.remove(), 2400); }
+let S = null, vista = 'info', sedeBr = null;
+
+async function carica(){
+  try { S = await api('GET', '/api/scheda/state'); }
+  catch (e) { $('#main').innerHTML = `<div class="card">${esc(e.message)}</div>`; return; }
+  $('#who').innerHTML = `<b>${esc(S.me.nome)}</b>${S.me.admin ? '<span class="pill">Amministratore</span>' : S.me.figura ? `<span class="pill">${esc(S.me.figura === 'Medico' ? 'Medico' : S.me.figura)}</span>` : ''}`;
+  if (S.me.admin && !$('#side')) {
+    const side = document.createElement('aside'); side.className = 'sidemenu'; side.id = 'side';
+    side.innerHTML = '<div class="sidemenu-h">Amministrazione</div>' +
+      [['info','Info utili'],['branche','Branche medici'],['impostazioni','Attivazione']].map(([k,t]) => `<button data-v="${k}">${t}</button>`).join('');
+    side.onclick = e => { const b = e.target.closest('[data-v]'); if (b) { vista = b.dataset.v; disegna(); } };
+    $('#shell').prepend(side);
+  }
+  disegna();
+}
+function disegna(){
+  document.querySelectorAll('#side [data-v]').forEach(b => b.setAttribute('aria-selected', b.dataset.v === vista));
+  const m = $('#main');
+  if (!S.me.admin) return utente(m);
+  ({info: adminInfo, branche: adminBranche, impostazioni: adminAttiva})[vista](m);
+}
+
+/* ================= utente ================= */
+function orariHtml(o){
+  return `<table class="orari">${S.giorni.map((g, i) => { const x = o[i] || {}; return `<tr><td>${g}</td><td>${x.aperto ? `${esc(x.da)} – ${esc(x.a)}` : '<span class="chiuso">Chiuso</span>'}${x.nota ? ` <span class="muted small">· ${esc(x.nota)}</span>` : ''}</td></tr>`; }).join('')}</table>`;
+}
+function utente(m){
+  const me = S.me, reg = S.docs.find(d => d.tipo === 'regolamento'), pol = S.docs.filter(d => d.tipo === 'policy');
+  const mieBr = me.medico ? S.medici.find(x => x.id === me.id) : null;
+  m.innerHTML = `<h1>Info utili</h1><p class="sub">Orari, medici e documenti delle sedi in cui lavori.</p>
+    ${reg && !reg.letto ? `<div class="banner warn">C'è un regolamento aziendale da leggere e accettare.</div>` : ''}
+    <div class="card"><h2>Orari delle tue sedi</h2>${S.sedi.length ? S.sedi.map(s => `<h3 style="margin-top:14px">${esc(s.nome)}</h3>${s.indirizzo ? `<p class="muted small" style="margin:-4px 0 8px">${esc(s.indirizzo)}</p>` : ''}${orariHtml(s.orari)}`).join('') : '<p class="muted">Nessuna sede assegnata. Chiedi all\'amministratore.</p>'}</div>
+    ${mieBr ? `<div class="card"><h2>Le tue branche</h2>${S.sedi.map(s => { const b = mieBr.branche[s.id] || []; return `<h3 style="margin-top:10px">${esc(s.nome)}</h3><div class="chips">${b.length ? b.map(x => `<span class="tag ok">${esc(x)}</span>`).join('') : '<span class="muted small">Nessuna branca ancora indicata.</span>'}</div>`; }).join('')}</div>` : ''}
+    <div class="card"><h2>Branche dei medici</h2>${S.sedi.map(s => { const ms = S.medici.filter(x => x.sedi.includes(s.id));
+      return `<h3 style="margin-top:12px">${esc(s.nome)}</h3>${ms.length ? `<div class="medlist">${ms.map(x => { const b = x.branche[s.id] || []; return `<div class="med"><b>${esc(x.nome)}</b><span class="muted small">${b.length ? esc(b.join(' · ')) : 'Branche non ancora indicate'}</span></div>`; }).join('')}</div>` : '<p class="muted small">Nessun medico indicato.</p>'}`; }).join('')}</div>
+    <div class="card"><h2>Policy aziendali</h2>${pol.length ? `<div class="lista">${pol.map(d => `<button class="item" data-doc="${d.id}"><span class="grow"><span class="t">${esc(d.titolo)}</span><span class="s">Versione ${d.versione} · ${fmtD(d.caricato)}</span></span></button>`).join('')}</div>` : '<p class="muted">Nessuna policy pubblicata.</p>'}</div>
+    <div class="card"><h2>Regolamento aziendale</h2>${reg ? `<button class="item" data-doc="${reg.id}"><span class="grow"><span class="t">${esc(reg.titolo)}</span><span class="s">Versione ${reg.versione} · ${fmtD(reg.caricato)}</span></span>${reg.letto ? `<span class="tag ok">Letto e accettato</span>` : '<span class="tag warn">Da leggere</span>'}</button>` : '<p class="muted">Il regolamento non è ancora stato pubblicato.</p>'}</div>`;
+  m.onclick = e => { const b = e.target.closest('[data-doc]'); if (b) apriDoc(S.docs.find(d => d.id === b.dataset.doc)); };
+}
+
+/* ---- lettore protetto: niente download, copia o stampa ---- */
+function filigrana(){
+  const t = `${S.me.nome} · ${new Date().toLocaleDateString('it-IT')} · Riservato`;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='380' height='230'><text x='190' y='120' text-anchor='middle' transform='rotate(-24 190 115)' font-family='Figtree, sans-serif' font-weight='600' font-size='13' fill='rgba(110,120,118,0.12)'>${esc(t)}</text></svg>`;
+  return `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}")`;
+}
+let pdfjsReady = null;
+function loadPdfJs(){
+  if (pdfjsReady) return pdfjsReady;
+  pdfjsReady = new Promise((ok, ko) => {
+    const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload = () => { window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; ok(window.pdfjsLib); };
+    s.onerror = () => { pdfjsReady = null; ko(new Error('Lettore PDF non disponibile')); };
+    document.head.append(s);
+  });
+  return pdfjsReady;
+}
+async function renderPdf(id, host){
+  host.innerHTML = '<p class="muted">Apro il documento…</p>';
+  try {
+    const [lib, buf] = await Promise.all([loadPdfJs(), fetch(`/api/scheda/doc/${id}/file`, {credentials: 'same-origin'}).then(r => { if (!r.ok) throw new Error('Documento non disponibile'); return r.arrayBuffer(); })]);
+    const pdf = await lib.getDocument({data: buf}).promise;
+    host.innerHTML = '';
+    const width = Math.min(host.clientWidth || 700, 900), ratio = Math.min(devicePixelRatio || 1, 2);
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const v1 = page.getViewport({scale: 1}), vp = page.getViewport({scale: width / v1.width * ratio});
+      const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height; c.className = 'pdf-page';
+      host.append(c);
+      await page.render({canvasContext: c.getContext('2d'), viewport: vp}).promise;
+      if (!host.isConnected) return;
+    }
+  } catch (e) { host.innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
+}
+function apriDoc(d){
+  const v = $('#viewer');
+  const accetta = d.tipo === 'regolamento' && !S.me.admin && !d.letto;
+  v.innerHTML = `<div class="viewer-h"><button class="btn small" id="chiudi">← Indietro</button><b class="grow">${esc(d.titolo)}</b><span class="tag">Versione ${d.versione}</span></div>
+    <div class="viewer-b"><div class="doc" style="background-image:${filigrana()}">${d.pdf ? '<div id="pdfh"></div>' : `<div class="testo">${esc(d.testo || 'Documento senza testo.')}</div>`}</div></div>
+    ${accetta ? `<div class="viewer-f"><span class="grow muted small">Leggi tutto il regolamento prima di accettare.</span><button class="btn primary" id="accetto">Ho letto e accetto</button></div>` : ''}`;
+  v.hidden = false; document.body.style.overflow = 'hidden';
+  if (d.pdf) renderPdf(d.id, $('#pdfh'));
+  $('#chiudi').onclick = () => { v.hidden = true; v.innerHTML = ''; document.body.style.overflow = ''; };
+  if (accetta) $('#accetto').onclick = async () => { try { await api('POST', `/api/scheda/doc/${d.id}/letto`, {}); $('#chiudi').click(); toast('Grazie, registrato.'); carica(); } catch (e) { toast(e.message); } };
+  if (!d.pdf && d.tipo === 'policy' && !S.me.admin && !d.letto) api('POST', `/api/scheda/doc/${d.id}/letto`, {}).catch(() => {});
+}
+['copy','cut','contextmenu','dragstart','selectstart'].forEach(ev => document.addEventListener(ev, e => { if (!$('#viewer').hidden) e.preventDefault(); }));
+document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && /^[cpsa]$/i.test(e.key) && !$('#viewer').hidden) e.preventDefault(); });
+document.addEventListener('visibilitychange', () => document.body.classList.toggle('nascosto', document.hidden));
+window.addEventListener('blur', () => document.body.classList.add('nascosto'));
+window.addEventListener('focus', () => document.body.classList.remove('nascosto'));
+
+/* ================= amministratore ================= */
+function adminInfo(m){
+  const reg = S.docs.find(d => d.tipo === 'regolamento'), pol = S.docs.filter(d => d.tipo === 'policy');
+  m.innerHTML = `<h1>Info utili</h1><p class="sub">Quello che il personale trova nella sezione Info utili.</p>
+    <div class="card"><h2>Orari delle sedi</h2><p class="muted small" style="margin-top:-4px">Ogni persona vede solo gli orari delle sedi in cui lavora.</p>
+      <div class="chips" id="sediOr">${S.sedi.map((s, i) => `<button class="chip" data-s="${s.id}" aria-pressed="${i === 0}">${esc(s.nome)}</button>`).join('')}</div>
+      <div id="orEd" style="margin-top:14px"></div></div>
+    <div class="card"><div class="row"><h2 class="grow" style="margin:0">Policy aziendali</h2><button class="btn small primary" id="nuovaPol">+ Carica policy</button></div>
+      <div class="lista" style="margin-top:12px">${pol.length ? pol.map(d => `<div class="item"><span class="grow"><span class="t">${esc(d.titolo)}</span><span class="s">Versione ${d.versione} · ${fmtD(d.caricato)}</span></span>
+        <button class="btn small" data-apri="${d.id}">Apri</button><button class="btn small" data-sost="${d.id}">Sostituisci</button><button class="btn small danger" data-togli="${d.id}">Togli</button></div>`).join('') : '<p class="muted">Nessuna policy caricata.</p>'}</div></div>
+    <div class="card"><div class="row"><h2 class="grow" style="margin:0">Regolamento aziendale</h2><button class="btn small primary" id="nuovoReg">${reg ? 'Carica nuova versione' : '+ Carica regolamento'}</button></div>
+      ${reg ? `<div class="item" style="margin-top:12px"><span class="grow"><span class="t">${esc(reg.titolo)}</span><span class="s">Versione ${reg.versione} · ${fmtD(reg.caricato)} · letto e accettato da ${S.regLetti || 0} su ${S.persone}</span></span>
+        <button class="btn small" data-apri="${reg.id}">Apri</button><button class="btn small" data-letture="${reg.id}">Chi ha letto</button></div>
+        <p class="muted small">Quando carichi una nuova versione, tutti devono rileggerla e accettarla di nuovo.</p><div id="letture"></div>` : '<p class="muted">Non ancora caricato.</p>'}</div>
+    <input type="file" id="file" accept=".pdf,.docx,application/pdf" hidden>`;
+  const sedeOr = id => { document.querySelectorAll('#sediOr .chip').forEach(c => c.setAttribute('aria-pressed', c.dataset.s === id)); editorOrari(S.sedi.find(s => s.id === id)); };
+  $('#sediOr').onclick = e => { const c = e.target.closest('[data-s]'); if (c) sedeOr(c.dataset.s); };
+  if (S.sedi[0]) editorOrari(S.sedi[0]);
+  let carica_ = null;
+  const scegli = (tipo, sost) => { carica_ = {tipo, sost}; $('#file').value = ''; $('#file').click(); };
+  $('#nuovaPol').onclick = () => scegli('policy');
+  $('#nuovoReg').onclick = () => scegli('regolamento');
+  $('#file').onchange = async () => {
+    const f = $('#file').files[0]; if (!f || !carica_) return;
+    const def = carica_.sost ? (S.docs.find(d => d.id === carica_.sost)?.titolo || '') : (carica_.tipo === 'regolamento' ? 'Regolamento aziendale' : f.name.replace(/\.[^.]+$/, ''));
+    const titolo = prompt('Titolo del documento', def); if (titolo === null) return;
+    const fd = new FormData(); fd.append('file', f); fd.append('tipo', carica_.tipo); fd.append('titolo', titolo);
+    if (carica_.sost) fd.append('sostituisce', carica_.sost);
+    try { await api('POST', '/api/scheda/doc', undefined, fd); toast('Documento caricato.'); carica(); } catch (e) { toast(e.message); }
+  };
+  m.onclick = async e => {
+    const a = e.target.closest('[data-apri]'), s = e.target.closest('[data-sost]'), t = e.target.closest('[data-togli]'), l = e.target.closest('[data-letture]');
+    if (a) apriDoc(S.docs.find(d => d.id === a.dataset.apri));
+    if (s) scegli('policy', s.dataset.sost);
+    if (t && confirm('Togliere questa policy? Non la vedrà più nessuno, ma resta archiviata.')) { await api('DELETE', `/api/scheda/doc/${t.dataset.togli}`); toast('Policy tolta.'); carica(); }
+    if (l) { const r = await api('GET', `/api/scheda/doc/${l.dataset.letture}/letture`);
+      $('#letture').innerHTML = `<div class="tw" style="margin-top:10px"><table class="br"><thead><tr><th>Persona</th><th>Mansione</th><th>Letto e accettato</th></tr></thead><tbody>${r.persone.map(p => `<tr><td>${esc(p.nome)}</td><td>${esc(p.figura)}</td><td>${p.letto ? `<span class="tag ok">${fmtD(p.letto)}</span>` : '<span class="tag warn">Non ancora</span>'}</td></tr>`).join('')}</tbody></table></div>`; }
+  };
+}
+function editorOrari(s){
+  const h = $('#orEd'); if (!s) return;
+  h.innerHTML = `<table class="orari">${S.giorni.map((g, i) => { const x = s.orari[i] || {}; return `<tr data-g="${i}"><td>${g}</td>
+    <td><label class="row" style="gap:6px"><input type="checkbox" class="cb ap" ${x.aperto ? 'checked' : ''}> Aperto</label></td>
+    <td><input type="time" class="da" value="${esc(x.da || '09:30')}" ${x.aperto ? '' : 'disabled'}> – <input type="time" class="a" value="${esc(x.a || '18:30')}" ${x.aperto ? '' : 'disabled'}></td></tr>`; }).join('')}</table>
+    <div class="row" style="margin-top:12px"><button class="btn primary" id="salvaOr">Salva orari</button><span class="muted small">${esc(s.nome)}</span></div>`;
+  h.querySelectorAll('.ap').forEach(c => c.onchange = () => c.closest('tr').querySelectorAll('input[type=time]').forEach(t => t.disabled = !c.checked));
+  $('#salvaOr').onclick = async () => {
+    const orari = [...h.querySelectorAll('tr[data-g]')].map(r => ({aperto: r.querySelector('.ap').checked, da: r.querySelector('.da').value, a: r.querySelector('.a').value}));
+    try { await api('PUT', `/api/scheda/orari/${s.id}`, {orari}); s.orari = orari; toast('Orari salvati.'); } catch (e) { toast(e.message); }
+  };
+}
+
+function adminBranche(m){
+  if (!sedeBr || !S.tutteSedi.some(s => s.id === sedeBr)) sedeBr = S.tutteSedi[0]?.id;
+  const ms = S.tuttiMedici.filter(x => x.sedi.includes(sedeBr)), altri = S.tuttiMedici.filter(x => !x.sedi.includes(sedeBr));
+  const brDi = x => S.medici.find(y => y.id === x.id)?.branche[sedeBr] || [];
+  m.innerHTML = `<h1>Branche medici</h1><p class="sub">Scegli la sede e spunta le branche per cui ogni medico è abilitato. Si salva da solo.</p>
+    <div class="chips" style="margin-bottom:14px">${S.tutteSedi.map(s => `<button class="chip" data-s="${s.id}" aria-pressed="${s.id === sedeBr}">${esc(s.nome)}</button>`).join('')}</div>
+    <div class="card">${ms.length ? `<div class="tw"><table class="br"><thead><tr><th>Branca</th>${ms.map(x => `<th>${esc(x.nome)}<div class="th-acts"><button data-tutte="${x.id}">Tutte</button>·<button data-nessuna="${x.id}">Nessuna</button>·<button data-fuori="${x.id}" title="Togli il medico da questa sede">Togli</button></div></th>`).join('')}</tr></thead>
+      <tbody>${S.branche.map(b => `<tr><td>${esc(b)}</td>${ms.map(x => `<td><input type="checkbox" class="cb" data-m="${x.id}" data-b="${esc(b)}" ${brDi(x).includes(b) ? 'checked' : ''} aria-label="${esc(x.nome)} – ${esc(b)}"></td>`).join('')}</tr>`).join('')}</tbody></table></div>`
+      : '<p class="muted">Nessun medico in questa sede.</p>'}
+      <div class="row" style="margin-top:14px">${altri.length ? `<select id="aggMed"><option value="">Aggiungi un medico a questa sede…</option>${altri.map(x => `<option value="${x.id}">${esc(x.nome)}</option>`).join('')}</select><button class="btn small" id="aggBtn">Aggiungi</button>` : ''}
+      <span class="muted small">I medici sono quelli con figura “Medico odontoiatra” nel pannello accessi.</span></div></div>`;
+  const salva = async (id, lista) => {
+    const med = S.medici.find(y => y.id === id) || (S.medici.push({id, branche: {}, sedi: []}), S.medici[S.medici.length - 1]);
+    await api('PUT', `/api/scheda/branche/${id}/${sedeBr}`, {branche: lista}); med.branche[sedeBr] = lista;
+  };
+  m.onchange = async e => {
+    const c = e.target.closest('input[data-m]'); if (!c) return;
+    const lista = [...m.querySelectorAll(`input[data-m="${c.dataset.m}"]:checked`)].map(x => x.dataset.b);
+    try { await salva(c.dataset.m, lista); } catch (er) { c.checked = !c.checked; toast(er.message); }
+  };
+  m.onclick = async e => {
+    const s = e.target.closest('[data-s]'); if (s) { sedeBr = s.dataset.s; return adminBranche(m); }
+    const t = e.target.closest('[data-tutte]'), n = e.target.closest('[data-nessuna]'), f = e.target.closest('[data-fuori]');
+    try {
+      if (t) { await salva(t.dataset.tutte, [...S.branche]); adminBranche(m); }
+      if (n) { await salva(n.dataset.nessuna, []); adminBranche(m); }
+      if (f) { const x = S.tuttiMedici.find(y => y.id === f.dataset.fuori);
+        if (!confirm(`Togliere ${x.nome} da questa sede? Le branche spuntate restano salvate se lo rimetti.`)) return;
+        x.sedi = x.sedi.filter(y => y !== sedeBr); await api('PUT', `/api/scheda/medici/${x.id}/sedi`, {sedi: x.sedi}); adminBranche(m); }
+      if (e.target.id === 'aggBtn') { const id = $('#aggMed').value; if (!id) return; const x = S.tuttiMedici.find(y => y.id === id);
+        x.sedi = [...x.sedi, sedeBr]; await api('PUT', `/api/scheda/medici/${x.id}/sedi`, {sedi: x.sedi}); await carica(); }
+    } catch (er) { toast(er.message); }
+  };
+}
+
+function adminAttiva(m){
+  m.innerHTML = `<h1>Attivazione</h1><p class="sub">Finché è spenta, la Scheda personale la vedi solo tu (e gli altri amministratori).</p>
+    <div class="card">${S.attiva ? '<div class="banner ok">La Scheda personale è attiva: la vede tutto il personale.</div>' : '<div class="banner warn">La Scheda personale è spenta: il personale non la vede ancora.</div>'}
+      <p>Per ora contiene la sezione <b>Info utili</b> (orari delle sedi, branche dei medici, policy e regolamento). Le altre sezioni arrivano con i prossimi aggiornamenti.</p>
+      <p class="muted small">I medici vedranno solo: Info utili, Assenze, Turni, CU e Contratti.</p>
+      <button class="btn ${S.attiva ? '' : 'primary'}" id="sw">${S.attiva ? 'Spegni per tutti' : 'Attiva per tutti'}</button></div>`;
+  $('#sw').onclick = async () => {
+    if (!S.attiva && !confirm('Attivare la Scheda personale per tutto il personale?')) return;
+    await api('PUT', '/api/scheda/attiva', {attiva: !S.attiva}); toast(S.attiva ? 'Spenta.' : 'Attivata.'); carica();
+  };
+}
+carica();
+</script>
+</body>
+</html>

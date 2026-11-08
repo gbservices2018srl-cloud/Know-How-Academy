@@ -657,7 +657,7 @@ function render(){
   const bell = PUSH.state === "on" ? `<button class="btn sm ghost" id="pushOff" title="Notifiche attive su questo dispositivo">🔔 Attive</button>`
     : PUSH.state === "off" ? `<button class="btn sm ghost" id="pushOn">🔔 Notifiche</button>` : "";
   $("#whoBox").innerHTML = `<span class="userpill"><b>${esc(me.name || "")}</b>${role === "admin" ? `<span class="rolepill">Amministratore</span>` : ""}</span>
-    ${vistaBtn}${bell}<a class="btn sm ghost" href="${esc(STATE.links?.home || "https://appgestione.it")}">Le mie app</a><button class="btn sm ghost" id="logout">Esci</button>`;
+    ${vistaBtn}${bell}${role === "admin" ? '<a class="btn sm ghost" href="/scheda">Scheda personale</a>' : ''}<a class="btn sm ghost" href="${esc(STATE.links?.home || "https://appgestione.it")}">Le mie app</a><button class="btn sm ghost" id="logout">Esci</button>`;
   if (role === "emp" && (STATE.sconosciuto || !STATE.privacy)){
     $("#tabs").innerHTML = "";
     $("#view").innerHTML = STATE.sconosciuto ? vSconosciuto() : vPrivacy();
