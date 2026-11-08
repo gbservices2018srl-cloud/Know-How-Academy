@@ -892,20 +892,22 @@ function mdLite(src, fonti){
   chiudi(); return html;
 }
 function apriChat(){
-  const l = layer(`<div class="modal-h"><div class="eyebrow">Risponde solo dai protocolli che puoi vedere</div><h2>Assistente</h2><button class="x-btn" data-x aria-label="Chiudi">${I.x}</button></div>
+  const l = layer(`<div class="modal-h"><div class="eyebrow">Risponde solo dai protocolli che puoi vedere</div><h2>Assistente</h2><p class="rim"></p><button class="x-btn" data-x aria-label="Chiudi">${I.x}</button></div>
     <div class="modal-b"><div class="chat-list"></div></div>
     <div class="modal-f"><div class="chat-in"><textarea class="inp" rows="1" data-dom placeholder="Fai una domanda sui protocolli…"></textarea><button class="btn primary" data-invia>Invia</button></div></div>`, 'wide chat');
   const lista = l.querySelector('.chat-list'), box = l.querySelector('.modal-b'), ta = l.querySelector('[data-dom]');
+  const rim = (r, lim) => { CHAT.rimaste = r; l.querySelector('.rim').innerHTML = r > 0 ? `Ti restano <b>${r}</b> domande oggi (su ${lim}). Le domande già fatte da altri non contano.` : `<b>Hai usato tutte le ${lim} domande di oggi.</b> Domani ne avrai di nuovo ${lim}.`; };
+  api('GET', '/api/p/chat/rimaste').then(j => rim(j.rimaste, j.limite)).catch(() => {});
   const draw = (attesa) => {
     lista.innerHTML = (CHAT.msgs.length ? '' : '<p class="muted">Chiedi qualcosa sui protocolli: la risposta indica con un numero da quale protocollo arriva. Tocca il numero per aprirlo.</p>')
-      + CHAT.msgs.map(m => m.role === 'user' ? `<div class="msg u">${esc(m.content)}</div>` : `<div class="msg a">${mdLite(m.content, m.fonti)}</div>`).join('')
+      + CHAT.msgs.map(m => m.role === 'user' ? `<div class="msg u">${esc(m.content)}</div>` : `<div class="msg a">${mdLite(m.content, m.fonti)}${m.salvata ? '<p class="muted" style="font-size:12px;margin-top:6px">Risposta già data in precedenza: non conta nel limite.</p>' : ''}</div>`).join('')
       + (attesa ? '<div class="msg a"><span class="spin" style="width:16px;height:16px;border-width:2px"></span> Cerco nei protocolli…</div>' : '');
     box.scrollTop = box.scrollHeight;
   };
   async function invia(){
     const t = ta.value.trim(); if (!t) return;
     CHAT.msgs.push({ role: 'user', content: t }); ta.value = ''; draw(true);
-    try { const j = await api('POST', '/api/p/chat', { messages: CHAT.msgs.map(m => ({ role: m.role, content: m.content })) }); CHAT.msgs.push({ role: 'assistant', content: j.text, fonti: j.fonti }); }
+    try { const j = await api('POST', '/api/p/chat', { messages: CHAT.msgs.map(m => ({ role: m.role, content: m.content })) }); CHAT.msgs.push({ role: 'assistant', content: j.text, fonti: j.fonti, salvata: !!j.salvata }); rim(j.rimaste, j.limite); }
     catch (e) { CHAT.msgs.pop(); ta.value = t; toast(e.message); }
     draw(false);
   }

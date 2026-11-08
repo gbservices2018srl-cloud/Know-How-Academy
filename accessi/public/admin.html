@@ -154,10 +154,11 @@ dialog form{padding:22px;display:flex;flex-direction:column;gap:14px}
     <p>Approva le registrazioni e scegli per ogni persona a quali app può entrare e con quale ruolo. Le modifiche valgono subito e si salvano da sole.</p>
   </header>
   <div class="msg warn" id="mailwarn" hidden>L'invio delle email non è ancora attivo (manca <b>RESEND_API_KEY</b> su Render): le notifiche non partono e i link per la password te li mostro qui da copiare.</div>
-  <div class="seg" role="tablist" aria-label="Sezione"><button role="tab" data-sez="persone" aria-selected="true">Persone</button><button role="tab" data-sez="sedi" aria-selected="false">Sedi</button><button role="tab" data-sez="acc" aria-selected="false">Accensione app</button><button role="tab" data-sez="app" aria-selected="false">Sospensioni</button></div>
+  <div class="seg" role="tablist" aria-label="Sezione"><button role="tab" data-sez="persone" aria-selected="true">Persone</button><button role="tab" data-sez="sedi" aria-selected="false">Sedi</button><button role="tab" data-sez="acc" aria-selected="false">Accensione app</button><button role="tab" data-sez="app" aria-selected="false">Sospensioni</button><button role="tab" data-sez="ai" aria-selected="false">Consumo AI</button></div>
   <section id="sediBox" hidden></section>
   <section id="accBox" hidden></section>
   <section id="appBox" hidden></section>
+  <section id="aiBox" hidden></section>
   <div class="tools" id="toolsBox">
     <div class="chips" role="group" aria-label="Filtro">
       <button class="chip" data-f="pending">In attesa <span class="n" id="n-pending"></span></button>
@@ -377,10 +378,31 @@ document.addEventListener('change', async e => {
 let SEDI = null;
 function vista(sez) {
   document.querySelectorAll('[data-sez]').forEach(b => b.setAttribute('aria-selected', b.dataset.sez === sez));
-  $('#sediBox').hidden = sez !== 'sedi'; $('#appBox').hidden = sez !== 'app'; $('#accBox').hidden = sez !== 'acc';
+  $('#sediBox').hidden = sez !== 'sedi'; $('#appBox').hidden = sez !== 'app'; $('#accBox').hidden = sez !== 'acc'; $('#aiBox').hidden = sez !== 'ai';
+  if (sez === 'ai') caricaAi();
   if (sez === 'acc') caricaAcc(); $('#toolsBox').hidden = $('#list').hidden = sez !== 'persone';
   if (sez === 'sedi') caricaSedi();
   if (sez === 'app') caricaApp();
+}
+/* ---------- consumo di Claude ---------- */
+async function caricaAi(mese) {
+  const box = $('#aiBox'); box.innerHTML = '<p class="muted">Carico…</p>';
+  let r; try { r = await api('GET', '/api/admin/consumo-ai' + (mese ? '?mese=' + mese : '')); } catch (e) { box.innerHTML = `<p class="muted">${esc(e.message)}</p>`; return; }
+  const usd = n => '$ ' + (n || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const nomeMese = m => new Date(m + '-01T12:00:00').toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+  const mesi = [...new Set([r.mese, ...r.mesi.map(x => x.mese)])].sort().reverse();
+  const max = Math.max(0.0001, ...r.giorni.map(g => g.costo));
+  box.innerHTML = `<div style="display:grid;gap:14px;margin-top:6px">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><select class="search" id="aiMese" style="flex:0 1 220px">${mesi.map(m => `<option value="${m}" ${m === r.mese ? 'selected' : ''}>${nomeMese(m)}</option>`).join('')}</select>
+      <span class="muted" style="font-size:13px">Costi stimati in dollari dai consumi registrati dalle app (Protocolli, Turni, Magazzino). Il dato ufficiale è nel pannello di Anthropic.</span></div>
+    <div style="border:1px solid var(--line,#e5e5e5);border-radius:14px;padding:16px;display:flex;gap:24px;flex-wrap:wrap;align-items:flex-end">
+      <div><div class="muted" style="font-size:13px">Totale ${nomeMese(r.mese)}</div><div style="font-size:34px;font-weight:800;line-height:1.1">${usd(r.totale)}</div></div>
+      <div style="flex:1;min-width:240px;display:flex;align-items:flex-end;gap:3px;height:70px" aria-label="Spesa per giorno">${r.giorni.map(g => `<div title="${g.giorno.split('-').reverse().join('/')}: ${usd(g.costo)} · ${g.chiamate} richieste" style="flex:1;max-width:22px;background:#1f8a83;border-radius:3px 3px 0 0;height:${Math.max(3, Math.round(g.costo / max * 70))}px"></div>`).join('') || '<span class="muted" style="font-size:13px">Nessun consumo in questo mese.</span>'}</div></div>
+    <div style="border:1px solid var(--line,#e5e5e5);border-radius:14px;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:14px"><thead><tr style="text-align:left;font-size:12px;color:#666"><th style="padding:10px 12px">App</th><th style="padding:10px 12px">Funzione</th><th style="padding:10px 12px">Richieste</th><th style="padding:10px 12px">Costo</th></tr></thead><tbody>
+      ${r.voci.map(v => `<tr style="border-top:1px solid var(--line,#e5e5e5)"><td style="padding:10px 12px;font-weight:700">${esc(v.appNome)}</td><td style="padding:10px 12px">${esc(v.funzione)}</td><td style="padding:10px 12px">${v.chiamate}</td><td style="padding:10px 12px;font-weight:700">${usd(v.costo)}</td></tr>`).join('') || '<tr><td colspan="4" style="padding:14px 12px" class="muted">Nessun consumo registrato.</td></tr>'}
+    </tbody></table></div>
+    <p class="muted" style="font-size:13px;margin:0">Risparmi attivi: assistente dei Protocolli con limite di ${r.chatLimite} domande al giorno per persona e risposte salvate (le domande già fatte non costano); i test da ripetere usano domande di riserva preparate insieme al test.</p></div>`;
+  $('#aiMese').onchange = e => caricaAi(e.target.value);
 }
 async function caricaSedi() { try { SEDI = (await api('GET', '/api/admin/sedi')).sedi; } catch (e) { toast(e.message); SEDI = []; } renderSedi(); }
 function renderSedi() {

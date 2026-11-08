@@ -97,6 +97,7 @@ async function leggiEtichetta(files, codice) {
     });
   } catch { throw Object.assign(new Error("La lettura ha impiegato troppo. Riprova con una foto più nitida."), { status: 502 }); }
   const j = await r.json().catch(() => ({}));
+  require('../../lib/consumo').registra('magazzino', 'Lettura etichette', process.env.MAG_AI_MODEL || process.env.TURNI_AI_MODEL || 'claude-sonnet-5-5', j.usage);
   if (!r.ok) {
     console.warn('Magazzino etichetta:', r.status, JSON.stringify(j).slice(0, 300));
     throw Object.assign(new Error(r.status === 429 ? 'Troppe richieste ravvicinate: riprova tra poco.' : "Il servizio di lettura non ha risposto. Riprova tra poco."), { status: 502 });

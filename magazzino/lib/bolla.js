@@ -42,6 +42,7 @@ async function leggi(files) {
     });
   } catch { throw Object.assign(new Error('La lettura ha impiegato troppo. Riprova, magari con una foto più nitida.'), { status: 502 }); }
   const j = await r.json().catch(() => ({}));
+  require('../../lib/consumo').registra('magazzino', 'Lettura bolle', process.env.MAG_AI_MODEL || process.env.TURNI_AI_MODEL || 'claude-sonnet-5-5', j.usage);
   if (!r.ok) {
     console.warn('Magazzino bolla:', r.status, JSON.stringify(j).slice(0, 300));
     const msg = r.status === 429 ? 'Troppe richieste ravvicinate: riprova tra poco.' : r.status === 401 ? 'La chiave ANTHROPIC_API_KEY non è valida.'

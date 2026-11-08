@@ -868,6 +868,10 @@ function nomeDispositivo(ua, endpoint) {
   const app = (so === 'iPhone' || so === 'iPad') && host.includes('apple') ? ' (icona sulla Home)' : '';
   return so + (br ? ' · ' + br : '') + app;
 }
+// Consumo di Claude (API Anthropic) delle app di questo servizio, mese per mese
+app.get('/api/admin/consumo-ai', needAdmin, wrap(async (req, res) => {
+  res.json({ ...(await require('../lib/consumo').riepilogo(String(req.query.mese || ''))), chatLimite: Math.max(1, parseInt(process.env.PROT_CHAT_LIMITE || '20', 10) || 20) });
+}));
 app.get('/api/admin/users/:id/notifiche', needAdmin, wrap(async (req, res) => {
   const u = await store.getUser(req.params.id);
   if (!u) return bad(res, 404, 'Utente non trovato');

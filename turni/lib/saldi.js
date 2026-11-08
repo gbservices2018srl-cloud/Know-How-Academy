@@ -56,6 +56,7 @@ async function leggi(testoCompleto, togli = []) {
     signal: AbortSignal.timeout(60000),
   });
   const j = await r.json().catch(() => ({}));
+  require('../../lib/consumo').registra('turni', 'Lettura buste paga', process.env.TURNI_AI_MODEL || 'claude-sonnet-5-5', j.usage);
   if (!r.ok) throw new Error(`API ${r.status}`);
   const txt = (j.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
   const out = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1));
