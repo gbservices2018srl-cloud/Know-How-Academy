@@ -756,14 +756,16 @@ async function sediDaiTurni() {
   turniCache = m; turniT = Date.now();
   return m;
 }
-// medici "aperti" della sede: attivi, con Comunicazioni cliniche, figura Medico, che lavorano in quella sede
+// medici "aperti" della sede: attivi, con Comunicazioni cliniche, figura Medico, che lavorano in quella sede (sedi dal pannello accessi)
 async function mediciDiSede(sedeId) {
-  const [utenti, turni] = await Promise.all([store.usersWithApp('clinica'), sediDaiTurni()]);
+  const [utenti, turni, nlLista] = await Promise.all([store.usersWithApp('clinica'), sediDaiTurni(), require('../accessi/lib/medici-sedi').sediMedici()]);
+  const nl = new Map(nlLista.map(m => [m.id, m.sedi]));
   const out = [];
   for (const u of utenti) {
     if (u.figura !== 'Medico') continue;
     const lv = (await store.livelliOf(u.id)).clinica;
-    const sedi = lv?.enti?.length ? lv.enti.map(e => e.id) : (turni.get(u.id) || []);
+    // 1) sedi scelte per Comunicazioni cliniche; 2) altrimenti quelle dell'assegnazione Nuovalab (fonte unica del pannello); 3) vecchi Turni
+    const sedi = lv?.enti?.length ? lv.enti.map(e => e.id) : (nl.get(u.id)?.length ? nl.get(u.id) : (turni.get(u.id) || []));
     if (sedi.includes(sedeId)) out.push({ id: u.id, nome: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email });
   }
   return out.sort((a, b) => a.nome.localeCompare(b.nome, 'it'));

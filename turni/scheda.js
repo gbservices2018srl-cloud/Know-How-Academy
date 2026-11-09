@@ -43,21 +43,8 @@ module.exports = function scheda(app, { db, needUser, needAdmin, wrap, bad, uplo
   async function sedi() { return (await store.listSedi()).filter(s => s.attiva); }
   // Medici e loro sedi: sempre dal pannello accessi, dall'assegnazione di Nuovalab (livello "Medico" con uno o più
   // medici, ognuno legato a uno studio = una sede). Si cambia solo lì; vale anche per i medici nuovi.
-  const normSede = x => String(x || '').toLowerCase().replace(/to\s*smile|studio|sede|ambulatorio/g, '').replace(/[^a-z0-9]/g, '');
-  async function sediMedici() {
-    const [ss, { rows }] = await Promise.all([sedi(), store.q(`select u.id, u.first_name, u.last_name, ua.enti, ua.ente_nome from users u
-      left join user_apps ua on ua.user_id = u.id and ua.app = 'laboratorio' and ua.livello = 'MEDICO'
-      where u.status = 'active' and not u.owner and (u.figura = $1 or ua.user_id is not null) order by u.last_name, u.first_name`, [MEDICO])]);
-    const sedeDi = nome => {
-      const n = normSede(String(nome || '').split(' · ').slice(1).join(' · '));
-      if (!n) return null;
-      return (ss.find(s => normSede(s.nome) === n) || ss.find(s => normSede(s.nome).length >= 3 && (n.includes(normSede(s.nome)) || normSede(s.nome).includes(n))))?.id || null;
-    };
-    return rows.map(r => {
-      const enti = Array.isArray(r.enti) && r.enti.length ? r.enti : r.ente_nome ? [{ nome: r.ente_nome }] : [];
-      return { id: r.id, nome: `${r.first_name || ''} ${r.last_name || ''}`.trim(), sedi: [...new Set(enti.map(e => sedeDi(e.nome)).filter(Boolean))] };
-    });
-  }
+  // medici e sedi: sempre dal pannello accessi (assegnazione Nuovalab), stessa fonte di Misure implantari
+  const sediMedici = () => require('../accessi/lib/medici-sedi').sediMedici();
   async function orari() {
     await migrate();
     const ss = await sedi();

@@ -497,7 +497,7 @@ function formMis() {
       : `<div class="avviso giallo" style="margin:-2px 0 12px;background:var(--accent-soft);color:var(--fg)">${ic('cal')}<span><b>Richiesta standard:</b> il medico risponde entro 72 ore.</span></div>`}
     <div class="field"><label for="mi-m">Medico a cui inviarla</label>${!med ? '<div class="muted">Carico i medici della sede…</div>'
       : med.length ? `<select id="mi-m" data-mf="medico"><option value="">Scegli il medico</option>${med.map(m => `<option value="${esc(m.id)}" ${f.medico === m.id ? 'selected' : ''}>${esc(m.nome)}</option>`).join('')}</select>`
-      : '<div class="err">Nessun medico abilitato in questa sede. Chiedi all\'amministratore di assegnarlo in Gestione accessi (o nei Turni).</div>'}</div>
+      : '<div class="err">Nessun medico abilitato in questa sede. Chiedi all\'amministratore di assegnarlo alla sede in Gestione accessi (Nuovalab, livello Medico).</div>'}</div>
     <div class="field"><label for="mi-no">Note per il medico (facoltative)</label><textarea id="mi-no" data-mf="note">${esc(f.note)}</textarea></div>
     <label class="flag dtx"><input type="checkbox" data-mf="dtx" ${f.dtx ? 'checked' : ''}><span><span class="t">Ho caricato la documentazione su DTX</span><br><span class="s">Obbligatorio: senza questa spunta la richiesta non parte.</span></span></label>
     ${S.err ? `<div class="err" role="alert" style="margin:10px 0">${esc(S.err)}</div>` : ''}
