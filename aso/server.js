@@ -756,19 +756,24 @@ async function sediDaiTurni() {
   turniCache = m; turniT = Date.now();
   return m;
 }
-// medici "aperti" della sede: attivi, con Comunicazioni cliniche, figura Medico, che lavorano in quella sede (sedi dal pannello accessi)
+// Medici a cui una ASO può inviare la richiesta: tutti i medici attivi in anagrafica (figura "Medico odontoiatra"),
+// filtrati per la sede scelta. Sedi del medico: 1) scelte per Comunicazioni cliniche, 2) assegnazione Nuovalab nel pannello, 3) vecchi Turni.
+// Se nessun medico risulta assegnato a quella sede, si può scegliere fra tutti i medici attivi.
 async function mediciDiSede(sedeId) {
-  const [utenti, turni, nlLista] = await Promise.all([store.usersWithApp('clinica'), sediDaiTurni(), require('../accessi/lib/medici-sedi').sediMedici()]);
+  const [medici, turni, nlLista] = await Promise.all([
+    store.q(`select id, first_name, last_name, email from users where status = 'active' and figura = 'Medico' order by last_name, first_name`).then(r => r.rows),
+    sediDaiTurni(), require('../accessi/lib/medici-sedi').sediMedici()]);
   const nl = new Map(nlLista.map(m => [m.id, m.sedi]));
-  const out = [];
-  for (const u of utenti) {
-    if (u.figura !== 'Medico') continue;
+  const tutti = [], diSede = [];
+  for (const u of medici) {
     const lv = (await store.livelliOf(u.id)).clinica;
-    // 1) sedi scelte per Comunicazioni cliniche; 2) altrimenti quelle dell'assegnazione Nuovalab (fonte unica del pannello); 3) vecchi Turni
     const sedi = lv?.enti?.length ? lv.enti.map(e => e.id) : (nl.get(u.id)?.length ? nl.get(u.id) : (turni.get(u.id) || []));
-    if (sedi.includes(sedeId)) out.push({ id: u.id, nome: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email });
+    const m = { id: u.id, nome: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email };
+    tutti.push(m);
+    if (sedi.includes(sedeId)) diSede.push(m);
   }
-  return out.sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
+  const ord = l => l.sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
+  return diSede.length ? { medici: ord(diSede), tutti: false } : { medici: ord(tutti), tutti: true };
 }
 const shapeMis = r => ({ id: r.id, sedeId: r.sede_id, sede: r.sede_nome, cognome: r.paziente_cognome, nome: r.paziente_nome, lavoro: r.lavoro,
   dataIntervento: r.data_t, tipo: r.tipo, dtx: r.dtx, medicoId: r.medico_id, medico: r.medico_nome, stato: r.stato, note: r.note,
@@ -785,7 +790,7 @@ app.get('/api/misure', needUser, need(MI), wrap(async (req, res) => {
 app.get('/api/misure/medici', needUser, need(MI), wrap(async (req, res) => {
   const sede = sedeOk(req, MI, str(req.query.sede, 80));
   if (!sede) return bad(res, 400, 'Scegli la sede.');
-  res.json({ medici: await mediciDiSede(sede.id) });
+  res.json(await mediciDiSede(sede.id));
 }));
 app.post('/api/misure', needUser, need(MI), wrap(async (req, res) => {
   const b = req.body, sede = sedeOk(req, MI, str(b.sede, 80));
@@ -800,7 +805,7 @@ app.post('/api/misure', needUser, need(MI), wrap(async (req, res) => {
     return bad(res, 400, `Richiesta bloccata: una richiesta standard va fatta almeno ${GIORNI_MIN} giorni prima dell'intervento (dal ${piuGiorni(oggi(), GIORNI_MIN).split('-').reverse().join('/')}).`);
   if (b.dtx !== true) return bad(res, 400, 'Richiesta bloccata: conferma di aver caricato la documentazione su DTX.');
   if (tipo === 'emergenza' && b.regolamento !== true) return bad(res, 400, 'Per una richiesta di emergenza conferma di aver letto il regolamento.');
-  const medico = (await mediciDiSede(sede.id)).find(m => m.id === str(b.medico, 80));
+  const medico = (await mediciDiSede(sede.id)).medici.find(m => m.id === str(b.medico, 80));
   if (!medico) return bad(res, 400, 'Scegli il medico tra quelli della sede.');
   const id = db.newId();
   await db.q(`insert into misure (id, sede_id, sede_nome, paziente_cognome, paziente_nome, lavoro, data_intervento, tipo, dtx, medico_id, medico_nome, note, creato_da, creato_da_nome)
