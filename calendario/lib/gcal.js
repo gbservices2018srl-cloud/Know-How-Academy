@@ -64,7 +64,7 @@ async function feed(token) {
       and (e.created_by_id = $1 or exists (select 1 from rsvp r where r.event_id = e.id and r.user_id = $1 and r.status = 'yes' and not r.da_riconfermare))
     order by e.start_date`, [u.id]);
   await db.q('update users set gcal_collegato = now() where id = $1', [u.id]).catch(() => {});
-  return calendario(rows, 'To Smile · Eventi');
+  return { ics: calendario(rows, 'To Smile · Eventi'), nome: u.name, n: rows.length };
 }
 async function evento(id) {
   const { rows } = await db.q(`select ${COLS} ${FROM} where e.id = $1`, [id]);

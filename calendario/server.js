@@ -405,8 +405,10 @@ app.post('/api/me/gcal', needUser, wrap(async (req, res) => {
 }));
 // il calendario privato (lo legge Google, senza accesso): niente sessione, basta la chiave nell'indirizzo
 app.get('/feed/:t.ics', wrap(async (req, res) => {
-  const ics = await gcal.feed(req.params.t);
-  if (!ics) return res.status(404).type('text/plain').send('Calendario non trovato');
+  const f = await gcal.feed(req.params.t);
+  if (!f) { console.log('Calendario → Google: indirizzo non valido letto da', String(req.get('user-agent') || '').slice(0, 60)); return res.status(404).type('text/plain').send('Calendario non trovato'); }
+  const ics = f.ics;
+  console.log(`Calendario → Google: letto il calendario di ${f.nome} (${f.n} eventi) da ${/google/i.test(req.get('user-agent') || '') ? 'Google' : String(req.get('user-agent') || '?').slice(0, 40)}`);
   res.set({ 'Content-Type': 'text/calendar; charset=utf-8', 'Cache-Control': 'no-cache, private', 'X-Robots-Tag': 'noindex' });
   res.send(ics);
 }));

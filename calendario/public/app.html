@@ -1317,6 +1317,7 @@ async function gcalDialog(primaVolta = false) {
   const sheet = openDialog(`${head('Eventi nel tuo Google Calendar')}
     <div class="sh-body">
       ${primaVolta ? '<p style="margin:0">Vuoi vedere gli eventi To Smile direttamente nel tuo Google Calendar? Si collega <b>una volta sola</b>.</p>' : ''}
+      ${g.letto ? `<div class="note">✓ Google ha letto il tuo calendario l'ultima volta il <b>${esc(new Date(g.letto).toLocaleString('it-IT', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }))}</b>. Gli eventi creati dopo compariranno alla prossima lettura.</div>` : g.attivo ? '<div class="note">Google non ha ancora letto il tuo calendario: se non l\'hai ancora aggiunto, premi il pulsante qui sotto.</div>' : ''}
       ${passi}
       <div class="err" id="gerr" hidden></div>
       <details class="galtro"><summary>Dal telefono o se il pulsante non funziona</summary>
