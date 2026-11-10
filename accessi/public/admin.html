@@ -167,6 +167,7 @@ dialog form{padding:22px;display:flex;flex-direction:column;gap:14px}
   <div class="tools" id="toolsBox">
     <div class="chips" role="group" aria-label="Filtro">
       <button class="chip" data-f="pending">In attesa <span class="n" id="n-pending"></span></button>
+      <button class="chip" data-f="contratti" hidden>Contratti da confermare <span class="n" id="n-contratti"></span></button>
       <button class="chip" data-f="active">Attivi <span class="n" id="n-active"></span></button>
       <button class="chip" data-f="disabled">Disattivati <span class="n" id="n-disabled"></span></button>
       <button class="chip" data-f="all">Tutti <span class="n" id="n-all"></span></button>
@@ -246,23 +247,28 @@ async function load() {
   try { S.sediTutte = (await api('GET', '/api/admin/sedi')).sedi.filter(x => x.attiva); } catch { S.sediTutte = []; }
   S.livelli ||= {};
   $('#mailwarn').hidden = S.mail;
-  if (filter === 'pending' && !S.users.some(u => u.status === 'pending') && !load.done) filter = 'active';
+  const fUrl = new URLSearchParams(location.search).get('f');
+  if (!load.done && ['pending', 'contratti', 'active', 'disabled', 'all'].includes(fUrl)) filter = fUrl;
+  if (filter === 'pending' && !S.users.some(u => u.status === 'pending') && !load.done) filter = S.users.some(daConfermare) ? 'contratti' : 'active';
   load.done = true;
   render();
 }
 const fullName = u => `${u.firstName} ${u.lastName}`.trim() || u.email;
 function counts() {
-  const c = {pending: 0, active: 0, disabled: 0, all: S.users.length};
-  S.users.forEach(u => c[u.status]++);
+  const c = {pending: 0, active: 0, disabled: 0, all: S.users.length, contratti: 0};
+  S.users.forEach(u => { c[u.status]++; if (daConfermare(u)) c.contratti++; });
   for (const k in c) $('#n-' + k).textContent = c[k];
   document.querySelector('[data-f="pending"]').classList.toggle('attn', c.pending > 0);
+  const cc = document.querySelector('[data-f="contratti"]'); cc.hidden = !c.contratti && filter !== 'contratti'; cc.classList.toggle('attn', c.contratti > 0);
 }
+// contratto dichiarato dalla persona (persona attiva) e non ancora confermato: è quello che conta nel numero su «Gestione accessi»
+const daConfermare = u => u.status === 'active' && !!u.contratto && !u.contratto.ok;
 function render() {
   counts();
   document.querySelectorAll('.chip').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === filter));
   const q = $('#q').value.trim().toLowerCase();
   // filtro per ruolo (figura professionale): i numeri accanto contano le persone dello stato scelto
-  const fr = $('#fruolo'), frv = fr.value, nelloStato = S.users.filter(u => filter === 'all' || u.status === filter);
+  const fr = $('#fruolo'), frv = fr.value, nelloStato = S.users.filter(u => filter === 'all' || (filter === 'contratti' ? daConfermare(u) : u.status === filter));
   fr.innerHTML = `<option value="">Tutti i ruoli (${nelloStato.length})</option>` + (S.figure || []).map(f => { const n = nelloStato.filter(u => u.figura === f.id).length;
     return `<option value="${esc(f.id)}">${esc(f.nome)} (${n})</option>`; }).join('') + `<option value="-">Ruolo da scegliere (${nelloStato.filter(u => !u.figura).length})</option>`;
   fr.value = frv;
@@ -270,7 +276,7 @@ function render() {
     (!q || `${u.firstName} ${u.lastName} ${u.email}`.toLowerCase().includes(q)));
   if (!rows.length) {
     $('#list').className = 'list';
-    $('#list').innerHTML = `<div class="card empty">${filter === 'pending' && !q ? 'Nessuna richiesta in attesa.' : 'Nessun utente trovato.'}</div>`;
+    $('#list').innerHTML = `<div class="card empty">${filter === 'pending' && !q ? 'Nessuna richiesta in attesa.' : filter === 'contratti' && !q ? 'Nessun contratto da confermare.' : 'Nessun utente trovato.'}</div>`;
     return;
   }
   // omonimi: stesso nome e cognome → la data di nascita aiuta a distinguerli

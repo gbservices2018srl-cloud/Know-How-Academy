@@ -139,12 +139,12 @@ function toast(t) { const d = document.createElement('div'); d.className = 'toas
   const u = me.user;
   $('#hello').innerHTML = `Ciao <span>${esc(u.firstName || '')}</span>`;
   $('#pw-user').value = u.email;
-  let pending = 0;
+  let pending = 0, richieste = 0, contratti = 0;
   if (me.admin) {
-    try { const a = await (await fetch('/api/admin/users')).json(); pending = a.users.filter(x => x.status === 'pending' || (x.status === 'active' && x.contratto && !x.contratto.ok)).length; } catch {}
+    try { const a = await (await fetch('/api/admin/users')).json(); richieste = a.users.filter(x => x.status === 'pending').length; contratti = a.users.filter(x => x.status === 'active' && x.contratto && !x.contratto.ok).length; pending = richieste + contratti; } catch {}
   }
   $('#who').innerHTML = `<span class="name">${esc(u.email)}</span>
-    ${me.admin ? `<a class="btn small" href="/admin">Gestione accessi${pending ? ` <span class="badge" title="Richieste in attesa">${pending}</span>` : ''}</a>` : ''}
+    ${me.admin ? `<a class="btn small" href="/admin${!richieste && contratti ? '?f=contratti' : ''}">Gestione accessi${pending ? ` <span class="badge" title="${esc([richieste ? richieste + ' richieste in attesa' : '', contratti ? contratti + ' contratti da confermare' : ''].filter(Boolean).join(' · '))}">${pending}</span>` : ''}</a>` : ''}
     <a class="btn small" href="/completa-profilo">Il mio profilo</a>
     ${u.owner ? '' : '<button class="btn small" id="pw-open">Cambia password</button>'}
     <a class="btn small" href="/esci">Esci</a>`;
