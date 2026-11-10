@@ -11,7 +11,8 @@ const crypto = require('crypto');
 const CAMPI = [
   { k: 'telefono', nome: 'Telefono', tipo: 'tel', chi: 'persona', per: 'tutti', aiuto: 'Il numero di cellulare, per essere contattato/a dallo studio.' },
   { k: 'residenza', nome: 'Indirizzo di residenza', tipo: 'indirizzo', chi: 'persona', per: 'tutti' },
-  { k: 'iban', nome: 'IBAN', tipo: 'iban', chi: 'persona', per: 'tutti', aiuto: 'Il conto su cui ricevi i pagamenti. Viene salvato cifrato.' },
+  { k: 'iban', nome: 'IBAN per gli accrediti', tipo: 'iban', chi: 'persona', per: 'tutti',
+    aiuto: 'Il conto corrente su cui vuoi ricevere gli accrediti (stipendio o compensi), intestato o cointestato a te. Viene salvato cifrato.' },
   { k: 'contratto', nome: 'Contratto', tipo: 'contratto', chi: 'persona', per: 'tutti', conferma: 'admin',
     aiuto: "Dipendente o partita IVA e, per i dipendenti, le ore settimanali del contratto. L'amministratore lo conferma." },
 ];
