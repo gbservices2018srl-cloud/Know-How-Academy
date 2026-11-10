@@ -255,8 +255,10 @@ const idsDi = e => (Array.isArray(e) ? e : []).map(x => x.id).sort().join('|');
 async function sediNote(userId, tranne = null) {
   const anag = await sediAnagrafica(userId);
   if (anag.length) return anag;
-  const { rows } = await q(`select enti from user_apps where user_id = $1 and app = any($2) and app <> coalesce($3, '') and role <> 'admin'
-      and enti is not null and jsonb_array_length(enti) > 0`, [userId, APPS_SEDI().map(a => a.key), tranne]);
+  // (i permessi più vecchi hanno solo "ente", una sede: vale anche quella)
+  const { rows } = await q(`select case when enti is not null and jsonb_array_length(enti) > 0 then enti else jsonb_build_array(jsonb_build_object('id', ente, 'nome', ente_nome)) end as enti
+      from user_apps where user_id = $1 and app = any($2) and app <> coalesce($3, '') and role <> 'admin'
+      and ((enti is not null and jsonb_array_length(enti) > 0) or ente is not null)`, [userId, APPS_SEDI().map(a => a.key), tranne]);
   const conta = new Map();
   for (const r of rows) { const k = idsDi(r.enti); conta.set(k, { n: (conta.get(k)?.n || 0) + 1, enti: r.enti }); }
   return [...conta.values()].sort((a, b) => b.n - a.n)[0]?.enti || [];

@@ -1138,7 +1138,7 @@ async function recuperaSedi() {
     const ids = sp.get(r.id) || (await store.sediNote(r.id)).map(e => e.id);
     if (ids.length) { await store.impostaSedi(r.id, ids, { propaga: false }); n++; }
   }
-  if (n) console.log(`Anagrafica: sedi recuperate dalle app per ${n} persone`);
+  console.log(`Anagrafica: sedi recuperate per ${n} persone (su ${rows.length} senza sedi)`);
 }
 async function start() {
   await store.migrate();
