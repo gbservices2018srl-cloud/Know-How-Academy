@@ -649,6 +649,7 @@ async function start() {
   await gcal.migrate();
   await db.ensureEnvAdmin();
   await db.seedIfEmpty();
+  await db.tipiAggiunti();
   await db.categorieFigura();
   await push.init().catch(e => console.warn('Notifiche non attive:', e.message));
   if (sso.enabled()) { await allineaProfili(); setInterval(allineaProfili, 10 * 60e3).unref(); }

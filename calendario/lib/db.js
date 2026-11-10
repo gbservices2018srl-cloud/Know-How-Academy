@@ -173,6 +173,18 @@ async function seedIfEmpty() {
   }
 }
 
+// Tipi aggiunti dopo il primo avvio (una volta sola: se poi vengono tolti dall'app, non ritornano)
+async function tipiAggiunti() {
+  for (const [chiave, nome, colore] of [['tipo_riunioni_aziendali', 'Riunioni aziendali', 'green']]) {
+    const { rowCount } = await q(`insert into app_settings (key, value) values ($1, 'fatto') on conflict do nothing`, [chiave]);
+    if (!rowCount) continue;
+    const { rows } = await q('select 1 from event_types where lower(name) = lower($1)', [nome]);
+    if (rows.length) continue;
+    const { rows: [m] } = await q('select coalesce(max(sort), 0) + 1 as s from event_types');
+    await q('insert into event_types (id, name, color, sort) values ($1,$2,$3,$4)', [newId(), nome, colore, m.s]);
+  }
+}
+
 // Categorie per figura professionale (dall'accesso unico): una per figura, collegate per nome a quelle già presenti
 // (es. "Medici", "Extra-ambulatoriali"); le persone ci entrano da sole in base alla loro figura.
 const FIGURE = require('../../accessi/figure');
@@ -190,4 +202,4 @@ async function categorieFigura() {
   }
 }
 
-module.exports = { pool, q, newId, SCHEMA, migrate, ensureEnvAdmin, seedIfEmpty, categorieFigura };
+module.exports = { pool, q, newId, SCHEMA, migrate, ensureEnvAdmin, seedIfEmpty, categorieFigura, tipiAggiunti };
