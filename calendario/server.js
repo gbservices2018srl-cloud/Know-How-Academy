@@ -150,9 +150,9 @@ async function myCategories(userId) {
 }
 
 app.get('/api/state', needUser, wrap(async (req, res) => {
-  const { rows: [g] } = await db.q('select gcal_email, gcal_chiesto from users where id = $1', [req.user.id]);
+  const { rows: [g] } = await db.q('select gcal_chiesto, gcal_token, gcal_collegato from users where id = $1', [req.user.id]);
   const out = { me: { id: req.user.id, username: req.user.username, name: req.user.name, role: req.user.role, fromEnv: req.user.from_env,
-      gcal: { email: g?.gcal_email || null, chiesto: !!g?.gcal_chiesto, disponibile: gcal.attivo() } },
+      gcal: { chiesto: !!g?.gcal_chiesto, attivo: !!g?.gcal_token, letto: g?.gcal_collegato || null } },
     ...(await lists()), sso: sso.enabled() ? sso.links() : null };
   out.me.categories = await myCategories(req.user.id);
   if (req.user.role === 'admin') {
@@ -321,7 +321,6 @@ app.post('/api/events', needAdmin, wrap(async (req, res) => {
     [id, f.title, f.typeId, f.locationId, f.locationNote, f.start, f.end, f.allDay, f.startTime, f.endTime, f.description, f.link, f.allStaff, req.user.name, f.rsvp, req.user.id]);
   await saveCategories(id, f.categories, f.people);
   res.json({ id });
-  gcal.invia(id, req.user.id); // nel Google Calendar di chi l'ha creato (se l'ha collegato)
   avvisaPubblico(id, 'nuovo');
 }));
 app.put('/api/events/:id', needAdmin, wrap(async (req, res) => {
@@ -335,7 +334,6 @@ app.put('/api/events/:id', needAdmin, wrap(async (req, res) => {
   const vecchiPubblico = prima[0] ? (await db.q(`select u.id from events e join users u on ${AUDIENCE('e', 'u')} where e.id = $1`, [req.params.id])).rows.map(r => r.id) : [];
   await saveCategories(req.params.id, f.categories, f.people);
   res.json({ ok: true });
-  gcal.aggiorna(req.params.id); // aggiorna l'evento nei Google Calendar di chi ce l'ha
   // cambiano data, ora o luogo → avviso a tutti; si aggiungono persone o categorie → avviso solo ai nuovi
   const p = prima[0];
   const spostato = p && (p.start_date !== f.start || (p.end_date || p.start_date) !== f.end || p.all_day !== f.allDay
@@ -345,7 +343,6 @@ app.put('/api/events/:id', needAdmin, wrap(async (req, res) => {
   else if (p) avvisaNuovi(req.params.id, vecchiPubblico);
 }));
 app.delete('/api/events/:id', needAdmin, wrap(async (req, res) => {
-  await gcal.cancellato(req.params.id).catch(e => console.warn('Calendario → Google:', e.message));
   await db.q('delete from events where id = $1', [req.params.id]);
   res.json({ ok: true });
 }));
@@ -398,18 +395,20 @@ app.post('/api/events/:id/rsvp', needUser, wrap(async (req, res) => {
     on conflict (event_id, user_id) do update set status = excluded.status, da_riconfermare = false, updated_at = now()`, [req.params.id, req.user.id, status]);
   else await db.q('delete from rsvp where event_id = $1 and user_id = $2', [req.params.id, req.user.id]);
   res.json({ ok: true });
-  // solo in uscita: "ci sarò" → nel suo Google Calendar; "non ci sarò" o risposta tolta → si toglie
-  if (status === 'yes') gcal.invia(req.params.id, req.user.id); else gcal.togli(req.params.id, req.user.id);
 }));
-// Google Calendar della persona (solo in uscita): l'indirizzo dove mandare gli eventi, oppure "no grazie"
-app.put('/api/me/gcal', needUser, wrap(async (req, res) => {
-  if (req.body.no) { await gcal.disattiva(req.user.id); return res.json({ ok: true, email: null }); }
-  const email = str(req.body.email, 160).toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return bad(res, 400, "Scrivi l'indirizzo email del tuo account Google.");
-  const { rows: [g] } = await db.q('select gcal_email from users where id = $1', [req.user.id]);
-  if (g?.gcal_email && g.gcal_email !== email) await gcal.disattiva(req.user.id); // cambia account: toglie dal vecchio
-  const n = await gcal.attiva(req.user.id, email);
-  res.json({ ok: true, email, inviati: n });
+// Google Calendar (solo in uscita, senza email): l'indirizzo privato del calendario della persona da aggiungere "Da URL"
+app.post('/api/me/gcal', needUser, wrap(async (req, res) => {
+  if (req.body.no) { await db.q('update users set gcal_chiesto = true where id = $1', [req.user.id]); return res.json({ ok: true }); }
+  const t = await gcal.token(req.user.id, !!req.body.nuovo);
+  const base = (process.env.CALENDARIO_URL || `https://${req.get('host')}`).replace(/\/$/, '');
+  res.json({ ok: true, url: `${base}/feed/${t}.ics` });
+}));
+// il calendario privato (lo legge Google, senza accesso): niente sessione, basta la chiave nell'indirizzo
+app.get('/feed/:t.ics', wrap(async (req, res) => {
+  const ics = await gcal.feed(req.params.t);
+  if (!ics) return res.status(404).type('text/plain').send('Calendario non trovato');
+  res.set({ 'Content-Type': 'text/calendar; charset=utf-8', 'Cache-Control': 'no-cache, private', 'X-Robots-Tag': 'noindex' });
+  res.send(ics);
 }));
 // Elenco nominativo: chi ha confermato, chi no, chi non ha ancora risposto.
 app.get('/api/events/:id/attendance', needAdmin, wrap(async (req, res) => {
