@@ -168,6 +168,15 @@ async function vistaTurniU(m){
 }
 
 /* ---------- performance ---------- */
+// compenso di un ruolo (fisso, variabile, di area) come scritto nel piano di crescita
+function compenso(tit, c){
+  if (!c || !(c.fisso || c.variabile || c.area)) return '';
+  const righe = t => String(t || '').split('\n').filter(Boolean).map(x => `<li class="small" style="margin:3px 0">${esc(x)}</li>`).join('');
+  return `<div class="card"><h3>${esc(tit)}</h3>
+    ${c.fisso ? `<p class="small" style="margin:4px 0"><b>Fisso:</b> ${esc(c.fisso)}</p>` : ''}
+    ${c.variabile ? `<p class="small" style="margin:8px 0 0"><b>Variabile</b></p><ul style="margin:2px 0 0;padding-left:20px">${righe(c.variabile)}</ul>` : ''}
+    ${c.area ? `<p class="small" style="margin:8px 0 0"><b>Compenso di area</b></p><ul style="margin:2px 0 0;padding-left:20px">${righe(c.area)}</ul>` : ''}</div>`;
+}
 async function vistaPerfU(m){
   const p = ME.perf;
   if (!p) { m.innerHTML = `<div class="card"><h2>Performance</h2><p class="muted">Non sei ancora inserito in un piano di carriera. Quando l'amministrazione ti assegna un ruolo, qui trovi gli obiettivi per crescere e i bonus.</p></div>`; return; }
@@ -178,13 +187,17 @@ async function vistaPerfU(m){
       ${p.prossimo ? `<p class="small" style="margin:0 0 10px;opacity:.9">Prossimo ruolo: <b>${esc(p.prossimo.ruolo)}</b>${p.prossimo.bonus ? ' · bonus al passaggio: ' + esc(p.prossimo.bonus) : ''}</p>
       <div style="height:10px;background:rgba(255,255,255,.22);border-radius:5px;overflow:hidden"><div style="height:100%;width:${pct}%;background:#E8E560"></div></div>
       <p class="small" style="margin:8px 0 0;font-weight:700">${p.pass} pass su ${tot} obiettivi</p>` : '<p class="small" style="margin:0">Sei all\'ultimo livello del tuo piano.</p>'}</div>
+    ${compenso('Il tuo compenso da ' + p.ruolo, p.attuale)}
     ${p.inAttesa ? `<div class="banner ok">Hai tutti i pass! Il passaggio a ${esc(p.prossimo?.ruolo || '')} e il bonus sono in attesa di approvazione dell'amministrazione.</div>` : ''}
     ${p.prossimo ? `<div class="card"><h3>Obiettivi per diventare ${esc(p.prossimo.ruolo)}</h3>${tot ? p.obiettivi.map(o => `<div class="li" style="flex-direction:column;align-items:stretch;gap:6px">
         <div class="row"><b class="grow">${esc(o.testo)}</b><span class="tag ${ST[o.stato][1]}">${ST[o.stato][0]}</span></div>
         ${o.misura ? `<span class="muted xs">${esc(o.misura)}</span>` : ''}
         ${o.dato ? `<span class="small" style="background:var(--sunken);padding:6px 10px;border-radius:8px">Il tuo dato: ${esc(o.dato)}</span>` : ''}
         ${o.nota ? `<span class="xs muted">Nota dell'amministrazione: ${esc(o.nota)}</span>` : ''}
-        ${['fare', 'no'].includes(o.stato) ? `<div class="row"><input type="text" class="grow" data-dato="${o.id}" placeholder="Scrivi il risultato raggiunto"><button class="btn small primary" data-invia="${o.id}">Invia</button></div>` : ''}</div>`).join('') : '<p class="muted small">Gli obiettivi non sono ancora stati indicati.</p>'}</div>` : ''}`;
+        ${['fare', 'no'].includes(o.stato) ? `<div class="row"><input type="text" class="grow" data-dato="${o.id}" placeholder="Scrivi il risultato raggiunto"><button class="btn small primary" data-invia="${o.id}">Invia</button></div>` : ''}</div>`).join('') : '<p class="muted small">Gli obiettivi non sono ancora stati indicati.</p>'}</div>` : ''}
+    ${p.prossimo?.skill?.length ? `<div class="card"><h3>Competenze da sviluppare per diventare ${esc(p.prossimo.ruolo)}</h3><ul style="margin:6px 0 0;padding-left:20px">${p.prossimo.skill.map(x => `<li class="small" style="margin:3px 0">${esc(x)}</li>`).join('')}</ul></div>` : ''}
+    ${p.prossimo ? compenso('Compenso da ' + p.prossimo.ruolo, p.prossimo) : ''}
+    ${p.regole ? `<details class="card"><summary><b>Regole del piano di crescita</b></summary><div class="small" style="white-space:pre-line;margin-top:8px;line-height:1.5">${esc(p.regole)}</div></details>` : ''}`;
   m.onclick = async e => {
     const b = e.target.closest('[data-invia]'); if (!b) return;
     try { await api('POST', '/api/sp/perf/dato', {obiettivo: b.dataset.invia, dato: m.querySelector(`[data-dato="${b.dataset.invia}"]`).value}); toast('Inviato: ora lo verifica l\'amministrazione.'); ricarica(); }

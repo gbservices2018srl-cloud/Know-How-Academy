@@ -69,6 +69,10 @@ module.exports = function sp(app, ctx) {
         ricevuto_disp text, da text);
       create table if not exists sp_piani (id text primary key, nome text not null, ordine int not null default 0, archiviato boolean not null default false);
       create table if not exists sp_livelli (id text primary key, piano_id text not null, n int not null, ruolo text not null, bonus text not null default '', archiviato boolean not null default false);
+      alter table sp_livelli add column if not exists fisso text not null default '';
+      alter table sp_livelli add column if not exists variabile text not null default '';
+      alter table sp_livelli add column if not exists area text not null default '';
+      alter table sp_livelli add column if not exists skill jsonb not null default '[]';
       create table if not exists sp_obiettivi (id text primary key, livello_id text not null, testo text not null, misura text not null default '', ordine int not null default 0, archiviato boolean not null default false);
       create table if not exists sp_perf (user_id text primary key, piano_id text not null, livello_n int not null, dal date not null default current_date);
       create table if not exists sp_perf_dati (id text primary key, user_id text not null, obiettivo_id text not null, dato text not null, stato text not null default 'verifica',
@@ -426,6 +430,7 @@ module.exports = function sp(app, ctx) {
       q('select * from sp_obiettivi where not archiviato order by ordine'),
     ]);
     return piani.map(p => ({ id: p.id, nome: p.nome, livelli: liv.filter(l => l.piano_id === p.id).map(l => ({ id: l.id, n: l.n, ruolo: l.ruolo, bonus: l.bonus,
+      fisso: l.fisso || '', variabile: l.variabile || '', area: l.area || '', skill: Array.isArray(l.skill) ? l.skill : [],
       obiettivi: ob.filter(o => o.livello_id === l.id).map(o => ({ id: o.id, testo: o.testo, misura: o.misura })) })) }));
   }
   async function perfUtente(uid) {
@@ -438,7 +443,9 @@ module.exports = function sp(app, ctx) {
     const { rows: dati } = await q(`select * from sp_perf_dati where user_id = $1 order by il desc`, [uid]);
     const { rows: pas } = await q(`select * from sp_passaggi where user_id = $1 and stato = 'attesa' limit 1`, [uid]);
     const ob = (next?.obiettivi || []).map(o => { const d = dati.find(x => x.obiettivo_id === o.id); return { ...o, stato: d?.stato || 'fare', dato: d?.dato || '', nota: d?.nota || '' }; });
-    return { piano: piano.nome, ruolo: cur?.ruolo || '', prossimo: next ? { ruolo: next.ruolo, bonus: next.bonus } : null, obiettivi: ob,
+    const comp = l => l ? { fisso: l.fisso, variabile: l.variabile, area: l.area } : null;
+    return { piano: piano.nome, ruolo: cur?.ruolo || '', attuale: comp(cur), regole: (await sch.imp('sp_regole')) || '',
+      prossimo: next ? { ruolo: next.ruolo, bonus: next.bonus, ...comp(next), skill: next.skill } : null, obiettivi: ob,
       pass: ob.filter(o => o.stato === 'pass').length, inAttesa: !!pas[0] };
   }
   app.post('/api/sp/perf/dato', needSp, wrap(async (req, res) => {
@@ -833,10 +840,12 @@ module.exports = function sp(app, ctx) {
       const a = as.find(x => x.user_id === p.id);
       persone2.push({ id: p.id, nome: p.nome, figura: p.figura, piano: a?.piano_id || null, livello: a?.livello_n ?? null, stato: a ? await perfUtente(p.id) : null });
     }
-    res.json({ piani, persone: persone2,
+    res.json({ piani, persone: persone2, regole: (await sch.imp('sp_regole')) || '',
       dati: dati.map(d => ({ id: d.id, nome: nomi.get(d.user_id) || '', obiettivo: d.testo, dato: d.dato, il: d.il })),
       passaggi: pas.map(x => { const pi = piani.find(y => y.id === x.piano_id); return { id: x.id, nome: nomi.get(x.user_id) || '', da: pi?.livelli.find(l => l.n === x.da_n)?.ruolo || '', a: pi?.livelli.find(l => l.n === x.a_n)?.ruolo || '', bonus: pi?.livelli.find(l => l.n === x.a_n)?.bonus || '' }; }) });
   }));
+  // piano di crescita ufficiale To Smile (dal documento): si carica nell'editor, poi lo salva l'amministratore
+  app.get('/api/sp/admin/piani/modello', needAd, (req, res) => res.json(require('./data/piano-crescita-2025.json')));
   app.put('/api/sp/admin/piani', needAd, wrap(async (req, res) => {
     const piani = (Array.isArray(req.body.piani) ? req.body.piani : []).slice(0, 30);
     await db.tx(async tq => {
@@ -850,17 +859,22 @@ module.exports = function sp(app, ctx) {
         for (const l of (Array.isArray(p.livelli) ? p.livelli : []).slice(0, 15)) {
           const ruolo = str(l.ruolo, 80); if (!ruolo) continue;
           const lid = /^[\w-]{6,64}$/.test(l.id || '') ? l.id : db.newId(); vivi.l.push(lid);
-          await tq(`insert into sp_livelli (id, piano_id, n, ruolo, bonus) values ($1,$2,$3,$4,$5) on conflict (id) do update set piano_id = excluded.piano_id, n = excluded.n, ruolo = excluded.ruolo, bonus = excluded.bonus, archiviato = false`,
-            [lid, pid, n++, ruolo, str(l.bonus, 120)]);
+          const testo = (v, max) => String(v ?? '').replace(/\r/g, '').split('\n').map(x => x.replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n').slice(0, max);
+          const skill = (Array.isArray(l.skill) ? l.skill : String(l.skill || '').split('\n')).map(x => str(x, 300)).filter(Boolean).slice(0, 25);
+          await tq(`insert into sp_livelli (id, piano_id, n, ruolo, bonus, fisso, variabile, area, skill) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+              on conflict (id) do update set piano_id = excluded.piano_id, n = excluded.n, ruolo = excluded.ruolo, bonus = excluded.bonus,
+              fisso = excluded.fisso, variabile = excluded.variabile, area = excluded.area, skill = excluded.skill, archiviato = false`,
+            [lid, pid, n++, ruolo, str(l.bonus, 120), str(l.fisso, 160), testo(l.variabile, 2000), testo(l.area, 600), JSON.stringify(skill)]);
           let oi = 0;
           for (const o of (Array.isArray(l.obiettivi) ? l.obiettivi : []).slice(0, 20)) {
-            const testo = str(o.testo, 200); if (!testo) continue;
+            const testoO = str(o.testo, 400); if (!testoO) continue;
             const oid = /^[\w-]{6,64}$/.test(o.id || '') ? o.id : db.newId(); vivi.o.push(oid);
             await tq(`insert into sp_obiettivi (id, livello_id, testo, misura, ordine) values ($1,$2,$3,$4,$5) on conflict (id) do update set livello_id = excluded.livello_id, testo = excluded.testo, misura = excluded.misura, ordine = excluded.ordine, archiviato = false`,
-              [oid, lid, testo, str(o.misura, 200), oi++]);
+              [oid, lid, testoO, str(o.misura, 200), oi++]);
           }
         }
       }
+      if (typeof req.body.regole === 'string') await sch.setImp('sp_regole', String(req.body.regole).replace(/\r/g, '').slice(0, 12000));
       // quello che non c'è più si archivia (i dati inviati dalle persone restano)
       await tq('update sp_piani set archiviato = true where not (id = any($1))', [vivi.p]);
       await tq('update sp_livelli set archiviato = true where not (id = any($1))', [vivi.l]);
