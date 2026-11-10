@@ -456,10 +456,12 @@ $('#who').addEventListener('click', e => {
   m = document.createElement('div'); m.className = 'menu'; m.setAttribute('role', 'menu');
   const pushItem = PUSH.state === 'on' ? `<button data-a="push-off" role="menuitem">${ic('bell')}Disattiva notifiche qui</button>`
     : PUSH.state === 'off' ? `<button data-a="push-on" role="menuitem">${ic('bell')}Attiva notifiche</button>` : '';
-  m.innerHTML = `${pushItem}<button data-a="pw" role="menuitem">${ic('key')}Cambia password</button><button data-a="out" role="menuitem">${ic('out')}Esci</button>`;
+  const gItem = S.me.gcal?.disponibile ? `<button data-a="gcal" role="menuitem">${ic('cal')}Google Calendar${S.me.gcal.email ? ' ✓' : ''}</button>` : '';
+  m.innerHTML = `${pushItem}${gItem}<button data-a="pw" role="menuitem">${ic('key')}Cambia password</button><button data-a="out" role="menuitem">${ic('out')}Esci</button>`;
   m.addEventListener('click', ev => {
     ev.stopPropagation(); const a = ev.target.closest('[data-a]')?.dataset.a; m.remove();
     if (a === 'pw') { if (S.sso) location.href = S.sso.home; else passwordDialog(); }
+    if (a === 'gcal') gcalDialog();
     if (a === 'push-on') pushEnable();
     if (a === 'push-off') pushDisable();
     if (a === 'out') api('/api/logout', { method: 'POST', body: {} }).finally(() => location.href = S.sso ? S.sso.home : '/login');
@@ -817,8 +819,11 @@ function openEvent(id) {
     </div>
     <div class="sh-foot">
       ${e.link ? `<a class="btn primary" href="${esc(e.link)}" target="_blank" rel="noopener">${ic('link')}Apri il link</a>` : ''}
-      <a class="btn" href="/api/events/${e.id}/ics">${ic('dl')}Aggiungi al mio calendario</a>
+      ${S.me.gcal?.email && (e.myRsvp === 'yes' || isAdmin()) ? `<span class="muted" style="font-size:13px;align-self:center">${ic('check')} ${e.myRsvp === 'yes' ? 'Nel tuo Google Calendar' : 'Va nel tuo Google Calendar se l\'hai creato tu'}</span>`
+        : S.me.gcal?.disponibile && !S.me.gcal?.email ? `<button class="btn" type="button" data-gcal>${ic('cal')}Metti nel mio Google Calendar</button>` : ''}
+      <a class="btn ${S.me.gcal?.email ? 'ghost' : ''}" href="/api/events/${e.id}/ics" title="Scarica il file per aggiungerlo a mano">${ic('dl')}${S.me.gcal?.email ? 'Scarica .ics' : 'Scarica .ics'}</a>
     </div></div>`);
+  const bg = $('[data-gcal]', sheet); if (bg) bg.onclick = () => { closeDialog(); gcalDialog(); };
   if (e.rsvp && !isAdmin()) bindRsvp(sheet, e);
   if (e.rsvp && isAdmin()) loadAttendance(sheet, e);
   if (isAdmin()) {
@@ -862,7 +867,7 @@ function bindRsvp(sheet, e) {
       e.myRsvp = status; render();
       const txt = status === 'yes' ? 'Presenza confermata: ci sarai!' : status === 'no' ? 'Assenza segnata: non ci sarai.' : 'Risposta tolta.';
       box.outerHTML = `<div class="rsvp-box fatto ${status || ''}" id="rsvp" role="status"><p>${ic(status === 'no' ? 'x' : 'check')}<b>${txt}</b></p><p class="muted" style="margin:0;font-size:13px">Puoi cambiarla fino al giorno dell'evento.</p></div>`;
-      setTimeout(() => { if (sheet.isConnected) closeDialog(); }, 1600);
+      setTimeout(() => { if (sheet.isConnected) closeDialog(); if (status === 'yes') setTimeout(chiediGcal, 300); }, 1600);
     } catch (x) {
       clearTimeout(lento);
       msg.innerHTML = `<b style="color:var(--danger,#B3261E)">Risposta non salvata.</b> ${esc(x.message === 'Failed to fetch' ? 'Controlla la connessione e riprova.' : x.message)}`;
@@ -1031,6 +1036,7 @@ function openForm(e, date) {
       if (S.view === 'cal') { S.sel = body.start; const d = parse(body.start); S.cursor = new Date(d.getFullYear(), d.getMonth(), 1); }
       const spostato = !isNew && (e.start !== body.start || e.end !== body.end || !!e.allDay !== body.allDay
         || (!body.allDay && ((e.startTime || '') !== body.startTime || (e.endTime || '') !== body.endTime)));
+      if (isNew) setTimeout(chiediGcal, 700);
       render(); toast(isNew ? 'Evento creato' : spostato && body.rsvp ? 'Evento spostato: chi aveva risposto riceve l\'avviso e deve confermare di nuovo' : 'Modifiche salvate');
     } catch (x) { err(x.message); btn.disabled = false; }
   };
@@ -1286,6 +1292,41 @@ function passwordDialog() {
     catch (x) { const el = $('#perr', sheet); el.textContent = x.message; el.hidden = false; }
   };
   $('#pws', sheet).onclick = go; $('#pwf', sheet).onsubmit = go;
+}
+
+/* ============ Google Calendar (solo in uscita) ============ */
+// La prima volta che dici «Ci sarò» (o crei un evento) ti chiede dove mandare gli eventi; poi li mette e li aggiorna da solo.
+function chiediGcal() {
+  const g = S.me.gcal; if (!g?.disponibile || g.email || g.chiesto || $('.sheet')) return;
+  gcalDialog(true);
+}
+function gcalDialog(primaVolta = false) {
+  const g = S.me.gcal || {};
+  const sheet = openDialog(`${head('Eventi nel tuo Google Calendar')}
+    <form class="sh-body" id="gf">
+      <p style="margin:0">${primaVolta ? 'Vuoi che gli eventi finiscano <b>da soli</b> nel tuo Google Calendar? ' : ''}Quando confermi «Ci sarò»${isAdmin() ? ' o crei un evento' : ''}, l'evento arriva nel tuo Google Calendar e si aggiorna se cambia; se dici «Non ci sarò» si toglie.</p>
+      <div class="note">Solo in uscita: l'app <b>non legge</b> il tuo calendario e non vede i tuoi appuntamenti.</div>
+      <div class="err" id="gerr" hidden></div>
+      <label class="field"><span>Email del tuo account Google</span><input type="email" name="email" autocomplete="email" required value="${esc(g.email || S.me.username || '')}" placeholder="nome@gmail.com"><span class="hint">L'indirizzo con cui apri Google Calendar (Gmail o account Google dello studio).</span></label>
+    </form>
+    <div class="sh-foot">${g.email ? '<button class="btn ghost" id="goff">Non mandarli più</button>' : `<button class="btn ghost" id="gno">${primaVolta ? 'No grazie' : 'Annulla'}</button>`}<span class="spacer"></span><button class="btn primary" id="gok">${g.email ? 'Salva' : 'Attiva'}</button></div>`, { narrow: true });
+  const err = m => { const el = $('#gerr', sheet); el.textContent = m; el.hidden = false; };
+  const ok = async ev => {
+    ev?.preventDefault(); const b = $('#gok', sheet); b.disabled = true;
+    try {
+      const r = await api('/api/me/gcal', { method: 'PUT', body: { email: $('#gf', sheet).email.value } });
+      S.me.gcal = { ...g, email: r.email, chiesto: true }; closeDialog(); render();
+      toast(r.inviati ? `Fatto: ${r.inviati} ${r.inviati === 1 ? 'evento mandato' : 'eventi mandati'} al tuo Google Calendar` : 'Fatto: i prossimi eventi arriveranno nel tuo Google Calendar');
+    } catch (x) { err(x.message); b.disabled = false; }
+  };
+  $('#gok', sheet).onclick = ok; $('#gf', sheet).onsubmit = ok;
+  const no = $('#gno', sheet);
+  if (no) no.onclick = async () => { if (primaVolta) { try { await api('/api/me/gcal', { method: 'PUT', body: { no: true } }); } catch {} S.me.gcal = { ...g, chiesto: true }; } closeDialog(); };
+  const off = $('#goff', sheet);
+  if (off) off.onclick = async () => {
+    if (!confirm('Smetto di mandare gli eventi e tolgo dal tuo Google Calendar quelli già mandati?')) return;
+    try { await api('/api/me/gcal', { method: 'PUT', body: { no: true } }); S.me.gcal = { ...g, email: null, chiesto: true }; closeDialog(); render(); toast('Fatto: eventi tolti dal tuo Google Calendar'); } catch (x) { err(x.message); }
+  };
 }
 
 /* ============ avvio ============ */

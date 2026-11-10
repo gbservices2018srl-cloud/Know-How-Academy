@@ -15,7 +15,7 @@ async function send({ to, subject, text, html, replyTo, attachments }) {
       method: 'POST',
       headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ from: FROM(), to: [].concat(to), subject, text, html, ...(replyTo ? { reply_to: replyTo } : {}),
-        ...(attachments?.length ? { attachments: attachments.map(a => ({ filename: a.filename, content: Buffer.from(a.content).toString('base64') })) } : {}) }),
+        ...(attachments?.length ? { attachments: attachments.map(a => ({ filename: a.filename, content: Buffer.from(a.content).toString('base64'), ...(a.contentType ? { content_type: a.contentType } : {}) })) } : {}) }),
       signal: AbortSignal.timeout(15000),
     });
     if (!r.ok) { console.warn('Email non inviata:', r.status, (await r.text()).slice(0, 300)); return false; }
