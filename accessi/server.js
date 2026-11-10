@@ -486,7 +486,9 @@ app.get('/api/admin/users', needAdmin, wrap(async (req, res) => {
   }
   res.json({
     me: req.user.id,
-    apps: APPS.filter(a => !a.segue && !a.virtuale).map(a => ({ key: a.key, name: a.name, adminOnly: !!a.adminOnly, livelli: a.livelli || null })),
+    apps: APPS.filter(a => !a.segue && !a.virtuale).map(a => ({ key: a.key, name: a.name, adminOnly: !!a.adminOnly, livelli: a.livelli || null, gruppo: riquadroDi(a), color: a.color || 'teal' })),
+    // i riquadri come nella pagina delle app: i gruppi (Gestione ASO, HR, Comunicazioni…) e le app che hanno un riquadro proprio
+    riquadri: APPS.filter(a => !a.segue && (a.virtuale || !riquadroDi(a))).map(a => ({ key: a.key, name: a.name, color: a.color || 'teal', gruppo: !!a.virtuale })),
     figure: store.FIGURE,
     livelli: lv,
     mail: mail.enabled(),
@@ -494,6 +496,12 @@ app.get('/api/admin/users', needAdmin, wrap(async (req, res) => {
   });
 }));
 
+// riquadro in cui sta l'app nella pagina delle app (il gruppo "virtuale" più esterno), null se ha un riquadro suo
+function riquadroDi(a) {
+  let x = a, top = null;
+  for (let i = 0; i < 5 && x?.dentro; i++) { x = APPS.find(y => y.key === x.dentro); if (x?.virtuale) top = x.key; }
+  return top;
+}
 async function sendActivation(u, link) {
   const apps = appsForUser(await store.appsOf(u)).filter(a => a.key !== 'accessi');
   const list = apps.length ? apps.map(a => mail.esc(a.name)).join(', ') : 'nessuna per ora';

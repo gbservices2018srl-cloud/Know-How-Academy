@@ -66,6 +66,16 @@ header p{margin:0;color:var(--muted);max-width:70ch}
 .sedibox .schip.on{background:var(--teal);border-color:var(--teal);color:#fff}
 .pill.owner{background:color-mix(in srgb,var(--purple) 18%,transparent);color:var(--purple-ink)}
 .actions{display:flex;gap:6px;flex-wrap:wrap}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;margin-top:4px}
+.tile{--c:var(--teal);position:relative;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:12px 14px 12px 18px;cursor:pointer;display:flex;flex-direction:column;gap:3px;font:inherit;color:var(--fg);overflow:hidden;min-height:62px}
+.tile::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--line)}
+.tile.on::before{background:var(--c)}
+.tile b{font-size:14.5px}.tile small{font-size:12.5px;color:var(--muted)}
+.tile.on small{color:var(--fg);font-weight:600}
+.tile.aperto{border-color:var(--c);box-shadow:0 0 0 2px color-mix(in srgb,var(--c) 35%,transparent)}
+.tile.c-purple{--c:var(--purple)}.tile.c-yellow{--c:var(--yellow)}.tile.c-grey{--c:var(--grey)}
+.tile-box{border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-top:8px;background:var(--surface-2,transparent)}
+.tile-tit{font-weight:700;margin-bottom:8px}
 .apps{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
 .ap{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;color:var(--muted)}
 .ap select{min-height:40px;padding:8px 10px;font-size:14.5px;border-radius:10px}
@@ -284,11 +294,16 @@ function render() {
   $('#list').className = 'list card';
   $('#list').innerHTML = rows.map(u => card(u, names[fullName(u).toLowerCase()] > 1)).join('');
 }
+const gruppoAperto = {}; // persona → riquadro aperto
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-tile]'); if (!t) return;
+  const id = t.dataset.u; gruppoAperto[id] = gruppoAperto[id] === t.dataset.tile ? null : t.dataset.tile; render();
+});
 function card(u, homonym) {
   const st = {pending: 'In attesa', active: 'Attivo', disabled: 'Disattivato'}[u.status];
   const selfOrOwner = u.owner || u.id === S.me;
   const sosp = new Set(u.sospese || []);
-  const apps = S.apps.map(a => {
+  const appHtml = a => {
     const role = u.apps[a.key] || '';
     const ns = sosp.has(a.key) ? '<small style="color:var(--danger);font-weight:700">Sospesa · riattivala dalla scheda App</small>' : '';
     if (a.livelli && !u.owner) {
@@ -307,7 +322,19 @@ function card(u, homonym) {
       ? `<option value="">Nessun accesso</option><option value="admin" ${role ? 'selected' : ''}>Amministratore</option>`
       : `<option value="">Nessun accesso</option><option value="user" ${role === 'user' ? 'selected' : ''}>Utente</option><option value="admin" ${role === 'admin' ? 'selected' : ''}>Amministratore</option>`;
     return `<label class="ap">${esc(a.name)}<select data-app="${a.key}" data-u="${u.id}" class="${role}" ${dis ? 'disabled' : ''}>${opts}</select>${ns}</label>`;
+  };
+  // come nella pagina delle app: un riquadro per gruppo (o per app); si apre e mostra le sue app. Uno solo aperto alla volta.
+  const membri = r => r.gruppo ? S.apps.filter(a => a.gruppo === r.key) : S.apps.filter(a => a.key === r.key);
+  const riq = (S.riquadri || []).map(r => ({ ...r, app: membri(r) })).filter(r => r.app.length);
+  const aperto = gruppoAperto[u.id];
+  const tiles = riq.map(r => {
+    const on = r.app.filter(a => u.apps[a.key]).length, adm = r.app.some(a => u.apps[a.key] === 'admin');
+    const stato = !on ? 'Non attiva' : r.app.length === 1 ? (adm ? 'Amministratore' : 'Attiva') : `${on} di ${r.app.length} attive`;
+    return `<button type="button" class="tile c-${esc(r.color)} ${on ? 'on' : ''} ${aperto === r.key ? 'aperto' : ''}" data-tile="${esc(r.key)}" data-u="${u.id}" aria-expanded="${aperto === r.key}">
+      <b>${esc(r.name)}</b><small>${esc(stato)}</small></button>`;
   }).join('');
+  const sel = riq.find(r => r.key === aperto);
+  const apps = `<div class="tiles">${tiles}</div>` + (sel ? `<div class="tile-box"><div class="tile-tit">${esc(sel.name)}${sel.app.length > 1 ? ' <span class="muted" style="font-weight:500;font-size:13px">· scegli le app da attivare</span>' : ''}</div><div class="apps">${sel.app.map(appHtml).join('')}</div></div>` : '');
   let actions = '';
   if (u.status === 'pending') actions = `<button class="btn small primary" data-act="approve" data-u="${u.id}">Approva</button><button class="btn small danger" data-act="reject" data-u="${u.id}">Rifiuta</button>`;
   else if (!selfOrOwner) actions = (u.status === 'active'
@@ -336,7 +363,7 @@ function card(u, homonym) {
     ${u.owner ? '' : sediBox(u)}
     ${u.status === 'pending' ? '<p class="hint">1. Controlla i dati e scegli le sedi · 2. conferma il contratto · 3. controlla le app qui sotto (quelle della sua figura sono già pronte) · 4. premi «Approva»: il profilo viene creato da solo in ogni app con le sue sedi e la persona riceve un\'email.</p>' : ''}
     ${u.owner ? '<p class="hint">Il proprietario (impostato su Render) è amministratore di tutte le app.</p>' : ''}
-    <div class="apps">${apps}</div>
+    ${apps}
   </div></article>`;
 }
 
