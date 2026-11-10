@@ -586,6 +586,12 @@ function pendingPanel() {
     ${list.length > 4 ? `<p class="muted" style="margin:8px 0 0;font-size:13px">e altri ${list.length - 4} nei prossimi mesi.</p>` : ''}
   </div>`;
 }
+// finché la persona non ha scelto: invito a collegare il suo Google Calendar (solo in uscita)
+function gcalBanner() {
+  const g = S.me.gcal; if (!g?.disponibile || g.email || g.chiesto) return '';
+  return `<div class="banner">${ic('cal')}<div class="grow"><b>Eventi nel tuo Google Calendar</b>${isAdmin() ? 'Gli eventi che crei' : 'Gli eventi a cui dici «Ci sarò»'} arrivano da soli nel tuo Google Calendar e si aggiornano se cambiano. Solo in uscita.</div><button class="btn sm primary" data-gcal-on>Collega</button></div>`;
+}
+document.addEventListener('click', e => { if (e.target.closest('[data-gcal-on]')) gcalDialog(true); });
 function pushBanner() {
   if (isAdmin() || store.get('pushLater', 0) > Date.now()) return '';
   const later = `<button class="btn sm ghost" data-push-later>Più tardi</button>`;
@@ -622,6 +628,7 @@ async function renderCal() {
     : fmt(S.cursor, { month: 'long', year: 'numeric' });
   const typeChips = S.types.map(t => `<button class="chip c-${t.color} ${S.typeFilter.has(t.id) ? 'on' : ''}" data-type="${t.id}"><span class="dot"></span>${esc(t.name)}</button>`).join('');
   main.innerHTML = `
+  ${gcalBanner()}
   ${pushBanner()}
   ${pendingPanel()}
   <div class="cal">
@@ -1333,6 +1340,7 @@ function gcalDialog(primaVolta = false) {
 (async () => {
   try { await loadState(); } catch (e) { $('#main').innerHTML = `<div class="err">${esc(e.message)}</div>`; return; }
   renderTop(); render();
+  setTimeout(chiediGcal, 1200);
   pushInit().then(() => { if (S.view === 'cal' && PUSH.state !== 'checking') render(); });
   const want = new URLSearchParams(location.search).get('event');
   if (want) {

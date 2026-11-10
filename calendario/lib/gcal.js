@@ -14,6 +14,9 @@ async function migrate() {
     create table if not exists gcal_invii (event_id text not null, user_id text not null, email text not null, seq int not null default 0,
       attivo boolean not null default true, il timestamptz not null default now(), primary key (event_id, user_id));
   `);
+  // eventi creati prima: chi li ha creati si ricava da "modificato da" (nome della persona)
+  await db.q(`update events e set created_by_id = (select u.id from users u where u.name = e.updated_by order by u.role = 'admin' desc limit 1)
+    where e.created_by_id is null and e.updated_by is not null`);
 }
 
 const escI = s => String(s || '').replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/([,;])/g, '\\$1');
