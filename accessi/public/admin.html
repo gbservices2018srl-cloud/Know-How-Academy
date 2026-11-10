@@ -430,8 +430,8 @@ document.addEventListener('change', async e => {
   const a = S.apps.find(x => x.key === s.dataset.app);
   if (a.livelli) {
     const k = u.id + '|' + a.key, L = a.livelli.find(l => l.key === s.value);
-    // per le app "per sede": se la persona ha già le sedi in un'altra app, si usano quelle (niente da riselezionare)
-    const giaSedi = L?.ente === 'sedi' && Object.entries(S.livelli[u.id] || {}).some(([app, lv]) => app !== a.key && lv.enti?.length && S.apps.find(x => x.key === app)?.livelli?.find(l => l.key === lv.livello)?.ente === 'sedi');
+    // per le app "per sede": si usano le sedi della persona (riquadro «Sedi in cui lavora») o quelle già scelte in un'altra app
+    const giaSedi = L?.ente === 'sedi' && ((u.sedi || []).length || Object.entries(S.livelli[u.id] || {}).some(([app, lv]) => app !== a.key && lv.enti?.length && S.apps.find(x => x.key === app)?.livelli?.find(l => l.key === lv.livello)?.ente === 'sedi'));
     if (L?.ente && !giaSedi) { pend[k] = L.key; render(); toast(`Ora scegli: ${L.enteLabel.toLowerCase()}`); return; }
     if (s.value === '_old') return;
     delete pend[k];

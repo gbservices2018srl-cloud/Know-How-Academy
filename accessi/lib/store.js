@@ -278,7 +278,7 @@ async function impostaSedi(userId, ids, { propaga = true } = {}) {
   const enti = [...new Set((Array.isArray(ids) ? ids : []).map(String))].map(id => ss.find(x => x.id === id)).filter(Boolean).map(x => ({ id: x.id, nome: x.nome }));
   const prima = await sediAnagrafica(userId);
   await q('update users set sedi = $2 where id = $1', [userId, JSON.stringify(enti.map(e => e.id))]);
-  if (!propaga || !enti.length || idsDi(prima) === idsDi(enti)) return enti;
+  if (!propaga || !enti.length) return enti; // anche se uguali: le app per sede rimaste senza sede le ricevono
   const { rows } = await q(`select app, role, livello, enti from user_apps where user_id = $1 and app = any($2) and role <> 'admin'`, [userId, APPS_SEDI().map(a => a.key)]);
   for (const r of rows) {
     const vuoto = !Array.isArray(r.enti) || !r.enti.length;

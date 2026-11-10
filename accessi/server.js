@@ -1168,6 +1168,9 @@ async function start() {
   await store.accessiAutomatici().catch(e => console.warn('Accessi automatici:', e.message));
   await recuperaSedi().catch(e => console.warn('Recupero sedi:', e.message));
   await sediMediciInAnagrafica().catch(e => console.warn('Sedi dei medici:', e.message));
+  // app per sede rimaste senza sede (es. date in automatico prima che le sedi fossero scelte): ricevono quelle dell'anagrafica
+  try { for (const r of (await store.q(`select id, sedi from users where jsonb_typeof(sedi) = 'array' and jsonb_array_length(sedi) > 0`)).rows) await store.impostaSedi(r.id, r.sedi); }
+  catch (e) { console.warn('Sedi nelle app:', e.message); }
 }
 
 // Per le app che girano nello stesso servizio (Protocolli, Calendario)
