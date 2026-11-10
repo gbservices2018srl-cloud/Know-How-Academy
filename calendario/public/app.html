@@ -1310,6 +1310,34 @@ function chiediGcal() {
 }
 async function gcalDialog(primaVolta = false) {
   const g = S.me.gcal || {};
+  const tel = /android|iphone|ipad|ipod/i.test(navigator.userAgent), ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  // dal telefono l'app Google Calendar non permette di aggiungere calendari da indirizzo: si fa una volta dal browser, in versione computer
+  if (tel) {
+    const sheet = openDialog(`${head('Eventi nel tuo Google Calendar')}
+      <div class="sh-body">
+        <p style="margin:0">Dal telefono si fa <b>una volta sola</b> dal browser (l'app Google Calendar non ha questa funzione). Poi gli eventi compaiono anche nell'app.</p>
+        <ol class="gpassi">
+          <li>Premi <b>Copia indirizzo</b>.</li>
+          <li>Premi <b>Apri Google Calendar</b>. Se si apre l'app o una pagina ridotta: nel browser chiedi la <b>versione per computer</b> (${ios ? 'Safari: tasto «aA» → «Richiedi sito desktop»' : 'Chrome: menu ⋮ → «Sito desktop»'}).</li>
+          <li>Nella pagina «Da URL» incolla l'indirizzo e premi <b>Aggiungi calendario</b>.</li>
+          <li>Fatto: nell'app Google Calendar compare <b>To Smile · Eventi</b> (se non lo vedi: menu ☰ → spunta «To Smile · Eventi»).</li></ol>
+        <div class="err" id="gerr" hidden></div>
+        <div class="row" style="gap:8px"><input type="text" id="gurl" readonly value="Preparo l'indirizzo…" style="flex:1;font-size:12.5px"><button class="btn sm primary" id="gcopia">Copia indirizzo</button></div>
+        ${ios ? '<p style="margin:0;font-size:13px">Usi il Calendario di iPhone invece di Google? <a href="#" id="gios">Aggiungilo lì con un tocco</a>.</p>' : ''}
+        <div class="note">Solo in uscita e senza email: l'app <b>non legge</b> il tuo calendario. Google aggiorna questi calendari da solo, di solito ogni qualche ora.</div>
+      </div>
+      <div class="sh-foot">${primaVolta ? '<button class="btn ghost" id="gno">No grazie</button>' : '<button class="btn ghost" data-close>Chiudi</button>'}<span class="spacer"></span><a class="btn primary" href="https://calendar.google.com/calendar/r/settings/addbyurl" target="_blank" rel="noopener">${ic('cal')}Apri Google Calendar</a></div>`, { narrow: true });
+    try {
+      const r = await api('/api/me/gcal', { method: 'POST', body: {} });
+      S.me.gcal = { ...g, attivo: true, chiesto: true };
+      $('#gurl', sheet).value = r.url;
+      const gi = $('#gios', sheet); if (gi) gi.href = r.url.replace(/^https?:/, 'webcal:');
+      $('#gcopia', sheet).onclick = async () => { try { await navigator.clipboard.writeText(r.url); toast('Indirizzo copiato: ora apri Google Calendar'); } catch { const i = $('#gurl', sheet); i.select(); document.execCommand('copy'); toast('Indirizzo copiato'); } };
+    } catch (x) { const el = $('#gerr', sheet); el.textContent = x.message; el.hidden = false; }
+    const no = $('#gno', sheet);
+    if (no) no.onclick = async () => { try { await api('/api/me/gcal', { method: 'POST', body: { no: true } }); } catch {} S.me.gcal = { ...g, chiesto: true }; closeDialog(); render(); };
+    return;
+  }
   const passi = `<ol class="gpassi">
       <li>Premi <b>Aggiungi a Google Calendar</b>: si apre Google Calendar e chiede «Aggiungere il calendario?». Rispondi <b>Aggiungi</b>.</li>
       <li>Fatto: compare il calendario <b>To Smile · Eventi</b>, con ${isAdmin() ? 'gli eventi che crei e quelli' : 'gli eventi'} a cui dici «Ci sarò».</li></ol>
