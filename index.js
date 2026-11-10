@@ -77,7 +77,10 @@ function route(req) {
     }
     // www.appgestione.it → appgestione.it (un solo indirizzo, così il cookie dell'accesso è sempre lo stesso)
     if (hostOf(req) === 'www.appgestione.it') { res.writeHead(301, { Location: 'https://appgestione.it' + req.url }); return res.end(); }
-    route(req)(req, res);
+    // dati obbligatori dell'anagrafica mancanti: prima di aprire qualsiasi app si completa il profilo (sull'accesso unico lo controlla lui)
+    const dest = route(req);
+    if (dest === accessi.app) return dest(req, res);
+    accessi.cancello(req, res, false).then(fatto => { if (!fatto) dest(req, res); }, () => dest(req, res));
   }).listen(PORT, () => console.log(`Accesso unico, Protocolli, Calendario, Magazzino, Turni, Comunicazioni e Documenti attivi sulla porta ${PORT}` +
     (process.env.SSO_ATTIVO === 'true' ? ' (accesso unico acceso)' : ' (accesso unico spento: SSO_ATTIVO non è true)')));
 })().catch(e => { console.error('Avvio non riuscito:', e); process.exit(1); });

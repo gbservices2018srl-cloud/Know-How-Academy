@@ -6,6 +6,7 @@ const express = require('express');
 const store = require('./lib/store');
 const mail = require('./lib/mail');
 const notifiche = require('./lib/notifiche');
+const profilo = require('./lib/profilo');
 
 const PROD = process.env.NODE_ENV === 'production';
 const COOKIE = 'ag_sso';
@@ -272,6 +273,83 @@ app.get('/esci', wrap(async (req, res) => {
   res.redirect('/accedi');
 }));
 
+/* ---------- anagrafica: dati obbligatori (elenco in lib/profilo.js) ---------- */
+// Chi ha dati mancanti, aprendo qualsiasi app viene mandato prima a «Completa il tuo profilo».
+const gateCache = new Map(); // token → { t, manca }
+const gateAzzera = userId => { for (const [k, v] of gateCache) if (!userId || v.id === userId) gateCache.delete(k); };
+const LIBERE = /^\/(completa-profilo|api\/|static\/|fonts\/|esci|accedi|registrati|privacy|termini|cookie|conferma-email|reimposta|password-dimenticata|sw\.js|manifest)/;
+async function cancello(req, res, interna) {
+  if (req.method !== 'GET' || !String(req.headers.accept || '').includes('text/html')) return false;
+  const url = req.url || '/';
+  if (/\/api\//.test(url) || /\.(js|css|png|jpe?g|svg|ico|webmanifest|json|woff2?|pdf|txt)(\?|$)/i.test(url.split('?')[0])) return false;
+  if (interna && LIBERE.test(url)) return false;
+  const token = readCookie(req); if (!token) return false;
+  let c = gateCache.get(token);
+  if (!c || Date.now() - c.t > 60000) {
+    const u = await store.utenteDaToken(token).catch(() => null);
+    if (!u) return false; // sessione non valida: ci pensa l'app (manda all'accesso)
+    c = { t: Date.now(), id: u.id, manca: profilo.mancanti(u).length > 0 };
+    gateCache.set(token, c);
+    if (gateCache.size > 5000) gateCache.clear();
+  }
+  if (!c.manca) return false;
+  const torna = `https://${String(req.headers.host || BASE_DOMAIN).split(':')[0]}${url}`;
+  res.writeHead(302, { Location: `${interna ? '' : PUBLIC_URL()}/completa-profilo?next=${encodeURIComponent(torna)}`, 'Cache-Control': 'no-store' });
+  res.end();
+  return true;
+}
+app.use((req, res, next) => cancello(req, res, true).then(fatto => fatto || next(), next));
+
+app.get('/api/profilo/campi', (req, res) => res.json({ campi: profilo.campiPer(null) }));
+app.get('/api/profilo', needUser, wrap(async (req, res) => {
+  const u = await store.getUser(req.user.id);
+  res.json({ campi: profilo.campiPer(u), valori: profilo.valori(u, { ibanIntero: true }), mancanti: profilo.mancanti(u), nome: u.first_name, cifraOk: profilo.cifraOk() });
+}));
+// legge dal modulo i campi dell'anagrafica: obbligatori quelli che mancano ancora, gli altri solo se cambiati
+function leggiProfilo(b, u, { tutti = false, admin = false } = {}) {
+  const set = {}, campi = profilo.CAMPI.filter(c => c.chi === 'persona' && (c.per === 'tutti' || [].concat(c.per).includes(u.figura)));
+  for (const c of campi) {
+    const v = b[c.k], vuoto = v == null || v === '' || (typeof v === 'object' && !Object.values(v).some(x => String(x ?? '').trim()));
+    if (vuoto) { if (tutti || (!admin && !profilo.presente(c, u))) return { errore: `Compila «${c.nome}».` }; continue; }
+    if (c.tipo === 'contratto' && u.contratto_ok && !admin) {
+      if (v.tipo === u.contratto_tipo && (v.tipo !== 'dip' || Number(v.ore) === Number(u.contratto_ore))) continue;
+      return { errore: "Il contratto è già stato confermato dall'amministratore: per cambiarlo chiediglielo." };
+    }
+    const r = profilo.leggi(c, v); if (r.errore) return r;
+    Object.assign(set, r.set);
+  }
+  if ('contratto_tipo' in set) {
+    const cambia = set.contratto_tipo !== u.contratto_tipo || Number(set.contratto_ore ?? -1) !== Number(u.contratto_ore ?? -1);
+    if (!cambia && !admin) { delete set.contratto_tipo; delete set.contratto_ore; }
+    else if (!admin) { set.contratto_ok = false; set.contratto_il = new Date(); }
+  }
+  return { set };
+}
+const salvaSet = async (id, set) => {
+  const k = Object.keys(set); if (!k.length) return;
+  await store.q(`update users set ${k.map((x, i) => `${x} = $${i + 2}`).join(', ')}, profilo_il = now() where id = $1`, [id, ...k.map(x => set[x])]);
+  gateAzzera(id);
+};
+app.put('/api/profilo', needUser, wrap(async (req, res) => {
+  const u = await store.getUser(req.user.id);
+  const r = leggiProfilo(req.body || {}, u); if (r.errore) return bad(res, 400, r.errore);
+  await salvaSet(u.id, r.set);
+  const fresh = await store.getUser(u.id);
+  if (r.set.contratto_tipo && !u.owner) {
+    const ct = fresh.contratto_tipo === 'dip' ? `dipendente, ${fresh.contratto_ore} ore settimanali` : 'partita IVA';
+    mail.send({ to: NOTIFY(), subject: `Contratto da confermare: ${fullName(fresh)}`,
+      text: `${fullName(fresh)} ha dichiarato: ${ct}. Confermalo dal pannello accessi: ${PUBLIC_URL()}/admin`,
+      html: mail.layout('Contratto da confermare', [`<b>${mail.esc(fullName(fresh))}</b> ha dichiarato: <b>${mail.esc(ct)}</b>.`, 'Controllalo e confermalo dal pannello accessi (Modifica → Anagrafica).'],
+        { url: PUBLIC_URL() + '/admin', label: 'Apri il pannello accessi' }) });
+  }
+  res.json({ ok: true, mancanti: profilo.mancanti(fresh), valori: profilo.valori(fresh, { ibanIntero: true }) });
+}));
+// amministratore: IBAN intero (solo su richiesta, dal pannello)
+app.get('/api/admin/users/:id/iban', needAdmin, wrap(async (req, res) => {
+  const u = await store.getUser(req.params.id); if (!u) return bad(res, 404, 'Utente non trovato');
+  res.json({ iban: u.iban_cifrato ? profilo.decifra(u.iban_cifrato) : '' });
+}));
+
 /* ---------- registrazione ---------- */
 app.get('/api/figure', (req, res) => res.json({ figure: store.FIGURE }));
 // Medico: provincia e numero di iscrizione all'albo (servono a Nuovalab). Vuoti = non è medico.
@@ -307,8 +385,11 @@ app.post('/api/register', wrap(async (req, res) => {
   if (!b.privacy) return bad(res, 400, "Per registrarti devi confermare di aver letto la Privacy Policy e accettare i Termini e condizioni.");
   if (await store.findByEmail(email)) return bad(res, 400, 'Esiste già un account con questa email. Se non ricordi la password usa «Password dimenticata».');
   if (await cfUsato(cf)) return bad(res, 400, 'Esiste già un account con questo codice fiscale. Se non ricordi la password usa «Password dimenticata».');
+  const anag = leggiProfilo(b, { figura, status: 'pending' }, { tutti: true });
+  if (anag.errore) return bad(res, 400, anag.errore);
   if (limited('reg|' + req.ip, 100, 60)) return bad(res, 429, 'Troppe registrazioni da questa connessione nell\'ultima ora. Riprova più tardi oppure usa i dati mobili del telefono.');
   const u = await store.createUser({ firstName, lastName, birthDate, email, password, status: 'pending', cf, figura, ...albo.dati });
+  await salvaSet(u.id, { ...anag.set, contratto_il: new Date() });
   const adminUrl = PUBLIC_URL() + '/admin';
   mail.send({
     to: NOTIFY(), replyTo: email,
@@ -497,12 +578,22 @@ app.patch('/api/admin/users/:id', needAdmin, wrap(async (req, res) => {
     if (albo.errore) return bad(res, 400, albo.errore);
     set.albo_provincia = albo.dati.alboProvincia; set.albo_numero = albo.dati.alboNumero;
   }
+  if (b.anagrafica) {
+    const r = leggiProfilo(b.anagrafica, u, { admin: true }); if (r.errore) return bad(res, 400, r.errore);
+    Object.assign(set, r.set);
+    if ('contratto_tipo' in r.set) {
+      const uguale = r.set.contratto_tipo === u.contratto_tipo && Number(r.set.contratto_ore ?? -1) === Number(u.contratto_ore ?? -1);
+      if (uguale) { delete set.contratto_tipo; delete set.contratto_ore; } else { set.contratto_ok = true; set.contratto_il = new Date(); } // cambiato dall'amministratore: vale come confermato
+    }
+  }
+  if (b.contrattoOk !== undefined) { if (!u.contratto_tipo && !set.contratto_tipo) return bad(res, 400, 'Il contratto non è ancora stato indicato.'); set.contratto_ok = !!b.contrattoOk; }
   if (b.status !== undefined) {
     if (!['active', 'disabled'].includes(b.status)) return bad(res, 400, 'Stato non valido');
     if (u.owner || u.id === req.user.id) return bad(res, 400, 'Non puoi disattivare questo account.');
   }
   const keys = Object.keys(set);
   if (keys.length) await store.q(`update users set ${keys.map((k, i) => `${k} = $${i + 2}`).join(', ')} where id = $1`, [u.id, ...keys.map(k => set[k])]);
+  if (keys.length) gateAzzera(u.id);
   let sent, avvisi = [];
   if (b.status !== undefined) {
     const wasPending = u.status === 'pending';
@@ -928,6 +1019,7 @@ app.post('/api/notifiche/invia', needNotifyKey, wrap(async (req, res) => {
 const PUB = path.join(__dirname, 'public');
 const sendPage = file => (req, res) => { res.set('Cache-Control', 'no-store'); res.sendFile(path.join(PUB, file)); };
 app.get('/', (req, res) => req.user ? sendPage('home.html')(req, res) : res.redirect('/accedi'));
+app.get('/completa-profilo', (req, res) => req.user ? sendPage('profilo.html')(req, res) : res.redirect('/accedi?next=' + encodeURIComponent(req.originalUrl)));
 // Gestione amministrativa · Raffronto prezzi (listini e confronto delle fatture)
 require('./prezzi')(app, { store, needUser, wrap, bad, sendPage });
 /* ---------- HR · Lettore I-Profile: legge il grafico e fa il report. Non salva niente (né foto né valori). ---------- */
@@ -1028,6 +1120,6 @@ async function logoutFromApp(req, res) {
   clearSessionCookie(req, res);
 }
 module.exports = {
-  app, start, store, readCookie, COOKIE, logoutFromApp, publicUrl: PUBLIC_URL,
+  app, start, store, readCookie, COOKIE, logoutFromApp, publicUrl: PUBLIC_URL, cancello, gateAzzera,
   loginUrl: next => `${PUBLIC_URL()}/accedi?next=${encodeURIComponent(next)}`,
 };

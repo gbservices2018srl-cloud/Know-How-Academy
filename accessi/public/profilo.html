@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Il tuo profilo · To Smile</title>
+<link rel="stylesheet" href="/fonts/tosmile.css?f=fira-sans:600,700,800|figtree:400,500,600,700">
+<link rel="stylesheet" href="/static/accessi.css?v=3">
+<link rel="icon" href="/static/icon.svg">
+<meta name="theme-color" content="#4CAAAA">
+<style>
+.wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+header{display:flex;flex-direction:column;gap:12px;padding-top:6px}
+header p{margin:0;color:var(--muted)}
+.card{padding:22px;display:flex;flex-direction:column;gap:16px}
+form{display:flex;flex-direction:column;gap:14px}
+.avviso{background:color-mix(in srgb,var(--yellow) 22%,transparent);border-radius:14px;padding:12px 14px;font-size:14.5px}
+.row{display:flex;gap:10px;justify-content:space-between;flex-wrap:wrap;align-items:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="logo" href="/" aria-label="To Smile"><img src="/static/logo-tosmile.png" alt="To Smile" width="548" height="165"></a>
+    <h1 id="title">Il tuo <span>profilo</span></h1>
+    <div class="rule" aria-hidden="true"></div>
+    <p id="lead">Caricamento…</p>
+  </header>
+  <main class="card" id="card"></main>
+</div>
+<script src="/static/profilo-campi.js?v=1"></script>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const next = (() => { const n = new URLSearchParams(location.search).get('next') || ''; return /^https:\/\/([a-z0-9-]+\.)*appgestione\.it(\/|$)/i.test(n) || n.startsWith('/') && !n.startsWith('//') ? n : '/'; })();
+async function api(method, url, body) {
+  const r = await fetch(url, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined, credentials: 'same-origin' });
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401) { location.href = '/accedi?next=' + encodeURIComponent(location.pathname + location.search); throw new Error('Accesso richiesto'); }
+  if (!r.ok) throw new Error(j.error || 'Errore');
+  return j;
+}
+async function carica() {
+  const d = await api('GET', '/api/profilo');
+  const manca = d.mancanti.length > 0;
+  $('#title').innerHTML = manca ? 'Completa il tuo <span>profilo</span>' : 'Il tuo <span>profilo</span>';
+  $('#lead').textContent = manca
+    ? `Ciao ${d.nome}, prima di usare le app servono alcuni dati. Si compilano una volta sola: poi le app li prendono da qui.`
+    : 'I tuoi dati usati da tutte le app To Smile. Puoi aggiornarli quando cambiano.';
+  $('#card').innerHTML = `<form id="f" novalidate>
+    ${manca ? `<div class="avviso">Le app restano bloccate finché non compili ${d.mancanti.length === 1 ? 'il dato segnato' : 'i dati segnati'} «da compilare».</div>` : ''}
+    ${ProfiloCampi.html(d.campi, d.valori, { mancanti: d.mancanti })}
+    <div class="msg err" id="err" role="alert"></div>
+    <div class="row"><a href="${manca ? '/esci' : esc(next)}">${manca ? 'Esci' : '← Torna alle app'}</a><button class="btn primary" type="submit">${manca ? 'Salva e continua' : 'Salva'}</button></div>
+  </form>`;
+  ProfiloCampi.attiva($('#f'));
+  $('#f').addEventListener('submit', async e => {
+    e.preventDefault(); $('#err').textContent = '';
+    const b = e.submitter || $('#f button[type=submit]'); b.disabled = true;
+    try {
+      const r = await api('PUT', '/api/profilo', ProfiloCampi.leggi($('#f')));
+      if (r.mancanti.length) { $('#err').textContent = 'Mancano ancora dei dati.'; b.disabled = false; return; }
+      if (manca || next !== '/') location.href = next; else { b.disabled = false; $('#err').style.color = 'var(--ok)'; $('#err').textContent = '✓ Salvato'; }
+    } catch (x) { $('#err').textContent = x.message; b.disabled = false; }
+  });
+}
+carica().catch(x => { $('#lead').textContent = x.message; });
+</script>
+</body>
+</html>

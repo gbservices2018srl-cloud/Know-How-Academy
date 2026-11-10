@@ -141,10 +141,11 @@ function toast(t) { const d = document.createElement('div'); d.className = 'toas
   $('#pw-user').value = u.email;
   let pending = 0;
   if (me.admin) {
-    try { const a = await (await fetch('/api/admin/users')).json(); pending = a.users.filter(x => x.status === 'pending').length; } catch {}
+    try { const a = await (await fetch('/api/admin/users')).json(); pending = a.users.filter(x => x.status === 'pending' || (x.status === 'active' && x.contratto && !x.contratto.ok)).length; } catch {}
   }
   $('#who').innerHTML = `<span class="name">${esc(u.email)}</span>
     ${me.admin ? `<a class="btn small" href="/admin">Gestione accessi${pending ? ` <span class="badge" title="Richieste in attesa">${pending}</span>` : ''}</a>` : ''}
+    <a class="btn small" href="/completa-profilo">Il mio profilo</a>
     ${u.owner ? '' : '<button class="btn small" id="pw-open">Cambia password</button>'}
     <a class="btn small" href="/esci">Esci</a>`;
   const apps = me.apps.filter(a => a.key !== 'accessi');

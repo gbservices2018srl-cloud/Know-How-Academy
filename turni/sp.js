@@ -80,13 +80,17 @@ module.exports = function sp(app, ctx) {
     const { rows } = await q('select count(*)::int n from sp_preset');
     if (!rows[0].n) await q(`insert into sp_preset (id, nome, da, a, pausa, ordine) values
       ('giornata','Giornata','09:30','18:30',60,1),('mattina','Mattina','09:30','13:30',0,2),('pomeriggio','Pomeriggio','14:30','18:30',0,3) on conflict do nothing`);
+    // il contratto ora sta nell'anagrafica unica (accesso unico): quelli già dichiarati qui la riempiono (solo dove è vuota)
+    await q(`update ${store.SCHEMA}.users u set contratto_tipo = p.tipo, contratto_ore = case when p.tipo = 'dip' then p.ore_sett end, contratto_ok = p.tipo_ok,
+        contratto_il = coalesce(p.onb, p.aggiornato) from ${db.SCHEMA}.sp_persone p
+      where p.user_id = u.id and u.contratto_tipo is null and p.tipo in ('dip','piva')`).catch(e => console.warn('Scheda personale: recupero contratti:', e.message));
   })().catch(e => { pronto = null; throw e; }));
 
   /* ---------- persone ---------- */
   const nomeDi = r => `${r.first_name || ''} ${r.last_name || ''}`.trim();
   async function persone() {
     await migrate();
-    const { rows } = await store.q(`select u.id, u.first_name, u.last_name, u.figura, u.cf, u.email, u.owner from users u
+    const { rows } = await store.q(`select u.id, u.first_name, u.last_name, u.figura, u.cf, u.email, u.owner, u.contratto_tipo, u.contratto_ore, u.contratto_ok from users u
       where u.status = 'active' and (u.owner or exists (select 1 from user_apps a where a.user_id = u.id and a.app = any($1) and not a.sospesa))
       order by u.last_name, u.first_name`, [['turni', 'hr']]);
     const ids = rows.map(r => r.id);
@@ -102,8 +106,10 @@ module.exports = function sp(app, ctx) {
       let sedi = medico ? (mm.get(r.id) || []) : x.sedi;
       if (!medico && !Array.isArray(sedi)) sedi = (await store.sediNote(r.id)).map(e => e.id).filter(Boolean);
       out.push({ id: r.id, nome: nomeDi(r) || r.email, figura: r.figura || '', cf: String(r.cf || '').toUpperCase(), email: r.email, owner: !!r.owner,
-        admin: !!r.owner || am.has(r.id), medico, tipo: x.tipo || (medico ? 'piva' : null), tipoOk: !!x.tipo_ok, ore: x.ore_sett != null ? Number(x.ore_sett) : null,
-        senzaNfc: !!x.senza_nfc, sedi: sedi || [], onb: !!x.onb });
+        // contratto: dall'anagrafica unica; se lì manca ancora, quello di prima di questa app
+        ...(r.contratto_tipo ? { tipo: r.contratto_tipo, tipoOk: !!r.contratto_ok, ore: r.contratto_ore != null ? Number(r.contratto_ore) : null }
+          : { tipo: x.tipo || (medico ? 'piva' : null), tipoOk: !!x.tipo_ok, ore: x.ore_sett != null ? Number(x.ore_sett) : null }),
+        admin: !!r.owner || am.has(r.id), medico, senzaNfc: !!x.senza_nfc, sedi: sedi || [], onb: !!x.onb || !!r.contratto_tipo });
     }
     return out;
   }
@@ -272,6 +278,8 @@ module.exports = function sp(app, ctx) {
     await q(`insert into sp_persone (user_id, tipo, ore_sett, onb, tipo_ok) values ($1,$2,$3,now(),false)
       on conflict (user_id) do update set tipo = case when sp_persone.tipo_ok then sp_persone.tipo else excluded.tipo end,
         ore_sett = case when sp_persone.tipo_ok then sp_persone.ore_sett else excluded.ore_sett end, onb = coalesce(sp_persone.onb, now()), aggiornato = now()`,
+      [req.user.sso_id, tipo, tipo === 'dip' ? ore : null]);
+    await store.q(`update users set contratto_tipo = $2, contratto_ore = $3, contratto_ok = false, contratto_il = now() where id = $1 and not contratto_ok`,
       [req.user.sso_id, tipo, tipo === 'dip' ? ore : null]);
     const { rows } = await q('select tipo_ok from sp_persone where user_id = $1', [req.user.sso_id]);
     if (rows[0]?.tipo_ok) return res.json({ ok: true, bloccato: true });
@@ -481,6 +489,12 @@ module.exports = function sp(app, ctx) {
     if (!sets.length) return res.json({ ok: true });
     await q(`insert into sp_persone (user_id) values ($1) on conflict do nothing`, [req.params.id]);
     await q(`update sp_persone set ${sets.join(', ')}, aggiornato = now() where user_id = $1`, vals);
+    // contratto: lo stesso anche nell'anagrafica unica (è lei che vale per tutte le app)
+    const us = [], uv = [req.params.id], uadd = (c, v) => { uv.push(v); us.push(`${c} = $${uv.length}`); };
+    if ('tipo' in b) { const t = b.tipo === 'dip' || b.tipo === 'piva' ? b.tipo : null; uadd('contratto_tipo', t); uadd('contratto_ok', !!t); if (t === 'piva') uadd('contratto_ore', null); }
+    if ('ore' in b && b.tipo !== 'piva') uadd('contratto_ore', num(b.ore));
+    if ('conferma' in b) uadd('contratto_ok', true);
+    if (us.length) await store.q(`update users set ${us.join(', ')}, contratto_il = coalesce(contratto_il, now()) where id = $1`, uv);
     res.json({ ok: true });
   }));
 

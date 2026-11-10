@@ -88,6 +88,15 @@ async function migrate() {
     alter table users add column if not exists cf text;
     alter table users add column if not exists albo_provincia text;
     alter table users add column if not exists albo_numero text;
+    alter table users add column if not exists telefono text;
+    alter table users add column if not exists residenza jsonb;
+    alter table users add column if not exists iban_cifrato text;
+    alter table users add column if not exists iban_fine text;
+    alter table users add column if not exists contratto_tipo text;
+    alter table users add column if not exists contratto_ore numeric;
+    alter table users add column if not exists contratto_ok boolean not null default false;
+    alter table users add column if not exists contratto_il timestamptz;
+    alter table users add column if not exists profilo_il timestamptz;
     alter table user_apps add column if not exists livello text;
     alter table user_apps add column if not exists ente text;
     alter table user_apps add column if not exists ente_nome text;
@@ -314,6 +323,9 @@ function publicUser(u, apps) {
     id: u.id, firstName: u.first_name, lastName: u.last_name, birthDate: u.birth_date, email: u.email,
     status: u.status, owner: u.owner, createdAt: u.created_at, approvedAt: u.approved_at, lastLogin: u.last_login,
     hasPassword: !!u.password_hash, emailVerificata: u.email_verificata !== false || !!u.owner, figura: u.figura || '', cf: u.cf || '', alboProvincia: u.albo_provincia || '', alboNumero: u.albo_numero || '',
+    telefono: u.telefono || '', residenza: u.residenza || null, ibanFine: u.iban_fine || '', haIban: !!u.iban_cifrato,
+    contratto: u.contratto_tipo ? { tipo: u.contratto_tipo, ore: u.contratto_ore != null ? Number(u.contratto_ore) : null, ok: !!u.contratto_ok } : null,
+    mancanti: require('./profilo').mancanti(u),
     ...(apps ? { apps } : {}),
   };
 }
@@ -396,6 +408,12 @@ async function check(token) {
   return { user: u, apps: await appsOf(u), renewed };
 }
 
+// solo chi è (senza rinnovare la sessione né leggere i permessi): per il controllo dei dati obbligatori
+async function utenteDaToken(token) {
+  if (!token || typeof token !== 'string' || token.length > 100) return null;
+  const { rows } = await q(`select u.* from sessions s join users u on u.id = s.user_id where s.token_hash = $1 and s.expires_at > now()`, [sha(token)]);
+  return rows[0] || null;
+}
 // Per le app: chi è l'utente e che ruolo ha in quell'app. null se non può entrare.
 async function verify(token, app) {
   const c = await check(token);
@@ -492,7 +510,7 @@ async function peekPasswordLink(token) {
 
 module.exports = {
   accessiAutomatici, allineaSeguaci, fondiSeguaci, capo, appSpente, appSpenteAggiorna,
-  pool, q, SCHEMA, APPS, APP_KEYS, events, migrate, ensureOwner,
+  utenteDaToken, pool, q, SCHEMA, APPS, APP_KEYS, events, migrate, ensureOwner,
   cleanEmail, validEmail, cleanName, cleanDate, cleanFigura, FIGURE, cleanCf, validCf, cleanProv, cleanAlbo, appsOf, publicUser, getUser, findByEmail, createUser, setPassword,
   setAppRole, livelliOf, sediNote, APPS_SEDI, deleteUser, usersWithApp, logoutEverywhere, createSession, endSession, check, verify,
   createPasswordLink, usePasswordLink, peekPasswordLink, confirmEmail, listSedi, SESSION_DAYS, sha, createTicket, redeemTicket,
