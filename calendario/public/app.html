@@ -175,6 +175,8 @@ button.wk:hover{background:var(--purple-soft)}
 .ev .meta svg{width:14px;height:14px}
 .ev .date{flex:none;width:46px;text-align:center;border-radius:10px;background:var(--surface-3);padding:6px 0;display:flex;flex-direction:column;justify-content:center;line-height:1.05}
 .ev .date b{font:700 20px/1 var(--f-display)}
+.ev .date small.fino{margin-top:3px;color:var(--fg);text-transform:none;letter-spacing:0}
+.ev .meta .periodo{font-weight:700;color:var(--fg)}
 .ev .date small{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 
 /* agenda */
@@ -521,13 +523,16 @@ function audienceLabel(e) {
 }
 
 function evCard(e, { withDate = false, day = null } = {}) {
-  const t = typeOf(e.typeId), place = placeLabel(e);
+  const t = typeOf(e.typeId), place = placeLabel(e), multi = e.start !== e.end;
+  // eventi di più giorni: sempre il giorno di inizio e quello di fine
+  const periodo = multi ? `Dal ${fmt(e.start, { weekday: 'short', day: 'numeric', month: 'short' })} al ${fmt(e.end, { weekday: 'short', day: 'numeric', month: 'short' })}` : '';
   return `<button class="ev c-${colorOf(e)}" data-ev="${e.id}">
-    ${withDate ? `<span class="date"><small>${fmt(e.start, { weekday: 'short' })}</small><b>${parse(e.start).getDate()}</b><small>${fmt(e.start, { month: 'short' })}</small></span>` : '<span class="bar"></span>'}
+    ${withDate ? `<span class="date"><small>${fmt(e.start, { weekday: 'short' })}</small><b>${parse(e.start).getDate()}</b><small>${fmt(e.start, { month: 'short' })}</small>${multi ? `<small class="fino">→ ${parse(e.end).getDate()}${e.end.slice(0, 7) !== e.start.slice(0, 7) ? ' ' + fmt(e.end, { month: 'short' }) : ''}</small>` : ''}</span>` : '<span class="bar"></span>'}
     <span class="body">
       <span class="title">${esc(e.title)}</span>
       <span class="meta">
         ${t ? `<span class="tag">${esc(t.name)}</span>` : ''}
+        ${multi ? `<span class="periodo">${ic('cal')}${esc(periodo)}</span>` : ''}
         <span>${ic('clock')}${esc(timeLabel(e, day))}</span>
         ${place ? `<span>${ic('pin')}${esc(place)}</span>` : ''}
         ${isAdmin() ? `<span>${ic('eye')}${esc(audienceLabel(e))}</span>` : ''}
