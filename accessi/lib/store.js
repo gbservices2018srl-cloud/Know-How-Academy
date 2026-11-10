@@ -97,6 +97,7 @@ async function migrate() {
     alter table users add column if not exists contratto_ok boolean not null default false;
     alter table users add column if not exists contratto_il timestamptz;
     alter table users add column if not exists profilo_il timestamptz;
+    alter table users add column if not exists sedi jsonb; -- sedi in cui lavora (id della scheda Sedi): fonte unica per tutte le app
     alter table user_apps add column if not exists livello text;
     alter table user_apps add column if not exists ente text;
     alter table user_apps add column if not exists ente_nome text;
@@ -252,11 +253,41 @@ const APPS_SEDI = () => APPS.filter(a => a.livelli?.some(l => l.ente === 'sedi')
 const idsDi = e => (Array.isArray(e) ? e : []).map(x => x.id).sort().join('|');
 // le sedi già scelte per la persona in una qualunque di quelle app (le più usate)
 async function sediNote(userId, tranne = null) {
+  const anag = await sediAnagrafica(userId);
+  if (anag.length) return anag;
   const { rows } = await q(`select enti from user_apps where user_id = $1 and app = any($2) and app <> coalesce($3, '') and role <> 'admin'
       and enti is not null and jsonb_array_length(enti) > 0`, [userId, APPS_SEDI().map(a => a.key), tranne]);
   const conta = new Map();
   for (const r of rows) { const k = idsDi(r.enti); conta.set(k, { n: (conta.get(k)?.n || 0) + 1, enti: r.enti }); }
   return [...conta.values()].sort((a, b) => b.n - a.n)[0]?.enti || [];
+}
+// sedi della persona nell'anagrafica (accesso unico) come [{ id, nome }]
+async function sediAnagrafica(userId) {
+  const { rows } = await q('select sedi from users where id = $1', [userId]);
+  const ids = Array.isArray(rows[0]?.sedi) ? rows[0].sedi : [];
+  if (!ids.length) return [];
+  const ss = await listSedi();
+  return ids.map(id => ss.find(x => x.id === id)).filter(Boolean).map(x => ({ id: x.id, nome: x.nome }));
+}
+// cambia le sedi della persona (una volta sola) e le porta nelle app "per sede": in quelle che avevano le stesse sedi di prima
+// (allineate) o nessuna. Quelle volutamente diverse (eccezioni scelte nell'app) restano come sono.
+async function impostaSedi(userId, ids, { propaga = true } = {}) {
+  const ss = await listSedi();
+  const enti = [...new Set((Array.isArray(ids) ? ids : []).map(String))].map(id => ss.find(x => x.id === id)).filter(Boolean).map(x => ({ id: x.id, nome: x.nome }));
+  const prima = await sediAnagrafica(userId);
+  await q('update users set sedi = $2 where id = $1', [userId, JSON.stringify(enti.map(e => e.id))]);
+  if (!propaga || !enti.length || idsDi(prima) === idsDi(enti)) return enti;
+  const { rows } = await q(`select app, role, livello, enti from user_apps where user_id = $1 and app = any($2) and role <> 'admin'`, [userId, APPS_SEDI().map(a => a.key)]);
+  for (const r of rows) {
+    const vuoto = !Array.isArray(r.enti) || !r.enti.length;
+    if (!vuoto && idsDi(r.enti) !== idsDi(prima)) continue;
+    const A = APPS.find(a => a.key === r.app), L = A.livelli.find(l => l.ente === 'sedi');
+    const lv = r.livello && A.livelli.find(l => l.key === r.livello);
+    if (lv && lv.ente !== 'sedi') continue;
+    await q(`update user_apps set livello = $3, ente = $4, ente_nome = $5, enti = $6 where user_id = $1 and app = $2`,
+      [userId, r.app, lv ? lv.key : L.key, enti[0].id, enti[0].nome, JSON.stringify(enti)]);
+  }
+  return enti;
 }
 // dopo aver scelto le sedi in un'app: le stesse sedi vanno nelle altre app "per sede" della persona
 // che non ne avevano ancora, o che avevano le stesse di prima (erano allineate). Quelle volutamente diverse restano.
@@ -326,6 +357,7 @@ function publicUser(u, apps) {
     telefono: u.telefono || '', residenza: u.residenza || null, ibanFine: u.iban_fine || '', haIban: !!u.iban_cifrato,
     contratto: u.contratto_tipo ? { tipo: u.contratto_tipo, ore: u.contratto_ore != null ? Number(u.contratto_ore) : null, ok: !!u.contratto_ok } : null,
     mancanti: require('./profilo').mancanti(u),
+    sedi: Array.isArray(u.sedi) ? u.sedi : [],
     ...(apps ? { apps } : {}),
   };
 }
@@ -368,6 +400,9 @@ async function setAppRole(userId, app, role, livello = null) {
     await q('delete from user_apps where user_id = $1 and app = $2', [userId, app]);
   }
   if (perSede && role === 'user' && livello?.enti?.length) await allineaSedi(userId, app, prima, livello.enti);
+  // prima sede scelta per la persona: diventa anche quella dell'anagrafica
+  if (perSede && role === 'user' && livello?.enti?.length && !(await sediAnagrafica(userId)).length)
+    await q('update users set sedi = $2 where id = $1', [userId, JSON.stringify(livello.enti.map(e => e.id))]);
   if (APPS.some(a => a.segue === app)) await allineaSeguaci();
 }
 
@@ -512,6 +547,6 @@ module.exports = {
   accessiAutomatici, allineaSeguaci, fondiSeguaci, capo, appSpente, appSpenteAggiorna,
   utenteDaToken, pool, q, SCHEMA, APPS, APP_KEYS, events, migrate, ensureOwner,
   cleanEmail, validEmail, cleanName, cleanDate, cleanFigura, FIGURE, cleanCf, validCf, cleanProv, cleanAlbo, appsOf, publicUser, getUser, findByEmail, createUser, setPassword,
-  setAppRole, livelliOf, sediNote, APPS_SEDI, deleteUser, usersWithApp, logoutEverywhere, createSession, endSession, check, verify,
+  setAppRole, livelliOf, sediNote, sediAnagrafica, impostaSedi, APPS_SEDI, deleteUser, usersWithApp, logoutEverywhere, createSession, endSession, check, verify,
   createPasswordLink, usePasswordLink, peekPasswordLink, confirmEmail, listSedi, SESSION_DAYS, sha, createTicket, redeemTicket,
 };

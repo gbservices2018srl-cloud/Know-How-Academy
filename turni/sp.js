@@ -90,7 +90,7 @@ module.exports = function sp(app, ctx) {
   const nomeDi = r => `${r.first_name || ''} ${r.last_name || ''}`.trim();
   async function persone() {
     await migrate();
-    const { rows } = await store.q(`select u.id, u.first_name, u.last_name, u.figura, u.cf, u.email, u.owner, u.contratto_tipo, u.contratto_ore, u.contratto_ok from users u
+    const { rows } = await store.q(`select u.id, u.first_name, u.last_name, u.figura, u.cf, u.email, u.owner, u.contratto_tipo, u.contratto_ore, u.contratto_ok, u.sedi as sedi_anag from users u
       where u.status = 'active' and (u.owner or exists (select 1 from user_apps a where a.user_id = u.id and a.app = any($1) and not a.sospesa))
       order by u.last_name, u.first_name`, [['turni', 'hr']]);
     const ids = rows.map(r => r.id);
@@ -103,7 +103,8 @@ module.exports = function sp(app, ctx) {
     const out = [];
     for (const r of rows) {
       const x = spm.get(r.id) || {}, medico = r.figura === MEDICO;
-      let sedi = medico ? (mm.get(r.id) || []) : x.sedi;
+      // sedi: quelle dell'anagrafica unica (i medici: dagli studi Nuovalab); se mancano, quelle di prima
+      let sedi = medico ? (mm.get(r.id) || []) : Array.isArray(r.sedi_anag) && r.sedi_anag.length ? r.sedi_anag : x.sedi;
       if (!medico && !Array.isArray(sedi)) sedi = (await store.sediNote(r.id)).map(e => e.id).filter(Boolean);
       out.push({ id: r.id, nome: nomeDi(r) || r.email, figura: r.figura || '', cf: String(r.cf || '').toUpperCase(), email: r.email, owner: !!r.owner,
         // contratto: dall'anagrafica unica; se lì manca ancora, quello di prima di questa app
@@ -484,7 +485,12 @@ module.exports = function sp(app, ctx) {
     if ('tipo' in b) { const t = b.tipo === 'dip' || b.tipo === 'piva' ? b.tipo : null; add('tipo', t); add('tipo_ok', !!t); }
     if ('ore' in b) { const o = num(b.ore); if (o !== null && !(o >= 0 && o <= 60)) return bad(res, 400, 'Ore non valide.'); add('ore_sett', o); }
     if ('senzaNfc' in b) add('senza_nfc', !!b.senzaNfc);
-    if ('sedi' in b) { const ok = new Set((await sch.sedi()).map(s => s.id)); add('sedi', JSON.stringify((Array.isArray(b.sedi) ? b.sedi : []).filter(x => ok.has(x)))); }
+    if ('sedi' in b) {
+      const ok = new Set((await sch.sedi()).map(s => s.id)), ids = (Array.isArray(b.sedi) ? b.sedi : []).filter(x => ok.has(x));
+      add('sedi', JSON.stringify(ids));
+      const { rows: [pu] } = await store.q('select figura from users where id = $1', [req.params.id]);
+      if (pu && pu.figura !== MEDICO) await store.impostaSedi(req.params.id, ids); // le sedi stanno nell'anagrafica unica: valgono per tutte le app
+    }
     if ('conferma' in b) add('tipo_ok', true);
     if (!sets.length) return res.json({ ok: true });
     await q(`insert into sp_persone (user_id) values ($1) on conflict do nothing`, [req.params.id]);

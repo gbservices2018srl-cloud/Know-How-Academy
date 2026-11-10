@@ -586,13 +586,21 @@ app.patch('/api/admin/users/:id', needAdmin, wrap(async (req, res) => {
       if (uguale) { delete set.contratto_tipo; delete set.contratto_ore; } else { set.contratto_ok = true; set.contratto_il = new Date(); } // cambiato dall'amministratore: vale come confermato
     }
   }
+  if (b.sedi !== undefined) {
+    if (u.figura === 'Medico') return bad(res, 400, 'Le sedi dei medici arrivano dagli studi assegnati in Nuovalab: cambiale lì.');
+    if (!Array.isArray(b.sedi)) return bad(res, 400, 'Sedi non valide.');
+  }
   if (b.contrattoOk !== undefined) { if (!u.contratto_tipo && !set.contratto_tipo) return bad(res, 400, 'Il contratto non è ancora stato indicato.'); set.contratto_ok = !!b.contrattoOk; }
   if (b.status !== undefined) {
     if (!['active', 'disabled'].includes(b.status)) return bad(res, 400, 'Stato non valido');
     if (u.owner || u.id === req.user.id) return bad(res, 400, 'Non puoi disattivare questo account.');
   }
+  // approvazione: la scheda deve essere completa (le sedi le sceglie l'amministratore; ai medici arrivano da Nuovalab)
+  if (b.status === 'active' && u.status === 'pending' && u.figura !== 'Medico' && !(b.sedi || u.sedi || []).length)
+    return bad(res, 400, 'Prima di approvare scegli le sedi in cui lavora (in alto nella scheda).');
   const keys = Object.keys(set);
   if (keys.length) await store.q(`update users set ${keys.map((k, i) => `${k} = $${i + 2}`).join(', ')} where id = $1`, [u.id, ...keys.map(k => set[k])]);
+  if (b.sedi !== undefined) await store.impostaSedi(u.id, b.sedi);
   if (keys.length) gateAzzera(u.id);
   let sent, avvisi = [];
   if (b.status !== undefined) {
@@ -618,7 +626,8 @@ app.put('/api/admin/users/:id/apps/:app', needAdmin, wrap(async (req, res) => {
   await store.setAppRole(u.id, a.key, role || 'none', lv);
   let avvisi = [];
   if (!role) revokeIn(u, [a.key]); else if (u.status === 'active') avvisi = await provisiona(u, [a.key]);
-  res.json({ apps: await store.appsOf(u), livelli: await store.livelliOf(u.id), avvisi });
+  if (a.key === 'laboratorio') await sediMediciInAnagrafica(u.id).catch(e => console.warn('Sedi medico:', e.message));
+  res.json({ apps: await store.appsOf(u), livelli: await store.livelliOf(u.id), avvisi, sedi: (await store.sediAnagrafica(u.id)).map(e => e.id) });
 }));
 /* ---------- app: spegnere per tutti, sospendere a gruppi o persone, storico con Annulla ---------- */
 const APP_GESTIBILI = () => APPS.filter(a => a.key !== 'accessi' && !a.segue && !a.virtuale);
@@ -1106,12 +1115,39 @@ app.use((err, req, res, next) => {
   bad(res, 500, 'Errore del server. Riprova.');
 });
 
+// medici: le sedi dell'anagrafica sono quelle degli studi Nuovalab assegnati nel pannello (lì comanda l'assegnazione)
+async function sediMediciInAnagrafica(userId = null) {
+  const lista = await require('./lib/medici-sedi').sediMedici();
+  const { rows } = await store.q(`select id, sedi from users where figura = 'Medico' and status = 'active' ${userId ? 'and id = $1' : ''}`, userId ? [userId] : []);
+  for (const r of rows) {
+    const nuove = lista.find(m => m.id === r.id)?.sedi || [];
+    const ora = Array.isArray(r.sedi) ? r.sedi : [];
+    if (nuove.length && [...nuove].sort().join('|') !== [...ora].sort().join('|')) await store.impostaSedi(r.id, nuove);
+  }
+}
+// una volta (riempie solo chi non ha ancora le sedi in anagrafica): dalla Scheda personale o dalle app per sede
+async function recuperaSedi() {
+  const { rows } = await store.q(`select id from users where status <> 'disabled' and not owner and sedi is null and coalesce(figura, '') <> 'Medico'`);
+  let sp = new Map();
+  try {
+    const T = (process.env.TURNI_DB_SCHEMA || 'turni').replace(/[^a-z0-9_]/gi, '').toLowerCase() || 'turni';
+    sp = new Map((await store.q(`select user_id, sedi from ${T}.sp_persone where jsonb_typeof(sedi) = 'array' and jsonb_array_length(sedi) > 0`)).rows.map(r => [r.user_id, r.sedi]));
+  } catch {}
+  let n = 0;
+  for (const r of rows) {
+    const ids = sp.get(r.id) || (await store.sediNote(r.id)).map(e => e.id);
+    if (ids.length) { await store.impostaSedi(r.id, ids, { propaga: false }); n++; }
+  }
+  if (n) console.log(`Anagrafica: sedi recuperate dalle app per ${n} persone`);
+}
 async function start() {
   await store.migrate();
   await notifiche.migrate();
   await store.ensureOwner();
   await store.fondiSeguaci().catch(e => console.warn('Unione delle app:', e.message));
   await store.accessiAutomatici().catch(e => console.warn('Accessi automatici:', e.message));
+  await recuperaSedi().catch(e => console.warn('Recupero sedi:', e.message));
+  await sediMediciInAnagrafica().catch(e => console.warn('Sedi dei medici:', e.message));
 }
 
 // Per le app che girano nello stesso servizio (Protocolli, Calendario)

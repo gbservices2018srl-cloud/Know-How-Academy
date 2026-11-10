@@ -60,6 +60,10 @@ header p{margin:0;color:var(--muted);max-width:70ch}
 .pill.pending{background:var(--warn-bg);color:var(--olive-ink)}
 .pill.active{background:var(--ok-bg);color:var(--ok)}
 .pill.disabled{background:var(--danger-bg);color:var(--danger)}
+.sedibox{display:flex;flex-direction:column;gap:6px;margin:4px 0 10px}
+.sedibox .chips{display:flex;flex-wrap:wrap;gap:6px}
+.sedibox .schip{border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:6px 12px;font:600 13.5px var(--f-body);cursor:pointer;color:var(--fg);min-height:34px}
+.sedibox .schip.on{background:var(--teal);border-color:var(--teal);color:#fff}
 .pill.owner{background:color-mix(in srgb,var(--purple) 18%,transparent);color:var(--purple-ink)}
 .actions{display:flex;gap:6px;flex-wrap:wrap}
 .apps{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
@@ -239,6 +243,7 @@ async function api(method, url, body) {
 async function load() {
   S = await api('GET', '/api/admin/users');
   try { S.campi = (await api('GET', '/api/profilo/campi')).campi; } catch { S.campi = []; }
+  try { S.sediTutte = (await api('GET', '/api/admin/sedi')).sedi.filter(x => x.attiva); } catch { S.sediTutte = []; }
   S.livelli ||= {};
   $('#mailwarn').hidden = S.mail;
   if (filter === 'pending' && !S.users.some(u => u.status === 'pending') && !load.done) filter = 'active';
@@ -322,12 +327,34 @@ function card(u, homonym) {
         ${!u.hasPassword ? '<span style="color:var(--olive-ink)">Password non ancora scelta</span>' : ''}</div>
       <div class="actions">${actions}</div>
     </div>
-    ${u.status === 'pending' ? '<p class="hint">Scegli le app e i livelli qui sotto, poi premi «Approva»: il profilo viene creato da solo in ogni app e la persona riceve un\'email.</p>' : ''}
+    ${u.owner ? '' : sediBox(u)}
+    ${u.status === 'pending' ? '<p class="hint">1. Controlla i dati e scegli le sedi · 2. conferma il contratto · 3. controlla le app qui sotto (quelle della sua figura sono già pronte) · 4. premi «Approva»: il profilo viene creato da solo in ogni app con le sue sedi e la persona riceve un\'email.</p>' : ''}
     ${u.owner ? '<p class="hint">Il proprietario (impostato su Render) è amministratore di tutte le app.</p>' : ''}
     <div class="apps">${apps}</div>
   </div></article>`;
 }
 
+// sedi della persona (anagrafica unica): scelte una volta, valgono in tutte le app per sede. Ai medici arrivano dagli studi Nuovalab.
+function sediBox(u) {
+  const tutte = S.sediTutte || [], mie = u.sedi || [];
+  if (u.figura === 'Medico') {
+    const nomi = mie.map(id => tutte.find(x => x.id === id)?.nome || id);
+    return `<div class="sedibox"><b>Sedi</b> <span class="muted">${nomi.length ? esc(nomi.join(', ')) : 'nessuna'} · arrivano dagli studi assegnati in Nuovalab (qui sotto)</span></div>`;
+  }
+  return `<div class="sedibox"><b>Sedi in cui lavora</b>${!mie.length ? ' <b style="color:var(--olive-ink)">· da scegliere</b>' : ''}
+    <span class="muted" style="font-size:13px">valgono per tutte le app (Gestione ASO, Scheda personale, Misure…)</span>
+    <div class="chips">${tutte.map(x => `<button type="button" class="schip ${mie.includes(x.id) ? 'on' : ''}" data-sede="${esc(x.id)}" data-u="${u.id}" aria-pressed="${mie.includes(x.id)}">${esc(x.nome)}</button>`).join('')}</div></div>`;
+}
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-sede]'); if (!b) return;
+  const u = S.users.find(x => x.id === b.dataset.u); if (!u) return;
+  const set = new Set(u.sedi || []); set.has(b.dataset.sede) ? set.delete(b.dataset.sede) : set.add(b.dataset.sede);
+  b.disabled = true;
+  try {
+    const r = await api('PATCH', '/api/admin/users/' + u.id, {sedi: [...set]});
+    Object.assign(u, r.user); S.livelli[u.id] = r.livelli; render(); toast('Sedi salvate: aggiornate nelle app');
+  } catch (x) { b.disabled = false; toast(x.message); }
+});
 function anagMeta(u) {
   if (u.owner) return '';
   const nomi = Object.fromEntries((S.campi || []).map(c => [c.k, c.nome.toLowerCase()]));
@@ -528,8 +555,13 @@ document.addEventListener('click', async e => {
     if (act === 'approve') {
       if (!u.emailVerificata && !confirm(`${fullName(u)} non ha ancora confermato l'email ${u.email}: non è sicuro che sia davvero sua. Approvare lo stesso?`)) return;
       if (!Object.keys(u.apps).length && !confirm(`${fullName(u)} non ha ancora nessuna app. Vuoi approvare lo stesso?`)) return;
+      const corpo = {status: 'active'};
+      if (u.contratto && !u.contratto.ok) {
+        const ct = u.contratto.tipo === 'dip' ? `dipendente, ${u.contratto.ore} ore settimanali` : 'partita IVA';
+        if (confirm(`${fullName(u)} ha dichiarato: ${ct}.\n\nConfermi anche il contratto? (Annulla = approva ma lascia il contratto da confermare)`)) corpo.contrattoOk = true;
+      }
       b.disabled = true;
-      const r = await api('PATCH', '/api/admin/users/' + u.id, {status: 'active'});
+      const r = await api('PATCH', '/api/admin/users/' + u.id, corpo);
       Object.assign(u, r.user); S.livelli[u.id] = r.livelli; rinfrescaEnti(); if (!r.avvisi?.length) aperti.delete(u.id); render();
       if (r.avvisi?.length) toast(r.avvisi.join(' · '));
       else toast((r.sent ? `Approvato: ${u.firstName} riceve un'email` : `Approvato. Avvisa tu ${u.firstName}: le email non sono attive.`) + ' Profili creati nelle app.');
