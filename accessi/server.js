@@ -1133,9 +1133,21 @@ async function recuperaSedi() {
     const T = (process.env.TURNI_DB_SCHEMA || 'turni').replace(/[^a-z0-9_]/gi, '').toLowerCase() || 'turni';
     sp = new Map((await store.q(`select user_id, sedi from ${T}.sp_persone where jsonb_typeof(sedi) = 'array' and jsonb_array_length(sedi) > 0`)).rows.map(r => [r.user_id, r.sedi]));
   } catch {}
+  // vecchi Turni: le sedi in cui la persona aveva ore (collegate alle sedi del pannello)
+  const vt = new Map();
+  try {
+    const { rows: [c] } = await store.q(`select data from ${(process.env.TURNI_DB_SCHEMA || 'turni').replace(/[^a-z0-9_]/gi, '').toLowerCase() || 'turni'}.config where id = 1`);
+    const cfg = c?.data || {}, valide = new Set((await store.listSedi()).map(x => x.id));
+    for (const e of cfg.staff || []) {
+      if (!e.ssoId) continue;
+      const ids = [...new Set((cfg.sedi || []).filter(x => (e.ore?.[x.id] || 0) > 0).map(x => x.centrale || x.id).filter(id => valide.has(id)))];
+      if (ids.length) vt.set(e.ssoId, ids);
+    }
+  } catch {}
   let n = 0;
   for (const r of rows) {
-    const ids = sp.get(r.id) || (await store.sediNote(r.id)).map(e => e.id);
+    const ids = sp.get(r.id) || (await store.sediNote(r.id)).map(e => e.id) || [];
+    if (!ids.length && vt.get(r.id)) ids.push(...vt.get(r.id));
     if (ids.length) { await store.impostaSedi(r.id, ids, { propaga: false }); n++; }
   }
   console.log(`Anagrafica: sedi recuperate per ${n} persone (su ${rows.length} senza sedi)`);
