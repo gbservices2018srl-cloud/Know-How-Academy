@@ -73,6 +73,14 @@ module.exports = function sp(app, ctx) {
       alter table sp_livelli add column if not exists variabile text not null default '';
       alter table sp_livelli add column if not exists area text not null default '';
       alter table sp_livelli add column if not exists skill jsonb not null default '[]';
+      alter table sp_livelli add column if not exists inc_perc numeric;
+      alter table sp_livelli add column if not exists inc_soglia text not null default 'target';
+      alter table sp_perf_dati add column if not exists file_nome text;
+      alter table sp_perf_dati add column if not exists file_tipo text;
+      alter table sp_perf_dati add column if not exists file_dati bytea;
+      alter table sp_perf_dati add column if not exists file_iv bytea;
+      alter table sp_perf_dati add column if not exists file_tag bytea;
+      alter table sp_perf add column if not exists test_invio text;
       create table if not exists sp_obiettivi (id text primary key, livello_id text not null, testo text not null, misura text not null default '', ordine int not null default 0, archiviato boolean not null default false);
       create table if not exists sp_perf (user_id text primary key, piano_id text not null, livello_n int not null, dal date not null default current_date);
       create table if not exists sp_perf_dati (id text primary key, user_id text not null, obiettivo_id text not null, dato text not null, stato text not null default 'verifica',
@@ -431,34 +439,120 @@ module.exports = function sp(app, ctx) {
     ]);
     return piani.map(p => ({ id: p.id, nome: p.nome, livelli: liv.filter(l => l.piano_id === p.id).map(l => ({ id: l.id, n: l.n, ruolo: l.ruolo, bonus: l.bonus,
       fisso: l.fisso || '', variabile: l.variabile || '', area: l.area || '', skill: Array.isArray(l.skill) ? l.skill : [],
+      incPerc: l.inc_perc != null ? Number(l.inc_perc) : null, incSoglia: l.inc_soglia || 'target',
       obiettivi: ob.filter(o => o.livello_id === l.id).map(o => ({ id: o.id, testo: o.testo, misura: o.misura })) })) }));
   }
-  async function perfUtente(uid) {
+  /* ---------- incentivi: fatturato a consuntivo della sede da Gestione finanziaria ---------- */
+  const FIN_URL = () => (process.env.FINANZA_URL || 'https://finanza.appgestione.it').replace(/\/$/, '');
+  const finCache = new Map();
+  async function finanza(path) {
+    const key = process.env.SSO_API_KEY; if (!key) throw new Error('Collegamento con Gestione finanziaria non configurato (SSO_API_KEY).');
+    const c = finCache.get(path); if (c && Date.now() - c.t < 5 * 60e3) return c.v;
+    const r = await fetch(FIN_URL() + path, { headers: { Authorization: 'Bearer ' + key }, signal: AbortSignal.timeout(15000) });
+    if (!r.ok) throw new Error('Gestione finanziaria non risponde (' + r.status + ').');
+    const v = await r.json(); finCache.set(path, { t: Date.now(), v }); if (finCache.size > 100) finCache.clear();
+    return v;
+  }
+  const normSede = x => String(x || '').toLowerCase().replace(/to\s*smile|studio|sede|ambulatorio/g, '').replace(/[^a-z0-9]/g, '');
+  // mese di riferimento: quello passato (il consuntivo del mese in corso è ancora parziale)
+  const meseScorso = () => { const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Rome' })); d.setDate(1); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 7); };
+  async function consuntivo(mese) {
+    const az = await sch.imp('sp_fin_azienda'); if (!az) return null;
+    const [a, m] = mese.split('-').map(Number);
+    return finanza(`/api/_appgestione/consuntivo?azienda=${encodeURIComponent(az)}&anno=${a}&mese=${m}`);
+  }
+  const eur = n => '€ ' + Number(n).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // incentivo di un livello per una persona in un mese: % sul fatturato a consuntivo della sua sede (solo se a target, se così impostato)
+  async function incentivo(livello, sediPersona, mese) {
+    if (!livello || livello.incPerc == null) return { regola: livello?.variabile ? 'Variabile da calcolare a mano: ' + livello.variabile.split('\n')[0] : 'Nessun variabile per questo ruolo.', calcolabile: false };
+    const regola = `${String(livello.incPerc).replace('.', ',')}% sul fatturato della sede${livello.incSoglia === 'target' ? ' a target' : ''}`;
+    let c; try { c = await consuntivo(mese); } catch (e) { return { regola, calcolabile: false, errore: e.message }; }
+    if (!c) return { regola, calcolabile: false, errore: 'Scegli l’azienda di Gestione finanziaria (Performance → Incentivi).' };
+    const nomi = new Map((await sch.sedi()).map(x => [x.id, x.nome]));
+    const nomeSede = nomi.get((sediPersona || [])[0]) || '';
+    const s = c.sedi.find(x => normSede(x.nome) === normSede(nomeSede)) || c.sedi.find(x => normSede(nomeSede).length >= 3 && (normSede(x.nome).includes(normSede(nomeSede)) || normSede(nomeSede).includes(normSede(x.nome))));
+    if (!nomeSede) return { regola, calcolabile: false, errore: 'La persona non ha una sede nell’anagrafica.' };
+    if (!s) return { regola, sede: nomeSede, calcolabile: false, errore: `La sede ${nomeSede} non si trova in Gestione finanziaria.` };
+    if (s.fatturato == null) return { regola, sede: nomeSede, calcolabile: false, errore: `Consuntivo di ${mese} non disponibile in Gestione finanziaria.` };
+    const aTarget = !s.target || s.fatturato >= s.target, valore = livello.incSoglia === 'target' && !aTarget ? 0 : s.fatturato * livello.incPerc / 100;
+    return { regola, sede: nomeSede, mese, calcolabile: true, fatturato: s.fatturato, target: s.target, pct: s.target ? Math.round(s.fatturato / s.target * 100) : null, aTarget,
+      valore: Math.round(valore * 100) / 100, testo: { fatturato: eur(s.fatturato), target: s.target ? eur(s.target) : '—', valore: eur(valore) } };
+  }
+
+  async function perfUtente(uid, persona = null) {
     await migrate();
     const { rows } = await q('select * from sp_perf where user_id = $1', [uid]);
     if (!rows[0]) return null;
     const piano = (await struttura()).find(p => p.id === rows[0].piano_id);
     if (!piano) return null;
     const cur = piano.livelli.find(l => l.n === rows[0].livello_n), next = piano.livelli.find(l => l.n > rows[0].livello_n);
-    const { rows: dati } = await q(`select * from sp_perf_dati where user_id = $1 order by il desc`, [uid]);
+    const { rows: dati } = await q(`select id, obiettivo_id, dato, stato, nota, il, file_nome from sp_perf_dati where user_id = $1 order by il desc`, [uid]);
     const { rows: pas } = await q(`select * from sp_passaggi where user_id = $1 and stato = 'attesa' limit 1`, [uid]);
-    const ob = (next?.obiettivi || []).map(o => { const d = dati.find(x => x.obiettivo_id === o.id); return { ...o, stato: d?.stato || 'fare', dato: d?.dato || '', nota: d?.nota || '' }; });
+    const ob = (next?.obiettivi || []).map(o => { const d = dati.find(x => x.obiettivo_id === o.id);
+      return { ...o, stato: d?.stato || 'fare', dato: d?.dato || '', nota: d?.nota || '', datoId: d?.id || null, file: d?.file_nome || '', il: d?.il || null }; });
     const comp = l => l ? { fisso: l.fisso, variabile: l.variabile, area: l.area } : null;
-    return { piano: piano.nome, ruolo: cur?.ruolo || '', attuale: comp(cur), regole: (await sch.imp('sp_regole')) || '',
+    const pass = ob.filter(o => o.stato === 'pass').length;
+    // test di passaggio (dai Protocolli): si sblocca con tutti i pass; superato → passaggio di ruolo da approvare
+    let test = { disponibile: !!next && ob.length > 0 && pass === ob.length, stato: null };
+    if (rows[0].test_invio) {
+      const P = require('../lib/protocolli').api;
+      const e = P ? await P.esitoInvio(rows[0].test_invio).catch(() => null) : null;
+      test.stato = !e ? 'inviato' : e.esito || e.stato; test.punti = e?.punti ?? null;
+      if (e?.esito === 'superato' && next && !pas[0]) {
+        const { rows: gia } = await q(`select 1 from sp_passaggi where user_id = $1 and a_n = $2 and stato in ('attesa','approvato') limit 1`, [uid, next.n]);
+        if (!gia[0]) { await q(`insert into sp_passaggi (id, user_id, piano_id, da_n, a_n, bonus) values ($1,$2,$3,$4,$5,$6)`, [db.newId(), uid, piano.id, rows[0].livello_n, next.n, next.bonus || '']);
+          avvisaAdmin({ title: 'Passaggio di ruolo da approvare', body: `Test superato: passaggio a ${next.ruolo}.`, url: '/?sez=perf' }); pas[0] = { stato: 'attesa' }; }
+      }
+    }
+    const per = persona || (await persone()).find(p => p.id === uid);
+    const mese = meseScorso();
+    return { piano: piano.nome, pianoId: piano.id, livello: rows[0].livello_n, ruolo: cur?.ruolo || '', attuale: comp(cur), regole: (await sch.imp('sp_regole')) || '',
       prossimo: next ? { ruolo: next.ruolo, bonus: next.bonus, ...comp(next), skill: next.skill } : null, obiettivi: ob,
-      pass: ob.filter(o => o.stato === 'pass').length, inAttesa: !!pas[0] };
+      pass, inAttesa: !!pas[0], test,
+      incentivo: await incentivo(cur, per?.sedi, mese), incentivoProssimo: next && next.incPerc != null && (cur?.incPerc == null) ? await incentivo(next, per?.sedi, mese) : null };
   }
-  app.post('/api/sp/perf/dato', needSp, wrap(async (req, res) => {
-    const dato = str(req.body.dato, 1000), oid = str(req.body.obiettivo, 64);
-    if (!dato) return bad(res, 400, 'Scrivi il risultato raggiunto.');
+  // la persona carica la prova di un obiettivo (foto o file, con una nota): va all'amministratore da verificare
+  app.post('/api/sp/perf/dato', needSp, upload.single('file'), wrap(async (req, res) => {
+    const dato = str(req.body.dato, 1000), oid = str(req.body.obiettivo, 64), f = req.file;
+    if (!dato && !f) return bad(res, 400, 'Carica una foto o un file, oppure scrivi il risultato raggiunto.');
+    if (f && f.size > 15 * 1024 * 1024) return bad(res, 400, 'Il file è troppo grande (massimo 15 MB).');
     const p = await perfUtente(req.user.sso_id);
     const o = p?.obiettivi.find(x => x.id === oid);
     if (!o) return bad(res, 400, 'Obiettivo non trovato.');
-    if (o.stato === 'pass' || o.stato === 'verifica') return bad(res, 400, o.stato === 'pass' ? 'Hai già il pass per questo obiettivo.' : 'Il dato è già in verifica.');
-    await q('insert into sp_perf_dati (id, user_id, obiettivo_id, dato) values ($1,$2,$3,$4)', [db.newId(), req.user.sso_id, oid, dato]);
+    if (o.stato === 'pass' || o.stato === 'verifica') return bad(res, 400, o.stato === 'pass' ? 'Hai già il pass per questo obiettivo.' : 'La prova è già in verifica.');
+    let fileCol = [null, null, null, null, null];
+    if (f) {
+      const nome = String(f.originalname || 'prova').replace(/[^\w.\- àèéìòù()]/gi, '').slice(0, 120) || 'prova';
+      if (cifraOk()) { const c = cifra(f.buffer); fileCol = [nome, f.mimetype || 'application/octet-stream', c.file, c.iv, c.tag]; }
+      else fileCol = [nome, f.mimetype || 'application/octet-stream', f.buffer, null, null];
+    }
+    await q('insert into sp_perf_dati (id, user_id, obiettivo_id, dato, file_nome, file_tipo, file_dati, file_iv, file_tag) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+      [db.newId(), req.user.sso_id, oid, dato || '(prova caricata)', ...fileCol]);
     const me = await io(req);
-    avvisaAdmin({ title: 'Performance: dato da verificare', body: `${me.nome}: ${o.testo}`.slice(0, 160), url: '/?sez=perf' });
+    avvisaAdmin({ title: 'Performance: prova da verificare', body: `${me.nome}: ${o.testo}`.slice(0, 160), url: '/?sez=perf' });
     res.json({ ok: true });
+  }));
+  // file della prova: lo vedono la persona e l'amministratore
+  app.get('/api/sp/perf/prova/:id', needSp, wrap(async (req, res) => {
+    const { rows: [d] } = await q('select user_id, file_nome, file_tipo, file_dati, file_iv, file_tag from sp_perf_dati where id = $1', [req.params.id]);
+    if (!d || !d.file_dati || (req.user.role !== 'admin' && d.user_id !== req.user.sso_id)) return bad(res, 404, 'File non disponibile');
+    const buf = d.file_iv ? decifra({ file: d.file_dati, iv: d.file_iv, tag: d.file_tag }) : d.file_dati;
+    res.set({ 'Content-Type': d.file_tipo || 'application/octet-stream', 'Content-Disposition': `inline; filename="${encodeURIComponent(d.file_nome || 'prova')}"`, 'Cache-Control': 'private, no-store' });
+    res.send(buf);
+  }));
+  // tutti i pass: la persona genera il test (domande dai Protocolli della sua mansione)
+  app.post('/api/sp/perf/test', needSp, wrap(async (req, res) => {
+    const p = await perfUtente(req.user.sso_id);
+    if (!p?.test?.disponibile) return bad(res, 400, 'Il test si sblocca quando tutti gli obiettivi sono approvati.');
+    if (p.test.stato && p.test.stato !== 'da_ripetere') return res.json({ ok: true, url: 'https://protocolli.appgestione.it/?v=test' });
+    const me = await io(req), P = require('../lib/protocolli').api;
+    const r = P ? await P.testPassaggio({ ssoId: req.user.sso_id, figura: me.figura, ruolo: p.prossimo.ruolo }) : { errore: 'protocolli' };
+    if (r.errore) {
+      avvisaAdmin({ title: 'Test di passaggio da preparare', body: `${me.nome} ha tutti i pass per ${p.prossimo.ruolo}, ma la banca domande dei Protocolli per la sua mansione non è pronta.`, url: '/?sez=perf' });
+      return bad(res, 400, r.errore === 'banca' ? 'Il test per la tua mansione non è ancora pronto (mancano le domande nei Protocolli). L’amministratore è stato avvisato.' : r.errore === 'utente' ? 'Apri una volta l’app Protocolli, poi riprova.' : 'Il test non si può generare adesso: l’amministratore è stato avvisato.');
+    }
+    await q('update sp_perf set test_invio = $2 where user_id = $1', [req.user.sso_id, r.invio]);
+    res.json({ ok: true, url: 'https://protocolli.appgestione.it/?v=test' });
   }));
 
   /* ---------- documenti (utente: solo i suoi) ---------- */
@@ -838,11 +932,30 @@ module.exports = function sp(app, ctx) {
     const persone2 = [];
     for (const p of pp.filter(x => !x.medico)) {
       const a = as.find(x => x.user_id === p.id);
-      persone2.push({ id: p.id, nome: p.nome, figura: p.figura, piano: a?.piano_id || null, livello: a?.livello_n ?? null, stato: a ? await perfUtente(p.id) : null });
+      persone2.push({ id: p.id, nome: p.nome, figura: p.figura, sedi: p.sedi, piano: a?.piano_id || null, livello: a?.livello_n ?? null, stato: a ? await perfUtente(p.id, p) : null });
     }
-    res.json({ piani, persone: persone2, regole: (await sch.imp('sp_regole')) || '',
+    res.json({ piani, persone: persone2, regole: (await sch.imp('sp_regole')) || '', mese: meseScorso(), finAzienda: (await sch.imp('sp_fin_azienda')) || null,
+      sediNomi: Object.fromEntries((await sch.sedi()).map(x => [x.id, x.nome])),
       dati: dati.map(d => ({ id: d.id, nome: nomi.get(d.user_id) || '', obiettivo: d.testo, dato: d.dato, il: d.il })),
       passaggi: pas.map(x => { const pi = piani.find(y => y.id === x.piano_id); return { id: x.id, nome: nomi.get(x.user_id) || '', da: pi?.livelli.find(l => l.n === x.da_n)?.ruolo || '', a: pi?.livelli.find(l => l.n === x.a_n)?.ruolo || '', bonus: pi?.livelli.find(l => l.n === x.a_n)?.bonus || '' }; }) });
+  }));
+  // incentivi: azienda di Gestione finanziaria da cui prendere il consuntivo, e calcolo per un mese
+  app.get('/api/sp/admin/finanza/aziende', needAd, wrap(async (req, res) => {
+    try { res.json({ aziende: (await finanza('/api/_appgestione/aziende')).aziende, scelta: (await sch.imp('sp_fin_azienda')) || null }); }
+    catch (e) { bad(res, 502, e.message); }
+  }));
+  app.put('/api/sp/admin/finanza/azienda', needAd, wrap(async (req, res) => { await sch.setImp('sp_fin_azienda', str(req.body.azienda, 64) || null); finCache.clear(); res.json({ ok: true }); }));
+  app.get('/api/sp/admin/incentivi', needAd, wrap(async (req, res) => {
+    const mese = /^\d{4}-\d{2}$/.test(req.query.mese || '') ? req.query.mese : meseScorso();
+    const pp = await persone(), piani = await struttura(), { rows: as } = await q('select * from sp_perf');
+    const righe = [];
+    for (const a of as) {
+      const p = pp.find(x => x.id === a.user_id); if (!p) continue;
+      const pi = piani.find(x => x.id === a.piano_id), l = pi?.livelli.find(x => x.n === a.livello_n);
+      righe.push({ id: p.id, nome: p.nome, ruolo: l?.ruolo || '', ...(await incentivo(l, p.sedi, mese)) });
+    }
+    righe.sort((x, y) => x.nome.localeCompare(y.nome, 'it'));
+    res.json({ mese, righe, totale: righe.reduce((t, r) => t + (r.valore || 0), 0) });
   }));
   // piano di crescita ufficiale To Smile (dal documento): si carica nell'editor, poi lo salva l'amministratore
   app.get('/api/sp/admin/piani/modello', needAd, (req, res) => res.json(require('./data/piano-crescita-2025.json')));
@@ -861,10 +974,12 @@ module.exports = function sp(app, ctx) {
           const lid = /^[\w-]{6,64}$/.test(l.id || '') ? l.id : db.newId(); vivi.l.push(lid);
           const testo = (v, max) => String(v ?? '').replace(/\r/g, '').split('\n').map(x => x.replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n').slice(0, max);
           const skill = (Array.isArray(l.skill) ? l.skill : String(l.skill || '').split('\n')).map(x => str(x, 300)).filter(Boolean).slice(0, 25);
-          await tq(`insert into sp_livelli (id, piano_id, n, ruolo, bonus, fisso, variabile, area, skill) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+          const perc = l.incPerc === '' || l.incPerc == null ? null : Number(String(l.incPerc).replace(',', '.'));
+          await tq(`insert into sp_livelli (id, piano_id, n, ruolo, bonus, fisso, variabile, area, skill, inc_perc, inc_soglia) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
               on conflict (id) do update set piano_id = excluded.piano_id, n = excluded.n, ruolo = excluded.ruolo, bonus = excluded.bonus,
-              fisso = excluded.fisso, variabile = excluded.variabile, area = excluded.area, skill = excluded.skill, archiviato = false`,
-            [lid, pid, n++, ruolo, str(l.bonus, 120), str(l.fisso, 160), testo(l.variabile, 2000), testo(l.area, 600), JSON.stringify(skill)]);
+              fisso = excluded.fisso, variabile = excluded.variabile, area = excluded.area, skill = excluded.skill, inc_perc = excluded.inc_perc, inc_soglia = excluded.inc_soglia, archiviato = false`,
+            [lid, pid, n++, ruolo, str(l.bonus, 120), str(l.fisso, 160), testo(l.variabile, 2000), testo(l.area, 600), JSON.stringify(skill),
+             perc != null && perc >= 0 && perc <= 100 ? perc : null, l.incSoglia === 'sempre' ? 'sempre' : 'target']);
           let oi = 0;
           for (const o of (Array.isArray(l.obiettivi) ? l.obiettivi : []).slice(0, 20)) {
             const testoO = str(o.testo, 400); if (!testoO) continue;
@@ -887,7 +1002,7 @@ module.exports = function sp(app, ctx) {
     if (!pid) { await q('delete from sp_perf where user_id = $1', [req.params.user]); return res.json({ ok: true }); }
     const p = (await struttura()).find(x => x.id === pid); if (!p) return bad(res, 400, 'Piano non trovato.');
     const n = parseInt(req.body.livello) || p.livelli[0]?.n || 1;
-    await q(`insert into sp_perf (user_id, piano_id, livello_n, dal) values ($1,$2,$3,current_date) on conflict (user_id) do update set piano_id = excluded.piano_id, livello_n = excluded.livello_n, dal = current_date`, [req.params.user, pid, n]);
+    await q(`insert into sp_perf (user_id, piano_id, livello_n, dal) values ($1,$2,$3,current_date) on conflict (user_id) do update set piano_id = excluded.piano_id, livello_n = excluded.livello_n, dal = current_date, test_invio = null`, [req.params.user, pid, n]);
     await q(`update sp_passaggi set stato = 'superato' where user_id = $1 and stato = 'attesa'`, [req.params.user]);
     res.json({ ok: true });
   }));
@@ -896,14 +1011,9 @@ module.exports = function sp(app, ctx) {
     const { rows } = await q(`update sp_perf_dati set stato = $2, nota = $3, deciso_il = now() where id = $1 and stato = 'verifica' returning *`, [req.params.id, ok ? 'pass' : 'no', str(req.body.nota, 300)]);
     if (!rows[0]) return bad(res, 400, 'Già valutato.');
     const uid = rows[0].user_id, st = await perfUtente(uid);
-    avvisa([uid], { title: ok ? 'Pass ottenuto' : 'Dato non approvato', body: ok ? 'Un obiettivo della tua performance è stato approvato.' : 'Un tuo dato non è stato approvato: puoi reinviarlo.', url: '/?sez=perf' });
-    // tutti i pass: si propone il passaggio di ruolo, che l'amministratore deve approvare
-    if (st && st.prossimo && st.obiettivi.length && st.pass === st.obiettivi.length && !st.inAttesa) {
-      const { rows: a } = await q('select * from sp_perf where user_id = $1', [uid]);
-      const pi = (await struttura()).find(x => x.id === a[0].piano_id), next = pi.livelli.find(l => l.n > a[0].livello_n);
-      await q(`insert into sp_passaggi (id, user_id, piano_id, da_n, a_n, bonus) values ($1,$2,$3,$4,$5,$6)`, [db.newId(), uid, pi.id, a[0].livello_n, next.n, next.bonus || '']);
-      avvisaAdmin({ title: 'Passaggio di ruolo da approvare', body: `Tutti i pass raggiunti per ${next.ruolo}.`, url: '/?sez=perf' });
-    }
+    avvisa([uid], { title: ok ? 'Pass ottenuto' : 'Prova non approvata', body: ok ? 'Un obiettivo della tua performance è stato approvato.' : 'Una tua prova non è stata approvata: puoi caricarne un’altra.', url: '/?sez=perf' });
+    // tutti i pass: la persona può generare il test; superato il test, il passaggio arriva qui da approvare
+    if (st && st.test?.disponibile) avvisa([uid], { title: 'Tutti i pass!', body: `Puoi generare il test per diventare ${st.prossimo.ruolo}.`, url: '/?sez=perf' });
     res.json({ ok: true });
   }));
   app.post('/api/sp/admin/passaggi/:id', needAd, wrap(async (req, res) => {
@@ -911,7 +1021,7 @@ module.exports = function sp(app, ctx) {
     const { rows } = await q(`update sp_passaggi set stato = $2, deciso_il = now(), deciso_da = $3 where id = $1 and stato = 'attesa' returning *`, [req.params.id, ok ? 'approvato' : 'rimandato', req.user.email]);
     if (!rows[0]) return bad(res, 400, 'Già deciso.');
     const x = rows[0];
-    if (ok) await q('update sp_perf set livello_n = $2, dal = current_date where user_id = $1', [x.user_id, x.a_n]);
+    if (ok) await q('update sp_perf set livello_n = $2, dal = current_date, test_invio = null where user_id = $1', [x.user_id, x.a_n]);
     avvisa([x.user_id], { title: ok ? 'Nuovo ruolo!' : 'Passaggio rimandato', body: ok ? `Il passaggio di ruolo è stato approvato${x.bonus ? ' · bonus: ' + x.bonus : ''}.` : 'Il passaggio di ruolo per ora è rimandato.', url: '/?sez=perf' });
     res.json({ ok: true });
   }));

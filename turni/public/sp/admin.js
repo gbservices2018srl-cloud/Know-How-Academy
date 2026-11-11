@@ -370,32 +370,69 @@ function editorOrari(s){
 }
 
 /* ---------- performance ---------- */
-let PTAB = 'approva';
+let PTAB = 'persone', PSEL = null, IMESE = null;
 async function aPerf(m){
   const r = await api('GET', '/api/sp/admin/perf');
-  if (PTAB === 'approva' && !r.dati.length && !r.passaggi.length) PTAB = r.piani.length ? 'ruoli' : 'piani';
-  const tabs = [['approva', `Da approvare${r.dati.length + r.passaggi.length ? ' (' + (r.dati.length + r.passaggi.length) + ')' : ''}`], ['ruoli', 'Persone e ruoli'], ['piani', 'Piani di carriera']];
+  const tabs = [['persone', 'Persone'], ['piani', 'Piano di crescita'], ['incentivi', 'Incentivi del mese']];
+  const ST = { pass: ['Approvato', 'ok'], verifica: ['Da verificare', 'warn'], no: ['Non approvato', 'no'], fare: ['Da fare', 'info'] };
   let corpo = '';
-  if (PTAB === 'approva') corpo = `<div class="card"><h2>Dati inviati dalle persone</h2>${r.dati.length ? `<div class="lista">${r.dati.map(d => `<div class="li"><span class="grow"><span class="t">${esc(d.nome)} · ${esc(d.obiettivo)}</span><span class="s">«${esc(d.dato)}» · ${fmtDT(d.il)}</span></span><button class="btn small primary" data-dok="${d.id}">Dai il pass</button><button class="btn small" data-dno="${d.id}">Non approvare</button></div>`).join('')}</div>` : '<p class="muted small" style="margin:0">Niente da verificare.</p>'}</div>
-    <div class="card"><h2>Passaggi di ruolo</h2>${r.passaggi.length ? `<div class="lista">${r.passaggi.map(x => `<div class="li"><span class="grow"><span class="t">${esc(x.nome)}: ${esc(x.da)} → ${esc(x.a)}</span><span class="s">Tutti i pass raggiunti${x.bonus ? ' · bonus ' + esc(x.bonus) : ''}</span></span><button class="btn small primary" data-pok="${x.id}">Approva</button><button class="btn small" data-pno="${x.id}">Rimanda</button></div>`).join('')}</div>` : '<p class="muted small" style="margin:0">Nessun passaggio in attesa.</p>'}</div>`;
-  if (PTAB === 'ruoli') corpo = `<div class="card"><p class="muted small" style="margin-top:0">Dai a ogni persona il suo piano e il ruolo attuale. Lei vede gli obiettivi del ruolo successivo e invia i suoi dati.</p>
-    ${r.piani.length ? `<div class="tw"><table class="t"><thead><tr><th>Persona</th><th>Piano</th><th>Ruolo attuale</th><th>Verso</th><th>Pass</th></tr></thead><tbody>${r.persone.map(p => { const pi = r.piani.find(x => x.id === p.piano);
-      return `<tr><td><b>${esc(p.nome)}</b><br><span class="muted xs">${esc(p.figura)}</span></td><td><select data-piano="${p.id}"><option value="">—</option>${r.piani.map(x => `<option value="${x.id}" ${p.piano === x.id ? 'selected' : ''}>${esc(x.nome)}</option>`).join('')}</select></td>
-      <td>${pi ? `<select data-liv="${p.id}">${pi.livelli.map(l => `<option value="${l.n}" ${p.livello === l.n ? 'selected' : ''}>${esc(l.ruolo)}</option>`).join('')}</select>` : ''}</td>
-      <td>${p.stato?.prossimo ? esc(p.stato.prossimo.ruolo) : p.stato ? '<span class="muted">ultimo livello</span>' : ''}</td><td>${p.stato?.prossimo ? `${p.stato.pass} su ${p.stato.obiettivi.length}` : ''}</td></tr>`; }).join('')}</tbody></table></div>` : '<p class="muted">Prima crea un piano di carriera.</p>'}</div>`;
+  if (PTAB === 'persone') {
+    const nelPiano = r.persone.filter(p => p.stato), senza = r.persone.filter(p => !p.stato);
+    if (!PSEL || !r.persone.some(p => p.id === PSEL)) PSEL = (nelPiano.find(p => p.stato.obiettivi.some(o => o.stato === 'verifica')) || nelPiano[0] || r.persone[0])?.id;
+    const card = p => { const st = p.stato, tot = st.obiettivi.length, pct = st.prossimo && tot ? Math.round(100 * st.pass / tot) : 100;
+      const dv = st.obiettivi.filter(o => o.stato === 'verifica').length;
+      const badge = st.inAttesa ? 'Passaggio da approvare' : st.test?.stato === 'superato' ? 'Test superato' : st.test?.stato ? 'Test in corso' : st.test?.disponibile ? 'Pronto per il test' : dv ? `${dv} ${dv === 1 ? 'prova' : 'prove'} da verificare` : st.prossimo ? 'In corso' : 'Ultimo livello';
+      return `<button class="termcard" data-psel="${p.id}" aria-pressed="${PSEL === p.id}">${termometro(pct)}<span class="pc">${st.prossimo && tot ? pct + '%' : '—'}</span>
+        <b class="small">${esc(p.nome)}</b><span class="xs muted">${esc(st.ruolo)}${st.prossimo ? ' → ' + esc(st.prossimo.ruolo) : ''}</span>
+        <span class="xs muted">${esc((p.sedi || []).map(x => r.sediNomi[x] || '').filter(Boolean)[0] || '')}${st.prossimo && tot ? ' · ' + st.pass + ' di ' + tot : ''}</span>
+        <span class="tag ${st.inAttesa || st.test?.disponibile ? 'warn' : dv ? 'info' : ''}" style="margin-top:4px">${badge}</span></button>`; };
+    const sp = r.persone.find(p => p.id === PSEL), st = sp?.stato, pi = r.piani.find(x => x.id === sp?.piano);
+    const pas = r.passaggi;
+    const dettaglio = !sp ? '' : `<div class="card"><div class="row" style="flex-wrap:wrap;justify-content:space-between;gap:8px"><h2 style="margin:0">${esc(sp.nome)}</h2>
+        <div class="row" style="gap:6px;flex-wrap:wrap"><select data-piano="${sp.id}" aria-label="Piano"><option value="">Nessun piano</option>${r.piani.map(x => `<option value="${x.id}" ${sp.piano === x.id ? 'selected' : ''}>${esc(x.nome)}</option>`).join('')}</select>
+        ${pi ? `<select data-liv="${sp.id}" aria-label="Ruolo attuale">${pi.livelli.map(l => `<option value="${l.n}" ${sp.livello === l.n ? 'selected' : ''}>${esc(l.ruolo)}</option>`).join('')}</select>` : ''}</div></div>
+      ${st ? `${st.prossimo ? `<p class="muted small">Obiettivi per diventare <b>${esc(st.prossimo.ruolo)}</b></p>${st.obiettivi.length ? `<div class="lista">${st.obiettivi.map(o => `<div class="li" style="align-items:flex-start;gap:10px">
+          <span class="grow"><span class="t">${esc(o.testo)}</span>
+          <span class="s">${o.file && o.datoId ? `<a href="/api/sp/perf/prova/${o.datoId}" target="_blank" rel="noopener">📎 ${esc(o.file)}</a> · ` : ''}${o.dato && o.dato !== '(prova caricata)' ? '«' + esc(o.dato) + '» · ' : ''}${o.il ? fmtDT(o.il) : ''}${o.nota ? ' · nota: ' + esc(o.nota) : ''}</span></span>
+          ${o.stato === 'verifica' && o.datoId ? `<button class="btn small" data-dno="${o.datoId}">Non basta</button><button class="btn small primary" data-dok="${o.datoId}">Approva</button>` : `<span class="tag ${ST[o.stato][1]}">${ST[o.stato][0]}</span>`}</div>`).join('')}</div>` : '<p class="muted small">Il ruolo successivo non ha obiettivi: il passaggio lo decidi tu cambiando il ruolo qui sopra.</p>'}
+        <div class="card testbox ${st.test?.disponibile ? 'on' : ''}" style="margin:12px 0 0;box-shadow:none"><b class="small">${st.inAttesa ? 'Passaggio in attesa della tua approvazione' : st.test?.stato === 'superato' ? 'Test superato' : st.test?.stato === 'da_ripetere' ? 'Test da ripetere' : st.test?.stato ? 'Test generato: la persona lo sta facendo' : st.test?.disponibile ? 'Tutti i pass approvati: la persona può generare il test' : 'Test bloccato'}</b>
+          <p class="xs muted" style="margin:4px 0 0">${st.test?.disponibile || st.test?.stato ? 'Il test pesca dai Protocolli della sua mansione; superato, il passaggio di ruolo arriva qui da confermare.' : 'Si sblocca per la persona quando approvi tutte le prove.'}</p></div>` : '<p class="muted small">È all\'ultimo livello del suo piano.</p>'}
+      <div style="margin-top:12px">${boxIncentivo(st.incentivo, 'Incentivo · ' + st.ruolo)}</div>` : '<p class="muted small">Scegli un piano e il ruolo attuale per vedere obiettivi e incentivo.</p>'}</div>`;
+    corpo = `${pas.length ? `<div class="card"><h2>Passaggi di ruolo da confermare</h2><div class="lista">${pas.map(x => `<div class="li"><span class="grow"><span class="t">${esc(x.nome)}: ${esc(x.da)} → ${esc(x.a)}</span><span class="s">Test superato${x.bonus ? ' · bonus ' + esc(x.bonus) : ''}</span></span><button class="btn small" data-pno="${x.id}">Rimanda</button><button class="btn small primary" data-pok="${x.id}">Conferma</button></div>`).join('')}</div></div>` : ''}
+      ${nelPiano.length ? `<p class="muted small" style="margin:0 0 8px">Ogni termometro mostra a che punto è la persona con gli obiettivi del ruolo successivo. Tocca una persona per vedere le prove e l'incentivo.</p><div class="termgrid">${nelPiano.map(card).join('')}</div>` : `<div class="card"><p class="muted" style="margin:0">${r.piani.length ? 'Nessuno è ancora in un piano: scegli una persona qui sotto e assegnale piano e ruolo.' : 'Prima carica il piano di crescita (scheda «Piano di crescita»).'}</p></div>`}
+      ${senza.length ? `<details class="card" ${nelPiano.length ? '' : 'open'}><summary><b>Senza piano (${senza.length})</b></summary><div class="chips" style="margin-top:8px">${senza.map(p => `<button class="chip" data-psel="${p.id}" aria-pressed="${PSEL === p.id}">${esc(p.nome)}</button>`).join('')}</div></details>` : ''}
+      ${dettaglio}`;
+  }
   if (PTAB === 'piani') corpo = `<div id="pianiEd"></div>`;
-  m.innerHTML = `<h1>Performance</h1><p class="sub">Piani di carriera con ruoli, obiettivi e bonus. Le persone inviano i loro dati, tu dai i pass; con tutti i pass il passaggio di ruolo va approvato.</p>
-    <div class="chips" style="margin-bottom:14px">${tabs.map(([k, t]) => `<button class="chip" data-pt="${k}" aria-pressed="${PTAB === k}">${t}</button>`).join('')}</div>${corpo}`;
+  if (PTAB === 'incentivi') {
+    let inc = null, err = '', az = null;
+    try { inc = await api('GET', '/api/sp/admin/incentivi' + (IMESE ? '?mese=' + IMESE : '')); } catch (e) { err = e.message; }
+    try { az = await api('GET', '/api/sp/admin/finanza/aziende'); } catch (e) { err = err || e.message; }
+    IMESE = inc?.mese || IMESE || r.mese;
+    const mesi = Array.from({ length: 12 }, (_, i) => { const d = new Date(r.mese + '-15'); d.setMonth(d.getMonth() - i); return d.toISOString().slice(0, 7); });
+    corpo = `<div class="card"><div class="row" style="flex-wrap:wrap;gap:8px;justify-content:space-between"><div><h2 style="margin:0">Incentivi</h2><p class="muted small" style="margin:4px 0 0">Calcolati dal consuntivo di ogni sede in Gestione finanziaria, con la regola del ruolo (impostala nel Piano di crescita, livello per livello).</p></div>
+      <div class="row" style="gap:6px;flex-wrap:wrap">${az ? `<select id="finAz" aria-label="Azienda in Gestione finanziaria"><option value="">Azienda in Gestione finanziaria…</option>${az.aziende.map(a => `<option value="${esc(a.id)}" ${az.scelta === a.id ? 'selected' : ''}>${esc(a.nome)}</option>`).join('')}</select>` : ''}
+      <select id="iMese" aria-label="Mese">${mesi.map(x => `<option value="${x}" ${x === IMESE ? 'selected' : ''}>${new Date(x + '-15').toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}</option>`).join('')}</select></div></div>
+      ${err ? `<div class="banner warn" style="margin-top:10px">${esc(err)}</div>` : ''}
+      ${inc ? `<div class="tw" style="margin-top:12px"><table class="t"><thead><tr><th>Persona</th><th>Ruolo</th><th>Sede</th><th style="text-align:right">Fatturato</th><th style="text-align:right">Target</th><th>Regola</th><th style="text-align:right">Incentivo</th></tr></thead><tbody>
+        ${inc.righe.map(x => `<tr><td><b>${esc(x.nome)}</b></td><td>${esc(x.ruolo)}</td><td>${esc(x.sede || '')}</td><td style="text-align:right">${x.calcolabile ? esc(x.testo.fatturato) : ''}</td><td style="text-align:right">${x.calcolabile ? esc(x.testo.target) : ''}</td>
+          <td class="small">${esc(x.regola)}${x.errore ? `<br><span class="muted xs">${esc(x.errore)}</span>` : x.calcolabile && !x.aTarget ? '<br><span class="muted xs">target non raggiunto</span>' : ''}</td><td style="text-align:right;font-weight:800">${x.calcolabile ? esc(x.testo.valore) : '—'}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">Nessuna persona in un piano.</td></tr>'}
+        </tbody><tfoot><tr><td colspan="6"><b>Totale</b></td><td style="text-align:right;font-weight:800">€ ${Number(inc.totale).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr></tfoot></table></div>
+        <p class="muted xs">Il mese di riferimento è quello chiuso; il fatturato personale (RAP, CM) non è in Gestione finanziaria: quelle voci si calcolano a mano.</p>` : ''}</div>`;
+  }
+  m.innerHTML = `<h1>Performance</h1><p class="sub">Piano di crescita, obiettivi con le prove delle persone, test di passaggio e incentivi calcolati dal fatturato.</p>
+    <div class="chips" style="margin-bottom:14px">${tabs.map(([k, t]) => `<button class="chip" data-pt="${k}" aria-pressed="${PTAB === k}">${t}${k === 'persone' && (r.dati.length + r.passaggi.length) ? ` (${r.dati.length + r.passaggi.length})` : ''}</button>`).join('')}</div>${corpo}`;
   if (PTAB === 'piani') editorPiani($('#pianiEd'), r.piani, () => aPerf(m), r.regole);
   m.onclick = async e => {
     const t = e.target.closest('[data-pt]'); if (t) { PTAB = t.dataset.pt; return aPerf(m); }
+    const ps = e.target.closest('[data-psel]'); if (ps) { PSEL = ps.dataset.psel; return aPerf(m); }
     const k = ['dok', 'dno', 'pok', 'pno'].find(x => e.target.closest(`[data-${x}]`));
     if (!k) return;
     const id = e.target.closest(`[data-${k}]`).dataset[k];
     try {
-      if (k[0] === 'd') { const nota = k === 'dno' ? prompt('Perché non lo approvi? (lo legge la persona)') : ''; if (nota === null) return; await api('POST', `/api/sp/admin/perf/dato/${id}`, {ok: k === 'dok', nota}); }
+      if (k[0] === 'd') { const nota = k === 'dno' ? prompt('Cosa manca? (lo legge la persona)') : ''; if (nota === null) return; await api('POST', `/api/sp/admin/perf/dato/${id}`, {ok: k === 'dok', nota}); }
       else await api('POST', `/api/sp/admin/passaggi/${id}`, {ok: k === 'pok'});
-      toast('Fatto.'); ridisegna();
+      toast('Fatto.'); aPerf(m);
     } catch (er) { toast(er.message); }
   };
   m.onchange = async e => {
@@ -403,7 +440,9 @@ async function aPerf(m){
     try {
       if (p) await api('PUT', `/api/sp/admin/perf/${p.dataset.piano}`, {piano: p.value});
       if (l) await api('PUT', `/api/sp/admin/perf/${l.dataset.liv}`, {piano: r.persone.find(x => x.id === l.dataset.liv).piano, livello: l.value});
-      aPerf(m);
+      if (e.target.id === 'finAz') { await api('PUT', '/api/sp/admin/finanza/azienda', {azienda: e.target.value}); toast('Azienda salvata.'); }
+      if (e.target.id === 'iMese') IMESE = e.target.value;
+      if (p || l || e.target.id === 'finAz' || e.target.id === 'iMese') aPerf(m);
     } catch (er) { toast(er.message); }
   };
 }
@@ -426,6 +465,10 @@ function editorPiani(h, piani, dopo, regole){
             <div class="row" style="flex-wrap:wrap"><label class="f grow">Compenso fisso<input type="text" class="fisso" value="${esc(l.fisso)}" placeholder="es. 1.530 € netti/mese (13ª e 14ª incluse)"></label>
               <label class="f grow">Bonus al passaggio<input type="text" class="bonus" value="${esc(l.bonus)}" placeholder="${i ? 'facoltativo' : 'livello di ingresso'}" ${i ? '' : 'disabled'}></label></div>
             <label class="f">Compenso variabile (%) <span class="muted xs">· una voce per riga</span>${ta('variabile', l.variabile, 'es. 1% su porta pazienti')}</label>
+            <div class="row" style="flex-wrap:wrap;align-items:flex-end;gap:8px;background:var(--surface);border-radius:10px;padding:8px 10px"><span class="small"><b>Incentivo calcolato in automatico</b></span>
+              <label class="f" style="width:110px">% sul fatturato<input type="text" inputmode="decimal" class="incPerc" value="${l.incPerc ?? ''}" placeholder="es. 0,15"></label>
+              <label class="f">della sede<select class="incSoglia"><option value="target" ${l.incSoglia !== 'sempre' ? 'selected' : ''}>solo se a target</option><option value="sempre" ${l.incSoglia === 'sempre' ? 'selected' : ''}>sempre</option></select></label>
+              <span class="muted xs" style="flex-basis:100%">Vuoto = nessun calcolo automatico. Il fatturato e il target arrivano dal consuntivo della sede della persona in Gestione finanziaria.</span></div>
             <label class="f">Compenso di area${ta('area', l.area, 'facoltativo', 2)}</label>
             <label class="f">Hard skill da sviluppare <span class="muted xs">· una per riga</span>${ta('skill', (l.skill || []).join('\n'), 'es. Time management', 4)}</label>
             ${i ? `<div><b class="small">Obiettivi da raggiungere (pass per diventare ${esc(l.ruolo || 'questo ruolo')})</b>
@@ -440,7 +483,7 @@ function editorPiani(h, piani, dopo, regole){
     const p = P[sel]; if (!p) return;
     p.nome = h.querySelector('#pNome').value;
     h.querySelectorAll('[data-l]').forEach(el => { const l = p.livelli[+el.dataset.l]; const v = c => el.querySelector('.' + c).value;
-      l.ruolo = v('ruolo'); l.bonus = v('bonus'); l.fisso = v('fisso'); l.variabile = v('variabile'); l.area = v('area');
+      l.ruolo = v('ruolo'); l.bonus = v('bonus'); l.fisso = v('fisso'); l.variabile = v('variabile'); l.area = v('area'); l.incPerc = v('incPerc').trim(); l.incSoglia = v('incSoglia');
       l.skill = v('skill').split('\n').map(x => x.trim()).filter(Boolean);
       el.querySelectorAll('[data-o]').forEach(oe => { const o = l.obiettivi[+oe.dataset.o]; o.testo = oe.querySelector('.testo').value; o.misura = oe.querySelector('.misura').value; }); });
   };

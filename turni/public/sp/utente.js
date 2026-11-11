@@ -177,31 +177,71 @@ function compenso(tit, c){
     ${c.variabile ? `<p class="small" style="margin:8px 0 0"><b>Variabile</b></p><ul style="margin:2px 0 0;padding-left:20px">${righe(c.variabile)}</ul>` : ''}
     ${c.area ? `<p class="small" style="margin:8px 0 0"><b>Compenso di area</b></p><ul style="margin:2px 0 0;padding-left:20px">${righe(c.area)}</ul>` : ''}</div>`;
 }
+// termometro: quanto manca agli obiettivi (turchese in corso, giallo quando è tutto fatto)
+function termometro(pct, grande){
+  const pieno = pct >= 100, h = grande ? 120 : 92;
+  return `<div class="term ${pieno ? 'pieno' : ''}" style="--h:${h}px" aria-hidden="true"><div class="tubo"><i style="height:${Math.max(0, Math.min(100, pct))}%"></i></div><div class="bulbo"></div></div>`;
+}
+function boxIncentivo(inc, titolo){
+  if (!inc) return '';
+  const mese = inc.mese ? new Date(inc.mese + '-15').toLocaleDateString('it-IT', { month: 'long', year: 'numeric' }) : '';
+  if (!inc.calcolabile) return `<div class="card"><h3>${esc(titolo)}</h3><p class="small" style="margin:4px 0 0">${esc(inc.regola)}</p>${inc.errore ? `<p class="muted xs" style="margin:6px 0 0">${esc(inc.errore)}</p>` : ''}</div>`;
+  const pct = inc.pct || 0;
+  return `<div class="card"><div class="row" style="justify-content:space-between;align-items:baseline"><h3 style="margin:0">${esc(titolo)}</h3><span class="muted xs">${esc(mese)}</span></div>
+    <div style="font-size:32px;font-weight:800;color:var(--teal-ink);margin:8px 0 2px">${esc(inc.testo.valore)}</div>
+    <p class="small" style="margin:0 0 10px">${esc(inc.regola)}${inc.aTarget ? '' : ' · <b>target non raggiunto</b>'}</p>
+    <div style="height:10px;border-radius:99px;background:var(--sunken);overflow:hidden"><div style="height:100%;width:${Math.min(100, pct)}%;background:${pct >= 100 ? 'var(--teal)' : '#E8C93A'}"></div></div>
+    <div class="row xs muted" style="justify-content:space-between;margin-top:6px"><span>Fatturato ${esc(inc.sede)} ${esc(inc.testo.fatturato)}</span><span>Target ${esc(inc.testo.target)}${inc.pct != null ? ' · ' + inc.pct + '%' : ''}</span></div>
+    <p class="muted xs" style="margin:8px 0 0">Dal consuntivo della sede in Gestione finanziaria.</p></div>`;
+}
 async function vistaPerfU(m){
   const p = ME.perf;
-  if (!p) { m.innerHTML = `<div class="card"><h2>Performance</h2><p class="muted">Non sei ancora inserito in un piano di carriera. Quando l'amministrazione ti assegna un ruolo, qui trovi gli obiettivi per crescere e i bonus.</p></div>`; return; }
+  if (!p) { m.innerHTML = `<div class="card"><h2>Performance</h2><p class="muted">Non sei ancora inserito in un piano di crescita. Quando l'amministrazione ti assegna un ruolo, qui trovi gli obiettivi per crescere e il tuo incentivo.</p></div>`; return; }
   const tot = p.obiettivi.length, pct = tot ? Math.round(100 * p.pass / tot) : 0;
-  const ST = { pass: ['Pass ✓', 'ok'], verifica: ['In verifica', 'warn'], no: ['Non approvato', 'no'], fare: ['Da fare', 'info'] };
-  m.innerHTML = `<div class="card" style="background:var(--teal-ink);color:#fff;border:0"><span class="xs" style="text-transform:uppercase;letter-spacing:.05em;font-weight:700;opacity:.85">${esc(p.piano)}</span>
-      <h2 style="margin:4px 0;color:#fff">Ruolo attuale: ${esc(p.ruolo)}</h2>
-      ${p.prossimo ? `<p class="small" style="margin:0 0 10px;opacity:.9">Prossimo ruolo: <b>${esc(p.prossimo.ruolo)}</b>${p.prossimo.bonus ? ' · bonus al passaggio: ' + esc(p.prossimo.bonus) : ''}</p>
-      <div style="height:10px;background:rgba(255,255,255,.22);border-radius:5px;overflow:hidden"><div style="height:100%;width:${pct}%;background:#E8E560"></div></div>
-      <p class="small" style="margin:8px 0 0;font-weight:700">${p.pass} pass su ${tot} obiettivi</p>` : '<p class="small" style="margin:0">Sei all\'ultimo livello del tuo piano.</p>'}</div>
-    ${compenso('Il tuo compenso da ' + p.ruolo, p.attuale)}
-    ${p.inAttesa ? `<div class="banner ok">Hai tutti i pass! Il passaggio a ${esc(p.prossimo?.ruolo || '')} e il bonus sono in attesa di approvazione dell'amministrazione.</div>` : ''}
-    ${p.prossimo ? `<div class="card"><h3>Obiettivi per diventare ${esc(p.prossimo.ruolo)}</h3>${tot ? p.obiettivi.map(o => `<div class="li" style="flex-direction:column;align-items:stretch;gap:6px">
+  const ST = { pass: ['Approvato ✓', 'ok'], verifica: ['In verifica', 'warn'], no: ['Non approvato', 'no'], fare: ['Da fare', 'info'] };
+  const T = p.test || {}, prossimo = p.prossimo?.ruolo || '';
+  const testBox = !p.prossimo || !tot ? '' : (() => {
+    let tit, txt, btn = '';
+    if (p.inAttesa) { tit = 'Test superato!'; txt = `Il passaggio a ${prossimo} è in attesa di conferma dell'amministrazione.`; }
+    else if (T.stato === 'superato') { tit = 'Test superato!'; txt = 'Il passaggio va all\'amministrazione per la conferma.'; }
+    else if (T.stato === 'da_ripetere') { tit = 'Test da ripetere'; txt = `Punteggio ${T.punti ?? '—'}: rileggi i protocolli indicati e rifallo.`; btn = '<button class="btn primary" data-test>Genera un nuovo test</button>'; }
+    else if (T.stato === 'in_correzione') { tit = 'Test consegnato'; txt = 'Le risposte aperte sono in correzione.'; }
+    else if (T.stato) { tit = 'Il tuo test è pronto'; txt = 'Lo trovi nell\'app Protocolli.'; btn = '<a class="btn primary" href="https://protocolli.appgestione.it/?v=test">Apri il test</a>'; }
+    else if (T.disponibile) { tit = 'Hai tutti i pass: puoi fare il test'; txt = `Il test si genera dai Protocolli della tua mansione. Superato il test, passi a ${prossimo}.`; btn = '<button class="btn primary" data-test>Genera test</button>'; }
+    else { tit = `Test per ${prossimo}`; txt = `Si sblocca quando tutti gli obiettivi sono approvati (${p.pass} di ${tot}).`; btn = '<button class="btn" disabled>Genera test</button>'; }
+    return `<div class="card testbox ${T.disponibile || T.stato ? 'on' : ''}"><div class="row" style="gap:10px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><b>${esc(tit)}</b></div>
+      <p class="small" style="margin:6px 0 10px">${esc(txt)}</p>${btn}</div>`;
+  })();
+  m.innerHTML = `<div class="card"><div class="row" style="gap:16px;align-items:center">${termometro(p.prossimo ? pct : 100, true)}
+      <div style="min-width:0"><span class="xs muted" style="text-transform:uppercase;letter-spacing:.05em;font-weight:700">${esc(p.piano)}</span>
+      <h2 style="margin:2px 0 4px">${esc(p.ruolo)}${p.prossimo ? ` <span class="muted" style="font-weight:600;font-size:.75em">→ ${esc(prossimo)}</span>` : ''}</h2>
+      ${p.prossimo ? `<p class="small" style="margin:0"><b>${pct}%</b> del percorso · ${p.pass} di ${tot} pass${p.prossimo.bonus ? ' · bonus al passaggio: ' + esc(p.prossimo.bonus) : ''}</p>` : '<p class="small" style="margin:0">Sei all\'ultimo livello del tuo piano.</p>'}
+      ${p.attuale?.fisso ? `<p class="muted xs" style="margin:4px 0 0">Fisso: ${esc(p.attuale.fisso)}</p>` : ''}</div></div></div>
+    ${p.incentivo?.calcolabile || !p.incentivoProssimo ? boxIncentivo(p.incentivo, 'Il mio incentivo') : boxIncentivo(p.incentivoProssimo, `Nel tuo ruolo non c'è variabile · da ${prossimo} avresti`)}
+    ${p.prossimo ? `<div class="card"><h3>Obiettivi per diventare ${esc(prossimo)}</h3>${tot ? p.obiettivi.map(o => `<div class="li ob" style="flex-direction:column;align-items:stretch;gap:8px">
         <div class="row"><b class="grow">${esc(o.testo)}</b><span class="tag ${ST[o.stato][1]}">${ST[o.stato][0]}</span></div>
-        ${o.misura ? `<span class="muted xs">${esc(o.misura)}</span>` : ''}
-        ${o.dato ? `<span class="small" style="background:var(--sunken);padding:6px 10px;border-radius:8px">Il tuo dato: ${esc(o.dato)}</span>` : ''}
+        ${o.misura ? `<span class="muted xs">Come si misura: ${esc(o.misura)}</span>` : ''}
+        ${o.file && o.datoId ? `<a class="small" href="/api/sp/perf/prova/${o.datoId}" target="_blank" rel="noopener">📎 ${esc(o.file)}</a>` : ''}
+        ${o.dato && o.dato !== '(prova caricata)' ? `<span class="small" style="background:var(--sunken);padding:6px 10px;border-radius:8px">${esc(o.dato)}</span>` : ''}
         ${o.nota ? `<span class="xs muted">Nota dell'amministrazione: ${esc(o.nota)}</span>` : ''}
-        ${['fare', 'no'].includes(o.stato) ? `<div class="row"><input type="text" class="grow" data-dato="${o.id}" placeholder="Scrivi il risultato raggiunto"><button class="btn small primary" data-invia="${o.id}">Invia</button></div>` : ''}</div>`).join('') : '<p class="muted small">Gli obiettivi non sono ancora stati indicati.</p>'}</div>` : ''}
-    ${p.prossimo?.skill?.length ? `<div class="card"><h3>Competenze da sviluppare per diventare ${esc(p.prossimo.ruolo)}</h3><ul style="margin:6px 0 0;padding-left:20px">${p.prossimo.skill.map(x => `<li class="small" style="margin:3px 0">${esc(x)}</li>`).join('')}</ul></div>` : ''}
-    ${p.prossimo ? compenso('Compenso da ' + p.prossimo.ruolo, p.prossimo) : ''}
+        ${['fare', 'no'].includes(o.stato) ? `<div class="carica"><textarea rows="2" data-nota="${o.id}" placeholder="Scrivi cosa hai fatto (facoltativo se carichi un file)"></textarea>
+          <label class="btn primary small" style="cursor:pointer">Carica la prova (foto o file)<input type="file" data-file="${o.id}" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" hidden></label>
+          <button class="btn small" data-invia="${o.id}">Invia solo la nota</button></div>` : ''}</div>`).join('') : '<p class="muted small">Gli obiettivi non sono ancora stati indicati.</p>'}</div>` : ''}
+    ${testBox}
+    ${p.prossimo?.skill?.length ? `<div class="card"><h3>Competenze da sviluppare per diventare ${esc(prossimo)}</h3><ul style="margin:6px 0 0;padding-left:20px">${p.prossimo.skill.map(x => `<li class="small" style="margin:3px 0">${esc(x)}</li>`).join('')}</ul></div>` : ''}
+    ${p.prossimo ? compenso('Compenso da ' + prossimo, p.prossimo) : ''}
     ${p.regole ? `<details class="card"><summary><b>Regole del piano di crescita</b></summary><div class="small" style="white-space:pre-line;margin-top:8px;line-height:1.5">${esc(p.regole)}</div></details>` : ''}`;
+  const invia = async (oid, file) => {
+    const fd = new FormData(); fd.append('obiettivo', oid); fd.append('dato', m.querySelector(`[data-nota="${oid}"]`)?.value || '');
+    if (file) fd.append('file', file);
+    try { await api('POST', '/api/sp/perf/dato', undefined, fd); toast('Inviato: ora lo verifica l\'amministrazione.'); ricarica(); } catch (er) { toast(er.message); }
+  };
+  m.onchange = e => { const f = e.target.closest('[data-file]'); if (f && f.files[0]) invia(f.dataset.file, f.files[0]); };
   m.onclick = async e => {
-    const b = e.target.closest('[data-invia]'); if (!b) return;
-    try { await api('POST', '/api/sp/perf/dato', {obiettivo: b.dataset.invia, dato: m.querySelector(`[data-dato="${b.dataset.invia}"]`).value}); toast('Inviato: ora lo verifica l\'amministrazione.'); ricarica(); }
-    catch (er) { toast(er.message); }
+    const b = e.target.closest('[data-invia]');
+    if (b) return invia(b.dataset.invia, null);
+    const t = e.target.closest('[data-test]');
+    if (t) { t.disabled = true; try { const r = await api('POST', '/api/sp/perf/test', {}); toast('Test pronto: si apre nell\'app Protocolli.'); location.href = r.url; } catch (er) { toast(er.message); t.disabled = false; } }
   };
 }
 

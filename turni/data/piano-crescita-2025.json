@@ -1,71 +1,364 @@
 {
-  "fonte": "DG_PIANI_DI_CRESCITA.docx — Piano di crescita in To Smile, organigramma 2025 (senza la colonna soft skill)",
-  "regole": "REGOLE\nAll'ottenimento dei pass raggiunti puoi:\n• stare nella posizione in cui sei, sapendo che potresti cambiare;\n• passare al ruolo successivo nel tempo in cui le condizioni organizzative aziendali e di UL lo permettono (entro 6/8 mesi ricoprirai il nuovo ruolo); nel frattempo il tuo piano di guadagno sarà quello del ruolo successivo.\n\nSe le tue performance non rispettano ciò che devi ottenere per 3 mesi di fila:\n• lo status rimane quello acquisito;\n• il tuo piano di guadagno provvigionale retrocede al livello precedente.\n\nIl piano di guadagno è relativo ad assunzioni secondo CCNL e il piano provvigionale è su base lorda applicabile alla busta paga.\nTutte le figure che non rispettano le policy e i valori aziendali saranno retrocesse o allontanate dal proprio ruolo.\nI netti sono tutti comprensivi di 13ª e 14ª, escluso TFR.\nPer i manager executive non è necessario il raggiungimento degli obiettivi numerici: può essere eletto manager chiunque si distingua per affinità valoriale, dedizione, obiettivi o predisposizione verso l'azienda.\nPer successo intendiamo aver fatto raggiungere alla persona almeno un obiettivo principale per il suo ruolo.\n\nREGOLE SUL PIANO INCENTIVI\n1. Se sei una nuova figura in To Smile, il piano incentivi scatta al raggiungimento degli obiettivi in training.\n2. Se sei una nuova figura in To Smile, per avere il piano incentivi devi avere una posizione di ruolo e non essere in training.\n3. Se sei una figura già To Smile che avanza nel piano carriera e finisce in un ruolo in training, il compenso e il piano incentivi sono quelli del ruolo precedente.\n4. Se To Smile ti ingaggia sottraendoti da un'altra azienda, può essere derogato il punto 1.\n5. Tutti i compensi sono intesi a 40 ore settimanali.\n\nNOTE DI CREDITO\nIn caso di nota di credito che abbia generato premi o bonus, emessa entro 3 mesi dalla fattura, questi saranno scontati quota parte.\nEsempio: fatturo 1.000 € oggi e prendo l'1% di bonus su quei 1.000 € (10 €); nota di credito dopo 43 giorni di quei 1.000 €: al primo compenso utile chi ha preso i 10 € di bonus li vedrà detratti.\nSe la nota di credito è successiva al 3° mese (dal 4° in poi), sarà detratta dal fatturato del mese in corso.\nEsempio: fatturo 1.000 € oggi e prendo l'1% di bonus (10 €); nota di credito dopo 160 giorni: quel mese il target mensile sarà di 1.000 € in più.",
-  "piani": [
-    { "nome": "ASO", "livelli": [
-      { "ruolo": "ASO in training", "fisso": "", "variabile": "Il piano incentivi scatta al raggiungimento degli obiettivi in training", "area": "", "skill": [], "obiettivi": [] },
-      { "ruolo": "ASO", "fisso": "1.530 € netti/mese (13ª e 14ª incluse)", "variabile": "1% su porta pazienti\n0,15% sul fatturato mensile a target", "area": "",
-        "skill": ["Conoscere l'odontoiatria di base", "Conoscere le procedure assistenziali", "Aver raggiunto l'allineamento clinico ed extra clinico con To Smile", "Comunicazione social"],
-        "obiettivi": ["Aver gestito le sale senza mancanze e con viabilità per 2 mesi consecutivi", "Aver gestito con diligenza l'ordine e la pulizia dei locali sanitari"] },
-      { "ruolo": "Capo ASO", "fisso": "1.530 € netti/mese (13ª e 14ª incluse)", "variabile": "", "area": "",
-        "skill": ["Mantenere le hard skill precedenti", "Time management"],
-        "obiettivi": ["Aver portato in UL almeno 2 pazienti per 2 mesi di fila", "Aver dimostrato di creare feeling personale con i pazienti, riportando almeno 1 recensione con nome personale per 2 mesi di fila"] },
-      { "ruolo": "Capo ASO Senior", "fisso": "1.530 € netti/mese (13ª e 14ª incluse)", "variabile": "0,3% sul fatturato mensile a target\n1% su porta pazienti", "area": "",
-        "skill": ["Mantenere le hard skill precedenti", "Conoscere i principi di gestione ordini, magazzino e inventario", "Aver sviluppato competenza nelle mansioni date", "Aver dimostrato in più occasioni di saper gestire ottimamente l'agenda"],
-        "obiettivi": ["Aver avviato almeno 1 altra ASO con successo", "Aver stimolato 3 referral di pazienti per 2 mesi di fila"] }
-    ]},
-    { "nome": "Reception (REC)", "livelli": [
-      { "ruolo": "REC in training", "fisso": "", "variabile": "Il piano incentivi scatta al raggiungimento degli obiettivi in training", "area": "", "skill": [], "obiettivi": [] },
-      { "ruolo": "REC", "fisso": "1.530 € netti/mese (13ª e 14ª incluse)", "variabile": "", "area": "",
-        "skill": ["Conoscere le procedure REC", "Time management", "Conoscere i protocolli chiamate e gli script", "Comunicazione social", "Conoscere il gestionale di riferimento", "Conoscere l'odontoiatria di base"],
-        "obiettivi": ["Aver portato in PV almeno 3 persone per 2 mesi consecutivi (campagne, conoscenze personali…)", "Aver raggiunto l'obiettivo recensioni almeno una volta nei primi 3 mesi", "Aver raggiunto la quota di OV settimanali per 4 settimane consecutive"] },
-      { "ruolo": "REC Senior", "fisso": "1.530 € netti/mese (13ª e 14ª incluse)", "variabile": "0,25% sul fatturato mensile a target\n0,15% sul fatturato trimestrale a target\n+150 € mensili al raggiungimento del target OV settimanali +30%", "area": "",
-        "skill": ["Mantenere le hard skill precedenti", "Conoscere le tecniche di vendita", "Aver sviluppato competenza nelle mansioni date", "Gestire agende produttive (85%) con viabilità per 3 mesi"],
-        "obiettivi": ["Aver chiuso almeno 2 piani di cura da min. 2.500 € con incasso per 2 mesi di fila", "Aver raggiunto l'obiettivo recensioni per 3 mesi di fila", "Essere riuscito a portare in PV almeno 5 persone per 3 mesi di fila (campagne, conoscenze…)", "Aver raggiunto la quota di OV settimanali costantemente"] }
-    ]},
-    { "nome": "Commerciale e gestione UL (RAP · RUL)", "livelli": [
-      { "ruolo": "RAP in training", "fisso": "", "variabile": "Il piano incentivi scatta al raggiungimento degli obiettivi in training", "area": "", "skill": [], "obiettivi": [] },
-      { "ruolo": "RAP", "fisso": "1.550 € netti/mese (13ª e 14ª incluse)", "variabile": "", "area": "",
-        "skill": ["Conoscere procedure e mansioni RAP", "Conoscere le tecniche di vendita di base", "Time management", "Organizzazione dell'odontoiatria di base"],
-        "obiettivi": ["Avere una % di conversione media del 40% per 3 mesi consecutivi sulle OV viste personalmente", "Aver fatturato 25.000 € per 1 mese", "Aver creato 15 OV per 3 mesi di fila"] },
-      { "ruolo": "RAP Senior", "fisso": "1.550 € netti/mese (13ª e 14ª incluse)", "variabile": "0,7% del fatturato personale mensile a target\n+0,3% del fatturato personale mensile a overtarget +15%\n0,3% del fatturato trimestrale personale a target\n+0,2% del fatturato trimestrale personale a overtarget +15%\nSolo P.IVA: vedi piano incentivi specifico", "area": "",
-        "skill": ["Mantenere le hard skill precedenti", "Conoscere le tecniche di vendita advanced", "Aver sviluppato competenza nelle mansioni date", "Aver gestito ottimamente il flusso del piano di cura dei pazienti con problematiche rilevate"],
-        "obiettivi": ["Aver raggiunto il target di fatturato personale per 3 mesi di fila", "Aver fatto entro l'anno un overtarget personale +30%", "Avere una % di chiusura del 65% per 2 mesi di fila", "Aver avviato un nuovo RAP in training che abbia ottenuto almeno 1 suo obiettivo di crescita"] },
-      { "ruolo": "RUL", "fisso": "1.550 € netti/mese (13ª e 14ª incluse)", "variabile": "Bonus a target come RAP", "area": "",
-        "skill": ["Mantenere le hard skill precedenti", "Conoscere il controllo di gestione finanziaria", "Conoscere le tecniche per gestire le persone", "Aver gestito con successo procedure che non rendevano viabile lo studio"],
-        "obiettivi": ["Ottenere il target di UL per 3 mesi consecutivi", "Aver fatturato minimo il 15% del fatturato complessivo da OV generate e gestite", "Aver portato il suo staff a ottenere almeno 1 obiettivo del piano di crescita del loro ruolo"] },
-      { "ruolo": "RUL Senior", "fisso": "1.700 € netti/mese (13ª e 14ª incluse)", "variabile": "0,4% del fatturato di UL a target mensile\n+0,2% del fatturato di UL a overtarget +15% mensile\n0,7% del fatturato personale mensile a target\n0,15% del fatturato di UL a target trimestrale\n0,2% del fatturato personale trimestrale a target\n+0,15% del fatturato di UL a overtarget +15% trimestrale", "area": "+0,2% sul fatturato al +30% del target mensile",
-        "skill": ["Mantenere le hard skill precedenti", "Conoscere le procedure per l'apertura di UL", "Aver sviluppato competenza nelle mansioni date", "Aver gestito l'UL senza turnover di persone", "Aver gestito con successo procedure che non rendevano viabile lo studio"],
-        "obiettivi": ["Aver fatto ottenere le 2 KPI principali a 2 figure nuove di UL per 2 mesi di fila", "Ottenere un extra target aziendale del 15% per 3 mesi nell'anno solare", "Aver ottenuto almeno l'85% dell'erogato sul fatturato su base semestrale", "Aver ottenuto il 15% di incremento per 6 mesi nell'anno solare rispetto all'anno precedente, fatto salvo il raggiungimento del target"] },
-      { "ruolo": "Nuovo Store", "fisso": "1.800 € netti/mese + 13ª", "variabile": "Uguale a RUL, ma 2% dell'utile finanziario", "area": "8% delle quote dello studio gratuite",
-        "skill": ["Mantenere le hard skill precedenti"],
-        "obiettivi": ["Mantenere gli standard precedentemente acquisiti", "Portare la nuova UL a target aziendale nei primi 6 mesi"] }
-    ]},
-    { "nome": "Clinic Manager (CM)", "livelli": [
-      { "ruolo": "CM in training", "fisso": "", "variabile": "Il piano incentivi scatta al raggiungimento degli obiettivi in training", "area": "", "skill": [], "obiettivi": [] },
-      { "ruolo": "CM", "fisso": "1.700 € netti/mese (13ª e 14ª incluse)", "variabile": "0,4% del fatturato personale mensile a target\n+0,15% del fatturato personale mensile a overtarget +15%\n0,15% del fatturato trimestrale personale a target\n+0,1% del fatturato trimestrale personale a overtarget +15%", "area": "",
-        "skill": ["Conoscere procedure e mansioni RAP", "Conoscere le tecniche di vendita di base", "Time management", "Organizzazione dell'odontoiatria di base"],
-        "obiettivi": ["Avere una % di conversione media del 45% per 3 mesi consecutivi sulle OV viste personalmente", "Aver raggiunto il target di fatturato per 2 mesi di fila", "Aver creato 15 OV interne per 3 mesi di fila"] },
-      { "ruolo": "CM Senior", "fisso": "1.800 € netti/mese (13ª e 14ª incluse)", "variabile": "0,6% del fatturato personale mensile a target\n0,3% del fatturato complessivo dello studio a target\n+0,3% del fatturato personale mensile a overtarget +15%\n0,3% del fatturato trimestrale personale a target\n+0,2% del fatturato trimestrale personale a overtarget +15%\nSolo P.IVA: vedi piano incentivi specifico", "area": "",
-        "skill": ["Mantenere le hard skill precedenti", "Conoscere le tecniche di vendita advanced", "Aver sviluppato competenza nelle mansioni date", "Aver gestito ottimamente il flusso del piano di cura dei pazienti con problematiche rilevate", "Conoscere le procedure per l'apertura di UL", "Aver gestito l'UL senza turnover di persone", "Aver gestito con successo procedure che non rendevano viabile lo studio"],
-        "obiettivi": ["Aver raggiunto il target di fatturato personale per 4 mesi di fila", "Aver fatto entro l'anno un overtarget personale +30%", "Avere una % di chiusura OV del 65% per 2 mesi di fila", "Aver avviato un nuovo RAP in training che abbia ottenuto almeno 1 suo obiettivo di crescita", "Aver ottenuto almeno l'85% dell'erogato sul fatturato su base semestrale"] }
-    ]},
-    { "nome": "Direzione (Area Manager · Manager)", "livelli": [
-      { "ruolo": "RUL Senior / CM Senior", "fisso": "", "variabile": "Compenso del ruolo attuale", "area": "", "skill": [], "obiettivi": [] },
-      { "ruolo": "Area Manager", "fisso": "1.800 € netti/mese (13ª e 14ª incluse)", "variabile": "0,3% del target di area, sbloccato al raggiungimento dello stesso\n0,3% del fatturato di UL sul fatturato mensile delle UL assegnate\n+0,15% del fatturato di area a overtarget +15% mensile\n+0,1% del fatturato di area a target trimestrale\n+0,2% del fatturato di UL a overtarget +15% trimestrale", "area": "",
-        "skill": ["Mantenere le hard skill precedenti", "Aver tenuto speech formativi a eventi aziendali o extra aziendali", "Aver risolto tutte le situazioni di pressione personale con successo"],
-        "obiettivi": ["Aver portato minimo 3 key person differenti nei ruoli (RAP o RUL) da training a ruolo, con 3 mesi di KPI personali raggiunti", "Aver raggiunto il target di area per 3 mesi consecutivi", "Aver raggiunto il target con tutte le UL assegnate per 3 mesi di fila", "Aver raggiunto livelli produttivi per ogni UL assegnata dell'85% minimo, al raggiungimento dei precedenti target", "Aver formato da zero un nuovo Area Manager o una figura che abbia raggiunto il suo ruolo con successo (KPI)"] },
-      { "ruolo": "Manager", "fisso": "2.000 € netti/mese (13ª e 14ª incluse)", "variabile": "", "area": "", "skill": [],
-        "obiettivi": [] }
-    ]},
-    { "nome": "Operativi di area", "livelli": [
-      { "ruolo": "Operativo di area in training", "fisso": "", "variabile": "Il piano incentivi scatta al raggiungimento degli obiettivi in training", "area": "", "skill": [], "obiettivi": [] },
-      { "ruolo": "Operativo di area", "fisso": "Inquadramento CCNL / area", "variabile": "1,5% sul porta pazienti", "area": "",
-        "skill": ["Rispetto delle tempistiche di lavoro date", "Time management", "Conoscere le procedure base aziendali e l'odontoiatria di base", "Conoscere i principali strumenti e applicativi utilizzati nel suo ruolo", "Utilizzo dei social ai fini comunicativi aziendali e di personal branding", "Aver sviluppato le proprie mansioni con successo", "Aver favorito la viabilità del reparto per almeno 3 mesi consecutivi", "Avere capacità di approccio"],
-        "obiettivi": ["Aver portato in UL To Smile almeno 5 PV da proprie azioni (condivisione, vendita, conoscenze…)", "Aver presentato una partnership di valore che verrà chiusa al DC"] },
-      { "ruolo": "Responsabile di area", "fisso": "1.400 € netti/mese", "variabile": "Fisso sul fatturato creato dall'area", "area": "", "skill": [],
-        "obiettivi": ["Aver generato un risparmio di almeno il 5% sul budget speso l'anno precedente sulla branca, a parità di risultato e qualità"] },
-      { "ruolo": "Direttore", "fisso": "1.700 € netti/mese o P.IVA", "variabile": "", "area": "", "skill": [], "obiettivi": [] }
-    ]}
-  ]
+ "fonte": "DG_PIANI_DI_CRESCITA.docx — Piano di crescita in To Smile, organigramma 2025 (senza la colonna soft skill)",
+ "regole": "REGOLE\nAll'ottenimento dei pass raggiunti puoi:\n• stare nella posizione in cui sei, sapendo che potresti cambiare;\n• passare al ruolo successivo nel tempo in cui le condizioni organizzative aziendali e di UL lo permettono (entro 6/8 mesi ricoprirai il nuovo ruolo); nel frattempo il tuo piano di guadagno sarà quello del ruolo successivo.\n\nSe le tue performance non rispettano ciò che devi ottenere per 3 mesi di fila:\n• lo status rimane quello acquisito;\n• il tuo piano di guadagno provvigionale retrocede al livello precedente.\n\nIl piano di guadagno è relativo ad assunzioni secondo CCNL e il piano provvigionale è su base lorda applicabile alla busta paga.\nTutte le figure che non rispettano le policy e i valori aziendali saranno retrocesse o allontanate dal proprio ruolo.\nI netti sono tutti comprensivi di 13ª e 14ª, escluso TFR.\nPer i manager executive non è necessario il raggiungimento degli obiettivi numerici: può essere eletto manager chiunque si distingua per affinità valoriale, dedizione, obiettivi o predisposizione verso l'azienda.\nPer successo intendiamo aver fatto raggiungere alla persona almeno un obiettivo principale per il suo ruolo.\n\nREGOLE SUL PIANO INCENTIVI\n1. Se sei una nuova figura in To Smile, il piano incentivi scatta al raggiungimento degli obiettivi in training.\n2. Se sei una nuova figura in To Smile, per avere il piano incentivi devi avere una posizione di ruolo e non essere in training.\n3. Se sei una figura già To Smile che avanza nel piano carriera e finisce in un ruolo in training, il compenso e il piano incentivi sono quelli del ruolo precedente.\n4. Se To Smile ti ingaggia sottraendoti da un'altra azienda, può essere derogato il punto 1.\n5. Tutti i compensi sono intesi a 40 ore settimanali.\n\nNOTE DI CREDITO\nIn caso di nota di credito che abbia generato premi o bonus, emessa entro 3 mesi dalla fattura, questi saranno scontati quota parte.\nEsempio: fatturo 1.000 € oggi e prendo l'1% di bonus su quei 1.000 € (10 €); nota di credito dopo 43 giorni di quei 1.000 €: al primo compenso utile chi ha preso i 10 € di bonus li vedrà detratti.\nSe la nota di credito è successiva al 3° mese (dal 4° in poi), sarà detratta dal fatturato del mese in corso.\nEsempio: fatturo 1.000 € oggi e prendo l'1% di bonus (10 €); nota di credito dopo 160 giorni: quel mese il target mensile sarà di 1.000 € in più.",
+ "piani": [
+  {
+   "nome": "ASO",
+   "livelli": [
+    {
+     "ruolo": "ASO in training",
+     "fisso": "",
+     "variabile": "Il piano incentivi scatta al raggiungimento degli obiettivi in training",
+     "area": "",
+     "skill": [],
+     "obiettivi": []
+    },
+    {
+     "ruolo": "ASO",
+     "fisso": "1.530 € netti/mese (13ª e 14ª incluse)",
+     "variabile": "1% su porta pazienti\n0,15% sul fatturato mensile a target",
+     "area": "",
+     "skill": [
+      "Conoscere l'odontoiatria di base",
+      "Conoscere le procedure assistenziali",
+      "Aver raggiunto l'allineamento clinico ed extra clinico con To Smile",
+      "Comunicazione social"
+     ],
+     "obiettivi": [
+      "Aver gestito le sale senza mancanze e con viabilità per 2 mesi consecutivi",
+      "Aver gestito con diligenza l'ordine e la pulizia dei locali sanitari"
+     ],
+     "incPerc": 0.15,
+     "incSoglia": "target"
+    },
+    {
+     "ruolo": "Capo ASO",
+     "fisso": "1.530 € netti/mese (13ª e 14ª incluse)",
+     "variabile": "",
+     "area": "",
+     "skill": [
+      "Mantenere le hard skill precedenti",
+      "Time management"
+     ],
+     "obiettivi": [
+      "Aver portato in UL almeno 2 pazienti per 2 mesi di fila",
+      "Aver dimostrato di creare feeling personale con i pazienti, riportando almeno 1 recensione con nome personale per 2 mesi di fila"
+     ]
+    },
+    {
+     "ruolo": "Capo ASO Senior",
+     "fisso": "1.530 € netti/mese (13ª e 14ª incluse)",
+     "variabile": "0,3% sul fatturato mensile a target\n1% su porta pazienti",
+     "area": "",
+     "skill": [
+      "Mantenere le hard skill precedenti",
+      "Conoscere i principi di gestione ordini, magazzino e inventario",
+      "Aver sviluppato competenza nelle mansioni date",
+      "Aver dimostrato in più occasioni di saper gestire ottimamente l'agenda"
+     ],
+     "obiettivi": [
+      "Aver avviato almeno 1 altra ASO con successo",
+      "Aver stimolato 3 referral di pazienti per 2 mesi di fila"
+     ],
+     "incPerc": 0.3,
+     "incSoglia": "target"
+    }
+   ]
+  },
+  {
+   "nome": "Reception (REC)",
+   "livelli": [
+    {
+     "ruolo": "REC in training",
+     "fisso": "",
+     "variabile": "Il piano incentivi scatta al raggiungimento degli obiettivi in training",
+     "area": "",
+     "skill": [],
+     "obiettivi": []
+    },
+    {
+     "ruolo": "REC",
+     "fisso": "1.530 € netti/mese (13ª e 14ª incluse)",
+     "variabile": "",
+     "area": "",
+     "skill": [
+      "Conoscere le procedure REC",
+      "Time management",
+      "Conoscere i protocolli chiamate e gli script",
+      "Comunicazione social",
+      "Conoscere il gestionale di riferimento",
+      "Conoscere l'odontoiatria di base"
+     ],
+     "obiettivi": [
+      "Aver portato in PV almeno 3 persone per 2 mesi consecutivi (campagne, conoscenze personali…)",
+      "Aver raggiunto l'obiettivo recensioni almeno una volta nei primi 3 mesi",
+      "Aver raggiunto la quota di OV settimanali per 4 settimane consecutive"
+     ]
+    },
+    {
+     "ruolo": "REC Senior",
+     "fisso": "1.530 € netti/mese (13ª e 14ª incluse)",
+     "variabile": "0,25% sul fatturato mensile a target\n0,15% sul fatturato trimestrale a target\n+150 € mensili al raggiungimento del target OV settimanali +30%",
+     "area": "",
+     "skill": [
+      "Mantenere le hard skill precedenti",
+      "Conoscere le tecniche di vendita",
+      "Aver sviluppato competenza nelle mansioni date",
+      "Gestire agende produttive (85%) con viabilità per 3 mesi"
+     ],
+     "obiettivi": [
+      "Aver chiuso almeno 2 piani di cura da min. 2.500 € con incasso per 2 mesi di fila",
+      "Aver raggiunto l'obiettivo recensioni per 3 mesi di fila",
+      "Essere riuscito a portare in PV almeno 5 persone per 3 mesi di fila (campagne, conoscenze…)",
+      "Aver raggiunto la quota di OV settimanali costantemente"
+     ],
+     "incPerc": 0.25,
+     "incSoglia": "target"
+    }
+   ]
+  },
+  {
+   "nome": "Commerciale e gestione UL (RAP · RUL)",
+   "livelli": [
+    {
+     "ruolo": "RAP in training",
+     "fisso": "",
+     "variabile": "Il piano incentivi scatta al raggiungimento degli obiettivi in training",
+     "area": "",
+     "skill": [],
+     "obiettivi": []
+    },
+    {
+     "ruolo": "RAP",
+     "fisso": "1.550 € netti/mese (13ª e 14ª incluse)",
+     "variabile": "",
+     "area": "",
+     "skill": [
+      "Conoscere procedure e mansioni RAP",
+      "Conoscere le tecniche di vendita di base",
+      "Time management",
+      "Organizzazione dell'odontoiatria di base"
+     ],
+     "obiettivi": [
+      "Avere una % di conversione media del 40% per 3 mesi consecutivi sulle OV viste personalmente",
+      "Aver fatturato 25.000 € per 1 mese",
+      "Aver creato 15 OV per 3 mesi di fila"
+     ]
+    },
+    {
+     "ruolo": "RAP Senior",
+     "fisso": "1.550 € netti/mese (13ª e 14ª incluse)",
+     "variabile": "0,7% del fatturato personale mensile a target\n+0,3% del fatturato personale mensile a overtarget +15%\n0,3% del fatturato trimestrale personale a target\n+0,2% del fatturato trimestrale personale a overtarget +15%\nSolo P.IVA: vedi piano incentivi specifico",
+     "area": "",
+     "skill": [
+      "Mantenere le hard skill precedenti",
+      "Conoscere le tecniche di vendita advanced",
+      "Aver sviluppato competenza nelle mansioni date",
+      "Aver gestito ottimamente il flusso del piano di cura dei pazienti con problematiche rilevate"
+     ],
+     "obiettivi": [
+      "Aver raggiunto il target di fatturato personale per 3 mesi di fila",
+      "Aver fatto entro l'anno un overtarget personale +30%",
+      "Avere una % di chiusura del 65% per 2 mesi di fila",
+      "Aver avviato un nuovo RAP in training che abbia ottenuto almeno 1 suo obiettivo di crescita"
+     ]
+    },
+    {
+     "ruolo": "RUL",
+     "fisso": "1.550 € netti/mese (13ª e 14ª incluse)",
+     "variabile": "Bonus a target come RAP",
+     "area": "",
+     "skill": [
+      "Mantenere le hard skill precedenti",
+      "Conoscere il controllo di gestione finanziaria",
+      "Conoscere le tecniche per gestire le persone",
+      "Aver gestito con successo procedure che non rendevano viabile lo studio"
+     ],
+     "obiettivi": [
+      "Ottenere il target di UL per 3 mesi consecutivi",
+      "Aver fatturato minimo il 15% del fatturato complessivo da OV generate e gestite",
+      "Aver portato il suo staff a ottenere almeno 1 obiettivo del piano di crescita del loro ruolo"
+     ]
+    },
+    {
+     "ruolo": "RUL Senior",
+     "fisso": "1.700 € netti/mese (13ª e 14ª incluse)",
+     "variabile": "0,4% del fatturato di UL a target mensile\n+0,2% del fatturato di UL a overtarget +15% mensile\n0,7% del fatturato personale mensile a target\n0,15% del fatturato di UL a target trimestrale\n0,2% del fatturato personale trimestrale a target\n+0,15% del fatturato di UL a overtarget +15% trimestrale",
+     "area": "+0,2% sul fatturato al +30% del target mensile",
+     "skill": [
+      "Mantenere le hard skill precedenti",
+      "Conoscere le procedure per l'apertura di UL",
+      "Aver sviluppato competenza nelle mansioni date",
+      "Aver gestito l'UL senza turnover di persone",
+      "Aver gestito con successo procedure che non rendevano viabile lo studio"
+     ],
+     "obiettivi": [
+      "Aver fatto ottenere le 2 KPI principali a 2 figure nuove di UL per 2 mesi di fila",
+      "Ottenere un extra target aziendale del 15% per 3 mesi nell'anno solare",
+      "Aver ottenuto almeno l'85% dell'erogato sul fatturato su base semestrale",
+      "Aver ottenuto il 15% di incremento per 6 mesi nell'anno solare rispetto all'anno precedente, fatto salvo il raggiungimento del target"
+     ],
+     "incPerc": 0.4,
+     "incSoglia": "target"
+    },
+    {
+     "ruolo": "Nuovo Store",
+     "fisso": "1.800 € netti/mese + 13ª",
+     "variabile": "Uguale a RUL, ma 2% dell'utile finanziario",
+     "area": "8% delle quote dello studio gratuite",
+     "skill": [
+      "Mantenere le hard skill precedenti"
+     ],
+     "obiettivi": [
+      "Mantenere gli standard precedentemente acquisiti",
+      "Portare la nuova UL a target aziendale nei primi 6 mesi"
+     ]
+    }
+   ]
+  },
+  {
+   "nome": "Clinic Manager (CM)",
+   "livelli": [
+    {
+     "ruolo": "CM in training",
+     "fisso": "",
+     "variabile": "Il piano incentivi scatta al raggiungimento degli obiettivi in training",
+     "area": "",
+     "skill": [],
+     "obiettivi": []
+    },
+    {
+     "ruolo": "CM",
+     "fisso": "1.700 € netti/mese (13ª e 14ª incluse)",
+     "variabile": "0,4% del fatturato personale mensile a target\n+0,15% del fatturato personale mensile a overtarget +15%\n0,15% del fatturato trimestrale personale a target\n+0,1% del fatturato trimestrale personale a overtarget +15%",
+     "area": "",
+     "skill": [
+      "Conoscere procedure e mansioni RAP",
+      "Conoscere le tecniche di vendita di base",
+      "Time management",
+      "Organizzazione dell'odontoiatria di base"
+     ],
+     "obiettivi": [
+      "Avere una % di conversione media del 45% per 3 mesi consecutivi sulle OV viste personalmente",
+      "Aver raggiunto il target di fatturato per 2 mesi di fila",
+      "Aver creato 15 OV interne per 3 mesi di fila"
+     ]
+    },
+    {
+     "ruolo": "CM Senior",
+     "fisso": "1.800 € netti/mese (13ª e 14ª incluse)",
+     "variabile": "0,6% del fatturato personale mensile a target\n0,3% del fatturato complessivo dello studio a target\n+0,3% del fatturato personale mensile a overtarget +15%\n0,3% del fatturato trimestrale personale a target\n+0,2% del fatturato trimestrale personale a overtarget +15%\nSolo P.IVA: vedi piano incentivi specifico",
+     "area": "",
+     "skill": [
+      "Mantenere le hard skill precedenti",
+      "Conoscere le tecniche di vendita advanced",
+      "Aver sviluppato competenza nelle mansioni date",
+      "Aver gestito ottimamente il flusso del piano di cura dei pazienti con problematiche rilevate",
+      "Conoscere le procedure per l'apertura di UL",
+      "Aver gestito l'UL senza turnover di persone",
+      "Aver gestito con successo procedure che non rendevano viabile lo studio"
+     ],
+     "obiettivi": [
+      "Aver raggiunto il target di fatturato personale per 4 mesi di fila",
+      "Aver fatto entro l'anno un overtarget personale +30%",
+      "Avere una % di chiusura OV del 65% per 2 mesi di fila",
+      "Aver avviato un nuovo RAP in training che abbia ottenuto almeno 1 suo obiettivo di crescita",
+      "Aver ottenuto almeno l'85% dell'erogato sul fatturato su base semestrale"
+     ],
+     "incPerc": 0.3,
+     "incSoglia": "target"
+    }
+   ]
+  },
+  {
+   "nome": "Direzione (Area Manager · Manager)",
+   "livelli": [
+    {
+     "ruolo": "RUL Senior / CM Senior",
+     "fisso": "",
+     "variabile": "Compenso del ruolo attuale",
+     "area": "",
+     "skill": [],
+     "obiettivi": []
+    },
+    {
+     "ruolo": "Area Manager",
+     "fisso": "1.800 € netti/mese (13ª e 14ª incluse)",
+     "variabile": "0,3% del target di area, sbloccato al raggiungimento dello stesso\n0,3% del fatturato di UL sul fatturato mensile delle UL assegnate\n+0,15% del fatturato di area a overtarget +15% mensile\n+0,1% del fatturato di area a target trimestrale\n+0,2% del fatturato di UL a overtarget +15% trimestrale",
+     "area": "",
+     "skill": [
+      "Mantenere le hard skill precedenti",
+      "Aver tenuto speech formativi a eventi aziendali o extra aziendali",
+      "Aver risolto tutte le situazioni di pressione personale con successo"
+     ],
+     "obiettivi": [
+      "Aver portato minimo 3 key person differenti nei ruoli (RAP o RUL) da training a ruolo, con 3 mesi di KPI personali raggiunti",
+      "Aver raggiunto il target di area per 3 mesi consecutivi",
+      "Aver raggiunto il target con tutte le UL assegnate per 3 mesi di fila",
+      "Aver raggiunto livelli produttivi per ogni UL assegnata dell'85% minimo, al raggiungimento dei precedenti target",
+      "Aver formato da zero un nuovo Area Manager o una figura che abbia raggiunto il suo ruolo con successo (KPI)"
+     ]
+    },
+    {
+     "ruolo": "Manager",
+     "fisso": "2.000 € netti/mese (13ª e 14ª incluse)",
+     "variabile": "",
+     "area": "",
+     "skill": [],
+     "obiettivi": []
+    }
+   ]
+  },
+  {
+   "nome": "Operativi di area",
+   "livelli": [
+    {
+     "ruolo": "Operativo di area in training",
+     "fisso": "",
+     "variabile": "Il piano incentivi scatta al raggiungimento degli obiettivi in training",
+     "area": "",
+     "skill": [],
+     "obiettivi": []
+    },
+    {
+     "ruolo": "Operativo di area",
+     "fisso": "Inquadramento CCNL / area",
+     "variabile": "1,5% sul porta pazienti",
+     "area": "",
+     "skill": [
+      "Rispetto delle tempistiche di lavoro date",
+      "Time management",
+      "Conoscere le procedure base aziendali e l'odontoiatria di base",
+      "Conoscere i principali strumenti e applicativi utilizzati nel suo ruolo",
+      "Utilizzo dei social ai fini comunicativi aziendali e di personal branding",
+      "Aver sviluppato le proprie mansioni con successo",
+      "Aver favorito la viabilità del reparto per almeno 3 mesi consecutivi",
+      "Avere capacità di approccio"
+     ],
+     "obiettivi": [
+      "Aver portato in UL To Smile almeno 5 PV da proprie azioni (condivisione, vendita, conoscenze…)",
+      "Aver presentato una partnership di valore che verrà chiusa al DC"
+     ]
+    },
+    {
+     "ruolo": "Responsabile di area",
+     "fisso": "1.400 € netti/mese",
+     "variabile": "Fisso sul fatturato creato dall'area",
+     "area": "",
+     "skill": [],
+     "obiettivi": [
+      "Aver generato un risparmio di almeno il 5% sul budget speso l'anno precedente sulla branca, a parità di risultato e qualità"
+     ]
+    },
+    {
+     "ruolo": "Direttore",
+     "fisso": "1.700 € netti/mese o P.IVA",
+     "variabile": "",
+     "area": "",
+     "skill": [],
+     "obiettivi": []
+    }
+   ]
+  }
+ ]
 }
