@@ -7,6 +7,7 @@ const store = require('./lib/store');
 const mail = require('./lib/mail');
 const notifiche = require('./lib/notifiche');
 const profilo = require('./lib/profilo');
+const crescita = require('../lib/crescita');
 
 const PROD = process.env.NODE_ENV === 'production';
 const COOKIE = 'ag_sso';
@@ -493,8 +494,45 @@ app.get('/api/admin/users', needAdmin, wrap(async (req, res) => {
     livelli: lv,
     mail: mail.enabled(),
     users: users.map(u => ({ ...store.publicUser(u, u.owner ? Object.fromEntries(store.APP_KEYS.map(k => [k, 'admin'])) : (by[u.id] || {})), sospese: sosp[u.id] || [] })),
+    crescita: await riepilogoCrescita(),
   });
 }));
+
+/* ---------- piano di crescita (dalla Scheda personale): ruolo di ognuno, assegnato da qui ---------- */
+async function riepilogoCrescita() {
+  if (!crescita.hub.sp) return null;
+  try {
+    const r = await crescita.hub.sp.riepilogo();
+    const { rows } = await store.q(`select id, figura from users where status <> 'disabled' and not owner`);
+    r.suggeriti = Object.fromEntries(rows.filter(u => !r.assegnati[u.id]).map(u => [u.id, crescita.suggerito(u.figura, r.piani)]).filter(x => x[1]));
+    return r;
+  } catch (e) { console.warn('Piano di crescita:', e.message); return null; }
+}
+app.put('/api/admin/users/:id/crescita', needAdmin, wrap(async (req, res) => {
+  if (!crescita.hub.sp) return bad(res, 503, 'Scheda personale non disponibile.');
+  const u = await store.getUser(req.params.id); if (!u || u.owner) return bad(res, 404, 'Utente non trovato');
+  try { await crescita.hub.sp.assegna(u.id, String(req.body.piano || '').slice(0, 64), req.body.livello); }
+  catch (e) { if (e.status) return bad(res, e.status, e.message); throw e; }
+  res.json({ crescita: await riepilogoCrescita() });
+}));
+app.post('/api/admin/crescita/passaggi/:id', needAdmin, wrap(async (req, res) => {
+  if (!crescita.hub.sp) return bad(res, 503, 'Scheda personale non disponibile.');
+  let r; try { r = await crescita.hub.sp.decidiPassaggio(req.params.id, !!req.body.ok, req.user.email); }
+  catch (e) { if (e.status) return bad(res, e.status, e.message); throw e; }
+  res.json({ ...r, crescita: await riepilogoCrescita() });
+}));
+// passaggio di ruolo approvato: se il nuovo ruolo corrisponde a una figura (es. RAP Senior → RUL) la figura si aggiorna in tutte le app
+crescita.hub.accessi = {
+  async ruoloCambiato(userId, ruolo) {
+    const f = crescita.figuraDaRuolo(ruolo); if (!f) return;
+    const u = await store.getUser(userId); if (!u || u.owner || u.figura === f || u.figura === 'Medico') return;
+    await store.q('update users set figura = $2 where id = $1', [u.id, f]);
+    gateAzzera(u.id);
+    const fresh = await store.getUser(u.id);
+    if (fresh.status === 'active') await provisiona(fresh, null).catch(e => console.warn('Piano di crescita, aggiornamento app:', e.message));
+    console.log(`Piano di crescita: ${u.id} ora ha la figura ${f} (ruolo ${ruolo}).`);
+  },
+};
 
 // riquadro in cui sta l'app nella pagina delle app (il gruppo "virtuale" più esterno), null se ha un riquadro suo
 function riquadroDi(a) {

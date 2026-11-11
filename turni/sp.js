@@ -38,6 +38,7 @@ function cifra(buf) {
 }
 function decifra(r) { const d = crypto.createDecipheriv('aes-256-gcm', KEY(), r.iv); d.setAuthTag(r.tag); return Buffer.concat([d.update(r.file), d.final()]); }
 
+const crescita = require('../lib/crescita');
 module.exports = function sp(app, ctx) {
   const { db, needUser, needAdmin, wrap, bad, upload, push, sch } = ctx;
   const q = db.q;
@@ -997,14 +998,20 @@ module.exports = function sp(app, ctx) {
     });
     res.json({ ok: true });
   }));
+  // assegna (o toglie) il ruolo del piano di crescita: usato qui e da Gestione accessi
+  async function assegna(uid, pid, livello) {
+    await migrate();
+    if (!pid) { await q('delete from sp_perf where user_id = $1', [uid]); return { ok: true }; }
+    const p = (await struttura()).find(x => x.id === pid); if (!p) throw Object.assign(new Error('Piano non trovato.'), { status: 400 });
+    const n = p.livelli.some(l => l.n === parseInt(livello)) ? parseInt(livello) : p.livelli[0]?.n || 1;
+    const { rows: [prima] } = await q('select piano_id, livello_n from sp_perf where user_id = $1', [uid]);
+    if (prima && prima.piano_id === pid && prima.livello_n === n) return { ok: true, ruolo: p.livelli.find(l => l.n === n)?.ruolo };
+    await q(`insert into sp_perf (user_id, piano_id, livello_n, dal) values ($1,$2,$3,current_date) on conflict (user_id) do update set piano_id = excluded.piano_id, livello_n = excluded.livello_n, dal = current_date, test_invio = null`, [uid, pid, n]);
+    await q(`update sp_passaggi set stato = 'superato' where user_id = $1 and stato = 'attesa'`, [uid]);
+    return { ok: true, ruolo: p.livelli.find(l => l.n === n)?.ruolo };
+  }
   app.put('/api/sp/admin/perf/:user', needAd, wrap(async (req, res) => {
-    const pid = str(req.body.piano, 64);
-    if (!pid) { await q('delete from sp_perf where user_id = $1', [req.params.user]); return res.json({ ok: true }); }
-    const p = (await struttura()).find(x => x.id === pid); if (!p) return bad(res, 400, 'Piano non trovato.');
-    const n = parseInt(req.body.livello) || p.livelli[0]?.n || 1;
-    await q(`insert into sp_perf (user_id, piano_id, livello_n, dal) values ($1,$2,$3,current_date) on conflict (user_id) do update set piano_id = excluded.piano_id, livello_n = excluded.livello_n, dal = current_date, test_invio = null`, [req.params.user, pid, n]);
-    await q(`update sp_passaggi set stato = 'superato' where user_id = $1 and stato = 'attesa'`, [req.params.user]);
-    res.json({ ok: true });
+    try { res.json(await assegna(req.params.user, str(req.body.piano, 64), req.body.livello)); } catch (e) { if (e.status) return bad(res, e.status, e.message); throw e; }
   }));
   app.post('/api/sp/admin/perf/dato/:id', needAd, wrap(async (req, res) => {
     const ok = !!req.body.ok;
@@ -1016,15 +1023,37 @@ module.exports = function sp(app, ctx) {
     if (st && st.test?.disponibile) avvisa([uid], { title: 'Tutti i pass!', body: `Puoi generare il test per diventare ${st.prossimo.ruolo}.`, url: '/?sez=perf' });
     res.json({ ok: true });
   }));
-  app.post('/api/sp/admin/passaggi/:id', needAd, wrap(async (req, res) => {
-    const ok = !!req.body.ok;
-    const { rows } = await q(`update sp_passaggi set stato = $2, deciso_il = now(), deciso_da = $3 where id = $1 and stato = 'attesa' returning *`, [req.params.id, ok ? 'approvato' : 'rimandato', req.user.email]);
-    if (!rows[0]) return bad(res, 400, 'Già deciso.');
+  // passaggio di ruolo (dopo il test superato): approvato → la persona sale di livello e, se il nuovo ruolo è una figura, la figura si aggiorna
+  async function decidiPassaggio(id, ok, chi) {
+    await migrate();
+    const { rows } = await q(`update sp_passaggi set stato = $2, deciso_il = now(), deciso_da = $3 where id = $1 and stato = 'attesa' returning *`, [id, ok ? 'approvato' : 'rimandato', chi || '']);
+    if (!rows[0]) throw Object.assign(new Error('Già deciso.'), { status: 400 });
     const x = rows[0];
-    if (ok) await q('update sp_perf set livello_n = $2, dal = current_date, test_invio = null where user_id = $1', [x.user_id, x.a_n]);
-    avvisa([x.user_id], { title: ok ? 'Nuovo ruolo!' : 'Passaggio rimandato', body: ok ? `Il passaggio di ruolo è stato approvato${x.bonus ? ' · bonus: ' + x.bonus : ''}.` : 'Il passaggio di ruolo per ora è rimandato.', url: '/?sez=perf' });
-    res.json({ ok: true });
+    let ruolo = null;
+    if (ok) {
+      await q('update sp_perf set livello_n = $2, dal = current_date, test_invio = null where user_id = $1', [x.user_id, x.a_n]);
+      ruolo = (await struttura()).find(p => p.id === x.piano_id)?.livelli.find(l => l.n === x.a_n)?.ruolo || null;
+      if (ruolo && crescita.hub.accessi) await crescita.hub.accessi.ruoloCambiato(x.user_id, ruolo).catch(e => console.warn('Piano di crescita, figura:', e.message));
+    }
+    avvisa([x.user_id], { title: ok ? 'Nuovo ruolo!' : 'Passaggio rimandato', body: ok ? `Il passaggio di ruolo è stato approvato${ruolo ? ': ora sei ' + ruolo : ''}${x.bonus ? ' · bonus: ' + x.bonus : ''}.` : 'Il passaggio di ruolo per ora è rimandato.', url: '/?sez=perf' });
+    return { ok: true, ruolo };
+  }
+  app.post('/api/sp/admin/passaggi/:id', needAd, wrap(async (req, res) => {
+    try { res.json(await decidiPassaggio(req.params.id, !!req.body.ok, req.user.email)); } catch (e) { if (e.status) return bad(res, e.status, e.message); throw e; }
   }));
+
+  // per Gestione accessi: piani, ruolo di ognuno e passaggi da approvare
+  async function riepilogo() {
+    await migrate();
+    const [piani, { rows: as }, { rows: pas }] = await Promise.all([struttura(), q('select * from sp_perf'), q(`select * from sp_passaggi where stato = 'attesa' order by il`)]);
+    const ruoloDi = (pid, n) => piani.find(p => p.id === pid)?.livelli.find(l => l.n === n)?.ruolo || '';
+    return {
+      piani: piani.map(p => ({ id: p.id, nome: p.nome, livelli: p.livelli.map(l => ({ n: l.n, ruolo: l.ruolo })) })),
+      assegnati: Object.fromEntries(as.map(a => [a.user_id, { piano: a.piano_id, livello: a.livello_n, ruolo: ruoloDi(a.piano_id, a.livello_n), dal: a.dal }])),
+      passaggi: pas.map(x => ({ id: x.id, userId: x.user_id, da: ruoloDi(x.piano_id, x.da_n), a: ruoloDi(x.piano_id, x.a_n), bonus: x.bonus || '', il: x.il })),
+    };
+  }
+  crescita.hub.sp = { riepilogo, assegna, decidiPassaggio };
 
   return { migrate, elaboraMancate };
 };

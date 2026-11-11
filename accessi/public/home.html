@@ -139,12 +139,13 @@ function toast(t) { const d = document.createElement('div'); d.className = 'toas
   const u = me.user;
   $('#hello').innerHTML = `Ciao <span>${esc(u.firstName || '')}</span>`;
   $('#pw-user').value = u.email;
-  let pending = 0, richieste = 0, contratti = 0, rivedere = 0;
+  let pending = 0, richieste = 0, contratti = 0, rivedere = 0, ruoli = 0, passaggi = 0;
   if (me.admin) {
-    try { const a = await (await fetch('/api/admin/users')).json(); richieste = a.users.filter(x => x.status === 'pending').length; contratti = a.users.filter(x => x.status === 'active' && x.contratto && !x.contratto.ok).length; rivedere = a.users.filter(x => x.status !== 'disabled' && x.figura && (a.figure || []).some(f => f.id === x.figura && f.ritirata)).length; pending = richieste + contratti + rivedere; } catch {}
+    try { const a = await (await fetch('/api/admin/users')).json(); richieste = a.users.filter(x => x.status === 'pending').length; contratti = a.users.filter(x => x.status === 'active' && x.contratto && !x.contratto.ok).length; rivedere = a.users.filter(x => x.status !== 'disabled' && x.figura && (a.figure || []).some(f => f.id === x.figura && f.ritirata)).length; const cr = a.crescita; if (cr) { passaggi = cr.passaggi.length; ruoli = a.users.filter(x => x.status === 'active' && !x.owner && !['Medico', 'Igienista'].includes(x.figura) && !cr.assegnati[x.id]).length; }
+      pending = richieste + contratti + rivedere + ruoli + passaggi; } catch {}
   }
   $('#who').innerHTML = `<span class="name">${esc(u.email)}</span>
-    ${me.admin ? `<a class="btn small" href="/admin${!richieste && contratti ? '?f=contratti' : !richieste && rivedere ? '?f=rivedere' : ''}">Gestione accessi${pending ? ` <span class="badge" title="${esc([richieste ? richieste + ' richieste in attesa' : '', contratti ? contratti + ' contratti da confermare' : '', rivedere ? rivedere + ' figure da rivedere' : ''].filter(Boolean).join(' · '))}">${pending}</span>` : ''}</a>` : ''}
+    ${me.admin ? `<a class="btn small" href="/admin${!richieste && contratti ? '?f=contratti' : !richieste && rivedere ? '?f=rivedere' : !richieste && !contratti && !rivedere && !passaggi && ruoli ? '?f=crescita' : ''}">Gestione accessi${pending ? ` <span class="badge" title="${esc([richieste ? richieste + ' richieste in attesa' : '', contratti ? contratti + ' contratti da confermare' : '', rivedere ? rivedere + ' figure da rivedere' : '', passaggi ? passaggi + ' passaggi di ruolo da approvare' : '', ruoli ? ruoli + ' ruoli da assegnare nel piano di crescita' : ''].filter(Boolean).join(' · '))}">${pending}</span>` : ''}</a>` : ''}
     <a class="btn small" href="/completa-profilo">Il mio profilo</a>
     ${u.owner ? '' : '<button class="btn small" id="pw-open">Cambia password</button>'}
     <a class="btn small" href="/esci">Esci</a>`;
