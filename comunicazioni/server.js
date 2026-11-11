@@ -104,7 +104,7 @@ app.get('/api/stato', needUser, wrap(async (req, res) => {
   const { rows: pr } = await db.q(`select attiva from ${ACC}.notif_prefs where user_id = $1 and app = 'comunicazioni'`, [req.user.id]);
   let eventi = null; // il pulsante Eventi apre il Calendario, se la persona ce l'ha
   try { const store = require('../accessi/lib/store'); const u = await store.getUser(req.user.id); if (u && (await store.appsOf(u)).calendario) eventi = store.APPS.find(a => a.key === 'calendario').url; } catch {}
-  res.json({ me: { id: req.user.id, name: req.user.name, admin: !!req.user.admin }, eventi, figure: FIGURE.map(f => ({ id: f.id, nome: f.gruppo })),
+  res.json({ me: { id: req.user.id, name: req.user.name, admin: !!req.user.admin }, eventi, figure: FIGURE.filter(f => !f.ritirata).map(f => ({ id: f.id, nome: f.gruppo })),
     notifiche: { dispositivi: dev[0].n, attiva: pr[0]?.attiva !== false }, links: sso.links() });
 }));
 

@@ -351,7 +351,7 @@ app.get('/api/admin/users/:id/iban', needAdmin, wrap(async (req, res) => {
 }));
 
 /* ---------- registrazione ---------- */
-app.get('/api/figure', (req, res) => res.json({ figure: store.FIGURE }));
+app.get('/api/figure', (req, res) => res.json({ figure: store.FIGURE.filter(f => !f.ritirata) }));
 // Medico: provincia e numero di iscrizione all'albo (servono a Nuovalab). Vuoti = non è medico.
 function leggiAlbo(b) {
   const alboProvincia = store.cleanProv(b.alboProvincia), alboNumero = store.cleanAlbo(b.alboNumero);

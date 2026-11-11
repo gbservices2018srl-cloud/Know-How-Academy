@@ -142,7 +142,9 @@ async function lists() {
     db.q('select id, name, color from event_types order by sort, name'),
     db.q('select id, name, address, centrale from locations order by sort, name'),
   ]);
-  return { categories: c.rows, types: t.rows, locations: l.rows };
+  // categorie di figure non più usate (es. Extrambulatoriale): restano per gli eventi già fatti ma non si propongono più
+  const ritirate = new Set(require('../accessi/figure').filter(f => f.ritirata).map(f => f.id));
+  return { categories: c.rows.map(r => ({ ...r, ritirata: !!r.figura && ritirate.has(r.figura) })), types: t.rows, locations: l.rows };
 }
 async function myCategories(userId) {
   const { rows } = await db.q('select category_id from user_categories where user_id = $1', [userId]);
