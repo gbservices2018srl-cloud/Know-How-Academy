@@ -452,10 +452,10 @@ function boxBudget(titolo, sotto, d, pct, rigaF, rigaS) {
   return `<div class="card pad" style="flex:1 1 280px;border:2px solid ${col};background:${pos ? 'var(--ok-soft)' : 'var(--danger-soft)'}">
     <h3 style="margin:0 0 2px">${titolo}</h3><p class="muted" style="margin:0 0 10px;font-size:13.5px">${sotto}</p>
     <div style="font:800 34px/1.1 var(--f-display);color:${col};font-variant-numeric:tabular-nums">${eurB(d.disponibile)}</div>
-    <div style="margin-top:10px;font-size:14px;line-height:1.7;font-variant-numeric:tabular-nums">
-      ${S.st.budget.admin ? `${rigaF}: <b>${eurB(d.fatturato)}</b> × ${pctB(pct)} = <b>${eurB(d.budget)}</b><br>` : ''}
-      ${rigaS}: <b>${eurB(d.spesa)}</b>
-      ${S.st.budget.admin ? `<br>Budget − spesa = <b style="color:${col}">${eurB(d.disponibile)}</b>` : ''}</div></div>`;
+    ${S.st.budget.admin ? `<div style="margin-top:10px;font-size:14px;line-height:1.7;font-variant-numeric:tabular-nums">
+      ${rigaF}: <b>${eurB(d.fatturato)}</b> × ${pctB(pct)} = <b>${eurB(d.budget)}</b><br>
+      ${rigaS}: <b>${eurB(d.spesa)}</b><br>
+      Budget − spesa = <b style="color:${col}">${eurB(d.disponibile)}</b></div>` : `<div class="muted" style="margin-top:6px;font-size:14px">${pos ? 'Ancora a disposizione per il materiale di consumo' : 'Oltre il budget per il materiale di consumo'}</div>`}</div>`;
 }
 function vBudget() {
   const b = S.bud;
@@ -467,8 +467,8 @@ function vBudget() {
   const mP = MESI_B[b.mesePrecedente.mese - 1], m2 = MESI_B[b.dueMesiPrima.mese - 1];
   return head + b.sedi.map(s => `<section style="margin-bottom:22px"><h3 style="margin:0 0 10px">${esc(s.sede)} ${s.trovata && S.st.budget.admin ? `<span class="muted" style="font-weight:500;font-size:14px">· ${pctB(s.pct)} da budget</span>` : ''}</h3>
     ${!s.trovata ? '<div class="card pad muted">Sede non trovata in Gestione finanziaria.</div>' : `<div style="display:flex;flex-wrap:wrap;gap:12px">
-      ${boxBudget('Budget a disposizione annuo', `Da gennaio a ${MESI_B[s.annuo.fino - 1]} ${b.anno} (mese in corso compreso)`, s.annuo, s.pct, 'Fatturato da gennaio a oggi', 'Spesa materiale da gennaio a oggi')}
-      ${boxBudget('Budget mensile', S.st.budget.admin ? `Fatturato di ${mP} − spesa materiale di ${m2}` : `Riferito a ${mP}`, s.mensile, s.pct, 'Fatturato di ' + mP, 'Spesa materiale di ' + m2)}
+      ${boxBudget('Budget a disposizione annuo', (S.st.budget.admin ? `Da gennaio a ${MESI_B[s.annuo.fino - 1]} ${b.anno} (mese in corso compreso)` : `Dell'anno ${b.anno}`), s.annuo, s.pct, 'Fatturato da gennaio a oggi', 'Spesa materiale da gennaio a oggi')}
+      ${boxBudget('Budget mensile', S.st.budget.admin ? `Fatturato di ${mP} − spesa materiale di ${m2}` : `Del mese di ${mP}`, s.mensile, s.pct, 'Fatturato di ' + mP, 'Spesa materiale di ' + m2)}
     </div>`}</section>`).join('');
 }
 
