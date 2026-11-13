@@ -120,6 +120,41 @@ module.exports = [
   { key: 'documenti', name: 'Documenti di studio', url: 'https://documenti.appgestione.it', color: 'teal',
     auto: ['turni', 'calendario'],
     desc: 'Procedure, moduli e regolamenti dello studio, sempre aggiornati.' },
+  // CRM Commerciale: preventivi dei pazienti per sede (dati solo su Render, in Europa). Riquadro unico con le sue micro app.
+  // Amministratore = tutte le sedi; Operatore = le sedi scelte. Liste: solo chi ha il ruolo Amministratore.
+  { key: 'crm', name: 'CRM Commerciale', url: 'https://appgestione.it/crm/', color: 'yellow', virtuale: true,
+    gruppo: ['crm_preventivi', 'crm_richiami', 'crm_dashboard', 'crm_chiedi', 'crm_liste'],
+    desc: 'Inserimento preventivi, richiami commerciali, dashboard dei KPI di vendita e domande libere sui dati.' },
+  { key: 'crm_preventivi', name: 'Inserimento Preventivi', url: 'https://appgestione.it/crm/?v=preventivi', color: 'yellow', dentro: 'crm',
+    enti: 'sedi',
+    livelli: [
+      { key: 'admin', label: 'Amministratore (tutte le sedi)', role: 'admin' },
+      { key: 'operatore', label: 'Operatore', ente: 'sedi', enteLabel: 'Quale sede', multi: true },
+    ],
+    desc: 'Registra ogni preventivo presentato: paziente, opportunità, marketing, piano di cura, esito e pagato.' },
+  { key: 'crm_richiami', name: 'Richiami commerciali', url: 'https://appgestione.it/crm/?v=richiami', color: 'yellow', dentro: 'crm',
+    enti: 'sedi',
+    livelli: [
+      { key: 'admin', label: 'Amministratore (tutte le sedi)', role: 'admin' },
+      { key: 'operatore', label: 'Commerciale', ente: 'sedi', enteLabel: 'Quale sede', multi: true },
+    ],
+    desc: 'I pazienti con preventivo della sede, con ricerca e filtri: note ed esito (A, S, R) si aggiornano qui.' },
+  { key: 'crm_dashboard', name: 'Dashboard dati', url: 'https://appgestione.it/crm/?v=dashboard', color: 'yellow', dentro: 'crm',
+    enti: 'sedi',
+    livelli: [
+      { key: 'admin', label: 'Amministratore (tutte le sedi)', role: 'admin' },
+      { key: 'operatore', label: 'Operatore', ente: 'sedi', enteLabel: 'Quale sede', multi: true },
+    ],
+    desc: 'KPI di vendita per studio, venditore, medico, canale e tipologia, con incidenza dei tassi di finanziamento.' },
+  { key: 'crm_chiedi', name: 'Chiedi al CRM', url: 'https://appgestione.it/crm/?v=chiedi', color: 'yellow', dentro: 'crm',
+    enti: 'sedi',
+    livelli: [
+      { key: 'admin', label: 'Amministratore (tutte le sedi)', role: 'admin' },
+      { key: 'operatore', label: 'Operatore', ente: 'sedi', enteLabel: 'Quale sede', multi: true },
+    ],
+    desc: "Domande libere sui numeri del CRM: all'AI arrivano solo numeri, mai nomi o dati dei pazienti." },
+  { key: 'crm_liste', name: 'Liste (amministratore)', url: 'https://appgestione.it/crm/?v=liste', color: 'yellow', dentro: 'crm', adminOnly: true,
+    desc: 'Elenchi delle scelte del CRM (tipi di opportunità, marketing, tipi PDC) e importazione dal vecchio foglio Google.' },
   { key: 'accessi', name: 'Gestione accessi', url: '/admin', color: 'grey', adminOnly: true,
     desc: 'Approva le registrazioni e decide chi entra in quali app.' },
 ];

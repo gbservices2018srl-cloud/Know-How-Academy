@@ -3,3 +3,6 @@ node_modules/
 build/
 *.log
 .DS_Store
+# mai dati dei pazienti nel codice
+*.xlsx
+*.csv
