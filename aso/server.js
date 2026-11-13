@@ -54,8 +54,15 @@ app.use(wrap(async (req, res, next) => {
   // Comunicazioni cliniche (medici): amministratore = tutte le richieste; medico = quelle a lui
   const rc = c.apps.clinica;
   const clinica = !rc ? null : (rc !== 'admin' && !owner && spente.has('clinica')) ? { spenta: true } : { admin: rc === 'admin' || owner };
-  req.me = { id: u.id, nome: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email, owner, perm, clinica, figura: u.figura || '',
-    magazzino: !!c.apps.magazzino && (owner || c.apps.magazzino === 'admin' || !spente.has('magazzino')) };
+  const magazzino = !!c.apps.magazzino && (owner || c.apps.magazzino === 'admin' || !spente.has('magazzino'));
+  // Budget materiale di consumo: lo vede chi ha il Magazzino. Amministratore del Magazzino = tutte le sedi;
+  // gli altri = le sedi della loro anagrafica (Gestione accessi)
+  if (magazzino || owner) {
+    const tutte = await tutteLeSedi();
+    if (owner || c.apps.magazzino === 'admin') perm.budget_materiale = { admin: true, sedi: tutte };
+    else perm.budget_materiale = { admin: false, sedi: tutte.filter(s => Array.isArray(u.sedi) && u.sedi.includes(s.id)) };
+  }
+  req.me = { id: u.id, nome: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email, owner, perm, clinica, figura: u.figura || '', magazzino };
   next();
 }));
 const needUser = (req, res, next) => req.me ? next() : bad(res, 401, 'Accesso richiesto');
@@ -92,8 +99,46 @@ app.get('/api/foto/:id', needUser, wrap(async (req, res) => {
 app.get('/api/stato', needUser, wrap(async (req, res) => {
   const p = req.me.perm;
   res.json({ me: { id: req.me.id, nome: req.me.nome },
-    sterilizzazione: p.sterilizzazione || null, udi: p.registro_udi || null, manutenzione: p.manutenzione || null, misure: p.misure || null, clinica: req.me.clinica, voci: VOCI, magazzino: req.me.magazzino ? 'https://magazzino.appgestione.it' : null,
+    sterilizzazione: p.sterilizzazione || null, udi: p.registro_udi || null, manutenzione: p.manutenzione || null, misure: p.misure || null, budget: p.budget_materiale || null, clinica: req.me.clinica, voci: VOCI, magazzino: req.me.magazzino ? 'https://magazzino.appgestione.it' : null,
     ai: !!(process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY), oggi: oggi(), home: accessi.publicUrl() });
+}));
+
+/* ============ BUDGET MATERIALE DI CONSUMO (da Gestione finanziaria, azienda To Smile) ============ */
+// % «Materiale di consumo» del Budget della sede × fatturato a consuntivo − spesa «Materiale di consumo» a consuntivo.
+// Annuo: da gennaio al mese in corso compreso. Mensile: fatturato del mese precedente − spesa di due mesi prima.
+const finanza = require('../lib/finanza');
+app.get('/api/budget-materiale', needUser, need('budget_materiale'), wrap(async (req, res) => {
+  const sedi = permDi(req, 'budget_materiale').sedi;
+  const [ya, ma] = oggi().split('-').map(Number);
+  const indietro = n => { const d = new Date(Date.UTC(ya, ma - 1 - n, 1)); return { anno: d.getUTCFullYear(), mese: d.getUTCMonth() + 1 }; };
+  const mP = indietro(1), m2 = indietro(2);
+  let az, dati = {};
+  try {
+    az = await finanza.aziendaToSmile();
+    if (!az) return res.json({ errore: 'Non trovo l’azienda To Smile in Gestione finanziaria.' });
+    for (const a of new Set([ya, mP.anno, m2.anno])) {
+      const d = await finanza.chiama(`/api/_appgestione/consuntivo?azienda=${encodeURIComponent(az)}&anno=${a}&mese=1`);
+      if (d.annoNelGestionale === a) dati[a] = d;
+    }
+  } catch (e) { return res.json({ errore: finanza.messaggio(e) }); }
+  const cur = dati[ya];
+  if (!cur) return res.json({ errore: `In Gestione finanziaria il consuntivo aperto non è del ${ya}.` });
+  if (!cur.voceMateriale) return res.json({ errore: 'In Gestione finanziaria manca la voce «Materiale di consumo».' });
+  const fin = (anno, sede) => (dati[anno]?.sedi || []).find(x => finanza.normSede(x.nome) === finanza.normSede(sede.nome));
+  const somma = (a, n) => (a || []).slice(0, n).reduce((x, y) => x + (Number(y) || 0), 0);
+  const out = sedi.map(s => {
+    const f = fin(ya, s);
+    if (!f) return { sede: s.nome, trovata: false };
+    const pct = Number(f.materialePct) || 0;
+    const fatt = somma(f.fatturatoMesi, ma), spesa = somma(f.materialeMesi, ma);
+    const fp = fin(mP.anno, s), f2 = fin(m2.anno, s);
+    const mens = fp && f2 ? { fatturato: Number(fp.fatturatoMesi?.[mP.mese - 1]) || 0, spesa: Number(f2.materialeMesi?.[m2.mese - 1]) || 0 } : null;
+    return { sede: s.nome, trovata: true, pct,
+      annuo: { fino: ma, fatturato: fatt, budget: fatt * pct, spesa, disponibile: fatt * pct - spesa },
+      mensile: mens ? { ...mens, budget: mens.fatturato * pct, disponibile: mens.fatturato * pct - mens.spesa } : null };
+  });
+  res.set('Cache-Control', 'no-store');
+  res.json({ anno: ya, mese: ma, mesePrecedente: mP, dueMesiPrima: m2, sedi: out });
 }));
 
 /* ============ COMPLIANCE STERILIZZAZIONE ============ */
@@ -864,7 +909,7 @@ app.get('/', (req, res) => {
   }
   if (!req.me) return res.redirect(accessi.loginUrl(`${req.protocol}://${req.get('host')}${req.originalUrl}`));
   const p = req.me.perm;
-  if (!p.sterilizzazione && !p.registro_udi && !p.manutenzione && !p.misure && !req.me.magazzino) return res.redirect(`${accessi.publicUrl()}/?noaccess=aso`);
+  if (!p.sterilizzazione && !p.registro_udi && !p.manutenzione && !p.misure && !p.budget_materiale && !req.me.magazzino) return res.redirect(`${accessi.publicUrl()}/?noaccess=aso`);
   res.sendFile(path.join(PUB, 'app.html'));
 });
 app.use(express.static(PUB, { index: false, maxAge: '1h' }));

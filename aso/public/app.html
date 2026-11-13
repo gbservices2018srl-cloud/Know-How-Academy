@@ -378,6 +378,7 @@ function renderTop() {
   if (st.udi && !st.udi.spenta) tabs.push(['udi', 'Registro impianti', 'udi']);
   if (st.manutenzione && !st.manutenzione.spenta) tabs.push(['man', 'Manutenzione', 'man']);
   if (st.misure && !st.misure.spenta) tabs.push(['misure', 'Misure implantari', 'mis']);
+  if (st.budget) tabs.push(['budget', 'Budget materiale', 'box']);
   const vista = { scheda: 'steri', storico: 'steri', macchina: 'steri', paz: 'udi', manreg: 'man' }[S.view] || S.view;
   $('#tabs').innerHTML = tabs.map(([k, l, i]) => `<button class="tab ${vista === k ? 'on' : ''}" data-go="${k}">${ic(i)}${l}</button>`).join('')
     + (st.magazzino ? `<a class="tab" href="${esc(st.magazzino)}">${ic('box')}Magazzino</a>` : '');
@@ -400,6 +401,7 @@ async function load() {
     if (S.view === 'man' || S.view === 'manreg' || (S.view === 'home' && S.st.manutenzione && !S.st.manutenzione.spenta)) { const r = await api('GET', 'api/man/attrezzature'); S.att = r.attrezzature; S.attLink = r.sedi; }
     if (S.view === 'manreg') { const f = S.regF; S.reg = (await api('GET', 'api/man/registro?' + new URLSearchParams({ sede: f.sede || '', attrezzatura: f.att || '', da: f.da || '', a: f.a || '' }))).righe; }
     if (S.view === 'misure' || (S.view === 'home' && S.st.misure && !S.st.misure.spenta)) { const r = await api('GET', 'api/misure'); S.misR = r.richieste; S.misI = r; if (S.mis?.sede) await mediciMis(S.mis.sede); }
+    if (S.view === 'budget') S.bud = await api('GET', 'api/budget-materiale');
     if (S.view === 'udi') S.paz = (await api('GET', 'api/udi/pazienti?q=' + encodeURIComponent(S.q) + (S.sede ? '&sede=' + encodeURIComponent(S.sede) : ''))).pazienti;
     if (S.view === 'paz') { S.pz = await api('GET', 'api/udi/pazienti/' + encodeURIComponent(S.id)); if (!S.medici) api('GET', 'api/udi/medici').then(r => S.medici = r.medici).catch(() => {}); }
   } catch (e) { $('#main').innerHTML = `<div class="empty"><b>${esc(e.message)}</b><button class="btn" data-go="home">Torna all'inizio</button></div>`; return; }
@@ -407,7 +409,7 @@ async function load() {
 }
 function render() {
   renderTop();
-  const v = { home: vHome, steri: vSteri, scheda: vScheda, storico: vStorico, udi: vUdi, paz: vPaz, man: vMan, manreg: vManReg, misure: vMisure }[S.view] || vHome;
+  const v = { home: vHome, steri: vSteri, scheda: vScheda, storico: vStorico, udi: vUdi, paz: vPaz, man: vMan, manreg: vManReg, misure: vMisure, budget: vBudget }[S.view] || vHome;
   $('#main').innerHTML = v();
 }
 
@@ -431,10 +433,42 @@ function vHome() {
       <span><h2>Misure implantari</h2><p>Richiesta al medico della sede per valutare il caso e pianificarlo su DTX, almeno 5 giorni prima dell'intervento.</p></span>
       <span class="st"><span>${(() => { const r = S.misR || [], e = r.filter(x => x.tipo === 'emergenza' && x.stato === 'inviata').length, a = r.filter(x => x.stato === 'inviata' || x.stato === 'in_carico').length;
         return e ? `<span class="tag ko">${e} in emergenza</span>` : a ? `<span class="tag todo">${a} in attesa del medico</span>` : '<span class="tag plain">Nuova richiesta</span>'; })()}</span><span class="go">Apri →</span></span></button>` : ''}
+    ${st.budget ? `<button class="big" style="--bc:#2E8B57" data-go="budget"><span class="bi">${ic('box')}</span>
+      <span><h2>Budget materiale consumo</h2><p>Quanto resta del budget per il materiale di consumo della sede: annuo e del mese.</p></span>
+      <span class="st"><span class="tag plain">Da Gestione finanziaria</span><span class="go">Apri →</span></span></button>` : ''}
     ${st.magazzino ? `<a class="big" style="--bc:#C9A227" href="${esc(st.magazzino)}"><span class="bi">${ic('box')}</span>
       <span><h2>Magazzino</h2><p>Disponibilità degli articoli, prenotazioni e riordino ai fornitori.</p></span>
       <span class="st"><span class="tag plain">Magazzino centrale</span><span class="go">Apri ${ic('ext')}</span></span></a>` : ''}
   </div>`;
+}
+
+/* ============ budget materiale di consumo ============ */
+const MESI_B = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+const eurB = x => { const n = Math.round(Number(x) || 0), t = Math.abs(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.'); return (n < 0 ? '−' : '') + t + ' €'; };
+const pctB = x => (Number(x || 0) * 100).toLocaleString('it-IT', { maximumFractionDigits: 2 }) + '%';
+function boxBudget(titolo, sotto, d, pct, rigaF, rigaS) {
+  if (!d) return `<div class="card pad" style="flex:1 1 280px"><h3 style="margin:0 0 4px">${titolo}</h3><p class="muted" style="margin:0">${sotto}</p><p class="muted">Dati non ancora disponibili in Gestione finanziaria.</p></div>`;
+  const pos = d.disponibile >= 0, col = pos ? 'var(--ok)' : 'var(--danger)';
+  return `<div class="card pad" style="flex:1 1 280px;border:2px solid ${col};background:${pos ? 'var(--ok-soft)' : 'var(--danger-soft)'}">
+    <h3 style="margin:0 0 2px">${titolo}</h3><p class="muted" style="margin:0 0 10px;font-size:13.5px">${sotto}</p>
+    <div style="font:800 34px/1.1 var(--f-display);color:${col};font-variant-numeric:tabular-nums">${eurB(d.disponibile)}</div>
+    <div style="margin-top:10px;font-size:14px;line-height:1.7;font-variant-numeric:tabular-nums">
+      ${rigaF}: <b>${eurB(d.fatturato)}</b> × ${pctB(pct)} = <b>${eurB(d.budget)}</b><br>
+      ${rigaS}: <b>${eurB(d.spesa)}</b><br>
+      Budget − spesa = <b style="color:${col}">${eurB(d.disponibile)}</b></div></div>`;
+}
+function vBudget() {
+  const b = S.bud;
+  if (!b) return '<div class="empty">Caricamento…</div>';
+  const head = `<div class="head"><div><h2 class="view">Budget materiale consumo</h2><p>% del materiale di consumo nel Budget × fatturato della sede, meno la spesa per il materiale a consuntivo (Gestione finanziaria, To Smile). In verde quello che resta, in rosso se si è sforato.</p></div></div>`;
+  if (b.errore) return head + `<div class="err">${esc(b.errore)}</div>`;
+  if (!b.sedi.length) return head + '<div class="card empty"><b>Nessuna sede</b>Nella tua anagrafica in Gestione accessi non c\'è ancora una sede: chiedi all\'amministratore di aggiungerla.</div>';
+  const mP = MESI_B[b.mesePrecedente.mese - 1], m2 = MESI_B[b.dueMesiPrima.mese - 1];
+  return head + b.sedi.map(s => `<section style="margin-bottom:22px"><h3 style="margin:0 0 10px">${esc(s.sede)} ${s.trovata ? `<span class="muted" style="font-weight:500;font-size:14px">· ${pctB(s.pct)} da budget</span>` : ''}</h3>
+    ${!s.trovata ? '<div class="card pad muted">Sede non trovata in Gestione finanziaria.</div>' : `<div style="display:flex;flex-wrap:wrap;gap:12px">
+      ${boxBudget('Budget a disposizione annuo', `Da gennaio a ${MESI_B[s.annuo.fino - 1]} ${b.anno} (mese in corso compreso)`, s.annuo, s.pct, 'Fatturato da gennaio a oggi', 'Spesa materiale da gennaio a oggi')}
+      ${boxBudget('Budget mensile', `Fatturato di ${mP} − spesa materiale di ${m2}`, s.mensile, s.pct, 'Fatturato di ' + mP, 'Spesa materiale di ' + m2)}
+    </div>`}</section>`).join('');
 }
 
 /* ============ misure implantari ============ */
@@ -1176,6 +1210,7 @@ $('#dlg').addEventListener('close', () => {
   if ((v === 'man' || v === 'manreg') && S.st.manutenzione) return go(v);
   if (v === 'paz' && ok.udi && id) return go('paz', { id });
   if (v === 'misure' && S.st.misure && !S.st.misure.spenta) return go('misure');
+  if (v === 'budget' && S.st.budget) return go('budget');
   // con una sola sezione si entra subito lì
   const solo = [ok.steri && 'steri', ok.udi && 'udi', ok.man && 'man', S.st.misure && !S.st.misure.spenta && 'misure', S.st.magazzino && 'mag'].filter(Boolean);
   if (solo.length === 1 && solo[0] !== 'mag') return go(solo[0]);
