@@ -417,7 +417,7 @@ const D = { anno: null, data: null, periodo: null, studio: '', modo: 'tutti', so
 const perLabel = (p, a) => p === 'anno' ? 'Anno ' + a : p[0] === 'q' ? p.slice(1) + '° trimestre ' + a : MESI[+p.slice(1) - 1] + ' ' + a;
 const perOrder = p => p === 'anno' ? 1000 : p[0] === 'q' ? 100 + +p.slice(1) : +p.slice(1);
 const suffix = p => p[0] === 'm' ? '_mese' : p[0] === 'q' ? '_trim' : '_anno';
-const fmtOf = { dilazionati: fE, preventivato: fE, presentati: fN, accettati: fN, perc: fPct, ticket: fE, pagato: fE, nome: x => x ?? '—', sede: x => x ?? '—', sedi: x => x || '—' };
+const fmtOf = { dilazionati: fE, fatturato: fE, preventivato: fE, presentati: fN, accettati: fN, perc: fPct, ticket: fE, pagato: fE, nome: x => x ?? '—', sede: x => x ?? '—', sedi: x => x || '—' };
 async function vDash() {
   D.anno = D.anno || S.st.anni[0];
   if (!D.inizio) { D.inizio = true; const sp = sedePrima('dashboard'); if (sp) D.studio = sp.nome; }
@@ -498,8 +498,21 @@ function drawDash() {
   const rowsMed = KM.filter(r => r.periodo === periodo && r.modo === modo && r.sede === scope);
   const bMed = MD.find(m => m.key === 'medico|' + modo);
   const dz = new Map(DZ.map(d => [d.key, d.dilazionati]));
+  // fatturato dello studio = incassato dei preventivi (KPI) + rate dei pagamenti dilazionati (fuori dai KPI)
+  const nomiFatt = [...new Set([...rowsSede.map(r => r.nome), ...DZ.filter(d => d.periodo === periodo && d.modo === modo).map(d => d.sede)])].sort((a, b) => a.localeCompare(b, 'it'));
+  const fatt = nomiFatt.map(n => { const inc = rowsSede.find(r => r.nome === n)?.pagato || 0, dl = dz.get(`sede|${periodo}|${modo}|${n}`) || 0; return { sede: n, inc, dl, tot: inc + dl }; });
+  const fattScope = studio ? fatt.filter(f => f.sede === studio) : fatt;
+  const fattTot = fattScope.reduce((a, f) => ({ inc: a.inc + f.inc, dl: a.dl + f.dl, tot: a.tot + f.tot }), { inc: 0, dl: 0, tot: 0 });
+  const fattT = `<div class="card tile"><div class="l">Fatturato totale${studio ? '' : ' (rete)'}</div><div class="v">${fE(fattTot.tot)}</div>
+    <div class="b">Incassato ${fE(fattTot.inc)} + pag. dilazionati ${fE(fattTot.dl)}</div></div>`;
+  const fattBox = `<h3 class="dsec">Fatturato per sede · pagamenti dilazionati</h3>
+  <div class="dgrid"><div class="card dcard"><p class="dnote">I pagamenti dilazionati (rate incassate nel periodo) non entrano nei KPI degli studi (presentati, accettati, % accettazione, ticket medio, incassato): qui si sommano all'incassato per dare il fatturato totale della sede.</p>
+    <div class="tw"><table class="t"><thead><tr><th>Sede</th><th class="n">Incassato preventivi</th><th class="n">Pag. dilazionati</th><th class="n">Fatturato totale</th></tr></thead>
+    <tbody>${fattScope.map(f => `<tr><td>${esc(f.sede)}</td><td class="n">${fE(f.inc)}</td><td class="n">${fE(f.dl)}</td><td class="n"><b>${fE(f.tot)}</b></td></tr>`).join('')}
+    ${fattScope.length > 1 ? `<tr><td><b>Totale</b></td><td class="n"><b>${fE(fattTot.inc)}</b></td><td class="n"><b>${fE(fattTot.dl)}</b></td><td class="n"><b>${fE(fattTot.tot)}</b></td></tr>` : ''}</tbody></table></div></div>
+    <div class="card dcard"><h4>Pagamenti dilazionati per sede · ${esc(perLabel(periodo, anno))}</h4>${bars(fattScope.filter(f => f.dl > 0).sort((a, b) => b.dl - a.dl), d => d.sede, null, d => d.dl, fE)}</div></div>`;
   const base = ['presentati', 'preventivato', 'accettati', 'perc', 'ticket', 'pagato'];
-  const HEAD = { nome: 'Nome', sede: 'Studio', sedi: 'Studi', presentati: 'Presentati', preventivato: 'Preventivato', accettati: 'Accettati', perc: '% acc.', ticket: 'Ticket medio', pagato: 'Incassato', dilazionati: 'Pag. dilazionati' };
+  const HEAD = { nome: 'Nome', sede: 'Studio', sedi: 'Studi', presentati: 'Presentati', preventivato: 'Preventivato', accettati: 'Accettati', perc: '% acc.', ticket: 'Ticket medio', pagato: 'Incassato', dilazionati: 'Pag. dilazionati', fatturato: 'Fatturato totale' };
   const tab = (tid, rows, cols, b, primo) => {
     const st = D.sort[tid];
     const sorted = rows.slice().sort((a, c) => { const x = a[st.k], y = c[st.k]; if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1; return (typeof x === 'string' ? x.localeCompare(y, 'it') : x - y) * st.d; });
@@ -515,12 +528,13 @@ function drawDash() {
   const COL = ['var(--brand-teal)', 'var(--brand-purple)', 'var(--accent)', '#C08A1E', '#3F6FB5'];
   const best = rowsSede.filter(r => r.perc != null).sort((a, b) => b.perc - a.perc)[0];
   $('#main').innerHTML = ctrl + `
-  <div class="tiles">${tile('presentati', 'Preventivi presentati')}${tile('accettati', 'Preventivi accettati')}${tile('perc', '% accettazione')}${tile('ticket', 'Ticket medio (pagato ÷ accettati)')}${finT}</div>
-  <p class="legend"><span class="dot"></span>Sotto la media ${anno}. Ogni riga è un preventivo presentato; esclusi i pagamenti dilazionati. L'incidenza dei tassi è presa dal consuntivo di Gestione finanziaria, da gennaio a oggi.</p>
+  <div class="tiles">${tile('presentati', 'Preventivi presentati')}${tile('accettati', 'Preventivi accettati')}${tile('perc', '% accettazione')}${tile('ticket', 'Ticket medio (pagato ÷ accettati)')}${fattT}${finT}</div>
+  <p class="legend"><span class="dot"></span>Sotto la media ${anno}. Ogni riga è un preventivo presentato; i pagamenti dilazionati sono esclusi dai KPI e contano solo nel fatturato totale. L'incidenza dei tassi è presa dal consuntivo di Gestione finanziaria, da gennaio a oggi.</p>
   <h3 class="dsec">Classifica studi</h3>
-  <div class="dgrid"><div class="card dcard"><p class="dnote">Clicca un'intestazione per riordinare. «Pag. dilazionati» sono le rate incassate nel periodo: non entrano nei KPI; sommate a «Incassato» danno il fatturato totale.</p>
-    ${tab('studi', rowsSede.map(r => ({ ...r, dilazionati: dz.get(r.key) ?? 0 })), ['nome', ...base, 'dilazionati'], bench('sede'), 'Studio')}</div>
+  <div class="dgrid"><div class="card dcard"><p class="dnote">Clicca un'intestazione per riordinare. I KPI non contano i pagamenti dilazionati; «Pag. dilazionati» sono le rate incassate nel periodo e «Fatturato totale» = Incassato + Pag. dilazionati.</p>
+    ${tab('studi', rowsSede.map(r => { const dl = dz.get(r.key) ?? 0; return { ...r, dilazionati: dl, fatturato: (r.pagato || 0) + dl }; }), ['nome', ...base, 'dilazionati', 'fatturato'], bench('sede'), 'Studio')}</div>
     <div class="card dcard"><h4>% accettazione per studio · ${esc(perLabel(periodo, anno))}</h4><p class="dnote">La linea tratteggiata è la % della rete nel ${anno}; le barre rosse sono sotto.</p>${bars(byPerc(rowsSede), d => d.nome, ref)}</div></div>
+  ${fattBox}
   ${finBox(FIN, studio)}
   <h3 class="dsec">Classifica venditori</h3>
   <div class="dgrid"><div class="card dcard"><p class="dnote">Da gennaio a luglio 2026 i preventivi vanno al commerciale unico dello studio (Cabras Luca, Elmas Guarino, Dolianova Veronica, Capoterra Laura, Maracalagonis Zoppi; Sardara allo studio). Poi vale il commerciale indicato.</p>

@@ -222,7 +222,7 @@ app.get('/api/dashboard', needUser, need('dashboard'), wrap(async (req, res) => 
   const sedi = sediDi(req, 'dashboard');
   const anno = parseInt(req.query.anno, 10) || Number(oggi().slice(0, 4));
   const ds = await datiKpi(sedi.map(s => s.id), anno);
-  let fin; try { fin = await finanziamenti(sedi, anno); } catch (e) { fin = { errore: e.message }; }
+  let fin; try { fin = await finanziamenti(sedi, anno); } catch (e) { fin = { errore: /fetch failed|aborted|timeout/i.test(e.message) ? 'Gestione finanziaria non raggiungibile in questo momento: riprova tra poco.' : e.message }; }
   res.set('Cache-Control', 'no-store');
   res.json({ anno, sedi: sedi.map(s => s.nome), ...K.dashboard(ds), finanziamenti: fin });
 }));
