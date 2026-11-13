@@ -86,6 +86,12 @@ async function migrate() {
     for (const v of TIPO_OV) await q('insert into liste (tipo, valore) values ($1,$2) on conflict do nothing', ['tipo_ov', v]);
     for (const v of MARKETING) await q('insert into liste (tipo, valore) values ($1,$2) on conflict do nothing', ['marketing', v]);
   }
+  // tipi di piano di cura scelti dalla direzione (una volta sola): le voci vecchie restano ma si nascondono dal modulo
+  if ((await q(`insert into impostazioni (k, v) values ('_seme_tipo_pdc_2026_11', 'true') on conflict do nothing`)).rowCount) {
+    const TIPI_PDC = ['ALL ON 4', 'PARODONTALE', 'IMPLANTARE', 'GENERALISTA (CONSERVATIVA, ENDO, EXO)', 'ORTODONTICO'];
+    await q(`update liste set attivo = false where tipo = 'tipo_pdc' and not (valore = any($1))`, [TIPI_PDC]);
+    for (const v of TIPI_PDC) await q(`insert into liste (tipo, valore, attivo) values ('tipo_pdc', $1, true) on conflict (tipo, valore) do update set attivo = true`, [v]);
+  }
   // come nella vecchia dashboard: ORALPRO e ORAL PRO sono lo stesso canale (una volta sola; poi si cambia in Liste)
   if ((await q(`insert into impostazioni (k, v) values ('_seme_canali', 'true') on conflict do nothing`)).rowCount)
     await q(`update liste set canale = 'Oral Pro' where tipo = 'marketing' and valore in ('ORALPRO', 'ORAL PRO') and canale = ''`);

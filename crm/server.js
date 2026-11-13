@@ -125,7 +125,8 @@ app.post('/api/preventivi', needUser, need('preventivi'), wrap(async (req, res) 
   const num = v => { const n = Number(String(v ?? '').replace(',', '.')); return isFinite(n) && n >= 0 && String(v ?? '').trim() !== '' ? Math.round(n * 100) / 100 : null; };
   const pdc = num(b.pdc); if (pdc == null) return bad(res, 400, 'Scrivi il € del piano di cura (anche 0).');
   const pagato = num(b.pagato); if (pagato == null) return bad(res, 400, "Scrivi l'importo pagato (anche 0).");
-  const tipoPdc = str(b.tipoPdc, 80).toUpperCase(); if (!tipoPdc) return bad(res, 400, 'Scrivi il tipo di PDC.');
+  const tipoPdc = (L.tipo_pdc.find(x => x.attivo && x.valore === str(b.tipoPdc, 80).toUpperCase()) || {}).valore;
+  if (!tipoPdc) return bad(res, 400, "Scegli il tipo di piano di cura dall'elenco.");
   const esito = str(b.esito, 1).toUpperCase(); if (!ESITI.includes(esito)) return bad(res, 400, "Scegli l'esito.");
   const note = String(b.note ?? '').trim().slice(0, 4000); if (note.length < 50) return bad(res, 400, `Note troppo brevi: minimo 50 caratteri (${note.length} scritti).`);
   const ids = [str(b.commerciale, 60), ...(Array.isArray(b.medici) ? b.medici : []).map(x => str(x, 60))].filter(Boolean);
@@ -140,7 +141,6 @@ app.post('/api/preventivi', needUser, need('preventivi'), wrap(async (req, res) 
     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,'app',$20,$20)`,
     [id, sede.id, sede.nome, data, Number(data.slice(0, 4)), Number(data.slice(5, 7)), paziente, tipo, mk, pdc, esito, pagato, an, tipoPdc, note,
       comm.id, nomeDi(comm).toUpperCase(), JSON.stringify(meds.map(m => m.id)), meds.map(m => String(m.last_name || m.first_name).toUpperCase()).join(' / '), req.me.id]);
-  if (!L.tipo_pdc.some(x => x.valore === tipoPdc)) await db.q(`insert into liste (tipo, valore) values ('tipo_pdc', $1) on conflict do nothing`, [tipoPdc]);
   res.json({ ok: true, id });
 }));
 
@@ -348,7 +348,8 @@ app.post('/api/liste/importa/conferma', needUser, need('liste'), wrap(async (req
     }
     // voci nuove negli elenchi (tipi, marketing, tipi PDC): si aggiungono, niente si toglie
     const nuove = [['tipo_ov', R.map(r => r.tipo_ov)], ['marketing', [...R.map(r => r.marketing), ...a.p.marketing]], ['tipo_pdc', R.map(r => r.tipo_pdc)]];
-    for (const [t, vs] of nuove) for (const v of new Set(vs.filter(Boolean))) await client.query('insert into liste (tipo, valore) values ($1,$2) on conflict do nothing', [t, v]);
+    // i tipi di piano di cura scritti a mano nel vecchio foglio restano per i filtri, ma nascosti dal modulo
+    for (const [t, vs] of nuove) for (const v of new Set(vs.filter(Boolean))) await client.query('insert into liste (tipo, valore, attivo) values ($1,$2,$3) on conflict do nothing', [t, v, t !== 'tipo_pdc']);
     await client.query('insert into importazioni (id, file, righe, riepilogo, fatto_da) values ($1,$2,$3,$4,$5)',
       [impId, a.file, R.length, JSON.stringify({ sedi: a.p.riepilogo, scartate: a.p.scartate, anno: a.anno }), req.me.nome]);
     await client.query('commit');

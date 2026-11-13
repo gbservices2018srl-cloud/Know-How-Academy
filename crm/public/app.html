@@ -294,7 +294,7 @@ async function vPrev() {
       <div class="field"><label for="f-tipo">Tipo opportunità <span class="req">*</span></label><select id="f-tipo" name="tipoOv"><option value="">— Scegli —</option>${L.tipo_ov.filter(x => x.attivo).map(x => opt(x.valore, x.valore, x.valore === F.tipoOv)).join('')}</select></div>
       <div class="field"><label for="f-mk">Canale marketing <span class="req">*</span></label><select id="f-mk" name="marketing"><option value="">— Scegli —</option>${L.marketing.filter(x => x.attivo).map(x => opt(x.valore, x.valore, x.valore === F.marketing)).join('')}</select></div>
       <div class="field"><label for="f-pdc">€ Piano di cura <span class="req">*</span></label><input id="f-pdc" name="pdc" inputmode="decimal" placeholder="0" value="${esc(F.pdc)}"></div>
-      <div class="field"><label for="f-tpdc">Tipo PDC <span class="req">*</span></label><input id="f-tpdc" name="tipoPdc" list="dl-tpdc" placeholder="es. CONSER, ORTO" value="${esc(F.tipoPdc)}" autocomplete="off">
+      <div class="field"><label for="f-tpdc">Tipo di piano di cura <span class="req">*</span></label><input id="f-tpdc" name="tipoPdc" list="dl-tpdc" placeholder="Scrivi o scegli (es. impl…)" value="${esc(F.tipoPdc)}" autocomplete="off">
         <datalist id="dl-tpdc">${L.tipo_pdc.filter(x => x.attivo).map(x => `<option value="${esc(x.valore)}">`).join('')}</datalist></div>
     </div>
     <div class="field"><span class="lbl">Esito <span class="req">*</span></span>
@@ -315,7 +315,14 @@ document.addEventListener('input', e => {
   const f = e.target.closest('#fp [name]'); if (!f || !F) return;
   F[f.name] = f.value; if (f.name === 'note') cnt();
 });
+function vocePdc(v) {
+  const L = S.st.liste.tipo_pdc.filter(x => x.attivo), t = String(v || '').trim().toLowerCase(); if (!t) return '';
+  const es = L.find(x => x.valore.toLowerCase() === t); if (es) return es.valore;
+  const c = L.filter(x => t.split(/\s+/).every(w => x.valore.toLowerCase().includes(w)));
+  return c.length === 1 ? c[0].valore : null;
+}
 document.addEventListener('change', e => {
+  if (e.target.id === 'f-tpdc') { const v = vocePdc(e.target.value); if (v) { e.target.value = v; F.tipoPdc = v; } else if (v === null) toast("Scegli il tipo di piano di cura dall'elenco che compare mentre scrivi."); }
   if (e.target.id === 'f-sede') { F.sede = e.target.value; F.medici = []; F.commerciale = ''; vPrev(); }
 });
 document.addEventListener('click', e => {
@@ -329,6 +336,7 @@ document.addEventListener('submit', async e => {
   e.preventDefault();
   const btn = $('#f-save'); btn.disabled = true; btn.textContent = 'Salvataggio…'; $('#f-err').innerHTML = '';
   try {
+    const vp = vocePdc(F.tipoPdc); if (vp) F.tipoPdc = vp;
     await api('POST', 'api/preventivi', F);
     toast('Preventivo salvato.'); F = nuovoF({ sede: F.sede, commerciale: F.commerciale }); vPrev(); scrollTo({ top: 0, behavior: 'smooth' });
   } catch (x) { $('#f-err').innerHTML = `<div class="err" style="margin-bottom:12px">${esc(x.message)}</div>`; btn.disabled = false; btn.textContent = 'Salva preventivo'; }
@@ -339,7 +347,7 @@ const R = { anno: null, righe: null, q: '', f: {}, sort: { k: 'data', d: -1 }, q
 const FASCE_PDC = [['0', 'Sotto 200 €', x => x < 200], ['1', '200 – 1.000 €', x => x >= 200 && x < 1000], ['2', '1.000 – 3.000 €', x => x >= 1000 && x < 3000], ['3', '3.000 – 10.000 €', x => x >= 3000 && x < 10000], ['4', 'Da 10.000 €', x => x >= 10000]];
 const FASCE_PAG = [['0', 'Pagato 0 €', x => !x], ['1', 'Pagato sopra 0 €', x => x > 0]];
 const FASCE_ETA = [['0', 'Sotto 30 anni', x => x != null && x < 30], ['1', '30 – 44', x => x >= 30 && x < 45], ['2', '45 – 59', x => x >= 45 && x < 60], ['3', '60 – 74', x => x >= 60 && x < 75], ['4', 'Da 75 anni', x => x >= 75], ['5', 'Senza anno', x => x == null]];
-const RCOL = [['sede_nome', 'Sede'], ['mese', 'Mese'], ['tipo_ov', 'Tipo opportunità'], ['marketing', 'Marketing'], ['tipo_pdc', 'Tipo PDC'], ['commerciale', 'Commerciale'], ['medico', 'Medico'], ['esito', 'Esito']];
+const RCOL = [['sede_nome', 'Sede'], ['mese', 'Mese'], ['tipo_ov', 'Tipo opportunità'], ['marketing', 'Marketing'], ['tipo_pdc', 'Tipo di piano di cura'], ['commerciale', 'Commerciale'], ['medico', 'Medico'], ['esito', 'Esito']];
 async function vRich() {
   R.anno = R.anno || S.st.anni[0];
   if (!R.inizio) { R.inizio = true; const sp = sedePrima('richiami'); if (sp) R.f.sede_nome = sp.nome; }
@@ -371,7 +379,7 @@ function drawRich(full) {
   const vis = rows.slice(0, R.quanti);
   $('#r-out').innerHTML = `<div class="tot"><span><b>${rows.length.toLocaleString('it-IT')}</b> preventivi</span><span>Piani di cura <b>${fE(tot.pdc)}</b></span><span>Pagato <b>${fE(tot.pag)}</b></span>
       <span>A <b>${tot.A}</b> · S <b>${tot.S}</b> · R <b>${tot.R}</b></span></div>
-    ${rows.length ? `<div class="card tw"><table class="t"><thead><tr>${th('paziente', 'Nome e cognome')}${th('data', 'Data preventivo')}${th('tipo_ov', 'Tipo opportunità')}${th('marketing', 'Marketing')}${th('pdc', '€ Piano di cura', 1)}${th('pagato', 'Importo pagato', 1)}${th('tipo_pdc', 'Tipo PDC')}${th('eta', 'Età', 1)}${th('commerciale', 'Commerciale')}${th('medico', 'Medico')}${th('esito', 'Esito')}<th>Note</th>${sediDi('richiami').length > 1 ? th('sede_nome', 'Sede') : ''}</tr></thead>
+    ${rows.length ? `<div class="card tw"><table class="t"><thead><tr>${th('paziente', 'Nome e cognome')}${th('data', 'Data preventivo')}${th('tipo_ov', 'Tipo opportunità')}${th('marketing', 'Marketing')}${th('pdc', '€ Piano di cura', 1)}${th('pagato', 'Importo pagato', 1)}${th('tipo_pdc', 'Tipo di piano di cura')}${th('eta', 'Età', 1)}${th('commerciale', 'Commerciale')}${th('medico', 'Medico')}${th('esito', 'Esito')}<th>Note</th>${sediDi('richiami').length > 1 ? th('sede_nome', 'Sede') : ''}</tr></thead>
     <tbody>${vis.map(r => `<tr><td><b>${esc(r.paziente)}</b></td><td>${fD(r.data)}</td><td>${esc(r.tipo_ov)}</td><td>${esc(r.marketing)}</td><td class="n">${fE(r.pdc)}</td><td class="n">${fE(r.pagato)}</td>
       <td>${esc(r.tipo_pdc)}</td><td class="n">${r.eta ?? '—'}</td><td>${esc(r.commerciale)}</td><td>${esc(r.medico)}</td>
       <td><select class="es ${esc(r.esito)}" data-esito-r="${esc(r.id)}" aria-label="Esito">${r.esito ? '' : '<option value="">—</option>'}${Object.entries(ESITI).map(([k, t]) => `<option value="${k}" ${r.esito === k ? 'selected' : ''} title="${t}">${k}</option>`).join('')}</select></td>
@@ -645,7 +653,7 @@ document.addEventListener('click', e => { const b = e.target.closest('[data-q]')
 /* ================= LISTE (amministratore) ================= */
 const LI = { d: null, prev: null };
 const persLab = u => u ? u.nome + (u.figura ? ' · ' + u.figura : '') : '';
-const NOMI_L = { tipo_ov: 'Tipi di opportunità', marketing: 'Canali marketing', tipo_pdc: 'Tipi PDC' };
+const NOMI_L = { tipo_ov: 'Tipi di opportunità', marketing: 'Canali marketing', tipo_pdc: 'Tipi di piano di cura' };
 async function vListe() {
   $('#main').innerHTML = '<div class="empty">Caricamento…</div>';
   try { LI.d = await api('GET', 'api/liste'); } catch (x) { $('#main').innerHTML = `<div class="err">${esc(x.message)}</div>`; return; }
@@ -677,7 +685,7 @@ function drawListe() {
     <datalist id="dl-pers">${d.persone.map(u => `<option value="${esc(persLab(u))}">`).join('')}</datalist></div>` : ''}
   <div class="lists">${['tipo_ov', 'marketing', 'tipo_pdc'].map(t => `<div class="card sez"><h3>${NOMI_L[t]}</h3>
     ${t === 'marketing' ? '<p class="muted" style="margin-top:0;font-size:13px">«Nome nella dashboard» unisce più voci in un solo canale (es. ORALPRO e ORAL PRO → Oral Pro). Vuoto = la voce stessa.</p>' : ''}
-    ${t === 'tipo_pdc' ? '<p class="muted" style="margin-top:0;font-size:13px">Suggerimenti nel modulo: si può sempre scrivere un tipo nuovo.</p>' : ''}
+    ${t === 'tipo_pdc' ? '<p class="muted" style="margin-top:0;font-size:13px">Le voci del menu «Tipo di piano di cura» nel modulo. Quelle nascoste (es. scritte a mano nel vecchio foglio) restano solo per i filtri.</p>' : ''}
     <form class="bar" data-add="${t}"><input name="v" placeholder="Nuova voce" style="flex:1;border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:40px"><button class="btn sm primary">Aggiungi</button></form>
     ${lista(t) || '<p class="muted">Nessuna voce.</p>'}</div>`).join('')}</div>`;
 }
