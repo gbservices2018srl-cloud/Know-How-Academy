@@ -373,5 +373,37 @@ app.use((err, req, res, next) => {
   bad(res, err.status || 500, err.status ? err.message : 'Errore del server. Riprova.');
 });
 
-async function start() { await db.migrate(); }
+// Una volta sola (novembre 2026): CRM Commerciale a tutti i RAP e RUL attivi, come Commerciale/Operatore con le sedi
+// della loro anagrafica (Inserimento, Richiami, Dashboard, Chiedi; Liste no), e una notifica. Chi ha già una micro app non si tocca.
+async function attivaCommerciali() {
+  if (!(await db.q(`insert into impostazioni (k, v) values ('_attiva_rap_rul_2026_11', 'true') on conflict do nothing`)).rowCount) return;
+  const tutte = await tutteLeSedi();
+  const { rows: us } = await store.q(`select id, sedi from users where status = 'active' and not owner and figura in ('RAP', 'RUL')`);
+  const attivati = [];
+  for (const u of us) {
+    const enti = tutte.filter(s => Array.isArray(u.sedi) && u.sedi.includes(s.id));
+    const { rows: ha } = await store.q(`select app from user_apps where user_id = $1 and app like 'crm%'`, [u.id]);
+    let nuovo = false;
+    for (const k of ['crm_preventivi', 'crm_richiami', 'crm_dashboard', 'crm_chiedi']) {
+      if (ha.some(r => r.app === k)) continue;
+      await store.setAppRole(u.id, k, 'user', { livello: 'operatore', ente: enti[0]?.id || null, enteNome: enti[0]?.nome || null, enti });
+      nuovo = true;
+    }
+    if (nuovo) attivati.push(u.id);
+  }
+  let raggiunti = 0;
+  if (attivati.length) {
+    try {
+      const r = await require('../accessi/lib/notifiche').notifica(attivati, 'crm_richiami', { title: 'Nuovo: CRM Commerciale',
+        body: 'Da oggi trovi tra le tue app il CRM Commerciale: inserimento preventivi, richiami dei pazienti, dashboard e domande sui numeri. Il vecchio foglio Google non si usa più, e da oggi non si usa più nemmeno il link dato da Marco a suo tempo.',
+        url: 'https://appgestione.it/crm/' });
+      raggiunti = r.raggiunti.size;
+    } catch (e) { console.warn('CRM: notifica non inviata:', e.message); }
+  }
+  console.log(`CRM: attivato a ${attivati.length} commerciali (RAP/RUL su ${us.length}); notifica arrivata a ${raggiunti}.`);
+}
+async function start() { await db.migrate(); attivaCommerciali().catch(async e => {
+  console.warn('CRM: attivazione commerciali non riuscita (si riprova al prossimo avvio):', e.message);
+  await db.q(`delete from impostazioni where k = '_attiva_rap_rul_2026_11'`).catch(() => {});
+}); }
 module.exports = { app, start };

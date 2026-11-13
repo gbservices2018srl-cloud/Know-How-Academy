@@ -12,7 +12,7 @@ const q = (t, p) => store.q(t, p);
 const APP_NOTIFICHE = {
   calendario: 'Eventi aziendali', turni: 'Scheda personale', magazzino: 'Magazzino centrale',
   laboratorio: 'Nuovalab', ticket: 'Ticket assistenza', comunicazioni: 'Comunicazioni aziendali ed eventi', documenti: 'Documenti di studio', protocolli: 'Protocolli e test', sistema: 'Avvisi tecnici (AI)',
-  misure: 'Misure implantari', clinica: 'Comunicazioni cliniche con ASO',
+  misure: 'Misure implantari', clinica: 'Comunicazioni cliniche con ASO', crm_richiami: 'CRM Commerciale',
 };
 
 async function migrate() {
