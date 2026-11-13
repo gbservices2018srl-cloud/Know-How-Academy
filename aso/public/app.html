@@ -460,7 +460,8 @@ function boxBudget(titolo, sotto, d, pct, rigaF, rigaS) {
 function vBudget() {
   const b = S.bud;
   if (!b) return '<div class="empty">Caricamento…</div>';
-  const head = `<div class="head"><div><h2 class="view">Budget materiale consumo</h2><p>% del materiale di consumo nel Budget × fatturato della sede, meno la spesa per il materiale a consuntivo (Gestione finanziaria, To Smile). In verde quello che resta, in rosso se si è sforato.</p></div></div>`;
+  // la spiegazione del calcolo la vede solo l'amministratore (le ASO vedono solo i riquadri)
+  const head = `<div class="head"><div><h2 class="view">Budget materiale consumo</h2>${S.st.budget.admin ? '<p>% del materiale di consumo nel Budget × fatturato della sede, meno la spesa per il materiale a consuntivo (Gestione finanziaria, To Smile). In verde quello che resta, in rosso se si è sforato.</p>' : ''}</div></div>`;
   if (b.errore) return head + `<div class="err">${esc(b.errore)}</div>`;
   if (!b.sedi.length) return head + '<div class="card empty"><b>Nessuna sede</b>Nella tua anagrafica in Gestione accessi non c\'è ancora una sede: chiedi all\'amministratore di aggiungerla.</div>';
   const mP = MESI_B[b.mesePrecedente.mese - 1], m2 = MESI_B[b.dueMesiPrima.mese - 1];
