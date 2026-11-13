@@ -31,7 +31,7 @@ const BASE = '/aso';
 
 /* ---------- chi sta usando l'app ---------- */
 // Permessi per app: { admin, sedi: [{id, nome}] } (admin vede tutte le sedi attive). Magazzino: solo se c'è.
-const APPS_ASO = ['sterilizzazione', 'registro_udi', 'manutenzione', 'misure', 'budget_materiale'];
+const APPS_ASO = ['sterilizzazione', 'registro_udi', 'manutenzione', 'misure'];
 let sediCache = null, sediT = 0;
 async function tutteLeSedi() {
   if (!sediCache || Date.now() - sediT > 60000) { sediCache = (await store.listSedi()).filter(s => s.attiva !== false).map(s => ({ id: s.id, nome: s.nome })); sediT = Date.now(); }
@@ -55,6 +55,13 @@ app.use(wrap(async (req, res, next) => {
   const rc = c.apps.clinica;
   const clinica = !rc ? null : (rc !== 'admin' && !owner && spente.has('clinica')) ? { spenta: true } : { admin: rc === 'admin' || owner };
   const magazzino = !!c.apps.magazzino && (owner || c.apps.magazzino === 'admin' || !spente.has('magazzino'));
+  // Budget materiale di consumo: lo vede chi ha il Magazzino. Amministratore del Magazzino = tutte le sedi;
+  // gli altri = le sedi della loro anagrafica (Gestione accessi)
+  if (magazzino || owner) {
+    const tutte = await tutteLeSedi();
+    if (owner || c.apps.magazzino === 'admin') perm.budget_materiale = { admin: true, sedi: tutte };
+    else perm.budget_materiale = { admin: false, sedi: tutte.filter(s => Array.isArray(u.sedi) && u.sedi.includes(s.id)) };
+  }
   req.me = { id: u.id, nome: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email, owner, perm, clinica, figura: u.figura || '', magazzino };
   next();
 }));
@@ -98,7 +105,6 @@ app.get('/api/stato', needUser, wrap(async (req, res) => {
 
 /* ============ BUDGET MATERIALE DI CONSUMO (da Gestione finanziaria, azienda To Smile) ============ */
 // % «Materiale di consumo» del Budget della sede × fatturato a consuntivo − spesa «Materiale di consumo» a consuntivo.
-// Chi la vede: la voce «Budget materiale consumo» di Gestione accessi (Utente = le sue sedi, Amministratore = tutte).
 // Annuo: da gennaio al mese in corso compreso. Mensile: fatturato del mese precedente − spesa di due mesi prima.
 const finanza = require('../lib/finanza');
 app.get('/api/budget-materiale', needUser, need('budget_materiale'), wrap(async (req, res) => {
@@ -134,7 +140,7 @@ app.get('/api/budget-materiale', needUser, need('budget_materiale'), wrap(async 
   const mancanti = out.filter(x => !x.trovata).map(x => x.sede);
   // nei log solo nomi di sedi (niente numeri): serve a capire come si chiamano in Gestione finanziaria
   if (mancanti.length) console.warn(`Budget materiale: sedi non abbinate ${JSON.stringify(mancanti)}; in Gestione finanziaria ci sono ${JSON.stringify(cur.sedi.map(x => x.nome))}`);
-  // all'utente arriva solo quanto resta: niente fatturato, spesa o % della sede
+  // a chi non è amministratore del Magazzino arriva solo quanto resta: niente fatturato, spesa o % della sede
   const vis = permDi(req, 'budget_materiale').admin ? out : out.map(x => x.trovata ? { sede: x.sede, trovata: true, pct: null,
     annuo: { fino: x.annuo.fino, disponibile: x.annuo.disponibile }, mensile: x.mensile ? { disponibile: x.mensile.disponibile } : null } : x);
   res.set('Cache-Control', 'no-store');

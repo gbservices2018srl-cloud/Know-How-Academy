@@ -60,7 +60,7 @@ module.exports = [
   // Gestione ASO: riquadro unico che raccoglie Magazzino, Compliance sterilizzazione e Registro impianti.
   // È "virtuale": non si assegna, compare a chi ha almeno una delle tre app (che non hanno più un riquadro proprio).
   { key: 'aso', name: 'Gestione ASO', url: 'https://appgestione.it/aso/', color: 'teal', virtuale: true,
-    gruppo: ['magazzino', 'budget_materiale', 'sterilizzazione', 'registro_udi', 'manutenzione', 'misure'],
+    gruppo: ['magazzino', 'sterilizzazione', 'registro_udi', 'manutenzione', 'misure'],
     desc: 'Magazzino, sterilizzazione, registro impianti (UDI) e manutenzione delle attrezzature.' },
   // autoFigura 'ASO' + autoLivello: l'ASO appena attivata trova già Gestione ASO come Operatore (con le sue sedi, se già note)
   { key: 'sterilizzazione', name: 'Compliance sterilizzazione', url: 'https://appgestione.it/aso/?v=steri', color: 'teal', dentro: 'aso',
@@ -103,15 +103,6 @@ module.exports = [
     desc: 'Le richieste cliniche delle ASO: misure implantari da prendere in carico e pianificare su DTX.' },
   { key: 'magazzino', name: 'Magazzino centrale', url: 'https://magazzino.appgestione.it', color: 'yellow', dentro: 'aso', autoFigura: 'ASO',
     desc: 'Disponibilità degli articoli, prenotazioni e riordino ai fornitori.' },
-  // Budget materiale di consumo della sede (da Gestione finanziaria, To Smile), dentro Gestione ASO.
-  // Utente = le sedi scelte qui (vede solo quanto resta); Amministratore = tutte le sedi, con il calcolo.
-  { key: 'budget_materiale', name: 'Budget materiale consumo', url: 'https://appgestione.it/aso/?v=budget', color: 'teal', dentro: 'aso',
-    enti: 'sedi',
-    livelli: [
-      { key: 'admin', label: 'Amministratore (tutte le sedi)', role: 'admin' },
-      { key: 'utente', label: 'Utente', ente: 'sedi', enteLabel: 'Quale sede', multi: true },
-    ],
-    desc: 'Quanto resta del budget per il materiale di consumo della sede: annuo e del mese.' },
   { key: 'turni', name: 'Scheda personale', url: 'https://turni.appgestione.it', color: 'teal', dentro: 'hr',
     // La figura è quella della persona (Gestione accessi): con Dipendente o "Amministratore, anche in turno"
     // compare da sola nel Personale dei Turni
