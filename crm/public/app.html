@@ -630,6 +630,7 @@ document.addEventListener('click', e => { const b = e.target.closest('[data-q]')
 
 /* ================= LISTE (amministratore) ================= */
 const LI = { d: null, prev: null };
+const persLab = u => u ? u.nome + (u.figura ? ' · ' + u.figura : '') : '';
 const NOMI_L = { tipo_ov: 'Tipi di opportunità', marketing: 'Canali marketing', tipo_pdc: 'Tipi PDC' };
 async function vListe() {
   $('#main').innerHTML = '<div class="empty">Caricamento…</div>';
@@ -657,8 +658,9 @@ function drawListe() {
   ${d.commGrezzi.length ? `<div class="card sez"><h3>Commerciali del vecchio foglio</h3>
     <p style="margin-top:0">Nel foglio Google il commerciale era scritto a mano (es. «LUCA»). Collegalo alla persona: nella Dashboard e nei filtri diventa una riga sola con i preventivi nuovi. Vuoto = resta il nome scritto.</p>
     ${d.commGrezzi.map(g => `<div class="lrow"><span class="nm">${esc(g.nome)} <span class="muted" style="font-weight:500">· ${g.n} preventivi</span></span>
-      <select data-alias="${esc(g.nome)}" style="flex:1 1 220px;border:1px solid var(--line);border-radius:9px;padding:6px 9px;min-height:38px;background:var(--surface-2)"><option value="">— nessuna persona —</option>
-      ${d.persone.map(u => opt(u.id, u.nome + (u.figura ? ' · ' + u.figura : ''), d.alias[g.nome] === u.id)).join('')}</select></div>`).join('')}</div>` : ''}
+      <input data-alias="${esc(g.nome)}" list="dl-pers" autocomplete="off" placeholder="Scrivi il nome…" value="${esc(persLab(d.persone.find(u => u.id === d.alias[g.nome])))}"
+        style="flex:1 1 220px;border:1px solid var(--line);border-radius:9px;padding:6px 9px;min-height:38px;background:var(--surface-2)"></div>`).join('')}
+    <datalist id="dl-pers">${d.persone.map(u => `<option value="${esc(persLab(u))}">`).join('')}</datalist></div>` : ''}
   <div class="lists">${['tipo_ov', 'marketing', 'tipo_pdc'].map(t => `<div class="card sez"><h3>${NOMI_L[t]}</h3>
     ${t === 'marketing' ? '<p class="muted" style="margin-top:0;font-size:13px">«Nome nella dashboard» unisce più voci in un solo canale (es. ORALPRO e ORAL PRO → Oral Pro). Vuoto = la voce stessa.</p>' : ''}
     ${t === 'tipo_pdc' ? '<p class="muted" style="margin-top:0;font-size:13px">Suggerimenti nel modulo: si può sempre scrivere un tipo nuovo.</p>' : ''}
@@ -675,7 +677,15 @@ document.addEventListener('change', async e => {
     const x = LI.d.liste.marketing.find(v => v.valore === t.dataset.canale);
     try { await api('POST', 'api/liste/voce', { tipo: 'marketing', valore: x.valore, canale: t.value, attivo: x.attivo }); x.canale = t.value.trim(); toast('Salvato.'); } catch (y) { toast(y.message); }
   }
-  if (t.dataset.alias !== undefined) { try { await api('POST', 'api/liste/alias', { nome: t.dataset.alias, userId: t.value }); LI.d.alias[t.dataset.alias] = t.value; toast(t.value ? 'Collegato.' : 'Collegamento tolto.'); } catch (y) { toast(y.message); } }
+  if (t.dataset.alias !== undefined) {
+    // si scrive il nome e si sceglie dall'elenco; vuoto = nessuna persona
+    const v = t.value.trim().toLowerCase(), P = LI.d.persone;
+    // nome esatto, oppure l'unica persona che contiene le parole scritte
+    const u = !v ? null : P.find(x => persLab(x).toLowerCase() === v) || P.find(x => x.nome.toLowerCase() === v)
+      || (c => c.length === 1 ? c[0] : null)(P.filter(x => v.split(/\s+/).every(w => persLab(x).toLowerCase().includes(w))));
+    if (v && !u) { toast('Non trovo una sola persona con quel nome: scegli dall\'elenco che compare mentre scrivi.'); t.value = persLab(LI.d.persone.find(x => x.id === LI.d.alias[t.dataset.alias])); return; }
+    try { await api('POST', 'api/liste/alias', { nome: t.dataset.alias, userId: u ? u.id : '' }); LI.d.alias[t.dataset.alias] = u ? u.id : ''; t.value = persLab(u); toast(u ? 'Collegato a ' + u.nome + '.' : 'Collegamento tolto.'); } catch (y) { toast(y.message); }
+  }
   if (t.id === 'fin-az') { try { await api('PUT', 'api/liste/azienda', { azienda: t.value }); toast('Azienda salvata.'); } catch (y) { toast(y.message); } }
 });
 document.addEventListener('click', async e => {
