@@ -307,6 +307,9 @@ app.put('/api/liste/azienda', needUser, need('liste'), wrap(async (req, res) => 
 
 // importazione dal vecchio foglio Google: prima l'anteprima (niente si salva), poi la conferma
 const anteprime = new Map();
+// importazione dal vecchio foglio Google chiusa (novembre 2026): i dati sono già nel CRM e non si devono più sostituire
+const IMPORT_CHIUSA = true;
+app.post('/api/liste/importa/*', (req, res, next) => IMPORT_CHIUSA ? bad(res, 410, 'L’importazione dal vecchio foglio Google è chiusa: i dati sono già nel CRM.') : next());
 app.post('/api/liste/importa/anteprima', needUser, need('liste'), (req, res, next) => upload.single('file')(req, res, err => {
   if (err) return bad(res, 400, err.code === 'LIMIT_FILE_SIZE' ? 'Il file è troppo grande (massimo 40 MB).' : 'Caricamento non valido.');
   next();

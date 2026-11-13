@@ -665,24 +665,10 @@ function drawListe() {
       ${t === 'marketing' ? `<input data-canale="${esc(x.valore)}" value="${esc(x.canale)}" placeholder="Nome nella dashboard" aria-label="Canale in dashboard per ${esc(x.valore)}" style="flex:1 1 140px">` : ''}
       <button class="btn sm" data-ren="${t}|${esc(x.valore)}" type="button">Rinomina</button>
       <button class="btn sm" data-att="${t}|${esc(x.valore)}" type="button">${x.attivo ? 'Nascondi' : 'Rimetti'}</button></div>`).join('');
-  $('#main').innerHTML = `<div class="head"><div><h2 class="view">Liste</h2><p>Le scelte del CRM e l'importazione dal vecchio foglio Google. Solo amministratori.</p></div></div>
-  <div class="card sez"><h3>Importa dal foglio Google</h3>
-    <p style="margin-top:0">Nel CRM ci sono <b>${tot.toLocaleString('it-IT')}</b> preventivi (${(d.totali.import || 0).toLocaleString('it-IT')} importati, ${(d.totali.app || 0).toLocaleString('it-IT')} inseriti nell'app).</p>
-    <ol style="margin:0 0 12px;padding-left:20px"><li>Dal computer apri il foglio <b>To_Smile_CRM_MASTER2026</b> su Google.</li><li><b>File → Scarica → Microsoft Excel (.xlsx)</b>.</li><li>Caricalo qui sotto: il file si legge sul server in Europa e non si salva. Prima di importare vedi il riepilogo.</li></ol>
-    <div class="grid2"><div class="field"><label for="imp-f">File .xlsx</label><input type="file" id="imp-f" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></div>
-      <div class="field"><label for="imp-a">Anno dei dati</label><input id="imp-a" inputmode="numeric" value="2026" maxlength="4"></div></div>
-    <button class="btn primary" id="imp-go" type="button">Leggi il file (anteprima)</button>
-    <div id="imp-out" style="margin-top:12px"></div>
-    ${d.importazioni.length ? `<p class="muted" style="font-size:13px;margin-bottom:0">Ultime importazioni: ${d.importazioni.map(i => `${new Date(i.fatto_il).toLocaleDateString('it-IT')} · ${i.righe} righe · ${esc(i.fatto_da)}`).join(' — ')}</p>` : ''}</div>
+  $('#main').innerHTML = `<div class="head"><div><h2 class="view">Liste</h2><p>Le scelte del CRM. Solo amministratori.</p></div></div>
   <div class="card sez"><h3>Gestione finanziaria</h3>
     <p style="margin-top:0">Azienda da cui prendere i tassi di finanziamento verso pazienti per la Dashboard dati.</p>
     ${d.finErr ? `<div class="err">${esc(d.finErr)}</div>` : `<select id="fin-az" class="btn"><option value="">${d.finAuto ? 'Automatica: ' + esc((d.aziende.find(a => a.id === d.finAuto) || {}).nome || '') : '— Scegli —'}</option>${d.aziende.map(a => opt(a.id, a.nome, a.id === d.finAzienda)).join('')}</select>`}</div>
-  ${d.commGrezzi.length ? `<div class="card sez"><h3>Commerciali del vecchio foglio</h3>
-    <p style="margin-top:0">Nel foglio Google il commerciale era scritto a mano (es. «LUCA»). Collegalo alla persona: nella Dashboard e nei filtri diventa una riga sola con i preventivi nuovi. Vuoto = resta il nome scritto.</p>
-    ${d.commGrezzi.map(g => `<div class="lrow"><span class="nm">${esc(g.nome)} <span class="muted" style="font-weight:500">· ${g.n} preventivi</span></span>
-      <input data-alias="${esc(g.nome)}" list="dl-pers" autocomplete="off" placeholder="Scrivi il nome…" value="${esc(persLab(d.persone.find(u => u.id === d.alias[g.nome])))}"
-        style="flex:1 1 220px;border:1px solid var(--line);border-radius:9px;padding:6px 9px;min-height:38px;background:var(--surface-2)"></div>`).join('')}
-    <datalist id="dl-pers">${d.persone.map(u => `<option value="${esc(persLab(u))}">`).join('')}</datalist></div>` : ''}
   <div class="lists">${['tipo_ov', 'marketing', 'tipo_pdc'].map(t => `<div class="card sez"><h3>${NOMI_L[t]}</h3>
     ${t === 'marketing' ? '<p class="muted" style="margin-top:0;font-size:13px">«Nome nella dashboard» unisce più voci in un solo canale (es. ORALPRO e ORAL PRO → Oral Pro). Vuoto = la voce stessa.</p>' : ''}
     ${t === 'tipo_pdc' ? '<p class="muted" style="margin-top:0;font-size:13px">Le voci del menu «Tipo di piano di cura» nel modulo. Quelle nascoste (es. scritte a mano nel vecchio foglio) restano solo per i filtri.</p>' : ''}
