@@ -661,19 +661,17 @@ async function vListe() {
 }
 function drawListe() {
   const d = LI.d, tot = (d.totali.import || 0) + (d.totali.app || 0);
-  const lista = t => d.liste[t].map(x => `<div class="lrow"><span class="nm ${x.attivo ? '' : 'off'}">${esc(x.valore)} <span class="muted" style="font-weight:500">· ${d.usi[t + '|' + x.valore] || 0}</span></span>
+  const lista = t => d.liste[t].filter(x => x.attivo || LI.nascoste === t).map(x => `<div class="lrow"><span class="nm ${x.attivo ? '' : 'off'}">${esc(x.valore)} <span class="muted" style="font-weight:500">· ${d.usi[t + '|' + x.valore] || 0}</span></span>
       ${t === 'marketing' ? `<input data-canale="${esc(x.valore)}" value="${esc(x.canale)}" placeholder="Nome nella dashboard" aria-label="Canale in dashboard per ${esc(x.valore)}" style="flex:1 1 140px">` : ''}
       <button class="btn sm" data-ren="${t}|${esc(x.valore)}" type="button">Rinomina</button>
       <button class="btn sm" data-att="${t}|${esc(x.valore)}" type="button">${x.attivo ? 'Nascondi' : 'Rimetti'}</button></div>`).join('');
   $('#main').innerHTML = `<div class="head"><div><h2 class="view">Liste</h2><p>Le scelte del CRM. Solo amministratori.</p></div></div>
-  <div class="card sez"><h3>Gestione finanziaria</h3>
-    <p style="margin-top:0">Azienda da cui prendere i tassi di finanziamento verso pazienti per la Dashboard dati.</p>
-    ${d.finErr ? `<div class="err">${esc(d.finErr)}</div>` : `<select id="fin-az" class="btn"><option value="">${d.finAuto ? 'Automatica: ' + esc((d.aziende.find(a => a.id === d.finAuto) || {}).nome || '') : '— Scegli —'}</option>${d.aziende.map(a => opt(a.id, a.nome, a.id === d.finAzienda)).join('')}</select>`}</div>
   <div class="lists">${['tipo_ov', 'marketing', 'tipo_pdc'].map(t => `<div class="card sez"><h3>${NOMI_L[t]}</h3>
     ${t === 'marketing' ? '<p class="muted" style="margin-top:0;font-size:13px">«Nome nella dashboard» unisce più voci in un solo canale (es. ORALPRO e ORAL PRO → Oral Pro). Vuoto = la voce stessa.</p>' : ''}
     ${t === 'tipo_pdc' ? '<p class="muted" style="margin-top:0;font-size:13px">Le voci del menu «Tipo di piano di cura» nel modulo. Quelle nascoste (es. scritte a mano nel vecchio foglio) restano solo per i filtri.</p>' : ''}
     <form class="bar" data-add="${t}"><input name="v" placeholder="Nuova voce" style="flex:1;border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:40px"><button class="btn sm primary">Aggiungi</button></form>
-    ${lista(t) || '<p class="muted">Nessuna voce.</p>'}</div>`).join('')}</div>`;
+    ${lista(t) || '<p class="muted">Nessuna voce.</p>'}
+    ${(n => n ? `<button class="btn sm" type="button" data-nasc="${t}" style="margin-top:10px;border:0;background:none;color:var(--muted);text-decoration:underline">${LI.nascoste === t ? 'Chiudi le voci nascoste' : 'Voci nascoste: ' + n}</button>` : '')(d.liste[t].filter(x => !x.attivo).length)}</div>`).join('')}</div>`;
 }
 document.addEventListener('submit', async e => {
   const f = e.target.closest('[data-add]'); if (!f) return; e.preventDefault();
@@ -697,6 +695,7 @@ document.addEventListener('change', async e => {
   if (t.id === 'fin-az') { try { await api('PUT', 'api/liste/azienda', { azienda: t.value }); toast('Azienda salvata.'); } catch (y) { toast(y.message); } }
 });
 document.addEventListener('click', async e => {
+  const nb = e.target.closest('[data-nasc]'); if (nb) { LI.nascoste = LI.nascoste === nb.dataset.nasc ? null : nb.dataset.nasc; return drawListe(); }
   const r = e.target.closest('[data-ren]'), a = e.target.closest('[data-att]');
   if (r || a) {
     const [tipo, val] = (r || a).dataset[r ? 'ren' : 'att'].split(/\|(.*)/s);
