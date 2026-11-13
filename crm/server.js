@@ -205,10 +205,10 @@ async function finanziamenti(sedi, anno) {
   if (!d.voceFinanziamenti) return { errore: 'In Gestione finanziaria manca la voce «Tassi finanziamento verso pazienti».' };
   const [ya, ma] = oggi().split('-').map(Number);
   const fino = anno < ya ? 12 : ma; // da gennaio al mese in corso
-  const perNome = new Map(d.sedi.map(s => [K.normSede(s.nome), s]));
+  const finLib = require('../lib/finanza');
   const somma = (a, n) => (a || []).slice(0, n).reduce((x, y) => x + (Number(y) || 0), 0);
   const righe = sedi.map(s => {
-    const f = perNome.get(K.normSede(s.nome));
+    const f = finLib.trova(d.sedi, s.nome);
     if (!f) return { sede: s.nome, trovata: false };
     const tassi = somma(f.finanziamentiMesi, fino), fatt = somma(f.fatturatoMesi, fino);
     return { sede: s.nome, trovata: true, tassi, fatturato: fatt, incidenza: fatt > 0 ? tassi / fatt : null };

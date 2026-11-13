@@ -124,7 +124,7 @@ app.get('/api/budget-materiale', needUser, need('budget_materiale'), wrap(async 
   const cur = dati[ya];
   if (!cur) return res.json({ errore: `In Gestione finanziaria il consuntivo aperto non è del ${ya}.` });
   if (!cur.voceMateriale) return res.json({ errore: 'In Gestione finanziaria manca la voce «Materiale di consumo».' });
-  const fin = (anno, sede) => (dati[anno]?.sedi || []).find(x => finanza.normSede(x.nome) === finanza.normSede(sede.nome));
+  const fin = (anno, sede) => finanza.trova(dati[anno]?.sedi, sede.nome);
   const somma = (a, n) => (a || []).slice(0, n).reduce((x, y) => x + (Number(y) || 0), 0);
   const out = sedi.map(s => {
     const f = fin(ya, s);
@@ -137,6 +137,9 @@ app.get('/api/budget-materiale', needUser, need('budget_materiale'), wrap(async 
       annuo: { fino: ma, fatturato: fatt, budget: fatt * pct, spesa, disponibile: fatt * pct - spesa },
       mensile: mens ? { ...mens, budget: mens.fatturato * pct, disponibile: mens.fatturato * pct - mens.spesa } : null };
   });
+  const mancanti = out.filter(x => !x.trovata).map(x => x.sede);
+  // nei log solo nomi di sedi (niente numeri): serve a capire come si chiamano in Gestione finanziaria
+  if (mancanti.length) console.warn(`Budget materiale: sedi non abbinate ${JSON.stringify(mancanti)}; in Gestione finanziaria ci sono ${JSON.stringify(cur.sedi.map(x => x.nome))}`);
   res.set('Cache-Control', 'no-store');
   res.json({ anno: ya, mese: ma, mesePrecedente: mP, dueMesiPrima: m2, sedi: out });
 }));
