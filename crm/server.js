@@ -53,7 +53,8 @@ app.use(wrap(async (req, res, next) => {
     if (!role) continue;
     if (role !== 'admin' && spente.has(k)) continue;
     if (role === 'admin') perm[s] = { admin: true, sedi: tutte };
-    else perm[s] = { admin: false, sedi: (lv[k]?.enti || []).map(e => tutte.find(x => x.id === e.id)).filter(Boolean) };
+    // il commerciale/operatore vede tutte le sedi; le sue (scelte in Gestione accessi) sono quelle principali, da cui parte
+    else perm[s] = { admin: false, sedi: tutte, mie: (lv[k]?.enti || []).map(e => e.id).filter(id => tutte.some(x => x.id === id)) };
   }
   if (owner || c.apps.crm_liste === 'admin') perm.liste = { admin: true, sedi: tutte };
   req.me = { id: u.id, nome: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email, owner, perm };
@@ -76,6 +77,12 @@ async function canaleDi() {
   const { rows } = await db.q(`select valore, canale from liste where tipo = 'marketing' and canale <> ''`);
   const m = new Map(rows.map(r => [r.valore, r.canale]));
   return mk => m.get(mk) || null;
+}
+// nomi del vecchio foglio collegati a una persona (Liste): così nei KPI e nei filtri la stessa persona è una riga sola
+async function aliasComm() {
+  const { rows } = await db.q('select nome, user_nome from alias_commerciali');
+  const m = new Map(rows.map(r => [r.nome, r.user_nome]));
+  return c => m.get(String(c || '').trim().toUpperCase()) || c;
 }
 const imp = async k => (await db.q('select v from impostazioni where k = $1', [k])).rows[0]?.v ?? null;
 const impSet = (k, v) => db.q('insert into impostazioni (k, v) values ($1,$2) on conflict (k) do update set v = excluded.v', [k, JSON.stringify(v)]);
@@ -144,9 +151,9 @@ app.get('/api/richiami', needUser, need('richiami'), wrap(async (req, res) => {
   const { rows } = await db.q(`select id, sede_id, sede_nome, to_char(data, 'YYYY-MM-DD') as data, anno, mese, paziente, tipo_ov, marketing, pdc::float, esito,
       pagato::float, anno_nascita, tipo_pdc, note, commerciale, medico, aggiornato_il
     from preventivi where sede_id = any($1) and anno = $2 order by data desc nulls last, creato_il desc`, [sedi, anno]);
-  const annoOra = Number(oggi().slice(0, 4));
+  const annoOra = Number(oggi().slice(0, 4)), al = await aliasComm();
   res.set('Cache-Control', 'no-store');
-  res.json({ righe: rows.map(r => ({ ...r, eta: r.anno_nascita ? annoOra - r.anno_nascita : null, anno_nascita: undefined })) });
+  res.json({ righe: rows.map(r => ({ ...r, commerciale: al(r.commerciale), eta: r.anno_nascita ? annoOra - r.anno_nascita : null, anno_nascita: undefined })) });
 }));
 app.patch('/api/richiami/:id', needUser, need('richiami'), wrap(async (req, res) => {
   const id = str(req.params.id, 60);
@@ -167,7 +174,9 @@ app.patch('/api/richiami/:id', needUser, need('richiami'), wrap(async (req, res)
 async function datiKpi(sediIds, anno) {
   const { rows } = await db.q(`select sede_nome, to_char(data, 'YYYY-MM-DD') as data, anno, mese, tipo_ov, marketing, pdc::float, esito, pagato::float, tipo_pdc, commerciale, medico
     from preventivi where sede_id = any($1) ${anno ? 'and anno = $2' : ''}`, anno ? [sediIds, anno] : [sediIds]);
-  return K.dataset(rows, await canaleDi());
+  const al = await aliasComm();
+  for (const r of rows) r.commerciale = al(r.commerciale);
+  return K.dataset(rows, await canaleDi(), al);
 }
 
 /* ---------- Gestione finanziaria: tassi di finanziamento verso pazienti (consuntivo, da inizio anno a oggi) ---------- */
@@ -258,7 +267,12 @@ app.get('/api/liste', needUser, need('liste'), wrap(async (req, res) => {
   const imps = (await db.q('select file, righe, riepilogo, fatto_da, fatto_il from importazioni order by fatto_il desc limit 5')).rows;
   const tot = (await db.q(`select origine, count(*)::int as n from preventivi group by 1`)).rows;
   let aziende = [], finErr = null; try { aziende = (await finanza('/api/_appgestione/aziende')).aziende || []; } catch (e) { finErr = e.message; }
-  res.json({ liste: await liste(), usi, importazioni: imps, totali: Object.fromEntries(tot.map(r => [r.origine, r.n])),
+  // commerciali scritti a mano nel vecchio foglio (righe importate) e persone a cui collegarli
+  const { rows: grezzi } = await db.q(`select commerciale as nome, count(*)::int as n from preventivi where origine = 'import' and commerciale <> '' group by 1 order by 2 desc`);
+  const { rows: alias } = await db.q('select nome, user_id from alias_commerciali');
+  const { rows: pers } = await store.q(`select id, first_name, last_name, figura from users where status = 'active' and not owner and coalesce(figura, '') <> 'Medico' order by (figura in ('RAP', 'RUL')) desc, last_name, first_name`);
+  res.json({ liste: await liste(), usi, importazioni: imps, commGrezzi: grezzi, alias: Object.fromEntries(alias.map(a => [a.nome, a.user_id])),
+    persone: pers.map(u => ({ id: u.id, nome: nomeDi(u), figura: u.figura || '' })), totali: Object.fromEntries(tot.map(r => [r.origine, r.n])),
     finAzienda: await imp('fin_azienda'), finAuto: await aziendaFin().catch(() => null), aziende, finErr });
 }));
 app.post('/api/liste/voce', needUser, need('liste'), wrap(async (req, res) => {
@@ -275,6 +289,16 @@ app.post('/api/liste/voce', needUser, need('liste'), wrap(async (req, res) => {
     return res.json({ ok: true, aggiornati: rowCount });
   }
   await db.q(`insert into liste (tipo, valore, canale, attivo) values ($1,$2,$3,$4) on conflict (tipo, valore) do update set canale = excluded.canale, attivo = excluded.attivo`, [tipo, valore, canale, attivo]);
+  res.json({ ok: true });
+}));
+app.post('/api/liste/alias', needUser, need('liste'), wrap(async (req, res) => {
+  const nome = str(req.body.nome, 80).toUpperCase(); if (!nome) return bad(res, 400, 'Nome mancante.');
+  const uid = str(req.body.userId, 60);
+  if (!uid) { await db.q('delete from alias_commerciali where nome = $1', [nome]); return res.json({ ok: true }); }
+  const { rows: [u] } = await store.q(`select id, first_name, last_name from users where id = $1 and status = 'active'`, [uid]);
+  if (!u) return bad(res, 400, 'Persona non trovata.');
+  await db.q('insert into alias_commerciali (nome, user_id, user_nome) values ($1,$2,$3) on conflict (nome) do update set user_id = excluded.user_id, user_nome = excluded.user_nome',
+    [nome, u.id, nomeDi(u).toUpperCase()]);
   res.json({ ok: true });
 }));
 app.put('/api/liste/azienda', needUser, need('liste'), wrap(async (req, res) => {

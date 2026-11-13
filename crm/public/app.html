@@ -253,11 +253,13 @@ function go(v, replace) {
 window.addEventListener('popstate', e => { if (e.state?.v) go(e.state.v, true); });
 document.addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) go(b.dataset.go); });
 const sediDi = k => S.st.perm[k]?.sedi || [];
+// sede principale: la prima tra quelle assegnate alla persona (l'amministratore non ne ha: parte da tutte)
+const sedePrima = k => { const p = S.st.perm[k]; return p && !p.admin && p.mie?.length ? sediDi(k).find(s => s.id === p.mie[0]) || null : null; };
 const opt = (v, t, sel) => `<option value="${esc(v)}" ${sel ? 'selected' : ''}>${esc(t)}</option>`;
 
 /* ================= INSERIMENTO PREVENTIVI ================= */
 let F = null;
-const nuovoF = (keep = {}) => ({ sede: keep.sede || sediDi('preventivi')[0]?.id || '', data: S.st.oggi, paziente: '', annoNascita: '', commerciale: keep.commerciale || '', medici: [],
+const nuovoF = (keep = {}) => ({ sede: keep.sede || sedePrima('preventivi')?.id || sediDi('preventivi')[0]?.id || '', data: S.st.oggi, paziente: '', annoNascita: '', commerciale: keep.commerciale || '', medici: [],
   tipoOv: '', marketing: '', pdc: '', tipoPdc: '', esito: '', pagato: '', note: '' });
 const persone = {};
 async function personeDi(sede) { if (!persone[sede]) persone[sede] = await api('GET', 'api/persone?sede=' + encodeURIComponent(sede)); return persone[sede]; }
@@ -340,6 +342,7 @@ const FASCE_ETA = [['0', 'Sotto 30 anni', x => x != null && x < 30], ['1', '30 �
 const RCOL = [['sede_nome', 'Sede'], ['mese', 'Mese'], ['tipo_ov', 'Tipo opportunità'], ['marketing', 'Marketing'], ['tipo_pdc', 'Tipo PDC'], ['commerciale', 'Commerciale'], ['medico', 'Medico'], ['esito', 'Esito']];
 async function vRich() {
   R.anno = R.anno || S.st.anni[0];
+  if (!R.inizio) { R.inizio = true; const sp = sedePrima('richiami'); if (sp) R.f.sede_nome = sp.nome; }
   $('#main').innerHTML = `<div class="head"><div><h2 class="view">Richiami commerciali</h2><p>I pazienti con preventivo delle tue sedi. Note ed esito si cambiano qui.</p></div></div><div class="empty">Caricamento…</div>`;
   try { R.righe = (await api('GET', 'api/richiami?anno=' + R.anno)).righe; } catch (x) { $('#main').innerHTML = `<div class="err">${esc(x.message)}</div>`; return; }
   drawRich(true);
@@ -354,7 +357,7 @@ function drawRich(full) {
   const val = k => [...new Set(R.righe.map(r => String(r[k] ?? '')))].filter(v => v !== '').sort((a, b) => k === 'mese' ? a - b : a.localeCompare(b, 'it'));
   const lab = (k, v) => k === 'mese' ? MESI[v - 1] : k === 'esito' ? v + ' — ' + ESITI[v] : v;
   const sel = (k, t, opts) => `<select data-rf="${k}" class="${R.f[k] ? 'on' : ''}" aria-label="${esc(t)}"><option value="">${esc(t)}: tutti</option>${opts.map(([v, l]) => opt(v, l, R.f[k] === v)).join('')}</select>`;
-  if (full) $('#main').innerHTML = `<div class="head"><div><h2 class="view">Richiami commerciali</h2><p>I pazienti con preventivo delle tue sedi. Note ed esito si cambiano qui.</p></div><span class="spacer"></span>
+  if (full) $('#main').innerHTML = `<div class="head"><div><h2 class="view">Richiami commerciali</h2><p>I pazienti con preventivo. Parti dalla tua sede; con il filtro Sede vedi anche le altre. Note ed esito si cambiano qui.</p></div><span class="spacer"></span>
     <select id="r-anno" class="btn sm" aria-label="Anno">${S.st.anni.map(a => opt(a, a, a == R.anno)).join('')}</select></div>
     <div class="bar"><input type="search" id="r-q" placeholder="Cerca il paziente per nome…" value="${esc(R.q)}" autocomplete="off"><button class="btn sm" id="r-reset" type="button">Togli i filtri</button></div>
     <details class="fd" id="r-fd" ${innerWidth > 700 ? 'open' : ''}><summary id="r-fsum">Filtri</summary><div class="fil" id="r-fil"></div></details><div id="r-out"></div>`;
@@ -417,6 +420,7 @@ const suffix = p => p[0] === 'm' ? '_mese' : p[0] === 'q' ? '_trim' : '_anno';
 const fmtOf = { dilazionati: fE, preventivato: fE, presentati: fN, accettati: fN, perc: fPct, ticket: fE, pagato: fE, nome: x => x ?? '—', sede: x => x ?? '—', sedi: x => x || '—' };
 async function vDash() {
   D.anno = D.anno || S.st.anni[0];
+  if (!D.inizio) { D.inizio = true; const sp = sedePrima('dashboard'); if (sp) D.studio = sp.nome; }
   $('#main').innerHTML = `<div class="empty">Caricamento…</div>`;
   try { D.data = await api('GET', 'api/dashboard?anno=' + D.anno); } catch (x) { $('#main').innerHTML = `<div class="err">${esc(x.message)}</div>`; return; }
   drawDash();
@@ -650,6 +654,11 @@ function drawListe() {
   <div class="card sez"><h3>Gestione finanziaria</h3>
     <p style="margin-top:0">Azienda da cui prendere i tassi di finanziamento verso pazienti per la Dashboard dati.</p>
     ${d.finErr ? `<div class="err">${esc(d.finErr)}</div>` : `<select id="fin-az" class="btn"><option value="">${d.finAuto ? 'Automatica: ' + esc((d.aziende.find(a => a.id === d.finAuto) || {}).nome || '') : '— Scegli —'}</option>${d.aziende.map(a => opt(a.id, a.nome, a.id === d.finAzienda)).join('')}</select>`}</div>
+  ${d.commGrezzi.length ? `<div class="card sez"><h3>Commerciali del vecchio foglio</h3>
+    <p style="margin-top:0">Nel foglio Google il commerciale era scritto a mano (es. «LUCA»). Collegalo alla persona: nella Dashboard e nei filtri diventa una riga sola con i preventivi nuovi. Vuoto = resta il nome scritto.</p>
+    ${d.commGrezzi.map(g => `<div class="lrow"><span class="nm">${esc(g.nome)} <span class="muted" style="font-weight:500">· ${g.n} preventivi</span></span>
+      <select data-alias="${esc(g.nome)}" style="flex:1 1 220px;border:1px solid var(--line);border-radius:9px;padding:6px 9px;min-height:38px;background:var(--surface-2)"><option value="">— nessuna persona —</option>
+      ${d.persone.map(u => opt(u.id, u.nome + (u.figura ? ' · ' + u.figura : ''), d.alias[g.nome] === u.id)).join('')}</select></div>`).join('')}</div>` : ''}
   <div class="lists">${['tipo_ov', 'marketing', 'tipo_pdc'].map(t => `<div class="card sez"><h3>${NOMI_L[t]}</h3>
     ${t === 'marketing' ? '<p class="muted" style="margin-top:0;font-size:13px">«Nome nella dashboard» unisce più voci in un solo canale (es. ORALPRO e ORAL PRO → Oral Pro). Vuoto = la voce stessa.</p>' : ''}
     ${t === 'tipo_pdc' ? '<p class="muted" style="margin-top:0;font-size:13px">Suggerimenti nel modulo: si può sempre scrivere un tipo nuovo.</p>' : ''}
@@ -666,6 +675,7 @@ document.addEventListener('change', async e => {
     const x = LI.d.liste.marketing.find(v => v.valore === t.dataset.canale);
     try { await api('POST', 'api/liste/voce', { tipo: 'marketing', valore: x.valore, canale: t.value, attivo: x.attivo }); x.canale = t.value.trim(); toast('Salvato.'); } catch (y) { toast(y.message); }
   }
+  if (t.dataset.alias !== undefined) { try { await api('POST', 'api/liste/alias', { nome: t.dataset.alias, userId: t.value }); LI.d.alias[t.dataset.alias] = t.value; toast(t.value ? 'Collegato.' : 'Collegamento tolto.'); } catch (y) { toast(y.message); } }
   if (t.id === 'fin-az') { try { await api('PUT', 'api/liste/azienda', { azienda: t.value }); toast('Azienda salvata.'); } catch (y) { toast(y.message); } }
 });
 document.addEventListener('click', async e => {

@@ -27,7 +27,7 @@ function medici(raw) {
 
 // righe del database → dataset senza dati personali (come in "Chiedi al CRM")
 // canaleDi: marketing grezzo → canale uniformato (dalla micro app Liste)
-function dataset(rows, canaleDi) {
+function dataset(rows, canaleDi, alias = c => c) {
   const preventivi = [], med = [], dilazionati = [], opportunita = [];
   for (const r of rows) {
     const sede = r.sede_nome, mese = Number(r.mese), anno = Number(r.anno), tri = Math.ceil(mese / 3);
@@ -38,7 +38,9 @@ function dataset(rows, canaleDi) {
     const tipologia = tipo ? cap(tipo) : 'Non indicato';
     const mk = String(r.marketing || '').trim().toUpperCase();
     const canale = canaleDi(mk) || (mk ? cap(mk) : 'Non indicato');
-    const unico = anno === 2026 && mese <= 7 ? UNICO_2026[normSede(sede)] : null;
+    // commerciale unico (gennaio–luglio 2026): se in Liste quel nome è collegato a una persona, si usa la persona
+    let unico = anno === 2026 && mese <= 7 ? UNICO_2026[normSede(sede)] : null;
+    if (unico) { const m = alias(unico.toUpperCase()); if (m && m !== unico.toUpperCase()) unico = titolo(m); }
     const venditore = unico || titolo(r.commerciale) || 'Non indicato';
     const meds = medici(r.medico);
     preventivi.push({ sede, anno, mese, trimestre: tri, venditore, canale, tipologia, pdc, accettato: acc, pagato: acc ? pagRaw : 0 });
