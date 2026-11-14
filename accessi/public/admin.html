@@ -686,7 +686,7 @@ async function apriSetupSede(id, avvisi) {
     ${riga(!(avvisi || []).length, 'Copiata nelle app', (avvisi || []).length ? 'Attenzione: ' + avvisi.map(esc).join(' · ') : 'CRM, Calendario, Scheda personale, Gestione ASO, Nuovalab, Ticket, Comunicazioni e Documenti la vedono già.')}
     ${riga(v.email, 'Email della sede', v.email ? esc(sede.email) : 'Manca: serve a Nuovalab per lo studio.', v.email ? '' : `<button class="btn small primary" type="button" data-setup-edit="${id}" data-vai="email">Aggiungi</button>`)}
     ${riga(v.riuniti, 'Riuniti e aspiratori', v.riuniti ? `${(sede.riunitiNomi || []).length} riuniti, ${(sede.aspiratori || []).length} aspiratori` : 'Nessun riunito: servono a Turni e Manutenzione attrezzature.', v.riuniti ? '' : `<button class="btn small primary" type="button" data-setup-edit="${id}" data-vai="riuniti">Aggiungi</button>`)}
-    ${riga(v.orari, 'Orari di apertura', v.orari ? 'Impostati in Scheda personale.' : 'Non ancora impostati: valgono gli orari standard (9:30–18:30, lunedì–venerdì).', `<a class="btn small ${v.orari ? '' : 'primary'}" href="https://turni.appgestione.it/?sez=info&sede=${encodeURIComponent(id)}" target="_blank" rel="noopener">${v.orari ? 'Vedi' : 'Imposta'}</a>`)}
+    ${riga(v.orari, 'Orari di apertura', v.orari ? 'Impostati in Scheda personale.' : 'Non ancora impostati: valgono gli orari standard (9:30–18:30, lunedì–venerdì).', `<a class="btn small ${v.orari ? '' : 'primary'}" href="https://turni.appgestione.it/?sez=info&sede=${encodeURIComponent(id)}">${v.orari ? 'Vedi' : 'Imposta'}</a>`)}
     ${riga(v.finanza, 'Gestione finanziaria', v.finanza ? 'La sede c\'è: Budget materiale e tassi di finanziamento la trovano.' : v.finanza === false ? 'Va creata anche lì con lo stesso nome (in Gestione finanziaria non si modifica niente da qui).' : 'Non verificabile in questo momento.', v.finanza ? '' : '<a class="btn small" href="https://finanza.appgestione.it" target="_blank" rel="noopener">Apri</a>')}
     ${riga(v.persone, 'Persone che ci lavorano', st.persone ? `${st.persone} ${st.persone === 1 ? 'persona ha' : 'persone hanno'} questa sede in anagrafica.` : 'Nessuna persona ha ancora questa sede in anagrafica.', `<button class="btn small ${st.persone ? '' : 'primary'}" type="button" data-setup-pers="${id}">Aggiungi persone</button>`)}
     <div class="msg err" role="alert"></div><div class="row"><button class="btn primary" value="cancel" formnovalidate>Chiudi</button></div>`, async () => dlg.close());
@@ -722,7 +722,7 @@ document.addEventListener('click', e => {
     if (!ss.closest('.sede') && manca.length === 1 && x) { // una sola cosa da fare: dritti lì
       if (manca[0] === 'email' || manca[0] === 'riuniti') return apriSede(x, manca[0]);
       if (manca[0] === 'persone') return apriPersoneSede(x.id);
-      if (manca[0] === 'orari') return void window.open('https://turni.appgestione.it/?sez=info&sede=' + encodeURIComponent(x.id), '_blank', 'noopener');
+      if (manca[0] === 'orari') { location.href = 'https://turni.appgestione.it/?sez=info&sede=' + encodeURIComponent(x.id); return; } // stessa pagina: sul telefono le finestre nuove vengono bloccate
     }
     apriSetupSede(ss.dataset.setupSede); return;
   }
