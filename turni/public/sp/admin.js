@@ -7,7 +7,7 @@ const VOCI_ADMIN = [
 ];
 window.avvioAdmin = async function(st){
   const sez = new URLSearchParams(location.search).get('sez');
-  const alias = { assenze: 'richieste', doc: 'doc', perf: 'perf', turni: 'turni', persone: 'persone', timbra: 'timbra', richieste: 'richieste' };
+  const alias = { assenze: 'richieste', doc: 'doc', perf: 'perf', turni: 'turni', persone: 'persone', timbra: 'timbra', richieste: 'richieste', info: 'info', tag: 'tag' };
   if (alias[sez]) ASEZ = alias[sez];
   const side = document.createElement('aside'); side.className = 'sidemenu'; side.id = 'side';
   side.innerHTML = '<div class="sidemenu-h">Amministrazione</div>' + VOCI_ADMIN.map(v => v === '-' ? '<div class="sep"></div>' : `<button data-v="${v[0]}"><span>${v[1]}</span><span data-n="${v[0]}"></span></button>`).join('');
@@ -334,7 +334,12 @@ async function aInfo(m){
     <input type="file" id="file" accept=".pdf,.docx,application/pdf" hidden>`;
   const sedeOr = id => { m.querySelectorAll('#sediOr .chip').forEach(c => c.setAttribute('aria-pressed', c.dataset.s === id)); editorOrari(S2.sedi.find(s => s.id === id)); };
   $('#sediOr').onclick = e => { const c = e.target.closest('[data-s]'); if (c) sedeOr(c.dataset.s); };
-  if (S2.sedi[0]) editorOrari(S2.sedi[0]);
+  // da Gestione accessi («cosa resta da fare»): si apre direttamente sugli orari della sede indicata
+  const sedeUrl = new URLSearchParams(location.search).get('sede');
+  if (sedeUrl && S2.sedi.some(s => s.id === sedeUrl)) {
+    sedeOr(sedeUrl);
+    const card = $('#sediOr').closest('.card'); window.scrollTo({ top: card.getBoundingClientRect().top + scrollY - 90 }); card.style.outline = '3px solid var(--accent, #2B8384)'; card.style.outlineOffset = '3px';
+  } else if (S2.sedi[0]) editorOrari(S2.sedi[0]);
   let car = null;
   const scegli = (tipo, sost) => { car = {tipo, sost}; $('#file').value = ''; $('#file').click(); };
   $('#nuovaPol').onclick = () => scegli('policy');

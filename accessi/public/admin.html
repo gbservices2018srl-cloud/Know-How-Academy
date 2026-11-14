@@ -606,7 +606,7 @@ document.addEventListener('click', e => {
   $('#attrBox').innerHTML = attrHtml();
 });
 const avvisiSedi = (r, ok) => r.avvisi?.length ? toast(r.avvisi.join(' · ')) : toast(ok);
-function apriSede(x) {
+function apriSede(x, vai) {
   const v = x || { nome: '', sigla: '', indirizzo: '', societa: '', email: '', riuniti: 2, riunitiNomi: ['Riunito 1', 'Riunito 2'], aspiratori: ['Aspiratore 1'] };
   ATTR = { riu: [...(v.riunitiNomi || [])], asp: [...(v.aspiratori || [])] };
   const soc = [...new Set((SEDI || []).map(s => s.societa).filter(Boolean))];
@@ -629,6 +629,13 @@ function apriSede(x) {
     if (!x) { const nuova = SEDI.find(z => z.sigla === String(body.sigla).toUpperCase()); if (nuova) apriSetupSede(nuova.id, r.avvisi || []); }
     else caricaSetup();
   });
+  // aperta da «cosa resta da fare»: cursore direttamente sul campo da compilare
+  if (vai) setTimeout(() => {
+    const el = vai === 'email' ? dlgf.querySelector('#s-email') : dlgf.querySelector('#attrBox');
+    if (!el) return;
+    el.scrollIntoView({ block: 'center' }); el.style.outline = '3px solid var(--teal, #2B8384)'; el.style.outlineOffset = '3px'; el.style.borderRadius = '10px';
+    (vai === 'email' ? el : el.querySelector('[data-attr-piu="riu"]'))?.focus();
+  }, 60);
 }
 document.addEventListener('click', async e => {
   const t = e.target.closest('[data-sez],[data-sede-new],[data-sede-edit],[data-sede-stato],[data-sede-sync],[data-sede-import]'); if (!t) return;
@@ -677,9 +684,9 @@ async function apriSetupSede(id, avvisi) {
   open(`<h2>${esc(st.nome)}: cosa resta da fare</h2>
     <p class="muted" style="margin-top:-6px">Le voci con il punto esclamativo vanno completate. Le altre sono già a posto.</p>
     ${riga(!(avvisi || []).length, 'Copiata nelle app', (avvisi || []).length ? 'Attenzione: ' + avvisi.map(esc).join(' · ') : 'CRM, Calendario, Scheda personale, Gestione ASO, Nuovalab, Ticket, Comunicazioni e Documenti la vedono già.')}
-    ${riga(v.email, 'Email della sede', v.email ? esc(sede.email) : 'Manca: serve a Nuovalab per lo studio.', v.email ? '' : `<button class="btn small" type="button" data-setup-edit="${id}">Aggiungi</button>`)}
-    ${riga(v.riuniti, 'Riuniti e aspiratori', v.riuniti ? `${(sede.riunitiNomi || []).length} riuniti, ${(sede.aspiratori || []).length} aspiratori` : 'Nessun riunito: servono a Turni e Manutenzione attrezzature.', v.riuniti ? '' : `<button class="btn small" type="button" data-setup-edit="${id}">Aggiungi</button>`)}
-    ${riga(v.orari, 'Orari di apertura', v.orari ? 'Impostati in Scheda personale.' : 'Non ancora impostati: valgono gli orari standard (9:30–18:30, lunedì–venerdì).', `<a class="btn small ${v.orari ? '' : 'primary'}" href="https://turni.appgestione.it/?sez=info" target="_blank" rel="noopener">${v.orari ? 'Vedi' : 'Imposta'}</a>`)}
+    ${riga(v.email, 'Email della sede', v.email ? esc(sede.email) : 'Manca: serve a Nuovalab per lo studio.', v.email ? '' : `<button class="btn small primary" type="button" data-setup-edit="${id}" data-vai="email">Aggiungi</button>`)}
+    ${riga(v.riuniti, 'Riuniti e aspiratori', v.riuniti ? `${(sede.riunitiNomi || []).length} riuniti, ${(sede.aspiratori || []).length} aspiratori` : 'Nessun riunito: servono a Turni e Manutenzione attrezzature.', v.riuniti ? '' : `<button class="btn small primary" type="button" data-setup-edit="${id}" data-vai="riuniti">Aggiungi</button>`)}
+    ${riga(v.orari, 'Orari di apertura', v.orari ? 'Impostati in Scheda personale.' : 'Non ancora impostati: valgono gli orari standard (9:30–18:30, lunedì–venerdì).', `<a class="btn small ${v.orari ? '' : 'primary'}" href="https://turni.appgestione.it/?sez=info&sede=${encodeURIComponent(id)}" target="_blank" rel="noopener">${v.orari ? 'Vedi' : 'Imposta'}</a>`)}
     ${riga(v.finanza, 'Gestione finanziaria', v.finanza ? 'La sede c\'è: Budget materiale e tassi di finanziamento la trovano.' : v.finanza === false ? 'Va creata anche lì con lo stesso nome (in Gestione finanziaria non si modifica niente da qui).' : 'Non verificabile in questo momento.', v.finanza ? '' : '<a class="btn small" href="https://finanza.appgestione.it" target="_blank" rel="noopener">Apri</a>')}
     ${riga(v.persone, 'Persone che ci lavorano', st.persone ? `${st.persone} ${st.persone === 1 ? 'persona ha' : 'persone hanno'} questa sede in anagrafica.` : 'Nessuna persona ha ancora questa sede in anagrafica.', `<button class="btn small ${st.persone ? '' : 'primary'}" type="button" data-setup-pers="${id}">Aggiungi persone</button>`)}
     <div class="msg err" role="alert"></div><div class="row"><button class="btn primary" value="cancel" formnovalidate>Chiudi</button></div>`, async () => dlg.close());
@@ -701,9 +708,25 @@ function apriPersoneSede(id) {
 }
 document.addEventListener('input', e => { if (e.target.id === 'pp-q') { const q = e.target.value.trim().toLowerCase(); dlgf.querySelectorAll('#pp-l [data-nome]').forEach(r => r.hidden = q && !r.dataset.nome.includes(q)); } });
 document.addEventListener('click', e => {
-  const f = e.target.closest('[data-setf]'); if (f) { filter = f.dataset.setf; aperti.clear(); render(); return; }
-  const ss = e.target.closest('[data-setup-sede]'); if (ss) { if (dlg.open) dlg.close(); apriSetupSede(ss.dataset.setupSede); return; }
-  const se = e.target.closest('[data-setup-edit]'); if (se) { dlg.close(); const x = (SEDI || S.sediTutte).find(z => z.id === se.dataset.setupEdit); if (x) apriSede(x); return; }
+  const f = e.target.closest('[data-setf]');
+  if (f) {
+    const pend = S.users.filter(u => u.status === 'pending');
+    if (f.dataset.setf === 'pending' && pend.length === 1) return apriWizard(pend[0]);
+    filter = f.dataset.setf; aperti.clear(); render(); document.getElementById('list')?.scrollIntoView({ block: 'start', behavior: 'smooth' }); return;
+  }
+  const ss = e.target.closest('[data-setup-sede]');
+  if (ss) {
+    if (dlg.open) dlg.close();
+    const st = SETUP?.sedi.find(z => z.id === ss.dataset.setupSede), x = (SEDI || S.sediTutte || []).find(z => z.id === ss.dataset.setupSede);
+    const manca = st ? Object.entries(st.voci).filter(([, v]) => v === false).map(([k]) => k) : [];
+    if (!ss.closest('.sede') && manca.length === 1 && x) { // una sola cosa da fare: dritti lì
+      if (manca[0] === 'email' || manca[0] === 'riuniti') return apriSede(x, manca[0]);
+      if (manca[0] === 'persone') return apriPersoneSede(x.id);
+      if (manca[0] === 'orari') return void window.open('https://turni.appgestione.it/?sez=info&sede=' + encodeURIComponent(x.id), '_blank', 'noopener');
+    }
+    apriSetupSede(ss.dataset.setupSede); return;
+  }
+  const se = e.target.closest('[data-setup-edit]'); if (se) { dlg.close(); const x = (SEDI || S.sediTutte).find(z => z.id === se.dataset.setupEdit); if (x) apriSede(x, se.dataset.vai); return; }
   const sp = e.target.closest('[data-setup-pers]'); if (sp) { dlg.close(); apriPersoneSede(sp.dataset.setupPers); }
 });
 
