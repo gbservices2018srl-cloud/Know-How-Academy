@@ -633,6 +633,10 @@ function apriSede(x, vai) {
   if (vai) setTimeout(() => {
     const el = vai === 'email' ? dlgf.querySelector('#s-email') : dlgf.querySelector('#attrBox');
     if (!el) return;
+    // se alla sede quella cosa non serve (es. Sestu senza riuniti) lo si segna da qui
+    if (x && x.id) { const nb = document.createElement('div'); nb.className = 'hint'; nb.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0';
+      nb.innerHTML = `<span>${vai === 'email' ? 'Questa sede non ha un\'email?' : 'Questa sede non ha riuniti né aspiratori?'}</span><button class="btn small" type="button" data-ns="${vai}" data-ns-si="1" data-ns-sede="${x.id}">Non serve</button>`;
+      el.insertAdjacentElement(vai === 'email' ? 'afterend' : 'afterbegin', nb); }
     el.scrollIntoView({ block: 'center' }); el.style.outline = '3px solid var(--teal, #2B8384)'; el.style.outlineOffset = '3px'; el.style.borderRadius = '10px';
     (vai === 'email' ? el : el.querySelector('[data-attr-piu="riu"]'))?.focus();
   }, 60);
@@ -703,6 +707,7 @@ function apriPersoneSede(id) {
   open(`<h2>Chi lavora a ${esc(sede.nome)}</h2>
     <p class="muted" style="margin-top:-6px">Spunta le persone: la sede si aggiunge alla loro anagrafica (le altre sedi restano). Ai medici le sedi arrivano dagli studi di Nuovalab.</p>
     <input class="search" id="pp-q" type="search" placeholder="Cerca per nome" style="width:100%;margin-bottom:8px">
+    ${(SETUP?.sedi.find(z => z.id === id)?.persone || 0) === 0 ? `<div class="hint" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><span>Per ora non ci lavora nessuno?</span><button class="btn small" type="button" data-ns="persone" data-ns-si="1" data-ns-sede="${id}">Non serve</button></div>` : ''}
     <div class="wz-list" id="pp-l">${lista.map(u => { const gia = (u.sedi || []).includes(id); return `<label class="wz-app" data-nome="${esc(fullName(u).toLowerCase())}"><span style="display:flex;gap:8px;align-items:center;flex:1"><input type="checkbox" value="${u.id}" ${gia ? 'checked disabled' : ''}> <b>${esc(fullName(u))}</b> <small class="muted">${esc(figNome(u.figura) || '')}${gia ? ' · già qui' : ''}</small></span></label>`; }).join('')}</div>
     ${footer('Aggiungi alla sede')}`, async () => {
     const ids = [...dlgf.querySelectorAll('#pp-l input:checked:not([disabled])')].map(x => x.value);
@@ -736,7 +741,7 @@ document.addEventListener('click', e => {
   const sp = e.target.closest('[data-setup-pers]'); if (sp) { dlg.close(); apriPersoneSede(sp.dataset.setupPers); }
   const nsb = e.target.closest('[data-ns]');
   if (nsb) { api('PUT', `/api/admin/sedi/${nsb.dataset.nsSede}/non-serve`, { voce: nsb.dataset.ns, si: nsb.dataset.nsSi === '1' })
-    .then(() => { toast(nsb.dataset.nsSi === '1' ? 'Segnato: non serve per questa sede' : 'Voce di nuovo da completare'); apriSetupSede(nsb.dataset.nsSede); }).catch(x => toast(x.message)); }
+    .then(() => { toast(nsb.dataset.nsSi === '1' ? 'Segnato: non serve per questa sede' : 'Voce di nuovo da completare'); apriSetupSede(nsb.dataset.nsSede); }).catch(x => toast(x.message)); return; }
 });
 
 // persona: procedura in 4 passi (figura e sedi → app → piano di crescita → riepilogo e approvazione)
