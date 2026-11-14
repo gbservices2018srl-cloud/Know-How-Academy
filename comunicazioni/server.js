@@ -42,20 +42,26 @@ const needUser = (req, res, next) => req.user ? next() : bad(res, 401, 'Accesso 
 const needAdmin = (req, res, next) => req.user?.admin ? next() : bad(res, 403, 'Solo per gli amministratori delle comunicazioni.');
 
 /* ---------- persone e gruppi ---------- */
-// Le sedi di ogni persona vengono dai Turni (sedi in cui lavora): chi non è nei Turni non ha sede.
+// Sedi di ogni persona: prima quelle dell'anagrafica unica (Gestione accessi); per chi non le ha ancora,
+// quelle dei Turni (sedi in cui ha ore). Così una sede nuova aggiunta in Gestione accessi compare subito.
 async function sediPerPersona() {
   const m = new Map();
+  try {
+    const store = require('../accessi/server').store;
+    const nomi = new Map((await store.listSedi()).filter(s => s.attiva !== false).map(s => [s.id, s.nome]));
+    const { rows } = await store.q(`select id, sedi from users where status = 'active' and jsonb_typeof(sedi) = 'array' and jsonb_array_length(sedi) > 0`);
+    for (const u of rows) { const n = u.sedi.map(id => nomi.get(id)).filter(Boolean); if (n.length) m.set(u.id, n); }
+  } catch (e) { console.warn('Sedi dall\'anagrafica non lette:', e.message); }
   try {
     const turni = require('../turni/lib/db');
     const { rows } = await turni.q('select data from config where id = 1');
     const c = rows[0]?.data || {};
-    const sedi = (c.sedi || []);
     for (const e of c.staff || []) {
-      if (!e.ssoId) continue;
-      const nomi = sedi.filter(s => (e.ore?.[s.id] || 0) > 0).map(s => s.nome).filter(Boolean);
+      if (!e.ssoId || m.has(e.ssoId)) continue;
+      const nomi = (c.sedi || []).filter(s => (e.ore?.[s.id] || 0) > 0).map(s => s.nome).filter(Boolean);
       if (nomi.length) m.set(e.ssoId, nomi);
     }
-  } catch (e) { console.warn('Comunicazioni, sedi dai Turni non lette:', e.message); }
+  } catch (e) { console.warn('Sedi dai Turni non lette:', e.message); }
   return m;
 }
 const FIG = Object.fromEntries(FIGURE.map(f => [f.id, f]));
