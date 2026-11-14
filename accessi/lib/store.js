@@ -144,7 +144,8 @@ async function migrate() {
     create unique index if not exists sedi_sigla_idx on sedi (upper(sigla));
     -- nomi dei riuniti (tanti quanti "riuniti") e aspiratori della sede: li leggono Manutenzione attrezzature e le altre app
     alter table sedi add column if not exists riuniti_nomi jsonb not null default '[]';
-    alter table sedi add column if not exists aspiratori jsonb not null default '[]';`);
+    alter table sedi add column if not exists aspiratori jsonb not null default '[]';
+    alter table sedi add column if not exists setup_non_serve jsonb not null default '[]';`);
   // Turni: la figura scelta prima nel permesso diventa la figura della persona
   await q(`update users u set figura = ua.ente from user_apps ua
     where ua.user_id = u.id and ua.app = 'turni' and u.figura is null and ua.ente = any($1)`, [FIGURE.map(f => f.id)]);

@@ -674,21 +674,27 @@ function renderSetup(c) {
   box.hidden = !righe.length || (vista.cur || 'persone') !== 'persone';
   box.innerHTML = righe.length ? `<div class="card"><b>Da completare</b>${righe.join('')}</div>` : '';
 }
-const ICK = st => st === true ? '<span class="ic ok">✓</span>' : st === false ? '<span class="ic no">!</span>' : '<span class="ic na">?</span>';
+const ICK = st => st === true ? '<span class="ic ok">✓</span>' : st === false ? '<span class="ic no">!</span>' : st === 'non_serve' ? '<span class="ic na">–</span>' : '<span class="ic na">?</span>';
 async function apriSetupSede(id, avvisi) {
   await caricaSetup();
   const st = SETUP?.sedi.find(x => x.id === id), sede = (SEDI || S.sediTutte || []).find(x => x.id === id);
   if (!st || !sede) return toast('Sede non trovata');
   const v = st.voci;
-  const riga = (ok, titolo, testo, azione = '') => `<div class="ck">${ICK(ok)}<div class="tx"><b>${titolo}</b><small>${testo}</small></div>${azione}</div>`;
+  const NS = { email: 'Questa sede non ha un\'email', riuniti: 'Questa sede non ha riuniti né aspiratori', orari: 'Orari non necessari per questa sede', finanza: 'Non serve in Gestione finanziaria', persone: 'Per ora nessuno lavora qui' };
+  // k = voce: se manca si può segnare «Non serve»; se è segnata, si vede il motivo e si può annullare
+  const riga = (ok, titolo, testo, azione = '', k = null) => {
+    if (k && ok === 'non_serve') return `<div class="ck">${ICK(ok)}<div class="tx"><b>${titolo}</b><small>${NS[k]}.</small></div><button class="btn small" type="button" data-ns="${k}" data-ns-si="0" data-ns-sede="${id}">Annulla</button></div>`;
+    const ns = k && ok === false ? `<button class="btn small" type="button" data-ns="${k}" data-ns-si="1" data-ns-sede="${id}">Non serve</button>` : '';
+    return `<div class="ck">${ICK(ok)}<div class="tx"><b>${titolo}</b><small>${testo}</small></div><span style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">${azione}${ns}</span></div>`;
+  };
   open(`<h2>${esc(st.nome)}: cosa resta da fare</h2>
     <p class="muted" style="margin-top:-6px">Le voci con il punto esclamativo vanno completate. Le altre sono già a posto.</p>
     ${riga(!(avvisi || []).length, 'Copiata nelle app', (avvisi || []).length ? 'Attenzione: ' + avvisi.map(esc).join(' · ') : 'CRM, Calendario, Scheda personale, Gestione ASO, Nuovalab, Ticket, Comunicazioni e Documenti la vedono già.')}
-    ${riga(v.email, 'Email della sede', v.email ? esc(sede.email) : 'Manca: serve a Nuovalab per lo studio.', v.email ? '' : `<button class="btn small primary" type="button" data-setup-edit="${id}" data-vai="email">Aggiungi</button>`)}
-    ${riga(v.riuniti, 'Riuniti e aspiratori', v.riuniti ? `${(sede.riunitiNomi || []).length} riuniti, ${(sede.aspiratori || []).length} aspiratori` : 'Nessun riunito: servono a Turni e Manutenzione attrezzature.', v.riuniti ? '' : `<button class="btn small primary" type="button" data-setup-edit="${id}" data-vai="riuniti">Aggiungi</button>`)}
-    ${riga(v.orari, 'Orari di apertura', v.orari ? 'Impostati in Scheda personale.' : 'Non ancora impostati: valgono gli orari standard (9:30–18:30, lunedì–venerdì).', `<a class="btn small ${v.orari ? '' : 'primary'}" href="https://turni.appgestione.it/?sez=info&sede=${encodeURIComponent(id)}">${v.orari ? 'Vedi' : 'Imposta'}</a>`)}
-    ${riga(v.finanza, 'Gestione finanziaria', v.finanza ? 'La sede c\'è: Budget materiale e tassi di finanziamento la trovano.' : v.finanza === false ? 'Va creata anche lì con lo stesso nome (in Gestione finanziaria non si modifica niente da qui).' : 'Non verificabile in questo momento.', v.finanza ? '' : '<a class="btn small" href="https://finanza.appgestione.it" target="_blank" rel="noopener">Apri</a>')}
-    ${riga(v.persone, 'Persone che ci lavorano', st.persone ? `${st.persone} ${st.persone === 1 ? 'persona ha' : 'persone hanno'} questa sede in anagrafica.` : 'Nessuna persona ha ancora questa sede in anagrafica.', `<button class="btn small ${st.persone ? '' : 'primary'}" type="button" data-setup-pers="${id}">Aggiungi persone</button>`)}
+    ${riga(v.email, 'Email della sede', v.email ? esc(sede.email) : 'Manca: serve a Nuovalab per lo studio.', v.email ? '' : `<button class="btn small primary" type="button" data-setup-edit="${id}" data-vai="email">Aggiungi</button>`, 'email')}
+    ${riga(v.riuniti, 'Riuniti e aspiratori', v.riuniti ? `${(sede.riunitiNomi || []).length} riuniti, ${(sede.aspiratori || []).length} aspiratori` : 'Nessun riunito: servono a Turni e Manutenzione attrezzature.', v.riuniti ? '' : `<button class="btn small primary" type="button" data-setup-edit="${id}" data-vai="riuniti">Aggiungi</button>`, 'riuniti')}
+    ${riga(v.orari, 'Orari di apertura', v.orari ? 'Impostati in Scheda personale.' : 'Non ancora impostati: valgono gli orari standard (9:30–18:30, lunedì–venerdì).', `<a class="btn small ${v.orari ? '' : 'primary'}" href="https://turni.appgestione.it/?sez=info&sede=${encodeURIComponent(id)}">${v.orari ? 'Vedi' : 'Imposta'}</a>`, 'orari')}
+    ${riga(v.finanza, 'Gestione finanziaria', v.finanza ? 'La sede c\'è: Budget materiale e tassi di finanziamento la trovano.' : v.finanza === false ? 'Va creata anche lì con lo stesso nome (in Gestione finanziaria non si modifica niente da qui).' : 'Non verificabile in questo momento.', v.finanza ? '' : '<a class="btn small" href="https://finanza.appgestione.it" target="_blank" rel="noopener">Apri</a>', 'finanza')}
+    ${riga(v.persone, 'Persone che ci lavorano', st.persone ? `${st.persone} ${st.persone === 1 ? 'persona ha' : 'persone hanno'} questa sede in anagrafica.` : 'Nessuna persona ha ancora questa sede in anagrafica.', `<button class="btn small ${st.persone ? '' : 'primary'}" type="button" data-setup-pers="${id}">Aggiungi persone</button>`, 'persone')}
     <div class="msg err" role="alert"></div><div class="row"><button class="btn primary" value="cancel" formnovalidate>Chiudi</button></div>`, async () => dlg.close());
 }
 function apriPersoneSede(id) {
@@ -728,6 +734,9 @@ document.addEventListener('click', e => {
   }
   const se = e.target.closest('[data-setup-edit]'); if (se) { dlg.close(); const x = (SEDI || S.sediTutte).find(z => z.id === se.dataset.setupEdit); if (x) apriSede(x, se.dataset.vai); return; }
   const sp = e.target.closest('[data-setup-pers]'); if (sp) { dlg.close(); apriPersoneSede(sp.dataset.setupPers); }
+  const nsb = e.target.closest('[data-ns]');
+  if (nsb) { api('PUT', `/api/admin/sedi/${nsb.dataset.nsSede}/non-serve`, { voce: nsb.dataset.ns, si: nsb.dataset.nsSi === '1' })
+    .then(() => { toast(nsb.dataset.nsSi === '1' ? 'Segnato: non serve per questa sede' : 'Voce di nuovo da completare'); apriSetupSede(nsb.dataset.nsSede); }).catch(x => toast(x.message)); }
 });
 
 // persona: procedura in 4 passi (figura e sedi → app → piano di crescita → riepilogo e approvazione)

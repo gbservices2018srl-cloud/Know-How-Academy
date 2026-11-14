@@ -829,6 +829,8 @@ async function statoSedi() {
       finSedi = (await fin.chiama(`/api/_appgestione/consuntivo?azienda=${encodeURIComponent(az)}&anno=${anno}&mese=1`)).sedi || []; }
   } catch (e) { finErr = require('../lib/finanza').messaggio(e); }
   const { rows: pers } = await store.q(`select id, sedi from users where status = 'active' and not owner and jsonb_typeof(sedi) = 'array'`);
+  // voci segnate «non serve» per una sede (es. Sestu senza riuniti): contano come fatte
+  const nonServe = new Map((await store.q('select id, setup_non_serve from sedi')).rows.map(r => [r.id, Array.isArray(r.setup_non_serve) ? r.setup_non_serve : []]));
   const fin = require('../lib/finanza');
   return { finErr, sedi: sedi.map(s => {
     const persone = pers.filter(u => u.sedi.includes(s.id)).length;
@@ -836,6 +838,8 @@ async function statoSedi() {
       email: !!s.email, riuniti: (s.riunitiNomi || []).length > 0, orari: orari.has(s.id),
       finanza: finSedi ? !!fin.trova(finSedi, s.nome) : null, persone: persone > 0,
     };
+    const ns = nonServe.get(s.id) || [];
+    for (const k of ns) if (k in voci && voci[k] !== true) voci[k] = 'non_serve';
     return { id: s.id, nome: s.nome, persone, voci, mancano: Object.values(voci).filter(v => v === false).length };
   }) };
 }
@@ -844,6 +848,15 @@ app.get('/api/admin/setup', needAdmin, wrap(async (req, res) => {
   const { rows: [n] } = await store.q(`select count(*)::int as n from users where status = 'active' and not owner and coalesce(figura, '') <> 'Medico'
     and (sedi is null or jsonb_typeof(sedi) <> 'array' or jsonb_array_length(sedi) = 0)`);
   res.json({ ...st, personeSenzaSede: n.n });
+}));
+// «non serve per questa sede» (riuniti, persone, orari, email, Gestione finanziaria): la voce vale come fatta; si può annullare
+app.put('/api/admin/sedi/:id/non-serve', needAdmin, wrap(async (req, res) => {
+  const voce = String(req.body.voce || ''); if (!['email', 'riuniti', 'orari', 'finanza', 'persone'].includes(voce)) return bad(res, 400, 'Voce non valida');
+  const { rows: [s] } = await store.q('select setup_non_serve from sedi where id = $1', [req.params.id]); if (!s) return bad(res, 404, 'Sede non trovata');
+  const set = new Set(Array.isArray(s.setup_non_serve) ? s.setup_non_serve : []);
+  if (req.body.si) set.add(voce); else set.delete(voce);
+  await store.q('update sedi set setup_non_serve = $2 where id = $1', [req.params.id, JSON.stringify([...set])]);
+  res.json({ ok: true });
 }));
 // aggiunge una sede all'anagrafica di più persone insieme (le altre sedi restano)
 app.post('/api/admin/sedi/:id/persone', needAdmin, wrap(async (req, res) => {
