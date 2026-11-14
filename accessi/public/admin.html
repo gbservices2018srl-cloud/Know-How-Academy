@@ -30,6 +30,24 @@ header p{margin:0;color:var(--muted);max-width:70ch}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface);align-self:flex-start}
 .seg button{appearance:none;border:0;background:none;font:700 15px var(--f-body);padding:10px 18px;cursor:pointer;color:var(--muted)}
 .seg button[aria-selected="true"]{background:var(--fg);color:var(--bg)}
+#setupBox{margin:0 0 12px}
+#setupBox .card{padding:14px 16px;border:1px solid #E8D96A;background:#FFF9DB}
+#setupBox .srow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:7px 0;border-top:1px solid #EFE3A0}
+#setupBox .srow:first-of-type{border-top:0}
+.ck{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)}
+.ck:first-of-type{border-top:0}
+.ck .ic{flex:0 0 26px;height:26px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:14px}
+.ck .ic.ok{background:var(--ok-soft,#E3F3EA);color:var(--ok,#2E7D4F)}.ck .ic.no{background:#FFF1C2;color:#8A6D00}.ck .ic.na{background:var(--surface-2,#F1F3F1);color:var(--muted)}
+.ck .tx{flex:1;min-width:0}.ck .tx b{display:block}.ck .tx small{color:var(--muted)}
+.wz-steps{display:flex;gap:6px;margin:-4px 0 14px;flex-wrap:wrap}
+.wz-steps span{font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;background:var(--surface-2,#F1F3F1);color:var(--muted)}
+.wz-steps span.on{background:var(--teal,#2B8384);color:#fff}
+.wz-app{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+.wz-app label,label.wz-app{display:flex;gap:10px;align-items:center;justify-content:flex-start;flex:1 1 220px;font-weight:600;min-height:36px;margin:0;text-align:left}
+.wz-app input[type=checkbox]{width:20px;height:20px;min-height:0;flex:0 0 20px;margin:0;padding:0;accent-color:var(--teal,#2B8384)}
+.wz-app select{min-height:34px;border:1px solid var(--line);border-radius:9px;padding:3px 8px}
+.wz-g{margin:12px 0 2px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:800}
+.wz-list{max-height:52vh;overflow:auto;margin:0 -4px;padding:0 4px}
 .sede{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px;align-items:center;padding:14px 18px;border-top:1px solid var(--line)}
 .sede:first-child{border-top:0}
 .sede.off{opacity:.6}
@@ -187,6 +205,7 @@ dialog form{padding:22px;display:flex;flex-direction:column;gap:14px}
       <button class="chip" data-f="pending">In attesa <span class="n" id="n-pending"></span></button>
       <button class="chip" data-f="contratti" hidden>Contratti da confermare <span class="n" id="n-contratti"></span></button>
       <button class="chip" data-f="rivedere" hidden>Figura da rivedere <span class="n" id="n-rivedere"></span></button>
+      <button class="chip" data-f="senzasede" hidden>Senza sede <span class="n" id="n-senzasede"></span></button>
       <button class="chip" data-f="crescita" hidden>Ruolo da assegnare <span class="n" id="n-crescita"></span></button>
       <button class="chip" data-f="active">Attivi <span class="n" id="n-active"></span></button>
       <button class="chip" data-f="disabled">Disattivati <span class="n" id="n-disabled"></span></button>
@@ -197,6 +216,7 @@ dialog form{padding:22px;display:flex;flex-direction:column;gap:14px}
     <span class="grow"></span>
     <button class="btn primary" id="add">+ Nuovo utente</button>
   </div>
+  <section id="setupBox" hidden></section>
   <section id="passBox" hidden></section>
   <main class="list" id="list" aria-live="polite"></main>
 </div>
@@ -269,20 +289,23 @@ async function load() {
   S.livelli ||= {};
   $('#mailwarn').hidden = S.mail;
   const fUrl = new URLSearchParams(location.search).get('f');
-  if (!load.done && ['pending', 'contratti', 'rivedere', 'crescita', 'active', 'disabled', 'all'].includes(fUrl)) filter = fUrl;
+  if (!load.done && ['pending', 'contratti', 'rivedere', 'crescita', 'senzasede', 'active', 'disabled', 'all'].includes(fUrl)) filter = fUrl;
   if (filter === 'pending' && !S.users.some(u => u.status === 'pending') && !load.done) filter = S.users.some(daConfermare) ? 'contratti' : 'active';
   load.done = true;
+  caricaSetup();
   render();
 }
 const fullName = u => `${u.firstName} ${u.lastName}`.trim() || u.email;
 function counts() {
-  const c = {pending: 0, active: 0, disabled: 0, all: S.users.length, contratti: 0, rivedere: 0, crescita: 0};
-  S.users.forEach(u => { c[u.status]++; if (daConfermare(u)) c.contratti++; if (daRivedere(u)) c.rivedere++; if (daAssegnare(u)) c.crescita++; });
+  const c = {pending: 0, active: 0, disabled: 0, all: S.users.length, contratti: 0, rivedere: 0, crescita: 0, senzasede: 0};
+  S.users.forEach(u => { c[u.status]++; if (daConfermare(u)) c.contratti++; if (daRivedere(u)) c.rivedere++; if (daAssegnare(u)) c.crescita++; if (senzaSede(u)) c.senzasede++; });
   for (const k in c) $('#n-' + k).textContent = c[k];
   document.querySelector('[data-f="pending"]').classList.toggle('attn', c.pending > 0);
   const cc = document.querySelector('[data-f="contratti"]'); cc.hidden = !c.contratti && filter !== 'contratti'; cc.classList.toggle('attn', c.contratti > 0);
   const cr = document.querySelector('[data-f="rivedere"]'); cr.hidden = !c.rivedere && filter !== 'rivedere'; cr.classList.toggle('attn', c.rivedere > 0);
   const cg = document.querySelector('[data-f="crescita"]'); cg.hidden = !c.crescita && filter !== 'crescita'; cg.classList.toggle('attn', c.crescita > 0);
+  const cs = document.querySelector('[data-f="senzasede"]'); cs.hidden = !c.senzasede && filter !== 'senzasede'; cs.classList.toggle('attn', c.senzasede > 0);
+  renderSetup(c);
   renderPassaggi();
 }
 /* ---------- piano di crescita (Scheda personale): il ruolo si assegna qui, i passaggi dopo il test si approvano qui ---------- */
@@ -333,7 +356,7 @@ function render() {
   document.querySelectorAll('.chip').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === filter));
   const q = $('#q').value.trim().toLowerCase();
   // filtro per ruolo (figura professionale): i numeri accanto contano le persone dello stato scelto
-  const fr = $('#fruolo'), frv = fr.value, nelloStato = S.users.filter(u => filter === 'all' || (filter === 'contratti' ? daConfermare(u) : filter === 'rivedere' ? daRivedere(u) : filter === 'crescita' ? daAssegnare(u) : u.status === filter));
+  const fr = $('#fruolo'), frv = fr.value, nelloStato = S.users.filter(u => filter === 'all' || (filter === 'contratti' ? daConfermare(u) : filter === 'rivedere' ? daRivedere(u) : filter === 'crescita' ? daAssegnare(u) : filter === 'senzasede' ? senzaSede(u) : u.status === filter));
   fr.innerHTML = `<option value="">Tutti i ruoli (${nelloStato.length})</option>` + (S.figure || []).map(f => { const n = nelloStato.filter(u => u.figura === f.id).length;
     return `<option value="${esc(f.id)}">${esc(f.nome)} (${n})</option>`; }).join('') + `<option value="-">Ruolo da scegliere (${nelloStato.filter(u => !u.figura).length})</option>`;
   fr.value = frv;
@@ -341,7 +364,7 @@ function render() {
     (!q || `${u.firstName} ${u.lastName} ${u.email}`.toLowerCase().includes(q)));
   if (!rows.length) {
     $('#list').className = 'list';
-    $('#list').innerHTML = `<div class="card empty">${filter === 'pending' && !q ? 'Nessuna richiesta in attesa.' : filter === 'contratti' && !q ? 'Nessun contratto da confermare.' : filter === 'rivedere' && !q ? 'Nessuna figura da rivedere.' : filter === 'crescita' && !q ? 'Tutti hanno un ruolo nel piano di crescita.' : 'Nessun utente trovato.'}</div>`;
+    $('#list').innerHTML = `<div class="card empty">${filter === 'pending' && !q ? 'Nessuna richiesta in attesa.' : filter === 'contratti' && !q ? 'Nessun contratto da confermare.' : filter === 'rivedere' && !q ? 'Nessuna figura da rivedere.' : filter === 'crescita' && !q ? 'Tutti hanno un ruolo nel piano di crescita.' : filter === 'senzasede' && !q ? 'Tutti hanno una sede in anagrafica.' : 'Nessun utente trovato.'}</div>`;
     return;
   }
   // omonimi: stesso nome e cognome → la data di nascita aiuta a distinguerli
@@ -397,7 +420,7 @@ function card(u, homonym) {
       : `<button class="btn small" data-act="enable" data-u="${u.id}">Riattiva</button>`) +
     `<button class="btn small" data-act="pw" data-u="${u.id}">Password</button><button class="btn small danger" data-act="delete" data-u="${u.id}">Elimina</button>`;
   if (u.status === 'active') actions = `<button class="btn small" data-act="notif" data-u="${u.id}">Notifiche</button>` + actions;
-  actions = `<button class="btn small" data-act="edit" data-u="${u.id}">Modifica</button>` + (u.emailVerificata ? '' : `<button class="btn small" data-act="verify" data-u="${u.id}">Rimanda conferma email</button>`) + actions;
+  actions = (u.owner ? '' : `<button class="btn small primary" data-act="wizard" data-u="${u.id}">Procedura guidata</button>`) + `<button class="btn small" data-act="edit" data-u="${u.id}">Modifica</button>` + (u.emailVerificata ? '' : `<button class="btn small" data-act="verify" data-u="${u.id}">Rimanda conferma email</button>`) + actions;
   const open = aperti.has(u.id), nApp = Object.keys(u.apps).filter(k => k !== 'accessi').length;
   const row = `<button class="urow" data-toggle="${u.id}" aria-expanded="${open}" aria-controls="ub-${u.id}">
       <span class="nm">${esc(fullName(u))}${homonym ? ` <small>nato/a il ${fmtDate(u.birthDate)}</small>` : ''}</span>
@@ -508,7 +531,7 @@ document.addEventListener('change', async e => {
 /* ---------- sedi del gruppo ---------- */
 let SEDI = null;
 function vista(sez) {
-  vista.cur = sez; if (S) renderPassaggi();
+  vista.cur = sez; if (S) { renderPassaggi(); renderSetup(); }
   document.querySelectorAll('[data-sez]').forEach(b => b.setAttribute('aria-selected', b.dataset.sez === sez));
   $('#sediBox').hidden = sez !== 'sedi'; $('#appBox').hidden = sez !== 'app'; $('#accBox').hidden = sez !== 'acc'; $('#aiBox').hidden = sez !== 'ai';
   if (sez === 'ai') caricaAi();
@@ -557,7 +580,7 @@ function renderSedi() {
     <div style="min-width:0"><b>${esc(x.nome)}</b>${x.attiva ? '' : ' <span class="pill disabled">Disattivata</span>'}
       <div class="meta">${[x.societa, x.indirizzo, x.email].filter(Boolean).map(esc).map(t => `<span>${t}</span>`).join('')}</div>
       <div class="attr">${(x.riunitiNomi || []).map(n => `<span class="at r">${ICO_RIU}${esc(n)}</span>`).join('')}${(x.aspiratori || []).map(n => `<span class="at a">${ICO_ASP}${esc(n)}</span>`).join('')}${!(x.riunitiNomi || []).length && !(x.aspiratori || []).length ? '<span class="muted" style="font-size:13px">Nessun riunito o aspiratore</span>' : ''}</div></div>
-    <div class="actions"><button class="btn small" data-sede-edit="${x.id}">Modifica</button><button class="btn small" data-sede-stato="${x.id}">${x.attiva ? 'Disattiva' : 'Riattiva'}</button></div></div>`).join('');
+    <div class="actions">${(() => { const st = SETUP?.sedi.find(z => z.id === x.id); return x.attiva && st ? `<button class="btn small ${st.mancano ? 'primary' : ''}" data-setup-sede="${x.id}">${st.mancano ? `Da completare: ${st.mancano}` : '✓ Completa'}</button>` : ''; })()}<button class="btn small" data-sede-edit="${x.id}">Modifica</button><button class="btn small" data-sede-stato="${x.id}">${x.attiva ? 'Disattiva' : 'Riattiva'}</button></div></div>`).join('');
   box.innerHTML = `<div class="tools"><p class="hint" style="flex:1 1 300px">Le sedi del gruppo valgono per tutte le app: si copiano da sole in Turni (con i riuniti), Manutenzione attrezzature (riuniti e aspiratori con il loro nome), Calendario (luoghi degli eventi), Ticket (studi, con la società) e Nuovalab (studi, serve l'email della sede).</p>
       <button class="btn" data-sede-sync>Aggiorna le app</button><button class="btn primary" data-sede-new>+ Nuova sede</button></div>
     ${SEDI && !SEDI.length ? `<div class="card empty">Nessuna sede ancora. <button class="btn small primary" data-sede-import style="margin-left:8px">Importa le sedi già presenti in Nuovalab e Ticket</button></div>` : `<div class="card" style="padding:0">${righe || '<div class="empty">Caricamento…</div>'}</div>`}`;
@@ -601,6 +624,10 @@ function apriSede(x) {
       riuniti: ATTR.riu.length, riunitiNomi: ATTR.riu, aspiratoriN: ATTR.asp.length, aspiratori: ATTR.asp };
     const r = await api(x ? 'PUT' : 'POST', x ? '/api/admin/sedi/' + x.id : '/api/admin/sedi', body);
     SEDI = r.sedi; renderSedi(); dlg.close(); avvisiSedi(r, x ? 'Sede aggiornata in tutte le app' : 'Sede creata in tutte le app');
+    S.sediTutte = SEDI.filter(z => z.attiva);
+    // sede nuova: si apre subito il riepilogo di cosa resta da fare
+    if (!x) { const nuova = SEDI.find(z => z.sigla === String(body.sigla).toUpperCase()); if (nuova) apriSetupSede(nuova.id, r.avvisi || []); }
+    else caricaSetup();
   });
 }
 document.addEventListener('click', async e => {
@@ -621,6 +648,136 @@ document.addEventListener('click', async e => {
     }
   } catch (err) { t.disabled = false; toast(err.message); }
 });
+
+/* ---------- procedura guidata: riquadro «Da completare», sede nuova, persona nuova ---------- */
+let SETUP = null;
+const senzaSede = u => u.status === 'active' && !u.owner && u.figura !== 'Medico' && !(u.sedi || []).length;
+async function caricaSetup() { try { SETUP = await api('GET', '/api/admin/setup'); } catch { SETUP = null; } renderSetup(); if (!$('#sediBox').hidden) renderSedi(); }
+function renderSetup(c) {
+  const box = $('#setupBox'); if (!box) return;
+  c = c || renderSetup.c || {}; renderSetup.c = c;
+  const righe = [];
+  if (c.pending) righe.push(`<div class="srow"><span><b>${c.pending}</b> ${c.pending === 1 ? 'persona in attesa' : 'persone in attesa'} di approvazione</span><span class="grow"></span><button class="btn small primary" type="button" data-setf="pending">Apri</button></div>`);
+  const sd = (SETUP?.sedi || []).filter(x => x.mancano);
+  for (const x of sd) righe.push(`<div class="srow"><span>Sede <b>${esc(x.nome)}</b>: ${x.mancano} ${x.mancano === 1 ? 'cosa' : 'cose'} da completare</span><span class="grow"></span><button class="btn small primary" type="button" data-setup-sede="${x.id}">Completa</button></div>`);
+  if (c.senzasede) righe.push(`<div class="srow"><span><b>${c.senzasede}</b> ${c.senzasede === 1 ? 'persona' : 'persone'} senza sede in anagrafica</span><span class="grow"></span><button class="btn small" type="button" data-setf="senzasede">Vedi</button></div>`);
+  if (c.contratti) righe.push(`<div class="srow"><span><b>${c.contratti}</b> contratti da confermare</span><span class="grow"></span><button class="btn small" type="button" data-setf="contratti">Vedi</button></div>`);
+  if (c.rivedere) righe.push(`<div class="srow"><span><b>${c.rivedere}</b> figure da rivedere</span><span class="grow"></span><button class="btn small" type="button" data-setf="rivedere">Vedi</button></div>`);
+  if (c.crescita) righe.push(`<div class="srow"><span><b>${c.crescita}</b> ruoli da assegnare nel piano di crescita</span><span class="grow"></span><button class="btn small" type="button" data-setf="crescita">Vedi</button></div>`);
+  box.hidden = !righe.length || (vista.cur || 'persone') !== 'persone';
+  box.innerHTML = righe.length ? `<div class="card"><b>Da completare</b>${righe.join('')}</div>` : '';
+}
+const ICK = st => st === true ? '<span class="ic ok">✓</span>' : st === false ? '<span class="ic no">!</span>' : '<span class="ic na">?</span>';
+async function apriSetupSede(id, avvisi) {
+  await caricaSetup();
+  const st = SETUP?.sedi.find(x => x.id === id), sede = (SEDI || S.sediTutte || []).find(x => x.id === id);
+  if (!st || !sede) return toast('Sede non trovata');
+  const v = st.voci;
+  const riga = (ok, titolo, testo, azione = '') => `<div class="ck">${ICK(ok)}<div class="tx"><b>${titolo}</b><small>${testo}</small></div>${azione}</div>`;
+  open(`<h2>${esc(st.nome)}: cosa resta da fare</h2>
+    <p class="muted" style="margin-top:-6px">Le voci con il punto esclamativo vanno completate. Le altre sono già a posto.</p>
+    ${riga(!(avvisi || []).length, 'Copiata nelle app', (avvisi || []).length ? 'Attenzione: ' + avvisi.map(esc).join(' · ') : 'CRM, Calendario, Scheda personale, Gestione ASO, Nuovalab, Ticket, Comunicazioni e Documenti la vedono già.')}
+    ${riga(v.email, 'Email della sede', v.email ? esc(sede.email) : 'Manca: serve a Nuovalab per lo studio.', v.email ? '' : `<button class="btn small" type="button" data-setup-edit="${id}">Aggiungi</button>`)}
+    ${riga(v.riuniti, 'Riuniti e aspiratori', v.riuniti ? `${(sede.riunitiNomi || []).length} riuniti, ${(sede.aspiratori || []).length} aspiratori` : 'Nessun riunito: servono a Turni e Manutenzione attrezzature.', v.riuniti ? '' : `<button class="btn small" type="button" data-setup-edit="${id}">Aggiungi</button>`)}
+    ${riga(v.orari, 'Orari di apertura', v.orari ? 'Impostati in Scheda personale.' : 'Non ancora impostati: valgono gli orari standard (9:30–18:30, lunedì–venerdì).', `<a class="btn small ${v.orari ? '' : 'primary'}" href="https://turni.appgestione.it/?sez=info" target="_blank" rel="noopener">${v.orari ? 'Vedi' : 'Imposta'}</a>`)}
+    ${riga(v.finanza, 'Gestione finanziaria', v.finanza ? 'La sede c\'è: Budget materiale e tassi di finanziamento la trovano.' : v.finanza === false ? 'Va creata anche lì con lo stesso nome (in Gestione finanziaria non si modifica niente da qui).' : 'Non verificabile in questo momento.', v.finanza ? '' : '<a class="btn small" href="https://finanza.appgestione.it" target="_blank" rel="noopener">Apri</a>')}
+    ${riga(v.persone, 'Persone che ci lavorano', st.persone ? `${st.persone} ${st.persone === 1 ? 'persona ha' : 'persone hanno'} questa sede in anagrafica.` : 'Nessuna persona ha ancora questa sede in anagrafica.', `<button class="btn small ${st.persone ? '' : 'primary'}" type="button" data-setup-pers="${id}">Aggiungi persone</button>`)}
+    <div class="msg err" role="alert"></div><div class="row"><button class="btn primary" value="cancel" formnovalidate>Chiudi</button></div>`, async () => dlg.close());
+}
+function apriPersoneSede(id) {
+  const sede = (SEDI || S.sediTutte || []).find(x => x.id === id);
+  const lista = S.users.filter(u => u.status === 'active' && !u.owner && u.figura !== 'Medico').sort((a, b) => fullName(a).localeCompare(fullName(b), 'it'));
+  open(`<h2>Chi lavora a ${esc(sede.nome)}</h2>
+    <p class="muted" style="margin-top:-6px">Spunta le persone: la sede si aggiunge alla loro anagrafica (le altre sedi restano). Ai medici le sedi arrivano dagli studi di Nuovalab.</p>
+    <input class="search" id="pp-q" type="search" placeholder="Cerca per nome" style="width:100%;margin-bottom:8px">
+    <div class="wz-list" id="pp-l">${lista.map(u => { const gia = (u.sedi || []).includes(id); return `<label class="wz-app" data-nome="${esc(fullName(u).toLowerCase())}"><span style="display:flex;gap:8px;align-items:center;flex:1"><input type="checkbox" value="${u.id}" ${gia ? 'checked disabled' : ''}> <b>${esc(fullName(u))}</b> <small class="muted">${esc(figNome(u.figura) || '')}${gia ? ' · già qui' : ''}</small></span></label>`; }).join('')}</div>
+    ${footer('Aggiungi alla sede')}`, async () => {
+    const ids = [...dlgf.querySelectorAll('#pp-l input:checked:not([disabled])')].map(x => x.value);
+    if (!ids.length) return dlg.close();
+    const r = await api('POST', `/api/admin/sedi/${id}/persone`, { ids });
+    S = Object.assign(S, await api('GET', '/api/admin/users')); render(); toast(`${sede.nome} aggiunta a ${r.aggiunte} ${r.aggiunte === 1 ? 'persona' : 'persone'}`);
+    apriSetupSede(id);
+  });
+}
+document.addEventListener('input', e => { if (e.target.id === 'pp-q') { const q = e.target.value.trim().toLowerCase(); dlgf.querySelectorAll('#pp-l [data-nome]').forEach(r => r.hidden = q && !r.dataset.nome.includes(q)); } });
+document.addEventListener('click', e => {
+  const f = e.target.closest('[data-setf]'); if (f) { filter = f.dataset.setf; aperti.clear(); render(); return; }
+  const ss = e.target.closest('[data-setup-sede]'); if (ss) { if (dlg.open) dlg.close(); apriSetupSede(ss.dataset.setupSede); return; }
+  const se = e.target.closest('[data-setup-edit]'); if (se) { dlg.close(); const x = (SEDI || S.sediTutte).find(z => z.id === se.dataset.setupEdit); if (x) apriSede(x); return; }
+  const sp = e.target.closest('[data-setup-pers]'); if (sp) { dlg.close(); apriPersoneSede(sp.dataset.setupPers); }
+});
+
+// persona: procedura in 4 passi (figura e sedi → app → piano di crescita → riepilogo e approvazione)
+let W = null;
+const APP_WZ = () => (S.apps || []).filter(a => !a.virtuale && a.key !== 'accessi' && !a.adminOnly && !a.segue);
+const livBase = a => (a.livelli || []).find(l => l.role !== 'admin' && (!l.ente || l.ente === 'sedi'));
+const daScheda = a => a.livelli && !livBase(a); // es. Nuovalab, Ticket: serve scegliere lo studio nella scheda
+function apriWizard(u) { W = { id: u.id, step: 1 }; disegnaWizard(); }
+function disegnaWizard() {
+  const u = S.users.find(x => x.id === W.id); if (!u) return;
+  const passi = ['Figura e sedi', 'App', 'Piano di crescita', 'Riepilogo'];
+  const head = `<h2>${esc(fullName(u))}</h2><div class="wz-steps">${passi.map((p, i) => `<span class="${W.step === i + 1 ? 'on' : ''}">${i + 1}. ${p}</span>`).join('')}</div>`;
+  const nav = (avanti = 'Avanti') => `<div class="msg err" role="alert"></div><div class="row">${W.step > 1 ? '<button class="btn" value="prev" formnovalidate>Indietro</button>' : '<button class="btn" value="cancel" formnovalidate>Chiudi</button>'}<button class="btn primary" value="next">${avanti}</button></div>`;
+  let body = '';
+  if (W.step === 1) {
+    const sedi = W.sedi || (W.sedi = [...(u.sedi || [])]);
+    body = `<label class="field">Figura professionale<select id="wz-fig"><option value="">Da scegliere</option>${(S.figure || []).filter(f => !f.ritirata || u.figura === f.id).map(f => `<option value="${esc(f.id)}" ${u.figura === f.id ? 'selected' : ''}>${esc(f.nome)}</option>`).join('')}</select></label>
+      ${u.figura === 'Medico' ? '<p class="hint">Ai medici le sedi arrivano dagli studi di Nuovalab.</p>' : `<div class="field"><span>Sedi in cui lavora</span><div class="sedibox">${(S.sediTutte || []).map(x => `<button type="button" class="schip ${sedi.includes(x.id) ? 'on' : ''}" data-wzsede="${x.id}">${esc(x.nome)}</button>`).join('')}</div></div>`}`;
+  } else if (W.step === 2) {
+    const grp = (S.riquadri || []).map(r => ({ r, app: APP_WZ().filter(a => r.gruppo ? a.gruppo === r.key : a.key === r.key) })).filter(g => g.app.length);
+    body = `<p class="hint" style="margin-top:-4px">Spunta le app che servono. Il livello parte dal più semplice: lo puoi cambiare qui o dopo nella scheda.</p><div class="wz-list">${grp.map(g => `<div class="wz-g">${esc(g.r.name)}</div>${g.app.map(a => {
+      const gia = !!u.apps[a.key];
+      if (daScheda(a)) return `<div class="wz-app"><label><input type="checkbox" disabled ${gia ? 'checked' : ''}> ${esc(a.name)}</label><small class="muted">${gia ? 'già attiva' : 'si attiva dalla scheda della persona (serve scegliere lo studio)'}</small></div>`;
+      const opts = a.livelli ? `<select data-wzlv="${a.key}" ${gia ? 'disabled' : ''}>${a.livelli.filter(l => !l.ente || l.ente === 'sedi').map(l => `<option value="${l.key}" ${l.key === livBase(a)?.key ? 'selected' : ''}>${esc(l.label)}</option>`).join('')}</select>` : '';
+      return `<div class="wz-app"><label><input type="checkbox" data-wzapp="${a.key}" ${gia ? 'checked disabled' : ''}> ${esc(a.name)}</label>${gia ? '<small class="muted">già attiva</small>' : opts}</div>`;
+    }).join('')}`).join('')}</div>`;
+  } else if (W.step === 3) {
+    if (!S.crescita || ['Medico', 'Igienista'].includes(u.figura) || !S.crescita.piani.length) body = '<p class="hint">Per questa persona non serve un ruolo nel piano di crescita.</p>';
+    else { const a = crDi(u), sug = S.crescita.suggeriti?.[u.id], val0 = a ? a.piano + '|' + a.livello : '';
+      body = `<label class="field">Ruolo nel piano di crescita<select id="wz-cr"><option value="">— nessun ruolo —</option>${S.crescita.piani.map(p => `<optgroup label="${esc(p.nome)}">${p.livelli.map(l => `<option value="${esc(p.id)}|${l.n}" ${val0 === p.id + '|' + l.n ? 'selected' : ''}>${esc(l.ruolo)}</option>`).join('')}</optgroup>`).join('')}</select></label>
+        ${sug && !a ? `<p class="hint">Consigliato dalla figura: <b>${esc(ruoloNome(sug.piano, sug.livello))}</b></p>` : ''}`; }
+  } else {
+    const attive = APP_WZ().filter(a => u.apps[a.key]).map(a => a.name);
+    body = `<div class="ck">${ICK(!!(u.sedi || []).length || u.figura === 'Medico')}<div class="tx"><b>Sedi</b><small>${(u.sedi || []).map(id => esc((S.sediTutte || []).find(x => x.id === id)?.nome || '')).filter(Boolean).join(', ') || (u.figura === 'Medico' ? 'dagli studi di Nuovalab' : 'nessuna')}</small></div></div>
+      <div class="ck">${ICK(attive.length > 0)}<div class="tx"><b>App attive</b><small>${attive.map(esc).join(', ') || 'nessuna'}</small></div></div>
+      ${crDi(u) ? `<div class="ck">${ICK(true)}<div class="tx"><b>Piano di crescita</b><small>${esc(crDi(u).ruolo)}</small></div></div>` : ''}
+      ${u.status === 'pending' && u.contratto && !u.contratto.ok ? `<label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="wz-contr"> Conferma anche il contratto (${u.contratto.tipo === 'dip' ? 'dipendente, ' + u.contratto.ore + ' ore' : 'partita IVA'})</label>` : ''}`;
+  }
+  open(head + body + nav(W.step === 4 ? (u.status === 'pending' ? 'Approva' : 'Fine') : 'Avanti'), salvaWizard);
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-wzsede]'); if (!b || !W) return; const id = b.dataset.wzsede; W.sedi = W.sedi.includes(id) ? W.sedi.filter(x => x !== id) : [...W.sedi, id]; b.classList.toggle('on'); });
+async function salvaWizard(v) {
+  const u = S.users.find(x => x.id === W.id);
+  if (v === 'prev') { W.step--; return disegnaWizard(); }
+  if (W.step === 1) {
+    const body = {}, fig = dlgf.querySelector('#wz-fig').value;
+    if (fig !== (u.figura || '')) body.figura = fig;
+    if (u.figura !== 'Medico' && fig !== 'Medico' && JSON.stringify([...W.sedi].sort()) !== JSON.stringify([...(u.sedi || [])].sort())) body.sedi = W.sedi;
+    if (Object.keys(body).length) { const r = await api('PATCH', '/api/admin/users/' + u.id, body); Object.assign(u, r.user); if (r.livelli) S.livelli[u.id] = r.livelli; }
+  } else if (W.step === 2) {
+    const sel = [...dlgf.querySelectorAll('[data-wzapp]:checked:not([disabled])')].map(x => x.dataset.wzapp);
+    const avvisi = [];
+    for (const k of sel) {
+      const a = S.apps.find(x => x.key === k), lv = dlgf.querySelector(`[data-wzlv="${k}"]`)?.value;
+      const r = await api('PUT', `/api/admin/users/${u.id}/apps/${k}`, a.livelli ? { livello: lv } : { role: 'user' });
+      u.apps = r.apps; S.livelli[u.id] = r.livelli; if (r.sedi) u.sedi = r.sedi; avvisi.push(...(r.avvisi || []));
+    }
+    if (avvisi.length) toast(avvisi.join(' · '));
+  } else if (W.step === 3) {
+    const s0 = dlgf.querySelector('#wz-cr');
+    if (s0) { const [p, n] = s0.value.split('|'), a = crDi(u), prima = a ? a.piano + '|' + a.livello : '';
+      if (s0.value !== prima) { const r = await api('PUT', '/api/admin/users/' + u.id + '/crescita', { piano: p || '', livello: n ? +n : null }); S.crescita = r.crescita; } }
+  } else {
+    if (u.status === 'pending') {
+      if (!u.emailVerificata && !confirm(`${fullName(u)} non ha ancora confermato l'email ${u.email}. Approvare lo stesso?`)) return;
+      const corpo = { status: 'active' }; if (dlgf.querySelector('#wz-contr')?.checked) corpo.contrattoOk = true;
+      const r = await api('PATCH', '/api/admin/users/' + u.id, corpo); Object.assign(u, r.user); S.livelli[u.id] = r.livelli;
+      toast(r.avvisi?.length ? r.avvisi.join(' · ') : (r.sent ? `Approvato: ${u.firstName} riceve un'email` : 'Approvato'));
+    }
+    dlg.close(); W = null; render(); caricaSetup(); return;
+  }
+  W.step++; render(); disegnaWizard();
+}
 
 /* ---------- azioni ---------- */
 document.addEventListener('click', async e => {
@@ -671,7 +828,8 @@ document.addEventListener('click', async e => {
     } else if (act === 'verify') {
       const r = await api('POST', `/api/admin/users/${u.id}/verify-link`, {});
       if (r.link) linkResult(r.link, u.firstName, 'per confermare la sua email'); else toast(`Email di conferma rimandata a ${u.email}`);
-    } else if (act === 'edit') openEdit(u);
+    } else if (act === 'wizard') apriWizard(u);
+    else if (act === 'edit') openEdit(u);
     else if (act === 'pw') openPassword(u);
     else if (act === 'notif') openNotifiche(u);
   } catch (err) { b.disabled = false; toast(err.message); }

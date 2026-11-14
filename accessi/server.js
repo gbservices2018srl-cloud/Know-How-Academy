@@ -816,6 +816,49 @@ async function salvaSede(id, d) {
   return id;
 }
 app.get('/api/admin/sedi', needAdmin, wrap(async (req, res) => res.json({ sedi: await store.listSedi() })));
+
+/* ---------- procedura guidata: cosa manca per ogni sede, e persone senza sede ---------- */
+// orari (Scheda personale → Info utili), sede in Gestione finanziaria, email (serve a Nuovalab), riuniti, persone che ci lavorano
+async function statoSedi() {
+  const sedi = (await store.listSedi()).filter(s => s.attiva !== false);
+  let orari = new Set(), finSedi = null, finErr = null;
+  try { orari = new Set((await require('../turni/lib/db').q('select sede_id from sch_orari')).rows.map(r => r.sede_id)); } catch { /* Scheda personale non pronta */ }
+  try {
+    const fin = require('../lib/finanza'), az = await fin.aziendaToSmile();
+    if (az) { const anno = Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date()).slice(0, 4));
+      finSedi = (await fin.chiama(`/api/_appgestione/consuntivo?azienda=${encodeURIComponent(az)}&anno=${anno}&mese=1`)).sedi || []; }
+  } catch (e) { finErr = require('../lib/finanza').messaggio(e); }
+  const { rows: pers } = await store.q(`select id, sedi from users where status = 'active' and not owner and jsonb_typeof(sedi) = 'array'`);
+  const fin = require('../lib/finanza');
+  return { finErr, sedi: sedi.map(s => {
+    const persone = pers.filter(u => u.sedi.includes(s.id)).length;
+    const voci = {
+      email: !!s.email, riuniti: (s.riunitiNomi || []).length > 0, orari: orari.has(s.id),
+      finanza: finSedi ? !!fin.trova(finSedi, s.nome) : null, persone: persone > 0,
+    };
+    return { id: s.id, nome: s.nome, persone, voci, mancano: Object.values(voci).filter(v => v === false).length };
+  }) };
+}
+app.get('/api/admin/setup', needAdmin, wrap(async (req, res) => {
+  const st = await statoSedi();
+  const { rows: [n] } = await store.q(`select count(*)::int as n from users where status = 'active' and not owner and coalesce(figura, '') <> 'Medico'
+    and (sedi is null or jsonb_typeof(sedi) <> 'array' or jsonb_array_length(sedi) = 0)`);
+  res.json({ ...st, personeSenzaSede: n.n });
+}));
+// aggiunge una sede all'anagrafica di più persone insieme (le altre sedi restano)
+app.post('/api/admin/sedi/:id/persone', needAdmin, wrap(async (req, res) => {
+  const s = (await store.listSedi()).find(x => x.id === req.params.id); if (!s) return bad(res, 404, 'Sede non trovata');
+  const ids = (Array.isArray(req.body.ids) ? req.body.ids : []).map(String).slice(0, 300);
+  let n = 0;
+  for (const id of ids) {
+    const u = await store.getUser(id);
+    if (!u || u.owner || u.figura === 'Medico') continue; // ai medici le sedi arrivano dagli studi Nuovalab
+    const prima = (await store.sediAnagrafica(u.id)).map(e => e.id);
+    if (prima.includes(s.id)) continue;
+    await store.impostaSedi(u.id, [...prima, s.id]); gateAzzera(u.id); n++;
+  }
+  res.json({ ok: true, aggiunte: n });
+}));
 app.post('/api/admin/sedi', needAdmin, wrap(async (req, res) => {
   await salvaSede(null, leggiSede(req.body));
   res.json({ sedi: await store.listSedi(), avvisi: await sincronizzaSedi(req.user) });
