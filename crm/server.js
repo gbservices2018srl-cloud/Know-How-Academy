@@ -40,6 +40,8 @@ async function tutteLeSedi() {
   }
   return sediCache;
 }
+// una sede salvata in Gestione accessi entra subito nel CRM
+store.events.on('sedi', () => { sediCache = null; });
 app.use(wrap(async (req, res, next) => {
   const c = await store.check(accessi.readCookie(req));
   if (!c) return next();

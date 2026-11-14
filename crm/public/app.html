@@ -362,7 +362,8 @@ function filtrate() {
     && (!R.f.eta || FASCE_ETA.find(f => f[0] === R.f.eta)[2](r.eta)));
 }
 function drawRich(full) {
-  const val = k => [...new Set(R.righe.map(r => String(r[k] ?? '')))].filter(v => v !== '').sort((a, b) => k === 'mese' ? a - b : a.localeCompare(b, 'it'));
+  // le sedi: tutte quelle visibili, anche senza preventivi (es. una sede appena aperta)
+  const val = k => [...new Set([...R.righe.map(r => String(r[k] ?? '')), ...(k === 'sede_nome' ? sediDi('richiami').map(x => x.nome) : [])])].filter(v => v !== '').sort((a, b) => k === 'mese' ? a - b : a.localeCompare(b, 'it'));
   const lab = (k, v) => k === 'mese' ? MESI[v - 1] : k === 'esito' ? v + ' — ' + ESITI[v] : v;
   const sel = (k, t, opts) => `<select data-rf="${k}" class="${R.f[k] ? 'on' : ''}" aria-label="${esc(t)}"><option value="">${esc(t)}: tutti</option>${opts.map(([v, l]) => opt(v, l, R.f[k] === v)).join('')}</select>`;
   if (full) $('#main').innerHTML = `<div class="head"><div><h2 class="view">Richiami commerciali</h2><p>I pazienti con preventivo. Parti dalla tua sede; con il filtro Sede vedi anche le altre. Note ed esito si cambiano qui.</p></div><span class="spacer"></span>
@@ -467,7 +468,7 @@ function drawDash() {
   const periodi = [...new Set(kpi.filter(r => r.livello === 'rete').map(r => r.periodo))].sort((a, b) => perOrder(a) - perOrder(b));
   const mesi = periodi.filter(p => p[0] === 'm');
   const periodo = D.periodo && periodi.includes(D.periodo) ? D.periodo : mesi[mesi.length - 1];
-  const sedi = [...new Set(kpi.filter(r => r.livello === 'sede').map(r => r.sede))].sort();
+  const sedi = [...new Set([...kpi.filter(r => r.livello === 'sede').map(r => r.sede), ...(D.data.sedi || [])])].sort((a, b) => a.localeCompare(b, 'it'));
   const studio = D.studio && sedi.includes(D.studio) ? D.studio : '';
   const modo = D.modo;
   const ctrl = `<div class="head"><div><h2 class="view">Dashboard dati</h2><p class="take" id="take"></p></div><span class="spacer"></span>
