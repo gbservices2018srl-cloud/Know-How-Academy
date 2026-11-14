@@ -163,6 +163,10 @@ async function migrate() {
     );
     create index if not exists misure_sede_idx on misure(sede_id, creato_il desc);
     create index if not exists misure_medico_idx on misure(medico_id, stato);`);
+  // il medico può dire «Non pianificabile» (con una nota): l'ASO vede la richiesta in rosso
+  await q(`alter table misure add column if not exists non_pian_il timestamptz;
+    alter table misure drop constraint if exists misure_stato_check;
+    alter table misure add constraint misure_stato_check check (stato in ('inviata','in_carico','pianificata','non_pianificabile','annullata'));`);
   // Registro impianti per paziente: il paziente si crea una volta, poi si registrano le etichette dente per dente
   await q(`create table if not exists pazienti (
       id text primary key,

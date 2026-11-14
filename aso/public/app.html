@@ -256,7 +256,9 @@ dialog.dlg::backdrop{background:rgba(10,30,30,.45);backdrop-filter:blur(2px)}
 .mreq{position:relative;display:flex;flex-direction:column;gap:10px;padding:16px 18px 14px 22px;overflow:hidden}
 .mreq::before{content:"";position:absolute;inset:0 auto 0 0;width:6px;background:var(--mc,var(--accent))}
 .mreq.emg{--mc:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,var(--line))}
-.mreq.fine{--mc:var(--ok)} .mreq.ann{--mc:var(--line);opacity:.65}
+.mreq.fine{--mc:var(--ok)} .mreq.ann{--mc:var(--line);opacity:.65} .mreq.nopian{--mc:var(--danger);background:var(--danger-soft)}
+.nota-med.ko{background:#fff;color:var(--danger);border:1px solid var(--danger)}
+.s.ko{color:var(--danger)!important}
 .mreq .r1{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
 .mreq .n{font:800 17px/1.2 var(--f-display)} .mreq .lav{font-weight:600;margin-top:2px}
 .mreq .meta{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
@@ -490,7 +492,7 @@ function misControllo(f) { // cosa blocca l'invio (le stesse regole le controlla
 }
 function vMisure() {
   const p = S.st.misure, f = S.mis, list = S.misR || [];
-  const aperte = list.filter(r => r.stato === 'inviata' || r.stato === 'in_carico'), chiuse = list.filter(r => r.stato === 'pianificata' || r.stato === 'annullata');
+  const aperte = list.filter(r => r.stato === 'inviata' || r.stato === 'in_carico'), chiuse = list.filter(r => r.stato === 'pianificata' || r.stato === 'non_pianificabile' || r.stato === 'annullata');
   return `<div class="head"><div style="flex:1 1 260px"><h2 class="view">Misure implantari</h2><p>Chiedi al medico della sede di valutare il caso. La documentazione va caricata prima su DTX.</p></div>
     ${f || !p.sedi.length ? '' : `<button class="btn primary" data-a="mis-nuova">${ic('plus')}Nuova richiesta</button>`}</div>
   ${f ? formMis() : ''}
@@ -501,13 +503,13 @@ function vMisure() {
 }
 function cardMis(r) {
   const g = giorniA(r.dataIntervento), em = r.tipo === 'emergenza', st = r.stato;
-  const passo = { inviata: 1, in_carico: 2, pianificata: 3, annullata: 0 }[st];
-  return `<article class="card mreq ${em ? 'emg' : ''} ${st === 'pianificata' ? 'fine' : ''} ${st === 'annullata' ? 'ann' : ''}">
+  const passo = { inviata: 1, in_carico: 2, pianificata: 3, non_pianificabile: 3, annullata: 0 }[st], np = st === 'non_pianificabile';
+  return `<article class="card mreq ${em ? 'emg' : ''} ${st === 'pianificata' ? 'fine' : ''} ${np ? 'nopian' : ''} ${st === 'annullata' ? 'ann' : ''}">
     <div class="r1"><div style="flex:1 1 200px;min-width:0"><div class="n">${esc(r.cognome)} ${esc(r.nome)}</div><div class="lav">${esc(r.lavoro)}</div></div>
-      ${em ? `<span class="tag ko">${ic('urg')}EMERGENZA</span>` : ''}${st === 'annullata' ? '<span class="tag plain">Annullata</span>' : st === 'pianificata' ? `<span class="tag ok">${ic('check')}Pianificata su DTX</span>` : ''}</div>
+      ${em ? `<span class="tag ko">${ic('urg')}EMERGENZA</span>` : ''}${st === 'annullata' ? '<span class="tag plain">Annullata</span>' : st === 'pianificata' ? `<span class="tag ok">${ic('check')}Pianificata su DTX</span>` : np ? `<span class="tag ko">${ic('x')}Non pianificabile</span>` : ''}</div>
     <div class="meta"><span>${ic('cal')}Intervento ${esc(fmtD(r.dataIntervento))} · ${traG(g)}</span><span>${ic('user')}${esc(r.medico)}</span>${!em && (st === 'inviata' || st === 'in_carico') ? (() => { const sc = new Date(Date.parse(r.creatoIl) + 72 * 36e5), tardi = sc < new Date(); return `<span style="${tardi ? 'color:var(--danger);font-weight:700' : ''}">${tardi ? 'Oltre le 72 ore' : 'Risposta entro ' + esc(fmtDT(sc))}</span>`; })() : ''}${S.st.misure.sedi.length > 1 ? `<span>${esc(r.sede)}</span>` : ''}<span>inviata da ${esc(r.creatoDa)} il ${esc(fmtDT(r.creatoIl))}</span></div>
-    ${st !== 'annullata' ? `<div class="steps"><span class="s on">Inviata<small>${esc(fmtDT(r.creatoIl))}</small></span><span class="s ${passo >= 2 ? 'on' : ''}">Presa in carico<small>${r.presaIl ? esc(fmtDT(r.presaIl)) : 'in attesa'}</small></span><span class="s ${passo >= 3 ? 'on' : ''}">Pianificata su DTX<small>${r.pianificataIl ? esc(fmtDT(r.pianificataIl)) : '—'}</small></span></div>` : ''}
-    ${r.notaMedico ? `<div class="nota-med"><b>Nota del medico:</b> ${esc(r.notaMedico)}</div>` : ''}
+    ${st !== 'annullata' ? `<div class="steps"><span class="s on">Inviata<small>${esc(fmtDT(r.creatoIl))}</small></span><span class="s ${passo >= 2 ? 'on' : ''}">Presa in carico<small>${r.presaIl ? esc(fmtDT(r.presaIl)) : 'in attesa'}</small></span>${np ? `<span class="s on ko">Non pianificabile<small>${esc(fmtDT(r.nonPianIl))}</small></span>` : `<span class="s ${passo >= 3 ? 'on' : ''}">Pianificata su DTX<small>${r.pianificataIl ? esc(fmtDT(r.pianificataIl)) : '—'}</small></span>`}</div>` : ''}
+    ${r.notaMedico ? `<div class="nota-med ${np ? 'ko' : ''}"><b>${np ? 'Perché non è pianificabile' : 'Nota del medico'}:</b> ${esc(r.notaMedico)}</div>` : ''}
     ${r.note ? `<div class="muted" style="font-size:13.5px">Note: ${esc(r.note)}</div>` : ''}
     ${st === 'inviata' ? `<div><button class="btn sm danger" data-mis-annulla="${esc(r.id)}">${ic('x')}Annulla richiesta</button></div>` : ''}
   </article>`;

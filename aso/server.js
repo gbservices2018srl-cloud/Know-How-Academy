@@ -828,14 +828,14 @@ async function mediciDiSede(sedeId) {
 }
 const shapeMis = r => ({ id: r.id, sedeId: r.sede_id, sede: r.sede_nome, cognome: r.paziente_cognome, nome: r.paziente_nome, lavoro: r.lavoro,
   dataIntervento: r.data_t, tipo: r.tipo, dtx: r.dtx, medicoId: r.medico_id, medico: r.medico_nome, stato: r.stato, note: r.note,
-  creatoDa: r.creato_da_nome, creatoIl: r.creato_il, presaIl: r.presa_il, pianificataIl: r.pianificata_il, notaMedico: r.nota_medico, annullataIl: r.annullata_il });
+  creatoDa: r.creato_da_nome, creatoIl: r.creato_il, presaIl: r.presa_il, pianificataIl: r.pianificata_il, nonPianIl: r.non_pian_il, notaMedico: r.nota_medico, annullataIl: r.annullata_il });
 const COLS_MIS = `*, to_char(data_intervento, 'YYYY-MM-DD') as data_t`;
 const avvisa = (ids, app, p) => notifiche.notifica(ids, app, p).catch(e => console.warn('Misure: notifica non inviata:', e.message));
 
 app.get('/api/misure', needUser, need(MI), wrap(async (req, res) => {
   const p = permDi(req, MI), sede = str(req.query.sede, 80);
   const sedi = sede && sedeOk(req, MI, sede) ? [sede] : p.sedi.map(s => s.id);
-  const { rows } = await db.q(`select ${COLS_MIS} from misure where sede_id = any($1) order by (stato in ('pianificata','annullata')), (tipo = 'emergenza') desc, creato_il desc limit 300`, [sedi]);
+  const { rows } = await db.q(`select ${COLS_MIS} from misure where sede_id = any($1) order by (stato in ('pianificata','non_pianificabile','annullata')), (tipo = 'emergenza') desc, creato_il desc limit 300`, [sedi]);
   res.json({ richieste: rows.map(shapeMis), oggi: oggi(), minima: piuGiorni(oggi(), GIORNI_MIN), giorniMin: GIORNI_MIN });
 }));
 app.get('/api/misure/medici', needUser, need(MI), wrap(async (req, res) => {
@@ -901,6 +901,17 @@ app.post('/api/clinica/:id/pianificata', needUser, needClinica, wrap(async (req,
   if (!['inviata', 'in_carico'].includes(r.stato)) return bad(res, 400, r.stato === 'annullata' ? 'L\'ASO ha annullato questa richiesta.' : 'Già pianificata.');
   await db.q(`update misure set stato = 'pianificata', presa_il = coalesce(presa_il, now()), pianificata_il = now(), nota_medico = $2 where id = $1`, [r.id, str(req.body.nota, 1000)]);
   avvisa([r.creato_da], MI, { title: '✓ Pianificata su DTX · Misure implantari', body: `${r.medico_nome} ha visto il caso di ${r.paziente_cognome} ${r.paziente_nome}: pianificato su DTX`, url: 'https://appgestione.it/aso/?v=misure', tag: r.id });
+  res.json({ ok: true });
+}));
+
+// il medico non può pianificare il caso: nota obbligatoria, l'ASO riceve l'avviso e vede la richiesta in rosso
+app.post('/api/clinica/:id/non-pianificabile', needUser, needClinica, wrap(async (req, res) => {
+  const r = await richiestaMia(req, req.params.id);
+  if (!['inviata', 'in_carico'].includes(r.stato)) return bad(res, 400, r.stato === 'annullata' ? 'L\'ASO ha annullato questa richiesta.' : 'Richiesta già conclusa.');
+  const nota = str(req.body.nota, 1000);
+  if (nota.length < 5) return bad(res, 400, 'Scrivi nella nota perché non è pianificabile.');
+  await db.q(`update misure set stato = 'non_pianificabile', presa_il = coalesce(presa_il, now()), non_pian_il = now(), nota_medico = $2 where id = $1`, [r.id, nota]);
+  avvisa([r.creato_da], MI, { title: '✗ Non pianificabile · Misure implantari', body: `${r.medico_nome}: il caso di ${r.paziente_cognome} ${r.paziente_nome} non è pianificabile. ${nota}`.slice(0, 240), url: 'https://appgestione.it/aso/?v=misure', tag: r.id });
   res.json({ ok: true });
 }));
 

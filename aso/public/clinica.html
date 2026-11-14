@@ -109,7 +109,9 @@ h3{font:700 17px/1.2 var(--f-display);margin:0}
 .mreq{position:relative;display:flex;flex-direction:column;gap:10px;padding:16px 18px 14px 22px;overflow:hidden}
 .mreq::before{content:"";position:absolute;inset:0 auto 0 0;width:6px;background:var(--mc,var(--accent))}
 .mreq.emg{--mc:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,var(--line))}
-.mreq.fine{--mc:var(--ok)} .mreq.ann{--mc:var(--line);opacity:.65}
+.mreq.fine{--mc:var(--ok)} .mreq.ann{--mc:var(--line);opacity:.65} .mreq.nopian{--mc:var(--danger)}
+.nota-med.ko{background:var(--danger-soft);color:var(--danger)}
+.s.ko{color:var(--danger)!important}
 .mreq .r1{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
 .mreq .n{font:800 17px/1.2 var(--f-display)} .mreq .lav{font-weight:600;margin-top:2px}
 .mreq .meta{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
@@ -161,7 +163,7 @@ h3{font:700 17px/1.2 var(--f-display);margin:0}
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const IC = {
-  check: '<path d="M5 12l5 5L20 7"/>', cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  check: '<path d="M5 12l5 5L20 7"/>', x: '<path d="M6 6l12 12M18 6L6 18"/>', cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
   urg: '<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.01"/>', user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
   pin: '<path d="M12 21s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/>', hand: '<path d="M7 11V5.5a1.5 1.5 0 0 1 3 0V11M10 10V4a1.5 1.5 0 0 1 3 0v6M13 10V5a1.5 1.5 0 0 1 3 0v6M16 11V8a1.5 1.5 0 0 1 3 0v6a7 7 0 0 1-7 7h-1a6 6 0 0 1-5-3l-2.5-4a1.5 1.5 0 0 1 2.5-1.6L7 14"/>',
   bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/>', dtx: '<rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M7 9l3 3 7-6"/>',
@@ -189,7 +191,7 @@ async function load() {
 function render() {
   const d = S.d, r = d.richieste, n = d.me.nome || '';
   $('#who').innerHTML = `<span class="av">${esc(n.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase())}</span><b>${esc(n.split(' ')[0])}</b>`;
-  const gruppi = { nuove: r.filter(x => x.stato === 'inviata'), carico: r.filter(x => x.stato === 'in_carico'), fatte: r.filter(x => x.stato === 'pianificata' || x.stato === 'annullata') };
+  const gruppi = { nuove: r.filter(x => x.stato === 'inviata'), carico: r.filter(x => x.stato === 'in_carico'), fatte: r.filter(x => x.stato === 'pianificata' || x.stato === 'non_pianificabile' || x.stato === 'annullata') };
   const emg = r.filter(x => x.tipo === 'emergenza' && (x.stato === 'inviata' || x.stato === 'in_carico'));
   const lista = gruppi[S.f].filter(x => !(x.tipo === 'emergenza' && (x.stato === 'inviata' || x.stato === 'in_carico')));
   const da = gruppi.nuove.length;
@@ -200,27 +202,30 @@ function render() {
     ${d.admin ? `<label class="admin-sw"><input type="checkbox" id="tutte" ${S.tutte ? 'checked' : ''}>Vedi le richieste di tutti i medici</label>` : ''}</div>
   ${emg.length ? `<section class="emg-box" aria-label="Emergenze"><div class="emg-h"><span class="pulse"></span>Emergenze · ${emg.length}</div><div class="list">${emg.map(card).join('')}</div></section>` : ''}
   <div class="filtri" role="tablist">
-    ${[['nuove', 'Da vedere', gruppi.nuove.length - emgN], ['carico', 'In carico', gruppi.carico.filter(x => x.tipo !== 'emergenza').length], ['fatte', 'Pianificate', gruppi.fatte.length]].map(([k, l, c]) =>
+    ${[['nuove', 'Da vedere', gruppi.nuove.length - emgN], ['carico', 'In carico', gruppi.carico.filter(x => x.tipo !== 'emergenza').length], ['fatte', 'Concluse', gruppi.fatte.length]].map(([k, l, c]) =>
       `<button role="tab" aria-selected="${S.f === k}" class="${S.f === k ? 'on' : ''}" data-f="${k}">${l}<span class="n">${c}</span></button>`).join('')}
   </div>
-  ${lista.length ? `<div class="list">${lista.map(card).join('')}</div>` : `<div class="card empty"><b>${{ nuove: 'Tutto visto', carico: 'Nessun caso in carico', fatte: 'Ancora nessun caso pianificato' }[S.f]}</b>${S.f === 'nuove' ? 'Quando un\'ASO ti invia una richiesta ti arriva una notifica sul telefono.' : ''}</div>`}`;
+  ${lista.length ? `<div class="list">${lista.map(card).join('')}</div>` : `<div class="card empty"><b>${{ nuove: 'Tutto visto', carico: 'Nessun caso in carico', fatte: 'Ancora nessun caso concluso' }[S.f]}</b>${S.f === 'nuove' ? 'Quando un\'ASO ti invia una richiesta ti arriva una notifica sul telefono.' : ''}</div>`}`;
   if (S.evid) { const el = document.querySelector(`[data-id="${CSS.escape(S.evid)}"]`); if (el) { el.scrollIntoView({ block: 'center' }); } S.evid = null; }
 }
 function card(r) {
-  const g = giorni(r.dataIntervento), em = r.tipo === 'emergenza', st = r.stato, passo = { inviata: 1, in_carico: 2, pianificata: 3 }[st] || 0;
+  const g = giorni(r.dataIntervento), em = r.tipo === 'emergenza', st = r.stato, passo = { inviata: 1, in_carico: 2, pianificata: 3, non_pianificabile: 3 }[st] || 0, np = st === 'non_pianificabile';
   const evid = new URLSearchParams(location.search).get('r') === r.id;
-  return `<article class="card mreq ${em ? 'emg' : ''} ${st === 'pianificata' ? 'fine' : ''} ${st === 'annullata' ? 'ann' : ''} ${evid ? 'nuova' : ''}" data-id="${esc(r.id)}">
+  return `<article class="card mreq ${em ? 'emg' : ''} ${st === 'pianificata' ? 'fine' : ''} ${np ? 'nopian' : ''} ${st === 'annullata' ? 'ann' : ''} ${evid ? 'nuova' : ''}" data-id="${esc(r.id)}">
     <div class="r1"><div style="flex:1 1 220px;min-width:0"><div class="n">${esc(r.cognome)} ${esc(r.nome)}</div><div class="lav">${esc(r.lavoro)}</div></div>
-      ${em ? `<span class="tag ko">${ic('urg')}EMERGENZA</span>` : ''}${st === 'annullata' ? '<span class="tag plain">Annullata dall\'ASO</span>' : st === 'pianificata' ? `<span class="tag ok">${ic('check')}Pianificata su DTX</span>` : st === 'in_carico' ? '<span class="tag todo">In carico</span>' : ''}</div>
+      ${em ? `<span class="tag ko">${ic('urg')}EMERGENZA</span>` : ''}${st === 'annullata' ? '<span class="tag plain">Annullata dall\'ASO</span>' : st === 'pianificata' ? `<span class="tag ok">${ic('check')}Pianificata su DTX</span>` : np ? `<span class="tag ko">${ic('x')}Non pianificabile</span>` : st === 'in_carico' ? '<span class="tag todo">In carico</span>' : ''}</div>
     <div class="meta"><span style="${g <= 5 && passo < 3 && st !== 'annullata' ? 'color:var(--danger);font-weight:700' : ''}">${ic('cal')}Intervento ${esc(fmtD(r.dataIntervento))} · ${traG(g)}</span><span>${ic('pin')}${esc(r.sede)}</span>${!em && (st === 'inviata' || st === 'in_carico') ? (() => { const sc = new Date(Date.parse(r.creatoIl) + 72 * 36e5), tardi = sc < new Date(); return `<span style="${tardi ? 'color:var(--danger);font-weight:700' : ''}">${tardi ? 'Oltre le 72 ore' : 'Risposta entro ' + esc(fmtDT(sc))}</span>`; })() : ''}<span>${ic('user')}ASO ${esc(r.creatoDa)} · ${esc(fmtDT(r.creatoIl))}</span>${S.tutte ? `<span>→ ${esc(r.medico)}</span>` : ''}<span>${ic('dtx')}Documentazione su DTX</span></div>
     ${r.note ? `<div style="font-size:14.5px"><b>Note dell'ASO:</b> ${esc(r.note)}</div>` : ''}
-    ${st !== 'annullata' ? `<div class="steps"><span class="s on">Ricevuta<small>${esc(fmtDT(r.creatoIl))}</small></span><span class="s ${passo >= 2 ? 'on' : ''}">Presa in carico<small>${r.presaIl ? esc(fmtDT(r.presaIl)) : '—'}</small></span><span class="s ${passo >= 3 ? 'on' : ''}">Pianificata su DTX<small>${r.pianificataIl ? esc(fmtDT(r.pianificataIl)) : '—'}</small></span></div>` : ''}
-    ${r.notaMedico ? `<div class="nota-med"><b>La tua nota:</b> ${esc(r.notaMedico)}</div>` : ''}
-    ${S.pian === r.id ? `<div class="pian"><label for="nota" class="lbl" style="font-weight:700;font-size:13.5px;color:var(--muted)">Nota per l'ASO (facoltativa)</label><textarea id="nota" placeholder="Es. pianificato, guida chirurgica in arrivo">${esc(S.nota)}</textarea>
+    ${st !== 'annullata' ? `<div class="steps"><span class="s on">Ricevuta<small>${esc(fmtDT(r.creatoIl))}</small></span><span class="s ${passo >= 2 ? 'on' : ''}">Presa in carico<small>${r.presaIl ? esc(fmtDT(r.presaIl)) : '—'}</small></span>${np ? `<span class="s on ko">Non pianificabile<small>${esc(fmtDT(r.nonPianIl))}</small></span>` : `<span class="s ${passo >= 3 ? 'on' : ''}">Pianificata su DTX<small>${r.pianificataIl ? esc(fmtDT(r.pianificataIl)) : '—'}</small></span>`}</div>` : ''}
+    ${r.notaMedico ? `<div class="nota-med ${np ? 'ko' : ''}"><b>La tua nota:</b> ${esc(r.notaMedico)}</div>` : ''}
+    ${S.np === r.id ? `<div class="pian"><label for="notanp" class="lbl" style="font-weight:700;font-size:13.5px;color:var(--danger)">Perché non è pianificabile? (obbligatoria, la legge l'ASO)</label><textarea id="notanp" placeholder="Es. manca la TAC, osso insufficiente: serve rivalutare">${esc(S.notaNp)}</textarea>
+        <div class="azioni"><button class="btn danger" data-nonpian="${esc(r.id)}" ${S.busy ? 'disabled' : ''}>${ic('x')}${S.busy ? 'Invio…' : 'Confermo: non pianificabile'}</button><button class="btn" data-annulla-pian>Annulla</button></div></div>`
+      : S.pian === r.id ? `<div class="pian"><label for="nota" class="lbl" style="font-weight:700;font-size:13.5px;color:var(--muted)">Nota per l'ASO (facoltativa)</label><textarea id="nota" placeholder="Es. pianificato, guida chirurgica in arrivo">${esc(S.nota)}</textarea>
         <div class="azioni"><button class="btn primary" data-pianifica="${esc(r.id)}" ${S.busy ? 'disabled' : ''}>${ic('check')}${S.busy ? 'Invio…' : 'Confermo: visto e pianificato su DTX'}</button><button class="btn" data-annulla-pian>Annulla</button></div></div>`
       : passo === 1 || passo === 2 ? `<div class="azioni">
         ${passo === 1 ? `<button class="btn ${em ? 'emg' : 'primary'}" data-presa="${esc(r.id)}" ${S.busy ? 'disabled' : ''}>${ic('hand')}Prendo in carico</button>` : ''}
-        <button class="btn ${passo === 2 ? 'primary' : ''}" data-apri-pian="${esc(r.id)}">${ic('dtx')}Visto e pianificato su DTX</button></div>` : ''}
+        <button class="btn ${passo === 2 ? 'primary' : ''}" data-apri-pian="${esc(r.id)}">${ic('dtx')}Visto e pianificato su DTX</button>
+        <button class="btn danger" data-apri-np="${esc(r.id)}">${ic('x')}Non pianificabile</button></div>` : ''}
   </article>`;
 }
 
@@ -270,18 +275,25 @@ document.addEventListener('click', async e => {
     try { await api('POST', 'api/clinica/' + b.dataset.presa + '/presa', {}); toast('Presa in carico: l\'ASO riceve un avviso.'); } catch (x) { toast(x.message, 5000); }
     S.busy = false; return load();
   }
-  if (b.dataset.apriPian) { S.pian = b.dataset.apriPian; S.nota = ''; render(); return setTimeout(() => $('#nota')?.focus(), 30); }
-  if (b.dataset.annullaPian !== undefined) { S.pian = null; return render(); }
+  if (b.dataset.apriPian) { S.pian = b.dataset.apriPian; S.np = null; S.nota = ''; render(); return setTimeout(() => $('#nota')?.focus(), 30); }
+  if (b.dataset.apriNp) { S.np = b.dataset.apriNp; S.pian = null; S.notaNp = ''; render(); return setTimeout(() => $('#notanp')?.focus(), 30); }
+  if (b.dataset.annullaPian !== undefined) { S.pian = null; S.np = null; return render(); }
+  if (b.dataset.nonpian) {
+    if ((S.notaNp || '').trim().length < 5) { toast('Scrivi nella nota perché non è pianificabile.'); return $('#notanp')?.focus(); }
+    S.busy = true; render();
+    try { await api('POST', 'api/clinica/' + b.dataset.nonpian + '/non-pianificabile', { nota: S.notaNp }); S.np = null; toast('Fatto: l\'ASO riceve l\'avviso con la tua nota.'); } catch (x) { toast(x.message, 5000); }
+    S.busy = false; return load();
+  }
   if (b.dataset.pianifica) {
     S.busy = true; render();
     try { await api('POST', 'api/clinica/' + b.dataset.pianifica + '/pianificata', { nota: S.nota }); S.pian = null; toast('Fatto: l\'ASO sa che il caso è pianificato su DTX.'); } catch (x) { toast(x.message, 5000); }
     S.busy = false; return load();
   }
 });
-document.addEventListener('input', e => { if (e.target.id === 'nota') S.nota = e.target.value; });
+document.addEventListener('input', e => { if (e.target.id === 'nota') S.nota = e.target.value; if (e.target.id === 'notanp') S.notaNp = e.target.value; });
 document.addEventListener('change', e => { if (e.target.id === 'tutte') { S.tutte = e.target.checked; load(); } });
-setInterval(() => { if (document.visibilityState === 'visible' && !S.pian && !S.busy) load(); }, 20000);
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !S.pian && !S.busy) load(); });
+setInterval(() => { if (document.visibilityState === 'visible' && !S.pian && !S.np && !S.busy) load(); }, 20000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !S.pian && !S.np && !S.busy) load(); });
 load(); notifInit();
 </script>
 </body>
