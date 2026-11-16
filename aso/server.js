@@ -124,16 +124,34 @@ app.get('/api/budget-materiale', needUser, need('budget_materiale'), wrap(async 
   const cur = dati[ya];
   if (!cur) return res.json({ errore: `In Gestione finanziaria il consuntivo aperto non è del ${ya}.` });
   if (!cur.voceMateriale) return res.json({ errore: 'In Gestione finanziaria manca la voce «Materiale di consumo».' });
-  const fin = (anno, sede) => finanza.trova(dati[anno]?.sedi, sede.nome);
+  // sede direzionale (impostata in Gestione finanziaria): la sua spesa di materiale si divide in parti uguali
+  // sulle sedi di ripartizione scelte lì, mese per mese; la sede direzionale non ha un budget suo
+  const ripartisci = d => {
+    const D = d?.direzione, dir = D && d.sedi.find(x => x.id === D.sedeId);
+    if (!dir) return;
+    const rip = d.sedi.filter(x => D.sedi.includes(x.id));
+    if (!rip.length) return;
+    const mesi = dir.materialeMesi || [];
+    for (const x of rip) {
+      x.quotaDirMesi = mesi.map(v => (Number(v) || 0) / rip.length);
+      x.materialeMesi = (x.materialeMesi || mesi.map(() => 0)).map((v, i) => (Number(v) || 0) + (x.quotaDirMesi[i] || 0));
+    }
+    dir.direzionale = true; dir.ripartitaSu = rip.map(x => x.nome); dir.spesaDirMesi = mesi;
+  };
+  for (const d of Object.values(dati)) ripartisci(d);
+  // In anagrafica la sede direzionale è Sestu: in Gestione finanziaria ha un altro nome, si riconosce perché è quella segnata come direzionale
+  const fin = (anno, sede) => finanza.trova(dati[anno]?.sedi, sede.nome)
+    || (/sestu/i.test(sede.nome) ? (dati[anno]?.sedi || []).find(x => x.direzionale) : null);
   const somma = (a, n) => (a || []).slice(0, n).reduce((x, y) => x + (Number(y) || 0), 0);
   const out = sedi.map(s => {
     const f = fin(ya, s);
     if (!f) return { sede: s.nome, trovata: false };
+    if (f.direzionale) return { sede: s.nome, trovata: true, direzionale: true, ripartitaSu: f.ripartitaSu, spesaDir: somma(f.spesaDirMesi, ma) };
     const pct = Number(f.materialePct) || 0;
     const fatt = somma(f.fatturatoMesi, ma), spesa = somma(f.materialeMesi, ma);
     const fp = fin(mP.anno, s), f2 = fin(m2.anno, s);
     const mens = fp && f2 ? { fatturato: Number(fp.fatturatoMesi?.[mP.mese - 1]) || 0, spesa: Number(f2.materialeMesi?.[m2.mese - 1]) || 0 } : null;
-    return { sede: s.nome, trovata: true, pct,
+    return { sede: s.nome, trovata: true, pct, quotaDir: f.quotaDirMesi ? somma(f.quotaDirMesi, ma) : 0,
       annuo: { fino: ma, fatturato: fatt, budget: fatt * pct, spesa, disponibile: fatt * pct - spesa },
       mensile: mens ? { ...mens, budget: mens.fatturato * pct, disponibile: mens.fatturato * pct - mens.spesa } : null };
   });
@@ -141,7 +159,7 @@ app.get('/api/budget-materiale', needUser, need('budget_materiale'), wrap(async 
   // nei log solo nomi di sedi (niente numeri): serve a capire come si chiamano in Gestione finanziaria
   if (mancanti.length) console.warn(`Budget materiale: sedi non abbinate ${JSON.stringify(mancanti)}; in Gestione finanziaria ci sono ${JSON.stringify(cur.sedi.map(x => x.nome))}`);
   // a chi non è amministratore del Magazzino arriva solo quanto resta: niente fatturato, spesa o % della sede
-  const vis = permDi(req, 'budget_materiale').admin ? out : out.map(x => x.trovata ? { sede: x.sede, trovata: true, pct: null,
+  const vis = permDi(req, 'budget_materiale').admin ? out : out.map(x => x.direzionale ? { sede: x.sede, trovata: true, direzionale: true, ripartitaSu: x.ripartitaSu } : x.trovata ? { sede: x.sede, trovata: true, pct: null,
     annuo: { fino: x.annuo.fino, disponibile: x.annuo.disponibile }, mensile: x.mensile ? { disponibile: x.mensile.disponibile } : null } : x);
   res.set('Cache-Control', 'no-store');
   res.json({ anno: ya, mese: ma, mesePrecedente: mP, dueMesiPrima: m2, sedi: vis });
