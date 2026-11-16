@@ -25,7 +25,8 @@ const addG = (g, n) => { const d = new Date(g + 'T12:00:00Z'); d.setUTCDate(d.ge
 const euro = v => { let s = String(v ?? '').trim().replace(/[€\s]/g, ''); if (s === '') return 0; s = s.includes(',') || /^\d{1,3}(\.\d{3})+$/.test(s) ? s.replace(/\./g, '').replace(',', '.') : s; const n = Number(s); return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null; };
 const num = v => Number(v) || 0;
 const PUB = path.join(__dirname, 'public');
-const KEY = 'cassa', KEY_P = 'produzione', KEY_PAN = 'cassa_pannello';
+const KEY = 'cassa', KEY_P = 'produzione';
+const METODI = { contanti: 'Contanti', pos: 'POS', assegno: 'Assegno' };
 // quanti giorni indietro l'operatore può fare o correggere una chiusura (l'amministratore sempre)
 const GIORNI_CHIUSURA = 7;
 
@@ -55,9 +56,9 @@ app.use(wrap(async (req, res, next) => {
     const mie = (lv[k]?.enti || []).map(e => e.id);
     return { admin: false, sedi: tutte.filter(s => mie.includes(s.id)) };
   };
-  // Cassa sede: solo chi inserisce (l'amministratore guarda dal Pannello cassa, non inserisce)
+  // Gestione Cassa: l'operatore inserisce per le sue sedi; l'amministratore guarda il pannello (tutte le sedi), non inserisce
   const pc = owner ? null : await permDi(KEY);
-  const pan = owner || c.apps[KEY_PAN] === 'admin' ? { admin: true, sedi: tutte } : null;
+  const pan = owner || c.apps[KEY] === 'admin' ? { admin: true, sedi: tutte } : null;
   req.me = { id: u.id, nome: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email, perm: pc && !pc.admin ? pc : null, pan, prod: await permDi(KEY_P) };
   next();
 }));
@@ -95,7 +96,7 @@ app.get('/api/stato', needAny, (req, res) => {
 
 /* ============ USCITE DI CASSA ============ */
 const formaU = r => ({ id: r.id, sede: r.sede_id, sedeNome: r.sede_nome, data: r.data, importo: num(r.importo), nota: r.nota, chi: r.creato_nome, il: r.creato_il,
-  annullata: r.annullata, annullataMotivo: r.annullata_motivo || '', mia: false });
+  metodo: r.metodo || 'contanti', annullata: r.annullata, annullataMotivo: r.annullata_motivo || '', mia: false });
 app.get('/api/uscite', needVedere, wrap(async (req, res) => {
   const sedi = sediRichieste(req); if (!sedi) return bad(res, 403, 'Sede non tua.');
   const p = periodo(req.query.periodo);
@@ -103,7 +104,8 @@ app.get('/api/uscite', needVedere, wrap(async (req, res) => {
   const g = oggi();
   const lista = rows.map(r => ({ ...formaU(r), puoiAnnullare: !r.annullata && (!!req.me.pan || (r.creato_da === req.me.id && r.data === g)) }));
   const valide = rows.filter(r => !r.annullata);
-  res.json({ periodo: p.chiave, uscite: lista, totale: valide.reduce((s, r) => s + num(r.importo), 0),
+  const perMetodo = {}; for (const k of Object.keys(METODI)) perMetodo[k] = valide.filter(r => (r.metodo || 'contanti') === k).reduce((s, r) => s + num(r.importo), 0);
+  res.json({ periodo: p.chiave, uscite: lista, perMetodo, totale: valide.reduce((s, r) => s + num(r.importo), 0),
     totaleOggi: valide.filter(r => r.data === g).reduce((s, r) => s + num(r.importo), 0) });
 }));
 app.post('/api/uscite', needUser, wrap(async (req, res) => {
@@ -112,11 +114,12 @@ app.post('/api/uscite', needUser, wrap(async (req, res) => {
   const importo = euro(b.importo); if (!importo) return bad(res, 400, 'Scrivi l\'importo dell\'uscita (più di 0 €).');
   if (importo > 100000) return bad(res, 400, 'Importo troppo alto: controlla le cifre.');
   const nota = String(b.nota ?? '').trim().slice(0, 1000); if (nota.length < 3) return bad(res, 400, 'Scrivi a cosa si riferisce l\'uscita.');
+  const metodo = str(b.metodo, 20); if (!METODI[metodo]) return bad(res, 400, 'Scegli come hai pagato: contanti, POS o assegno.');
   const id = db.newId();
   // la data è sempre quella di oggi: si compila da sola
-  await db.q(`insert into uscite (id, sede_id, sede_nome, data, importo, nota, creato_da, creato_nome) values ($1,$2,$3,$4,$5,$6,$7,$8)`,
-    [id, sede.id, sede.nome, oggi(), importo, nota, req.me.id, req.me.nome]);
-  log('uscita', id, req.me.nome, null, { sede: sede.nome, importo, nota });
+  await db.q(`insert into uscite (id, sede_id, sede_nome, data, importo, nota, metodo, creato_da, creato_nome) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    [id, sede.id, sede.nome, oggi(), importo, nota, metodo, req.me.id, req.me.nome]);
+  log('uscita', id, req.me.nome, null, { sede: sede.nome, importo, nota, metodo });
   res.json({ ok: true, id });
 }));
 app.post('/api/uscite/:id/annulla', needVedere, wrap(async (req, res) => {
@@ -179,13 +182,14 @@ app.put('/api/chiusura', needUser, wrap(async (req, res) => {
 app.get('/api/pannello', needAdmin, wrap(async (req, res) => {
   const p = periodo(req.query.periodo), sedi = req.me.pan.sedi, ids = sedi.map(s => s.id);
   const [{ rows: us }, { rows: ch }] = await Promise.all([
-    db.q(`select sede_id, sum(importo) as t, count(*)::int as n from uscite where sede_id = any($1) and data between $2 and $3 and not annullata group by sede_id`, [ids, p.dal, p.al]),
+    db.q(`select sede_id, sum(importo) as t, count(*)::int as n, sum(importo) filter (where metodo = 'contanti') as uc, sum(importo) filter (where metodo = 'pos') as up,
+      sum(importo) filter (where metodo = 'assegno') as ua from uscite where sede_id = any($1) and data between $2 and $3 and not annullata group by sede_id`, [ids, p.dal, p.al]),
     db.q(`select sede_id, sum(contanti) as c, sum(pos) as p, sum(assegni) as a, count(*)::int as g, max(data) as ultima from chiusure where sede_id = any($1) and data between $2 and $3 group by sede_id`, [ids, p.dal, p.al]),
   ]);
   const U = new Map(us.map(r => [r.sede_id, r])), C = new Map(ch.map(r => [r.sede_id, r]));
   const righe = sedi.map(s => {
     const u = U.get(s.id) || {}, c = C.get(s.id) || {};
-    const r = { sede: s.id, nome: s.nome, uscite: num(u.t), usciteN: u.n || 0, contanti: num(c.c), pos: num(c.p), assegni: num(c.a), giorni: c.g || 0, ultima: c.ultima || null };
+    const r = { sede: s.id, nome: s.nome, uscite: num(u.t), usciteN: u.n || 0, usciteMetodo: { contanti: num(u.uc), pos: num(u.up), assegno: num(u.ua) }, contanti: num(c.c), pos: num(c.p), assegni: num(c.a), giorni: c.g || 0, ultima: c.ultima || null };
     r.incassi = r.contanti + r.pos + r.assegni;
     return r;
   });

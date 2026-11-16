@@ -29,6 +29,7 @@ async function migrate() {
       annullata_da text, annullata_il timestamptz, annullata_motivo text
     );
     create index if not exists uscite_sede_idx on uscite(sede_id, data);
+    alter table uscite add column if not exists metodo text not null default 'contanti';
     create table if not exists chiusure (
       sede_id text not null,
       data date not null,

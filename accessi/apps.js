@@ -17,18 +17,17 @@ module.exports = [
     desc: 'Dal bilancio a 4 sezioni: budget, consuntivo, scostamenti, costi fissi e variabili, break even, EBITDA e utile.' },
   // REC: Gestione Cassa UL e Produzione di UL (stessa app, su appgestione.it/cassa/)
   { key: 'rec', name: 'REC', url: 'https://appgestione.it/c/rec', color: 'teal', virtuale: true,
-    gruppo: ['cassa', 'cassa_pannello', 'produzione'],
+    gruppo: ['cassa', 'produzione'],
     desc: 'Cassa delle sedi (uscite e chiusure) e produzione mensile delle sedi, che va nel Consuntivo della Gestione finanziaria.' },
-  // Cassa sede: chi lavora in sede inserisce le uscite di cassa (data automatica) e la chiusura giornaliera (contanti, POS, assegni)
-  { key: 'cassa', name: 'Cassa sede', url: 'https://appgestione.it/cassa/?v=uscite', color: 'teal', dentro: 'rec',
+  // Gestione Cassa: l'operatore (le sue sedi) registra le uscite (importo, note, contanti/POS/assegno; data automatica)
+  // e ogni sera la chiusura (quanto c'è in cassa in contanti, POS e assegni); l'amministratore vede il pannello di ogni sede e complessivo
+  { key: 'cassa', name: 'Gestione Cassa', url: 'https://appgestione.it/cassa/', color: 'teal', dentro: 'rec',
     enti: 'sedi',
     livelli: [
+      { key: 'admin', label: 'Amministratore (pannello di tutte le sedi, solo da guardare)', role: 'admin' },
       { key: 'operatore', label: 'Operatore', ente: 'sedi', enteLabel: 'Quale sede', multi: true },
     ],
-    desc: 'Uscite di cassa con la nota e la data automatica, chiusura di cassa giornaliera (contanti, POS, assegni) con i totali per giorno e per mese.' },
-  // Pannello cassa: solo l'amministrazione, solo da guardare (uscite con importi e note, chiusure) di ogni sede e in totale
-  { key: 'cassa_pannello', name: 'Pannello cassa', url: 'https://appgestione.it/cassa/?v=pannello', color: 'teal', dentro: 'rec', adminOnly: true,
-    desc: 'Per l\'amministrazione: uscite di cassa con importi e note di ogni sede e il totale; contanti, POS e assegni per sede e in totale.' },
+    desc: 'Uscite di cassa (importo, note, contanti/POS/assegno) e chiusura di cassa ogni sera; l\'amministratore vede ogni sede e il complessivo.' },
   // Produzione di UL: ogni sede carica la produzione del mese; dopo l'approvazione dell'amministratore va nel Consuntivo
   // della Gestione finanziaria (To Smile), sezione Produzione della sede
   { key: 'produzione', name: 'Produzione di UL', url: 'https://appgestione.it/cassa/?v=produzione', color: 'purple', dentro: 'rec',
