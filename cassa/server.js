@@ -1,11 +1,12 @@
-// Gestione Cassa UL — server (stesso servizio delle altre app, all'indirizzo appgestione.it/cassa/).
-// Micro app dentro «Gestione amministrativa». Permessi dal pannello Gestione accessi:
+// REC — server (stesso servizio delle altre app, all'indirizzo appgestione.it/cassa/): Gestione Cassa UL e Produzione di UL.
+// Micro app dentro il riquadro «REC». Permessi dal pannello Gestione accessi (ognuna la sua: cassa, produzione):
 //   Amministratore = tutte le sedi + pannello di riepilogo; Operatore = le sedi scelte in Gestione accessi.
 // Uscite di cassa: importo e nota, la data si mette da sola (oggi). Chiusura di cassa: contanti, POS e assegni per giorno.
 const path = require('path');
 const express = require('express');
 const db = require('./lib/db');
 const accessi = require('../accessi/server');
+const finanza = require('../lib/finanza');
 const store = accessi.store;
 
 const app = express();
@@ -20,11 +21,11 @@ const str = (v, max = 200) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(
 const isDate = s => /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s + 'T00:00:00Z'));
 const oggi = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
 const addG = (g, n) => { const d = new Date(g + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
-// importi: "1.234,56", "1234,56" o "1234.56"
-const euro = v => { let s = String(v ?? '').trim().replace(/[€\s]/g, ''); if (s === '') return 0; s = s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s; const n = Number(s); return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null; };
+// importi: "1.234,56", "1234,56", "7.000" (migliaia) o "1234.56"
+const euro = v => { let s = String(v ?? '').trim().replace(/[€\s]/g, ''); if (s === '') return 0; s = s.includes(',') || /^\d{1,3}(\.\d{3})+$/.test(s) ? s.replace(/\./g, '').replace(',', '.') : s; const n = Number(s); return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null; };
 const num = v => Number(v) || 0;
 const PUB = path.join(__dirname, 'public');
-const KEY = 'cassa';
+const KEY = 'cassa', KEY_P = 'produzione';
 // quanti giorni indietro l'operatore può fare o correggere una chiusura (l'amministratore sempre)
 const GIORNI_CHIUSURA = 7;
 
@@ -43,19 +44,23 @@ app.use(wrap(async (req, res, next) => {
   const c = await store.check(accessi.readCookie(req));
   if (!c) return next();
   const u = c.user, owner = !!u.owner;
-  const role = owner ? 'admin' : c.apps[KEY];
   const tutte = await tutteLeSedi();
-  let perm = null;
-  if (role === 'admin') perm = { admin: true, sedi: tutte };
-  else if (role && !(await store.appSpente()).has(KEY)) {
-    const lv = await store.livelliOf(u.id);
-    const mie = (lv[KEY]?.enti || []).map(e => e.id);
-    perm = { admin: false, sedi: tutte.filter(s => mie.includes(s.id)) };
-  }
-  req.me = { id: u.id, nome: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email, perm };
+  const spente = await store.appSpente();
+  let lv = null;
+  const permDi = async k => {
+    const role = owner ? 'admin' : c.apps[k];
+    if (role === 'admin') return { admin: true, sedi: tutte };
+    if (!role || spente.has(k)) return null;
+    lv = lv || await store.livelliOf(u.id);
+    const mie = (lv[k]?.enti || []).map(e => e.id);
+    return { admin: false, sedi: tutte.filter(s => mie.includes(s.id)) };
+  };
+  req.me = { id: u.id, nome: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email, perm: await permDi(KEY), prod: await permDi(KEY_P) };
   next();
 }));
 const needUser = (req, res, next) => req.me?.perm ? next() : bad(res, req.me ? 403 : 401, req.me ? 'Non sei abilitato a Gestione Cassa UL.' : 'Accesso richiesto');
+const needProd = (req, res, next) => req.me?.prod ? next() : bad(res, req.me ? 403 : 401, req.me ? 'Non sei abilitato a Produzione di UL.' : 'Accesso richiesto');
+const needAny = (req, res, next) => req.me?.perm || req.me?.prod ? next() : bad(res, req.me ? 403 : 401, req.me ? 'Non sei abilitato a REC.' : 'Accesso richiesto');
 const needAdmin = (req, res, next) => req.me?.perm?.admin ? next() : bad(res, 403, 'Solo per l\'amministrazione.');
 const sedeOk = (req, id) => req.me.perm.sedi.find(s => s.id === id) || null;
 app.use('/api', (req, res, next) => (['GET', 'HEAD', 'DELETE'].includes(req.method) || req.is('application/json')) ? next() : bad(res, 415, 'Formato non valido'));
@@ -76,8 +81,9 @@ function sediRichieste(req) {
 }
 
 /* ---------- stato ---------- */
-app.get('/api/stato', needUser, (req, res) => {
-  res.json({ me: { id: req.me.id, nome: req.me.nome }, admin: req.me.perm.admin, sedi: req.me.perm.sedi, oggi: oggi(), giorniChiusura: GIORNI_CHIUSURA, home: accessi.publicUrl() });
+app.get('/api/stato', needAny, (req, res) => {
+  res.json({ me: { id: req.me.id, nome: req.me.nome }, cassa: !!req.me.perm, admin: !!req.me.perm?.admin, sedi: req.me.perm?.sedi || [],
+    prod: req.me.prod ? { admin: req.me.prod.admin, sedi: req.me.prod.sedi } : null, oggi: oggi(), giorniChiusura: GIORNI_CHIUSURA, home: accessi.publicUrl() });
 });
 
 /* ============ USCITE DI CASSA ============ */
@@ -184,17 +190,114 @@ app.get('/api/pannello', needUser, needAdmin, wrap(async (req, res) => {
     ieri, senzaChiusuraIeri: sedi.filter(s => !fatteIeri.some(f => f.sede_id === s.id)).map(s => s.nome) });
 }));
 
+/* ============ PRODUZIONE DI UL ============ */
+// ogni sede carica la produzione del mese (un totale in €); va nel Consuntivo della Gestione finanziaria
+// solo quando l'amministratore la approva (se la carica l'amministratore, va subito)
+const formaP = r => ({ sede: r.sede_id, sedeNome: r.sede_nome, anno: r.anno, mese: r.mese, valore: num(r.valore), stato: r.stato,
+  inviatoDa: r.inviato_nome, inviatoIl: r.inviato_il, decisoDa: r.deciso_nome || '', decisoIl: r.deciso_il, nota: r.nota_admin || '',
+  inviata: r.sincronizzato_il, errore: r.errore || '' });
+async function adminProduzione() {
+  const { rows } = await store.q(`select u.id from users u where u.status = 'active' and (u.owner or exists (select 1 from user_apps a where a.user_id = u.id and a.app = $1 and a.role = 'admin' and not a.sospesa))`, [KEY_P]);
+  return rows.map(r => r.id);
+}
+const avvisa = (ids, payload) => require('../accessi/lib/notifiche').notifica(ids, KEY_P, payload).catch(e => console.warn('REC notifica:', e.message));
+const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+const euroTxt = n => (Math.round(n * 100) / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+// manda il valore nel Consuntivo (Produzione della sede, quel mese)
+async function sincronizza(r) {
+  const az = await finanza.aziendaToSmile();
+  if (!az) throw new Error('Non trovo l\'azienda To Smile in Gestione finanziaria.');
+  const cons = await finanza.chiama(`/api/_appgestione/consuntivo?azienda=${encodeURIComponent(az)}&anno=${r.anno}&mese=${r.mese}`);
+  if (cons.annoNelGestionale !== r.anno) throw new Error(`In Gestione finanziaria il consuntivo aperto è del ${cons.annoNelGestionale}, non del ${r.anno}.`);
+  const f = finanza.trova(cons.sedi, r.sede_nome) || (/sestu/i.test(r.sede_nome) ? (cons.sedi || []).find(x => x.id === cons.direzione?.sedeId) : null);
+  if (!f) throw new Error(`La sede ${r.sede_nome} non c'è in Gestione finanziaria (controlla che abbia lo stesso nome).`);
+  return finanza.scrivi('/api/_appgestione/produzione', { azienda: az, sedeId: f.id, anno: r.anno, mese: r.mese, valore: num(r.valore) });
+}
+async function approva(r, chi) {
+  try {
+    const x = await sincronizza(r);
+    await db.q(`update produzione set stato = 'approvata', deciso_da = $4, deciso_nome = $5, deciso_il = now(), sincronizzato_il = now(), errore = '', valore_prima = $6
+      where sede_id = $1 and anno = $2 and mese = $3`, [r.sede_id, r.anno, r.mese, chi.id, chi.nome, x.prima ?? null]);
+    log('produzione approvata', `${r.sede_id}|${r.anno}-${r.mese}`, chi.nome, { valore: x.prima }, { valore: num(r.valore) });
+    return { ok: true, prima: x.prima };
+  } catch (e) {
+    const msg = finanza.messaggio(e);
+    await db.q(`update produzione set errore = $4 where sede_id = $1 and anno = $2 and mese = $3`, [r.sede_id, r.anno, r.mese, msg]);
+    return { ok: false, errore: msg };
+  }
+}
+app.get('/api/produzione', needProd, wrap(async (req, res) => {
+  const anno = parseInt(req.query.anno, 10) || Number(oggi().slice(0, 4));
+  const sedi = req.me.prod.sedi, ids = sedi.map(s => s.id);
+  const { rows } = await db.q('select * from produzione where sede_id = any($1) and anno = $2 order by sede_nome, mese', [ids, anno]);
+  let attesa = [];
+  if (req.me.prod.admin) attesa = (await db.q(`select * from produzione where stato = 'attesa' order by inviato_il`)).rows.map(formaP);
+  // all'amministratore: quanto c'è ora nel Consuntivo (per confrontare prima di approvare)
+  let nelConsuntivo = null;
+  if (req.me.prod.admin) {
+    try {
+      const az = await finanza.aziendaToSmile();
+      const cons = az && await finanza.chiama(`/api/_appgestione/consuntivo?azienda=${encodeURIComponent(az)}&anno=${anno}&mese=1`);
+      if (cons && cons.annoNelGestionale === anno) {
+        nelConsuntivo = {};
+        for (const s of sedi) { const f = finanza.trova(cons.sedi, s.nome) || (/sestu/i.test(s.nome) ? (cons.sedi || []).find(x => x.id === cons.direzione?.sedeId) : null); if (f) nelConsuntivo[s.id] = f.produzioneMesi || null; }
+      }
+    } catch { /* la Gestione finanziaria non risponde: si vede solo REC */ }
+  }
+  res.json({ anno, sedi, righe: rows.map(formaP), attesa, nelConsuntivo, oggi: oggi() });
+}));
+app.post('/api/produzione', needProd, wrap(async (req, res) => {
+  const b = req.body || {};
+  const sede = req.me.prod.sedi.find(s => s.id === str(b.sede, 60)); if (!sede) return bad(res, 400, 'Scegli la sede.');
+  const anno = parseInt(b.anno, 10), mese = parseInt(b.mese, 10);
+  const [ya, ma] = oggi().split('-').map(Number);
+  if (!(mese >= 1 && mese <= 12) || !(anno === ya || anno === ya - 1)) return bad(res, 400, 'Scegli il mese.');
+  if (anno === ya && mese > ma) return bad(res, 400, 'Non si carica la produzione di un mese che deve ancora venire.');
+  const valore = euro(b.valore); if (valore == null || String(b.valore ?? '').trim() === '') return bad(res, 400, 'Scrivi la produzione del mese in € (anche 0).');
+  if (valore > 10000000) return bad(res, 400, 'Importo troppo alto: controlla le cifre.');
+  const { rows: [prima] } = await db.q('select * from produzione where sede_id = $1 and anno = $2 and mese = $3', [sede.id, anno, mese]);
+  if (prima && prima.stato === 'approvata' && num(prima.valore) === valore) return res.json({ ok: true, stato: 'approvata', uguale: true });
+  await db.q(`insert into produzione (sede_id, anno, mese, sede_nome, valore, stato, inviato_da, inviato_nome, inviato_il, errore)
+      values ($1,$2,$3,$4,$5,'attesa',$6,$7,now(),'')
+    on conflict (sede_id, anno, mese) do update set valore = excluded.valore, sede_nome = excluded.sede_nome, stato = 'attesa',
+      inviato_da = excluded.inviato_da, inviato_nome = excluded.inviato_nome, inviato_il = now(), deciso_da = null, deciso_nome = null, deciso_il = null, nota_admin = null, errore = ''`,
+    [sede.id, anno, mese, sede.nome, valore, req.me.id, req.me.nome]);
+  log('produzione caricata', `${sede.id}|${anno}-${mese}`, req.me.nome, prima ? { valore: num(prima.valore), stato: prima.stato } : null, { valore });
+  const { rows: [r] } = await db.q('select * from produzione where sede_id = $1 and anno = $2 and mese = $3', [sede.id, anno, mese]);
+  if (req.me.prod.admin) { const x = await approva(r, req.me); return res.json({ ok: true, stato: x.ok ? 'approvata' : 'attesa', errore: x.errore || null }); }
+  avvisa(await adminProduzione(), { title: 'Produzione da approvare', body: `${sede.nome}: produzione di ${MESI[mese - 1]} ${anno} ${euroTxt(valore)} (da ${req.me.nome}).`, url: 'https://appgestione.it/cassa/?v=produzione' });
+  res.json({ ok: true, stato: 'attesa' });
+}));
+app.post('/api/produzione/decidi', needProd, wrap(async (req, res) => {
+  if (!req.me.prod.admin) return bad(res, 403, 'Solo l\'amministratore approva la produzione.');
+  const b = req.body || {};
+  const { rows: [r] } = await db.q(`select * from produzione where sede_id = $1 and anno = $2 and mese = $3 and stato = 'attesa'`, [str(b.sede, 60), parseInt(b.anno, 10), parseInt(b.mese, 10)]);
+  if (!r) return bad(res, 400, 'Questa produzione non è più da approvare.');
+  if (b.ok) {
+    const x = await approva(r, req.me);
+    if (!x.ok) return bad(res, 502, 'Non sono riuscito a mandarla in Gestione finanziaria: ' + x.errore);
+    if (r.inviato_da !== req.me.id) avvisa([r.inviato_da], { title: 'Produzione approvata', body: `${r.sede_nome}: produzione di ${MESI[r.mese - 1]} ${r.anno} ${euroTxt(num(r.valore))} approvata.`, url: 'https://appgestione.it/cassa/?v=produzione' });
+    return res.json({ ok: true, prima: x.prima });
+  }
+  const nota = str(b.nota, 300);
+  await db.q(`update produzione set stato = 'rifiutata', deciso_da = $4, deciso_nome = $5, deciso_il = now(), nota_admin = $6 where sede_id = $1 and anno = $2 and mese = $3`,
+    [r.sede_id, r.anno, r.mese, req.me.id, req.me.nome, nota]);
+  log('produzione rifiutata', `${r.sede_id}|${r.anno}-${r.mese}`, req.me.nome, null, { nota });
+  avvisa([r.inviato_da], { title: 'Produzione da ricontrollare', body: `${r.sede_nome}, ${MESI[r.mese - 1]} ${r.anno}: non approvata${nota ? ' (' + nota + ')' : ''}. Correggi e rimandala.`, url: 'https://appgestione.it/cassa/?v=produzione' });
+  res.json({ ok: true });
+}));
+
 /* ---------- pagine ---------- */
 app.get('/', (req, res) => {
   res.set('Cache-Control', 'no-store');
   if (!req.me) return res.redirect(accessi.loginUrl(`${req.protocol}://${req.get('host')}${req.originalUrl}`));
-  if (!req.me.perm) return res.redirect(`${accessi.publicUrl()}/?noaccess=cassa`);
+  if (!req.me.perm && !req.me.prod) return res.redirect(`${accessi.publicUrl()}/?noaccess=rec`);
   res.sendFile(path.join(PUB, 'app.html'));
 });
 app.use(express.static(PUB, { index: false, maxAge: '1h' }));
 app.use((err, req, res, next) => {
   if (err.status && err.status < 500) return bad(res, err.status, err.message);
-  console.error('Gestione Cassa UL:', err.message);
+  console.error('REC:', err.message);
   bad(res, err.status || 500, 'Errore del server. Riprova.');
 });
 

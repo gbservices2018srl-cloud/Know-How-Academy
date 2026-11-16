@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#4CAAAA">
 <base href="/cassa/">
-<title>Gestione Cassa UL · To Smile</title>
+<title>REC · To Smile</title>
 <link rel="icon" href="logo.png">
 <link rel="stylesheet" href="/fonts/tosmile.css?f=fira-sans:400,500,600,700,800">
 <style>
@@ -180,7 +180,7 @@ main{max-width:1100px}
 </head>
 <body>
 <header class="top">
-  <a class="brand" href="./" aria-label="Gestione Cassa UL, inizio"><img class="logo" src="logo.png" alt="To Smile" width="543" height="162"><span class="sep"></span><h1>Gestione Cassa UL</h1></a>
+  <a class="brand" href="./" aria-label="REC, inizio"><img class="logo" src="logo.png" alt="To Smile" width="543" height="162"><span class="sep"></span><h1>REC</h1></a>
   <nav class="tabs" id="tabs" aria-label="Sezioni"></nav>
   <a class="who" id="who" href="/" title="Torna alle app"></a>
 </header>
@@ -207,8 +207,8 @@ const fD = s => s ? `${GG[new Date(s + 'T12:00:00Z').getUTCDay()]} ${s.slice(8, 
 const fOra = s => s ? new Date(s).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' }) : '';
 const nomeP = p => /^\d{4}$/.test(p) ? 'Tutto il ' + p : MESI[+p.slice(5, 7) - 1] + ' ' + p.slice(0, 4);
 const opt = (v, t, sel) => `<option value="${esc(v)}" ${sel ? 'selected' : ''}>${esc(t)}</option>`;
-const parseE = v => { let s = String(v ?? '').trim().replace(/[€\s]/g, ''); if (!s) return 0; if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.'); const n = Number(s); return isFinite(n) && n >= 0 ? n : NaN; };
-const SEZ = [['uscite', 'Uscite di cassa'], ['chiusura', 'Chiusura di cassa'], ['pannello', 'Pannello']];
+const parseE = v => { let s = String(v ?? '').trim().replace(/[€\s]/g, ''); if (!s) return 0; if (s.includes(',') || /^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '').replace(',', '.'); const n = Number(s); return isFinite(n) && n >= 0 ? n : NaN; };
+const SEZ = [['uscite', 'Uscite di cassa'], ['chiusura', 'Chiusura di cassa'], ['pannello', 'Pannello cassa'], ['produzione', 'Produzione di UL']];
 const S = { st: null, v: null, sede: '', periodo: '' };
 
 async function boot() {
@@ -219,15 +219,15 @@ async function boot() {
   S.sede = S.st.sedi[0]?.id || '';
   S.periodo = S.st.oggi.slice(0, 7);
   const want = new URLSearchParams(location.search).get('v');
-  go(visibili().some(([k]) => k === want) ? want : S.st.admin ? 'pannello' : 'uscite', true);
+  go(visibili().some(([k]) => k === want) ? want : !S.st.cassa ? 'produzione' : S.st.admin ? 'pannello' : 'uscite', true);
 }
-const visibili = () => SEZ.filter(([k]) => k !== 'pannello' || S.st.admin);
+const visibili = () => SEZ.filter(([k]) => k === 'produzione' ? !!S.st.prod : k === 'pannello' ? S.st.admin : S.st.cassa);
 function go(v, replace) {
   S.v = v;
   const u = new URL(location.href); u.searchParams.set('v', v);
   history[replace ? 'replaceState' : 'pushState']({ v }, '', u);
   $('#tabs').innerHTML = visibili().map(([k, t]) => `<button class="tab ${k === v ? 'on' : ''}" data-go="${k}">${esc(t)}</button>`).join('');
-  ({ uscite: vUscite, chiusura: vChiusura, pannello: vPannello })[v]();
+  ({ uscite: vUscite, chiusura: vChiusura, pannello: vPannello, produzione: vProduzione })[v]();
 }
 window.addEventListener('popstate', e => { if (e.state?.v) go(e.state.v, true); });
 document.addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) go(b.dataset.go); });
@@ -386,6 +386,75 @@ async function vPannello() {
   $('#bMese').onchange = e => { if (e.target.value) { S.periodo = e.target.value; vPannello(); } };
   $('#bAnno').onclick = () => { S.periodo = /^\d{4}$/.test(S.periodo) ? S.st.oggi.slice(0, 7) : (S.periodo || S.st.oggi).slice(0, 4); vPannello(); };
   $('#main').querySelectorAll('[data-vai]').forEach(td => td.onclick = () => { S.sede = td.dataset.sede; if (/^\d{4}$/.test(S.periodo)) S.periodo = S.st.oggi.slice(0, 7); go(td.dataset.vai); });
+}
+/* ================= PRODUZIONE DI UL ================= */
+const P = { anno: null, sede: '' };
+const MESI_C = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
+const STATO_P = { attesa: ['In attesa di approvazione', 'todo'], approvata: ['Approvata · nel Consuntivo', 'ok'], rifiutata: ['Da ricontrollare', 'ko'] };
+async function vProduzione() {
+  const pr = S.st.prod;
+  if (!pr.sedi.length) return nessunaSede();
+  const [ya, ma] = S.st.oggi.split('-').map(Number);
+  if (!P.anno) P.anno = ya;
+  if (!P.sede || !pr.sedi.some(s => s.id === P.sede)) P.sede = pr.sedi[0].id;
+  let d; try { d = await api('GET', `api/produzione?anno=${P.anno}`); } catch (x) { return toast(x.message); }
+  const mesePrec = ma === 1 ? `${ya - 1}-12` : `${ya}-${String(ma - 1).padStart(2, '0')}`;
+  const cella = (sede, m) => d.righe.find(r => r.sede === sede && r.mese === m);
+  const nc = (sede, m) => d.nelConsuntivo?.[sede]?.[m - 1];
+  const att = d.attesa || [];
+  $('#main').innerHTML = `
+  <div class="head"><div><h2 class="view">Produzione di UL</h2><p>La produzione del mese di ogni sede. ${pr.admin ? 'Quando la approvi va nel Consuntivo della Gestione finanziaria (Produzione della sede).' : 'L\'amministrazione la controlla e poi va nel Consuntivo della Gestione finanziaria.'}</p></div></div>
+  ${pr.admin && att.length ? `<div class="card pad" style="margin-bottom:16px;border-color:var(--warn)"><h3 style="margin-bottom:6px">Da approvare · ${att.length}</h3>
+    ${att.map(r => { const ora = nc(r.sede, r.mese); return `<div class="riga"><div class="gr"><div class="t">${esc(r.sedeNome)} · ${MESI[r.mese - 1]} ${r.anno}</div>
+      <div class="s">Caricata da ${esc(r.inviatoDa)} il ${esc(fD(String(r.inviatoIl).slice(0, 10)))}${ora != null ? ` · ora nel Consuntivo: <b>${fE(ora)}</b>` : ''}${r.errore ? ` · <span style="color:var(--danger)">${esc(r.errore)}</span>` : ''}</div></div>
+      <div class="imp">${fE(r.valore)}</div><button class="btn sm danger" data-pno="${esc(r.sede)}|${r.anno}|${r.mese}">Rifiuta</button><button class="btn sm primary" data-pok="${esc(r.sede)}|${r.anno}|${r.mese}">Approva</button></div>`; }).join('')}</div>` : ''}
+  <form class="card pad form" id="fp" style="margin:0 0 16px" novalidate>
+    <h3 style="margin-bottom:10px">Carica la produzione del mese</h3>
+    <div class="grid2">
+      <div class="field"><label for="p-sede">Sede</label>${pr.sedi.length > 1 ? `<select id="p-sede">${pr.sedi.map(s => opt(s.id, s.nome, s.id === P.sede)).join('')}</select>` : `<input id="p-sede-n" value="${esc(pr.sedi[0].nome)}" disabled>`}</div>
+      <div class="field"><label for="p-mese">Mese</label><input type="month" id="p-mese" value="${mesePrec}" min="${ya - 1}-01" max="${S.st.oggi.slice(0, 7)}"></div>
+    </div>
+    <div class="field"><label for="p-val">Produzione del mese (€) <span class="req">*</span></label><input id="p-val" class="big-in" inputmode="decimal" placeholder="0,00" autocomplete="off"></div>
+    <p class="muted" id="p-info" style="margin:-4px 0 12px;font-size:13.5px"></p>
+    <button class="btn primary wide" type="submit">${pr.admin ? 'Salva e manda nel Consuntivo' : 'Invia all\'amministrazione'}</button>
+  </form>
+  <div class="card pad">
+    <div class="sez-t"><h3>Anno ${d.anno}</h3><div class="seg">${[ya - 1, ya].map(a => `<button type="button" class="${a === d.anno ? 'on' : ''}" data-panno="${a}">${a}</button>`).join('')}</div></div>
+    <div class="tw"><table class="t"><thead><tr><th>Sede</th>${MESI_C.map(m => `<th class="n">${m}</th>`).join('')}<th class="n">Totale approvato</th></tr></thead>
+    <tbody>${d.sedi.map(s => { let tot = 0; return `<tr><td><b>${esc(s.nome)}</b></td>${MESI_C.map((_, i) => { const c = cella(s.id, i + 1); if (!c) return '<td class="n muted">—</td>';
+      if (c.stato === 'approvata') tot += c.valore; const st = STATO_P[c.stato];
+      return `<td class="n" title="${esc(st[0] + (c.nota ? ': ' + c.nota : ''))}"><span class="tag ${st[1]}" style="padding:2px 7px">${fE(c.valore).replace(',00 €', ' €')}</span></td>`; }).join('')}<td class="n"><b>${fE(tot)}</b></td></tr>`; }).join('')}</tbody></table></div>
+    <div class="tot" style="margin-top:10px"><span><span class="tag ok">verde</span> nel Consuntivo</span><span><span class="tag todo">arancio</span> in attesa di approvazione</span><span><span class="tag ko">rosso</span> da ricontrollare</span></div>
+    ${d.righe.filter(r => r.stato === 'rifiutata').map(r => `<div class="avviso rosso">${esc(r.sedeNome)}, ${MESI[r.mese - 1]} ${r.anno}: da ricontrollare${r.nota ? ' — ' + esc(r.nota) : ''}. Correggi e rimandala.</div>`).join('')}
+  </div>`;
+  const info = () => {
+    const [a, m] = ($('#p-mese').value || mesePrec).split('-').map(Number), sede = $('#p-sede')?.value || pr.sedi[0].id;
+    const c = a === d.anno ? cella(sede, m) : null;
+    $('#p-info').innerHTML = c ? `Già caricata: <b>${fE(c.valore)}</b> · ${STATO_P[c.stato][0]}${c.nota ? ' — ' + esc(c.nota) : ''}. Se la mandi di nuovo, ${pr.admin ? 'il Consuntivo si aggiorna' : 'torna in attesa di approvazione'}.` : '';
+  };
+  info();
+  $('#p-mese').onchange = info; if ($('#p-sede')) $('#p-sede').onchange = e => { P.sede = e.target.value; info(); };
+  $('#main').querySelectorAll('[data-panno]').forEach(b => b.onclick = () => { P.anno = +b.dataset.panno; vProduzione(); });
+  $('#fp').onsubmit = async e => {
+    e.preventDefault();
+    const v = parseE($('#p-val').value); if (isNaN(v) || $('#p-val').value.trim() === '') return toast('Scrivi la produzione del mese in €.');
+    const [a, m] = ($('#p-mese').value || '').split('-').map(Number); if (!a || !m) return toast('Scegli il mese.');
+    const b = e.target.querySelector('button[type=submit]'); b.disabled = true;
+    try {
+      const r = await api('POST', 'api/produzione', { sede: $('#p-sede')?.value || pr.sedi[0].id, anno: a, mese: m, valore: $('#p-val').value });
+      toast(r.uguale ? 'Era già nel Consuntivo con questo valore.' : r.errore ? 'Salvata, ma non è andata nel Consuntivo: ' + r.errore : r.stato === 'approvata' ? 'Salvata e mandata nel Consuntivo.' : 'Inviata: l\'amministrazione la controlla.', 6000);
+      P.anno = a; vProduzione();
+    } catch (x) { b.disabled = false; toast(x.message); }
+  };
+  $('#main').querySelectorAll('[data-pok]').forEach(b => b.onclick = async () => {
+    const [sede, anno, mese] = b.dataset.pok.split('|'); b.disabled = true;
+    try { const r = await api('POST', 'api/produzione/decidi', { sede, anno: +anno, mese: +mese, ok: true }); toast('Approvata e mandata nel Consuntivo.'); vProduzione(); }
+    catch (x) { b.disabled = false; toast(x.message, 7000); }
+  });
+  $('#main').querySelectorAll('[data-pno]').forEach(b => b.onclick = () => conferma('Rifiutare questa produzione?', 'Chi l\'ha caricata riceve un avviso e deve correggerla. Nel Consuntivo non cambia nulla.', true, async nota => {
+    const [sede, anno, mese] = b.dataset.pno.split('|');
+    await api('POST', 'api/produzione/decidi', { sede, anno: +anno, mese: +mese, ok: false, nota }); toast('Rifiutata.'); vProduzione();
+  }));
 }
 boot();
 </script>

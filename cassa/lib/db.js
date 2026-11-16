@@ -41,6 +41,18 @@ async function migrate() {
       aggiornato_da text not null default '', aggiornato_nome text not null default '', aggiornato_il timestamptz not null default now(),
       primary key (sede_id, data)
     );
+    create table if not exists produzione (
+      sede_id text not null,
+      anno smallint not null,
+      mese smallint not null check (mese between 1 and 12),
+      sede_nome text not null default '',
+      valore numeric(14,2) not null default 0,
+      stato text not null default 'attesa' check (stato in ('attesa','approvata','rifiutata')),
+      inviato_da text, inviato_nome text not null default '', inviato_il timestamptz not null default now(),
+      deciso_da text, deciso_nome text, deciso_il timestamptz, nota_admin text,
+      sincronizzato_il timestamptz, valore_prima numeric(14,2), errore text not null default '',
+      primary key (sede_id, anno, mese)
+    );
     create table if not exists storico (
       id bigserial primary key,
       cosa text not null, rif text not null, chi text not null default '',
