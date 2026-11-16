@@ -57,6 +57,16 @@ module.exports = function sp(app, ctx) {
       alter table sp_timbrature add column if not exists lat numeric(7,3);
       alter table sp_timbrature add column if not exists lon numeric(7,3);
       alter table sp_timbrature add column if not exists prec int;
+      -- lutto (certificato di morte) e malattia (protocollo): approvate subito, ma restano da completare fino alla scadenza
+      alter table sp_richieste add column if not exists doc_stato text not null default '';
+      alter table sp_richieste add column if not exists scadenza date;
+      alter table sp_richieste add column if not exists doc_nome text;
+      alter table sp_richieste add column if not exists doc_tipo text;
+      alter table sp_richieste add column if not exists doc_dati bytea;
+      alter table sp_richieste add column if not exists doc_iv bytea;
+      alter table sp_richieste add column if not exists doc_tag bytea;
+      alter table sp_richieste add column if not exists doc_il timestamptz;
+      alter table sp_mancate add column if not exists motivo text not null default '';
       create table if not exists sp_turni (id text primary key, user_id text not null, giorno date not null, sede_id text, da text not null, a text not null,
         pausa int not null default 0, nota text not null default '', aggiornato timestamptz not null default now());
       create index if not exists sp_turni_g on sp_turni (giorno, user_id);
@@ -192,10 +202,12 @@ module.exports = function sp(app, ctx) {
     let n = 0; for (let g = dal; g <= al; g = addG(g, 1)) if (dow(g) >= 1 && dow(g) <= 5) n++;
     return n;
   }
-  const TIPI = { ferie: 'Ferie', permesso: 'Permesso', malattia: 'Malattia', altro: 'Altra assenza', smart: 'Smart working' };
+  // le colonne delle richieste senza il file del certificato (si legge solo quando serve)
+  const RCOLS = `id, user_id, tipo, dal, al, ora_da, ora_a, quanti, sost_id, sost_ok, stato, nota, prot, creata, decisa_il, decisa_da, nota_admin, doc_stato, scadenza, doc_il`;
+  const TIPI = { ferie: 'Ferie', permesso: 'Permesso', malattia: 'Malattia', altro: 'Altra assenza', smart: 'Smart working', lutto: 'Lutto' };
   const richShape = (r, nomi) => ({ id: r.id, user: r.user_id, nome: nomi?.get(r.user_id) || '', tipo: r.tipo, tipoTxt: TIPI[r.tipo], dal: r.dal, al: r.al, oraDa: r.ora_da, oraA: r.ora_a,
     quanti: r.quanti != null ? Number(r.quanti) : null, sost: r.sost_id, sostNome: nomi?.get(r.sost_id) || '', sostOk: r.sost_ok, stato: r.stato, nota: r.nota, prot: r.prot,
-    creata: r.creata, decisaIl: r.decisa_il, notaAdmin: r.nota_admin });
+    creata: r.creata, decisaIl: r.decisa_il, notaAdmin: r.nota_admin, docStato: r.doc_stato || '', scadenza: r.scadenza || null, haDoc: !!r.doc_il });
   const descRich = r => r.tipo === 'permesso' ? `${TIPI[r.tipo]} ${fmtG(r.dal)}, ${r.ora_da}–${r.ora_a}` : (r.dal === r.al ? `${TIPI[r.tipo]} ${fmtG(r.dal)}` : `${TIPI[r.tipo]} dal ${fmtG(r.dal)} al ${fmtG(r.al)}`);
 
   // Approvazione: scala ferie/permessi e passa i turni al sostituto (se quel giorno è libero)
@@ -205,7 +217,7 @@ module.exports = function sp(app, ctx) {
       if (r.tipo === 'ferie') await movimento(r.user_id, 'ferie', 'delta', -Number(r.quanti || 0), r.dal, descRich(r), 'rich:' + r.id, chi);
       if (r.tipo === 'permesso') await movimento(r.user_id, 'permessi', 'delta', -Number(r.quanti || 0), r.dal, descRich(r), 'rich:' + r.id, chi);
     }
-    if (r.sost_id && ['ferie', 'malattia', 'altro'].includes(r.tipo)) {
+    if (r.sost_id && ['ferie', 'malattia', 'altro', 'lutto'].includes(r.tipo)) {
       const ts = await turniDi(r.dal, r.al, [r.user_id, r.sost_id]);
       const nome = p?.nome || '';
       for (const t of ts.filter(t => t.user === r.user_id)) {
@@ -214,6 +226,52 @@ module.exports = function sp(app, ctx) {
       }
     }
   }
+
+  /* ---------- giorni lavorativi: i giorni con turno; se non ci sono turni, da lunedì a venerdì ---------- */
+  async function giorniLav(uid, dal, al) {
+    const ts = await turniDi(dal, al, [uid]);
+    const conTurno = [...new Set(ts.map(t => t.giorno))].sort();
+    if (conTurno.length) return conTurno;
+    const out = []; for (let g = dal; g <= al; g = addG(g, 1)) if (dow(g) >= 1 && dow(g) <= 5) out.push(g);
+    return out;
+  }
+  // lutto: 3 giorni lavorativi dal giorno scelto
+  async function fineLutto(uid, dal) {
+    const ts = await turniDi(dal, addG(dal, 40), [uid]);
+    const conTurno = [...new Set(ts.map(t => t.giorno))].sort();
+    if (conTurno.length >= 3) return conTurno[2];
+    let n = 0, g = dal; for (;; g = addG(g, 1)) if (dow(g) >= 1 && dow(g) <= 5 && ++n === 3) return g;
+  }
+  const fineMese = g => { const [y, m] = g.split('-').map(Number); return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10); };
+
+  /* ---------- lutto senza certificato / malattia senza protocollo entro la scadenza: ferie, altrimenti assenza ingiustificata ---------- */
+  async function elaboraScadenze() {
+    try {
+      await migrate();
+      if (!(await attiva())) return;
+      const { rows } = await q(`update sp_richieste set doc_stato = 'scaduta' where stato = 'approvata' and doc_stato = 'attesa' and scadenza < $1 returning *`, [oggi()]);
+      for (const r of rows) {
+        const p = await personaDi(r.user_id);
+        const cosa = r.tipo === 'lutto' ? 'certificato di morte non caricato' : 'protocollo non inserito';
+        const motivo = `${TIPI[r.tipo]} senza ${r.tipo === 'lutto' ? 'certificato' : 'protocollo'}`;
+        if (!p || !isDip(p)) { avvisaAdmin({ title: `${TIPI[r.tipo]}: ${cosa}`, body: `${p?.nome || ''}: ${descRich(r).toLowerCase()}.`, url: '/?sez=richieste' }); continue; }
+        let ferie = 0, ingiust = 0;
+        for (const g of await giorniLav(r.user_id, r.dal, r.al)) {
+          const s = (await saldi([r.user_id]))[r.user_id];
+          let esito = 'ingiustificata', valore = null, mov = null;
+          if (s.ferie >= 1) { esito = 'ferie'; valore = 1; mov = await movimento(r.user_id, 'ferie', 'delta', -1, g, `${motivo} ${fmtG(g)} (automatico)`, 'scad:' + r.id + ':' + g, 'automatico'); }
+          const ins = await q(`insert into sp_mancate (user_id, giorno, esito, valore, mov_id, motivo) values ($1,$2,$3,$4,$5,$6) on conflict do nothing`, [r.user_id, g, esito, valore, mov, motivo]);
+          if (!ins.rowCount) { if (mov) await q('update sp_movimenti set annullato = true where id = $1', [mov]); continue; }
+          if (esito === 'ferie') ferie++; else ingiust++;
+        }
+        const esitoTxt = [ferie ? `${ferie} ${ferie === 1 ? 'giorno' : 'giorni'} di ferie scalat${ferie === 1 ? 'o' : 'i'}` : '', ingiust ? `${ingiust} ${ingiust === 1 ? 'giorno' : 'giorni'} di assenza ingiustificata` : ''].filter(Boolean).join(' e ') || 'nessun giorno da scalare';
+        avvisa([r.user_id], { title: `${TIPI[r.tipo]}: ${cosa}`, body: `${descRich(r)}: ${esitoTxt}. Se è un errore, parla con l'amministrazione.`, url: '/?sez=assenze' });
+        avvisaAdmin({ title: `${TIPI[r.tipo]}: ${cosa}`, body: `${p.nome}, ${descRich(r).toLowerCase()}: ${esitoTxt}.`, url: '/?sez=richieste' });
+      }
+    } catch (e) { console.warn('Scheda personale, scadenze lutto/malattia:', e.message); }
+  }
+  setTimeout(elaboraScadenze, 25000).unref();
+  setInterval(elaboraScadenze, 30 * 60 * 1000).unref();
 
   /* ---------- mancate timbrature: prima ferie, poi permessi, poi assenza ingiustificata ---------- */
   let elaborando = false;
@@ -262,8 +320,8 @@ module.exports = function sp(app, ctx) {
     const [{ rows: tim }, s, { rows: mie }, { rows: sost }, { rows: mov }, { rows: docs }, perfS] = await Promise.all([
       q(`select * from sp_timbrature where user_id = $1 and giorno = $2 and not annullata order by il`, [p.id, g]),
       saldi([p.id]),
-      q(`select * from sp_richieste where user_id = $1 and stato <> 'annullata' order by dal desc limit 40`, [p.id]),
-      q(`select * from sp_richieste where sost_id = $1 and stato in ('attesa_sost','attesa_admin') and al >= $2 order by dal`, [p.id, g]),
+      q(`select ${RCOLS} from sp_richieste where user_id = $1 and stato <> 'annullata' order by dal desc limit 40`, [p.id]),
+      q(`select ${RCOLS} from sp_richieste where sost_id = $1 and stato in ('attesa_sost','attesa_admin') and al >= $2 order by dal`, [p.id, g]),
       q(`select voce, tipo, valore, data, causale from sp_movimenti where user_id = $1 and not annullato order by data desc, il desc limit 30`, [p.id]),
       q(`select id, tipo, periodo, titolo, pubblicato, visto, ricevuto from sp_docs where user_id = $1 and stato = 'pubblicato' order by periodo desc, pubblicato desc`, [p.id]),
       perfUtente(p.id),
@@ -396,7 +454,7 @@ module.exports = function sp(app, ctx) {
     const tipo = TIPI[b.tipo] ? b.tipo : null;
     if (!tipo) return bad(res, 400, 'Scegli il tipo di assenza.');
     if (tipo === 'smart' && per.medico) return bad(res, 400, 'Lo smart working è per chi timbra.');
-    const dal = str(b.dal, 10), al = tipo === 'permesso' ? dal : str(b.al || b.dal, 10);
+    const dal = str(b.dal, 10); let al = tipo === 'permesso' || tipo === 'lutto' ? dal : str(b.al || b.dal, 10);
     if (!isG(dal) || !isG(al) || al < dal) return bad(res, 400, 'Controlla le date.');
     let quanti = null, oraDa = null, oraA = null;
     if (tipo === 'permesso') {
@@ -405,23 +463,28 @@ module.exports = function sp(app, ctx) {
       quanti = r2((min(oraA) - min(oraDa)) / 60);
     } else if (tipo === 'ferie') quanti = await contaGiorni(per.id, dal, al);
     const fuoriAdmin = !(admin && b.user);
+    if (tipo === 'lutto') { al = await fineLutto(per.id, dal); quanti = 3; }
     if (fuoriAdmin && tipo !== 'malattia' && dal < oggi()) return bad(res, 400, 'Le richieste si fanno per oggi o per i giorni futuri.');
     const sost = str(b.sost, 64) || null;
     if (sost === per.id) return bad(res, 400, 'Il sostituto deve essere un\'altra persona.');
     if (fuoriAdmin && ['ferie', 'permesso'].includes(tipo) && !sost && !per.medico && per.tipo !== 'piva') return bad(res, 400, 'Indica chi ti sostituisce.');
-    if (tipo === 'malattia' && fuoriAdmin && !str(b.prot, 40)) return bad(res, 400, 'Scrivi il numero di protocollo del certificato medico.');
     const { rows: sov } = await q(`select 1 from sp_richieste where user_id = $1 and stato in ('attesa_sost','attesa_admin','approvata') and dal <= $3 and al >= $2
       and (tipo <> 'permesso' or $4 <> 'permesso')`, [per.id, dal, al, tipo]);
     if (sov.length) return bad(res, 400, 'Hai già una richiesta per quei giorni.');
-    const stato = admin && b.user ? 'approvata' : tipo === 'malattia' ? 'approvata' : sost ? 'attesa_sost' : 'attesa_admin';
+    const stato = admin && b.user ? 'approvata' : ['malattia', 'lutto'].includes(tipo) ? 'approvata' : sost ? 'attesa_sost' : 'attesa_admin';
     const id = db.newId();
     const { rows } = await q(`insert into sp_richieste (id, user_id, tipo, dal, al, ora_da, ora_a, quanti, sost_id, sost_ok, stato, nota, prot, decisa_il, decisa_da)
       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) returning *`,
       [id, per.id, tipo, dal, al, oraDa, oraA, quanti, sost, admin && b.user && sost ? true : null, stato, str(b.nota, 500), str(b.prot, 40),
         stato === 'approvata' ? new Date() : null, stato === 'approvata' ? (admin && b.user ? req.user.email : 'automatico') : null]);
-    const r = rows[0];
+    let r = rows[0];
+    // lutto: certificato di morte entro la fine del mese; malattia: protocollo entro le 23:59 del giorno della richiesta
+    if (fuoriAdmin && (tipo === 'lutto' || (tipo === 'malattia' && !r.prot))) {
+      r = (await q(`update sp_richieste set doc_stato = 'attesa', scadenza = $2 where id = $1 returning *`, [r.id, tipo === 'lutto' ? fineMese(r.al) : oggi()])).rows[0];
+    }
     if (stato === 'approvata') await applicaApprovazione(r, req.user.email);
-    if (tipo === 'malattia' && fuoriAdmin) avvisaAdmin({ title: 'Malattia comunicata', body: `${per.nome}: ${descRich(r).toLowerCase()}.`, url: '/?sez=richieste' });
+    if (tipo === 'malattia' && fuoriAdmin) avvisaAdmin({ title: 'Malattia comunicata', body: `${per.nome}: ${descRich(r).toLowerCase()}${r.prot ? '' : ' (protocollo da inserire entro oggi)'}.`, url: '/?sez=richieste' });
+    if (tipo === 'lutto' && fuoriAdmin) avvisaAdmin({ title: 'Lutto comunicato (per conoscenza)', body: `${per.nome}: ${descRich(r).toLowerCase()}. Certificato da caricare entro il ${fmtG(r.scadenza)}.`, url: '/?sez=richieste' });
     if (stato === 'attesa_sost') avvisa([sost], { title: 'Ti chiedono una sostituzione', body: `${per.nome}: ${descRich(r).toLowerCase()}. Accetta o rifiuta nella sezione Assenze.`, url: '/?sez=assenze' });
     if (stato === 'attesa_admin') avvisaAdmin({ title: 'Richiesta da approvare', body: `${per.nome}: ${descRich(r).toLowerCase()}.`, url: '/?sez=richieste' });
     if (admin && b.user) avvisa([per.id], { title: 'Assenza registrata', body: `${descRich(r)} registrata dall'amministrazione.`, url: '/?sez=assenze' });
@@ -431,7 +494,43 @@ module.exports = function sp(app, ctx) {
       if (tipo === 'ferie' && s.ferie < quanti) avviso = `Attenzione: hai ${s.ferie} giorni di ferie e ne chiedi ${quanti}.`;
       if (tipo === 'permesso' && s.permessi < quanti) avviso = `Attenzione: hai ${s.permessi} ore di permesso e ne chiedi ${quanti}.`;
     }
-    res.json({ ok: true, stato, avviso });
+    res.json({ ok: true, stato, avviso, scadenza: r.doc_stato === 'attesa' ? r.scadenza : null });
+  }));
+  // completare: certificato di morte (lutto) o numero di protocollo (malattia), entro la scadenza
+  async function richiestaDaCompletare(req, tipo) {
+    const { rows: [r] } = await q(`select ${RCOLS} from sp_richieste where id = $1 and user_id = $2 and tipo = $3`, [req.params.id, req.user.sso_id, tipo]);
+    if (!r) throw Object.assign(new Error('Richiesta non trovata.'), { status: 404 });
+    if (r.doc_stato === 'scaduta') throw Object.assign(new Error('Il tempo è scaduto: parla con l\'amministrazione.'), { status: 400 });
+    if (r.doc_stato !== 'attesa') throw Object.assign(new Error('Questa richiesta è già completa.'), { status: 400 });
+    if (r.scadenza && oggi() > r.scadenza) throw Object.assign(new Error('Il tempo è scaduto: parla con l\'amministrazione.'), { status: 400 });
+    return r;
+  }
+  app.post('/api/sp/richieste/:id/certificato', needSp, upload.single('file'), wrap(async (req, res) => {
+    const r = await richiestaDaCompletare(req, 'lutto'), f = req.file;
+    if (!f || !f.size) return bad(res, 400, 'Scegli il file del certificato (foto o PDF).');
+    if (f.size > 15 * 1024 * 1024) return bad(res, 400, 'Il file è troppo grande (massimo 15 MB).');
+    if (!/^(image\/|application\/pdf)/.test(f.mimetype || '')) return bad(res, 400, 'Carica una foto o un PDF.');
+    const nome = String(f.originalname || 'certificato').replace(/[^\w.\- àèéìòù()]/gi, '').slice(0, 120) || 'certificato';
+    const c = cifraOk() ? cifra(f.buffer) : { file: f.buffer, iv: null, tag: null };
+    await q(`update sp_richieste set doc_stato = 'ok', doc_il = now(), doc_nome = $2, doc_tipo = $3, doc_dati = $4, doc_iv = $5, doc_tag = $6 where id = $1 and doc_stato = 'attesa'`,
+      [r.id, nome, f.mimetype, c.file, c.iv, c.tag]);
+    const me = await io(req);
+    avvisaAdmin({ title: 'Lutto: certificato caricato', body: `${me.nome}: ${descRich(r).toLowerCase()}.`, url: '/?sez=richieste' });
+    res.json({ ok: true });
+  }));
+  app.post('/api/sp/richieste/:id/protocollo', needSp, wrap(async (req, res) => {
+    const r = await richiestaDaCompletare(req, 'malattia'), prot = str(req.body.prot, 40);
+    if (!prot) return bad(res, 400, 'Scrivi il numero di protocollo del certificato medico.');
+    await q(`update sp_richieste set doc_stato = 'ok', prot = $2 where id = $1 and doc_stato = 'attesa'`, [r.id, prot]);
+    res.json({ ok: true });
+  }));
+  // il certificato lo vedono la persona e l'amministrazione
+  app.get('/api/sp/richieste/:id/certificato', needSp, wrap(async (req, res) => {
+    const { rows: [d] } = await q('select user_id, doc_nome, doc_tipo, doc_dati, doc_iv, doc_tag from sp_richieste where id = $1', [req.params.id]);
+    if (!d || !d.doc_dati || (req.user.role !== 'admin' && d.user_id !== req.user.sso_id)) return bad(res, 404, 'File non disponibile');
+    const buf = d.doc_iv ? decifra({ file: d.doc_dati, iv: d.doc_iv, tag: d.doc_tag }) : d.doc_dati;
+    res.set({ 'Content-Type': d.doc_tipo || 'application/octet-stream', 'Content-Disposition': `inline; filename="${encodeURIComponent(d.doc_nome || 'certificato')}"`, 'Cache-Control': 'private, no-store' });
+    res.send(buf);
   }));
   app.post('/api/sp/richieste/:id/sostituto', needSp, wrap(async (req, res) => {
     const ok = !!req.body.ok;
@@ -662,7 +761,7 @@ module.exports = function sp(app, ctx) {
     const [ts, { rows: tim }, { rows: ric }, { rows: manc }] = await Promise.all([
       turniDi(dal, al, ids),
       q(`select * from sp_timbrature where giorno between $1 and $2 and not annullata order by giorno, il`, [dal, al]),
-      q(`select * from sp_richieste where stato = 'approvata' and al >= $1 and dal <= $2`, [dal, al]),
+      q(`select ${RCOLS} from sp_richieste where stato = 'approvata' and al >= $1 and dal <= $2`, [dal, al]),
       q(`select * from sp_mancate where giorno between $1 and $2 and not annullata`, [dal, al]),
     ]);
     return { pp, ts, tim, ric, manc };
@@ -686,8 +785,9 @@ module.exports = function sp(app, ctx) {
         for (const c of coppie(mt)) { if (c.in && c.out) minuti += Math.max(0, min(c.out.ora) - min(c.in.ora)); else aperta = true; }
         let nota = '', k = 'ok';
         if (as && as.tipo === 'smart') { nota = 'Smart working'; k = 'info'; if (!mt.length && g < oggi()) { nota = 'Smart working · nessuna timbratura'; k = 'no'; } else if (aperta && g < oggi()) { nota = 'Smart working · uscita non timbrata'; k = 'wait'; } }
-        else if (as) { nota = as.tipo === 'permesso' ? `Permesso ${as.ora_da}–${as.ora_a}` : TIPI[as.tipo]; k = 'info'; }
-        if (mc) { nota = mc.esito === 'ingiustificata' ? 'Assenza ingiustificata' : `Mancata timbratura · ${mc.esito === 'ferie' ? 'ferie' : 'permessi'} (automatico)`; k = mc.esito === 'ingiustificata' ? 'no' : 'wait'; }
+        else if (as) { nota = as.tipo === 'permesso' ? `Permesso ${as.ora_da}–${as.ora_a}` : TIPI[as.tipo]; k = 'info';
+          if (as.doc_stato === 'attesa') nota += as.tipo === 'lutto' ? ' · certificato da caricare' : ' · protocollo da inserire'; }
+        if (mc) { nota = mc.motivo ? `${mc.motivo} · ${mc.esito === 'ferie' ? 'ferie scalate' : 'assenza ingiustificata'}` : mc.esito === 'ingiustificata' ? 'Assenza ingiustificata' : `Mancata timbratura · ${mc.esito === 'ferie' ? 'ferie' : 'permessi'} (automatico)`; k = mc.esito === 'ingiustificata' ? 'no' : 'wait'; }
         if (!nota && mturni.length && !mt.length) { nota = g < oggi() ? 'Nessuna timbratura' : g === oggi() ? 'Non ancora timbrato' : 'In turno'; k = g < oggi() ? 'no' : 'info'; }
         if (!nota && aperta) { nota = 'Uscita non timbrata'; k = 'wait'; }
         if (!nota && mt.length && !mturni.length) { nota = 'Fuori turno'; k = 'info'; }
@@ -711,7 +811,7 @@ module.exports = function sp(app, ctx) {
     const lav = g.filter(x => dow(x) >= 1 && dow(x) <= 5).length;
     const ss = new Map((await sch.sedi()).map(s => [s.id, s.nome]));
     return { mese: m, giorni: g.map(x => ({ g: x, n: +x.slice(8), w: 'DLMMGVS'[dow(x)], fest: dow(x) === 0 || dow(x) === 6 })), righe: filtra(pp, sede, fig).filter(isDip).map(p => {
-      let tot = 0; const c = { F: 0, P: 0, M: 0, AI: 0, SW: 0 };
+      let tot = 0; const c = { F: 0, P: 0, M: 0, AI: 0, SW: 0, L: 0 };
       const celle = g.map(x => {
         const mt = tim.filter(t => t.user_id === p.id && t.giorno === x), mturni = ts.filter(t => t.user === p.id && t.giorno === x);
         const as = ric.find(r => r.user_id === p.id && r.dal <= x && r.al >= x), mc = manc.find(r => r.user_id === p.id && r.giorno === x);
@@ -724,12 +824,15 @@ module.exports = function sp(app, ctx) {
         const smart = as && as.tipo === 'smart';
         // smart working senza turno: contano le ore timbrate (il tetto del contratto resta)
         if (smart && !mturni.length) for (const cp of coppie(mt)) if (cp.in && cp.out) ricon += Math.max(0, min(cp.out.ora) - min(cp.in.ora));
+        // lutto con certificato (o registrato dall'amministrazione): conta come il turno del giorno
+        const lutto = as && as.tipo === 'lutto';
+        if (lutto && !mc && ['ok', ''].includes(as.doc_stato || '')) ricon = mturni.length ? mturni.reduce((s, t) => s + durata(t), 0) : (dow(x) >= 1 && dow(x) <= 5 ? Math.round(oreGiorno(p) * 60) : 0);
         tot += ricon;
         let cod = '';
         if (mc) { cod = mc.esito === 'ferie' ? 'F*' : mc.esito === 'permessi' ? 'P*' : 'AI'; c[mc.esito === 'ferie' ? 'F' : mc.esito === 'permessi' ? 'P' : 'AI']++; }
-        else if (as) { cod = as.tipo === 'ferie' ? 'F' : as.tipo === 'malattia' ? 'M' : as.tipo === 'permesso' ? 'P' : smart ? 'SW' : 'A'; if (c[cod] !== undefined) c[cod]++; }
+        else if (as) { cod = as.tipo === 'ferie' ? 'F' : as.tipo === 'malattia' ? 'M' : as.tipo === 'permesso' ? 'P' : smart ? 'SW' : lutto ? 'L' : 'A'; if (c[cod] !== undefined) c[cod]++; }
         const fuori = mt.length && !mturni.length && !smart;
-        return { min: ricon, cod, fuori, corto: mturni.length && ricon < mturni.reduce((s, t) => s + durata(t), 0) && (!as || smart) };
+        return { min: ricon, cod, fuori, corto: mturni.length && ricon < mturni.reduce((s, t) => s + durata(t), 0) && (!as || smart), attesa: !!(as && as.doc_stato === 'attesa') };
       });
       const tetto = Math.round((p.ore || 0) * 60 * lav / 5);
       return { user: p.id, nome: p.nome, figura: p.figura, sedi: p.sedi.map(s => ss.get(s)).filter(Boolean).join(', '), ore: p.ore, celle,
@@ -741,9 +844,9 @@ module.exports = function sp(app, ctx) {
     const r = await oreRiconosciute(m, req.query.sede, req.query.figura);
     if (req.query.csv) {
       const h = v => v ? hmDi(v) : '';
-      return csv(res, `ore_riconosciute_${m}.csv`, [['Persona', 'Mansione', 'Ore contratto/sett.', ...r.giorni.map(x => `${x.w} ${x.n}`), 'Totale riconosciuto', 'Tetto contratto', 'Ferie', 'Permessi', 'Malattia', 'Ass. ingiustificate', 'Smart working'],
-        ...r.righe.map(p => [p.nome, p.figura, p.ore ?? '', ...p.celle.map(c => [h(c.min), c.cod].filter(Boolean).join(' ')), hmDi(p.totale), hmDi(p.tetto), p.conta.F, p.conta.P, p.conta.M, p.conta.AI, p.conta.SW]),
-        [], ['Legenda: F ferie, P permesso, M malattia, AI assenza ingiustificata, SW smart working, * = scalato in automatico per mancata timbratura. Ogni giorno conta al massimo il turno; il totale non supera il tetto del contratto.']]);
+      return csv(res, `ore_riconosciute_${m}.csv`, [['Persona', 'Mansione', 'Ore contratto/sett.', ...r.giorni.map(x => `${x.w} ${x.n}`), 'Totale riconosciuto', 'Tetto contratto', 'Ferie', 'Permessi', 'Malattia', 'Ass. ingiustificate', 'Smart working', 'Lutto'],
+        ...r.righe.map(p => [p.nome, p.figura, p.ore ?? '', ...p.celle.map(c => [h(c.min), c.cod].filter(Boolean).join(' ')), hmDi(p.totale), hmDi(p.tetto), p.conta.F, p.conta.P, p.conta.M, p.conta.AI, p.conta.SW, p.conta.L]),
+        [], ['Legenda: F ferie, P permesso, M malattia, AI assenza ingiustificata, SW smart working, L lutto (con certificato conta come turno), * = scalato in automatico per mancata timbratura. Ogni giorno conta al massimo il turno; il totale non supera il tetto del contratto.']]);
     }
     res.json(r);
   }));
@@ -756,16 +859,17 @@ module.exports = function sp(app, ctx) {
   // richieste e saldi
   app.get('/api/sp/admin/richieste', needAd, wrap(async (req, res) => {
     const pp = await persone(), nomi = new Map(pp.map(p => [p.id, p.nome]));
-    const [{ rows: aperte }, { rows: recenti }, s, { rows: manc }] = await Promise.all([
-      q(`select * from sp_richieste where stato in ('attesa_sost','attesa_admin') order by dal`),
-      q(`select * from sp_richieste where stato in ('approvata','rifiutata') order by coalesce(decisa_il, creata) desc limit 40`),
+    const [{ rows: aperte }, { rows: recenti }, s, { rows: manc }, { rows: dacomp }] = await Promise.all([
+      q(`select ${RCOLS} from sp_richieste where stato in ('attesa_sost','attesa_admin') order by dal`),
+      q(`select ${RCOLS} from sp_richieste where stato in ('approvata','rifiutata') order by coalesce(decisa_il, creata) desc limit 40`),
       saldi(pp.map(p => p.id)),
       q(`select * from sp_mancate where giorno >= $1 order by giorno desc`, [addG(oggi(), -45)]),
+      q(`select ${RCOLS} from sp_richieste where stato = 'approvata' and doc_stato = 'attesa' order by scadenza, dal`),
     ]);
     const sh = r => ({ ...richShape(r, nomi), desc: descRich(r) });
-    res.json({ aperte: aperte.map(sh), recenti: recenti.map(sh),
+    res.json({ aperte: aperte.map(sh), recenti: recenti.map(sh), daCompletare: dacomp.map(sh),
       saldi: pp.filter(isDip).map(p => ({ id: p.id, nome: p.nome, figura: p.figura, ...s[p.id] })),
-      mancate: manc.map(m => ({ user: m.user_id, nome: nomi.get(m.user_id) || '', giorno: m.giorno, esito: m.esito, valore: m.valore != null ? Number(m.valore) : null, annullata: m.annullata })),
+      mancate: manc.map(m => ({ user: m.user_id, nome: nomi.get(m.user_id) || '', giorno: m.giorno, esito: m.esito, valore: m.valore != null ? Number(m.valore) : null, annullata: m.annullata, motivo: m.motivo || '' })),
       persone: pp.map(p => ({ id: p.id, nome: p.nome, tipo: p.tipo, medico: p.medico })) });
   }));
   app.post('/api/sp/admin/richieste/:id', needAd, wrap(async (req, res) => {

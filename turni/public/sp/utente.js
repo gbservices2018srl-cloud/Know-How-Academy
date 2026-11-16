@@ -18,7 +18,7 @@ window.avvioUtente = async function(st){
 };
 function navUtente(){
   const n = $('#unav'); n.hidden = false;
-  const badge = { assenze: ME.sostituzioni.filter(r => r.stato === 'attesa_sost').length, info: INFO.docs.some(d => d.tipo === 'regolamento' && !d.letto) ? 1 : 0,
+  const badge = { assenze: ME.sostituzioni.filter(r => r.stato === 'attesa_sost').length + ME.richieste.filter(r => r.docStato === 'attesa').length, info: INFO.docs.some(d => d.tipo === 'regolamento' && !d.letto) ? 1 : 0,
     doc: ME.docs.some(d => d.tipo === 'busta' && !d.ricevuto) ? 1 : 0 };
   n.innerHTML = sezioniUtente().map(([k, t]) => `<button data-u="${k}" aria-selected="${k === USEZ}"><span class="${badge[k] ? 'dot' : ''}">${svg(k)}</span><span>${t}</span></button>`).join('');
   n.onclick = e => { const b = e.target.closest('[data-u]'); if (b) { USEZ = b.dataset.u; history.replaceState(null, '', '/?sez=' + USEZ); disegnaUtente(); scrollTo(0, 0); } };
@@ -127,21 +127,28 @@ async function vistaAssenze(m){
   const me = ME.me, s = ME.saldi;
   let tipo = 'ferie';
   const sostDa = ME.sostituzioni.filter(r => r.stato === 'attesa_sost' && r.sost === me.id);
+  const daComp = ME.richieste.filter(r => r.docStato === 'attesa');
   const draw = () => {
     const serveSost = ['ferie', 'permesso'].includes(tipo) && !me.medico && me.tipo !== 'piva';
     m.innerHTML = `${s ? `<div class="grid2" style="margin-bottom:16px"><div class="stat"><div class="k">Ferie residue</div><div class="v">${nume(s.ferie)} gg</div></div><div class="stat"><div class="k">Permessi residui</div><div class="v">${nume(s.permessi)} h</div></div></div>` : ''}
       ${sostDa.length ? `<div class="card"><h3>Ti chiedono di sostituirli</h3>${sostDa.map(r => `<div class="li"><span class="grow"><b>${esc(r.nome)}</b> · ${esc(r.desc.toLowerCase())}</span><button class="btn small primary" data-si="${r.id}">Accetto</button><button class="btn small" data-no="${r.id}">Non posso</button></div>`).join('')}</div>` : ''}
+      ${daComp.length ? `<div class="card" style="border-color:var(--warn)"><h3>Da completare</h3>${daComp.map(r => `<div class="li" style="flex-wrap:wrap"><span class="grow"><span class="t">${esc(r.desc)}</span><span class="s">${r.tipo === 'lutto' ? 'Carica il certificato di morte' : 'Inserisci il numero di protocollo'} entro ${r.scadenza === ME.oggi ? 'le 23:59 di oggi' : 'il ' + fmtG(r.scadenza)}</span></span>
+        ${r.tipo === 'lutto' ? `<label class="btn small primary" style="cursor:pointer">Carica certificato di morte<input type="file" accept="image/*,application/pdf" data-cert="${r.id}" hidden></label>`
+          : `<input type="text" data-protin="${r.id}" placeholder="numero di protocollo" style="max-width:200px"><button class="btn small primary" data-prot="${r.id}">Salva</button>`}</div>`).join('')}</div>` : ''}
       <div class="card"><h3>Nuova richiesta</h3>
-        <div class="chips" style="margin-bottom:12px">${[['ferie', 'Ferie'], ['permesso', 'Permesso (ore)'], ['malattia', 'Malattia'], ...(me.medico ? [] : [['smart', 'Smart working']]), ['altro', 'Altro']].map(([k, t]) => `<button class="chip" data-tipo="${k}" aria-pressed="${tipo === k}">${t}</button>`).join('')}</div>
-        <div class="grid2">${tipo === 'permesso' ? `<label class="f">Giorno<input type="date" id="dal" min="${ME.oggi}" value="${ME.oggi}"></label><span></span>
+        <div class="chips" style="margin-bottom:12px">${[['ferie', 'Ferie'], ['permesso', 'Permesso (ore)'], ['malattia', 'Malattia'], ['lutto', 'Lutto'], ...(me.medico ? [] : [['smart', 'Smart working']]), ['altro', 'Altro']].map(([k, t]) => `<button class="chip" data-tipo="${k}" aria-pressed="${tipo === k}">${t}</button>`).join('')}</div>
+        <div class="grid2">${tipo === 'lutto' ? `<label class="f">Dal giorno<input type="date" id="dal" min="${ME.oggi}" value="${ME.oggi}"></label><span></span>` : tipo === 'permesso' ? `<label class="f">Giorno<input type="date" id="dal" min="${ME.oggi}" value="${ME.oggi}"></label><span></span>
             <label class="f">Dalle<input type="time" id="oraDa" value="16:00"></label><label class="f">Alle<input type="time" id="oraA" value="18:30"></label>`
           : `<label class="f">Dal<input type="date" id="dal" ${tipo !== 'malattia' ? `min="${ME.oggi}"` : ''} value="${ME.oggi}"></label><label class="f">Al<input type="date" id="al" value="${ME.oggi}"></label>`}</div>
-        ${tipo === 'malattia' ? `<label class="f" style="margin-top:10px">Numero di protocollo del certificato<input type="text" id="prot" placeholder="dal certificato del medico"></label>` : ''}
+        ${tipo === 'malattia' ? `<label class="f" style="margin-top:10px">Numero di protocollo del certificato<input type="text" id="prot" placeholder="dal certificato del medico"></label>
+          <p class="muted small" style="margin:6px 0 0">Se non lo hai ancora, invia lo stesso e inseriscilo <b>entro le 23:59 di oggi</b>. Altrimenti i giorni si scalano dalle ferie, o se non ne hai diventano assenza ingiustificata.</p>` : ''}
+        ${tipo === 'lutto' ? `<p class="muted small" style="margin:10px 0 0">Spettano <b>3 giorni lavorativi</b> da questa data. Sono approvati subito: l'amministrazione riceve solo un avviso. Poi carica il <b>certificato di morte</b> entro la fine del mese, altrimenti i giorni si scalano dalle ferie, o se non ne hai diventano assenza ingiustificata.</p>` : ''}
         ${tipo === 'smart' ? '<p class="muted small" style="margin:10px 0 0">Lavori da casa. Deve approvarlo l\'amministrazione: nei giorni approvati timbri dall\'app, con la posizione presa solo al momento della timbratura.</p>' : ''}
         ${tipo !== 'smart' ? `<label class="f" style="margin-top:10px">Chi ti sostituisce?${serveSost ? ' (deve accettare)' : ' (facoltativo)'}<select id="sost"><option value="">${serveSost ? 'Scegli un collega…' : 'Nessuno'}</option>${ME.colleghi.map(c => `<option value="${c.id}">${esc(c.nome)}${c.figura ? ' · ' + esc(c.figura) : ''}</option>`).join('')}</select></label>` : ''}
         <label class="f" style="margin-top:10px">Note (facoltative)<input type="text" id="nota" maxlength="300" placeholder="${tipo === 'altro' ? 'Scrivi il motivo' : ''}"></label>
-        <button class="btn primary big" id="invia" style="margin-top:14px">${tipo === 'malattia' ? 'Comunica la malattia' : tipo === 'smart' ? 'Chiedi lo smart working' : 'Invia richiesta'}</button></div>
-      <div class="card"><h3>Le mie richieste</h3>${ME.richieste.length ? `<div class="lista">${ME.richieste.map(r => `<div class="li"><span class="grow"><span class="t">${esc(r.desc)}</span><span class="s">${r.quanti != null ? (r.tipo === 'ferie' ? `${nume(r.quanti)} giorni` : `${nume(r.quanti)} ore`) + ' · ' : ''}${r.sostNome ? 'sostituto ' + esc(r.sostNome) : ''}${r.notaAdmin ? ' · ' + esc(r.notaAdmin) : ''}</span></span>
+        <button class="btn primary big" id="invia" style="margin-top:14px">${tipo === 'malattia' ? 'Comunica la malattia' : tipo === 'lutto' ? 'Comunica il lutto' : tipo === 'smart' ? 'Chiedi lo smart working' : 'Invia richiesta'}</button></div>
+      <div class="card"><h3>Le mie richieste</h3>${ME.richieste.length ? `<div class="lista">${ME.richieste.map(r => `<div class="li"><span class="grow"><span class="t">${esc(r.desc)}</span><span class="s">${r.quanti != null ? (['ferie', 'lutto'].includes(r.tipo) ? `${nume(r.quanti)} giorni` : `${nume(r.quanti)} ore`) + ' · ' : ''}${r.sostNome ? 'sostituto ' + esc(r.sostNome) : ''}${r.notaAdmin ? ' · ' + esc(r.notaAdmin) : ''}</span></span>
+        ${r.docStato === 'attesa' ? `<span class="tag warn">${r.tipo === 'lutto' ? 'Certificato da caricare' : 'Protocollo da inserire'}</span>` : r.docStato === 'scaduta' ? `<span class="tag no">${r.tipo === 'lutto' ? 'Certificato' : 'Protocollo'} non arrivato: scalato</span>` : r.haDoc ? `<a class="btn small" href="/api/sp/richieste/${r.id}/certificato" target="_blank" rel="noopener">Certificato</a>` : ''}
         <span class="tag ${STATI[r.stato]?.[1] || ''}">${STATI[r.stato]?.[0] || r.stato}</span>${['attesa_sost', 'attesa_admin'].includes(r.stato) ? `<button class="btn small" data-ann="${r.id}">Annulla</button>` : ''}</div>`).join('')}</div>` : '<p class="muted small" style="margin:0">Nessuna richiesta.</p>'}</div>
       ${s ? `<div class="card"><h3>Movimenti di ferie e permessi</h3>${ME.movimenti.length ? `<div class="lista">${ME.movimenti.map(x => `<div class="li"><span class="grow"><span class="t" style="font-weight:600">${esc(x.causale)}</span><span class="s">${fmtG(x.data)}</span></span><b style="white-space:nowrap">${x.tipo === 'saldo' ? 'saldo ' : x.valore > 0 ? '+' : ''}${nume(x.valore)} ${x.voce === 'ferie' ? 'gg ferie' : 'h permessi'}</b></div>`).join('')}</div>` : '<p class="muted small" style="margin:0">Il saldo arriva con la prossima busta paga.</p>'}</div>` : ''}`;
   };
@@ -151,17 +158,25 @@ async function vistaAssenze(m){
     const si = e.target.closest('[data-si]'), no = e.target.closest('[data-no]'), an = e.target.closest('[data-ann]');
     try {
       if (si || no) { await api('POST', `/api/sp/richieste/${(si || no).dataset[si ? 'si' : 'no']}/sostituto`, {ok: !!si}); toast(si ? 'Hai accettato: ora decide l\'amministrazione.' : 'Risposta inviata.'); return ricarica(); }
+      const pr = e.target.closest('[data-prot]');
+      if (pr) { await api('POST', `/api/sp/richieste/${pr.dataset.prot}/protocollo`, {prot: m.querySelector(`[data-protin="${pr.dataset.prot}"]`).value}); toast('Protocollo salvato.'); return ricarica(); }
       if (an) { if (!confirm('Annullare la richiesta?')) return; await api('POST', `/api/sp/richieste/${an.dataset.ann}/annulla`, {}); toast('Richiesta annullata.'); return ricarica(); }
       if (e.target.id === 'invia') {
         const r = await api('POST', '/api/sp/richieste', { tipo, dal: $('#dal').value, al: $('#al')?.value || $('#dal').value, oraDa: $('#oraDa')?.value, oraA: $('#oraA')?.value,
           sost: $('#sost')?.value, prot: $('#prot')?.value, nota: $('#nota').value });
-        toast(r.stato === 'attesa_sost' ? 'Richiesta inviata al sostituto.' : r.stato === 'approvata' ? 'Registrata.' : 'Richiesta inviata all\'amministrazione.');
+        toast(r.scadenza ? (tipo === 'lutto' ? 'Registrato. Ora carica il certificato di morte.' : 'Registrata. Inserisci il protocollo entro le 23:59.') : r.stato === 'attesa_sost' ? 'Richiesta inviata al sostituto.' : r.stato === 'approvata' ? 'Registrata.' : 'Richiesta inviata all\'amministrazione.');
         if (r.avviso) setTimeout(() => toast(r.avviso), 3300);
         return ricarica();
       }
     } catch (er) { toast(er.message); }
   };
-  m.onchange = e => { if (e.target.id === 'dal' && $('#al') && $('#al').value < e.target.value) $('#al').value = e.target.value; };
+  m.onchange = async e => {
+    if (e.target.dataset.cert) {
+      const f = e.target.files[0]; if (!f) return;
+      const fd = new FormData(); fd.append('file', f);
+      try { await api('POST', `/api/sp/richieste/${e.target.dataset.cert}/certificato`, undefined, fd); toast('Certificato caricato.'); return ricarica(); } catch (er) { return toast(er.message); }
+    }
+    if (e.target.id === 'dal' && $('#al') && $('#al').value < e.target.value) $('#al').value = e.target.value; };
 }
 
 /* ---------- turni del mese ---------- */
