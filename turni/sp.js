@@ -67,6 +67,9 @@ module.exports = function sp(app, ctx) {
       alter table sp_richieste add column if not exists doc_tag bytea;
       alter table sp_richieste add column if not exists doc_il timestamptz;
       alter table sp_mancate add column if not exists motivo text not null default '';
+      -- certificati letti e approvati dall'amministrazione: compaiono nei «I miei documenti» della persona
+      alter table sp_richieste add column if not exists doc_approvato timestamptz;
+      alter table sp_richieste add column if not exists doc_approvato_da text;
       create table if not exists sp_turni (id text primary key, user_id text not null, giorno date not null, sede_id text, da text not null, a text not null,
         pausa int not null default 0, nota text not null default '', aggiornato timestamptz not null default now());
       create index if not exists sp_turni_g on sp_turni (giorno, user_id);
@@ -203,11 +206,11 @@ module.exports = function sp(app, ctx) {
     return n;
   }
   // le colonne delle richieste senza il file del certificato (si legge solo quando serve)
-  const RCOLS = `id, user_id, tipo, dal, al, ora_da, ora_a, quanti, sost_id, sost_ok, stato, nota, prot, creata, decisa_il, decisa_da, nota_admin, doc_stato, scadenza, doc_il`;
+  const RCOLS = `id, user_id, tipo, dal, al, ora_da, ora_a, quanti, sost_id, sost_ok, stato, nota, prot, creata, decisa_il, decisa_da, nota_admin, doc_stato, scadenza, doc_il, doc_nome, doc_approvato`;
   const TIPI = { ferie: 'Ferie', permesso: 'ROL', malattia: 'Malattia', altro: 'Altra assenza', smart: 'Smart working', lutto: 'Lutto' };
   const richShape = (r, nomi) => ({ id: r.id, user: r.user_id, nome: nomi?.get(r.user_id) || '', tipo: r.tipo, tipoTxt: TIPI[r.tipo], dal: r.dal, al: r.al, oraDa: r.ora_da, oraA: r.ora_a,
     quanti: r.quanti != null ? Number(r.quanti) : null, sost: r.sost_id, sostNome: nomi?.get(r.sost_id) || '', sostOk: r.sost_ok, stato: r.stato, nota: r.nota, prot: r.prot,
-    creata: r.creata, decisaIl: r.decisa_il, notaAdmin: r.nota_admin, docStato: r.doc_stato || '', scadenza: r.scadenza || null, haDoc: !!r.doc_il });
+    creata: r.creata, decisaIl: r.decisa_il, notaAdmin: r.nota_admin, docStato: r.doc_stato || '', scadenza: r.scadenza || null, haDoc: !!r.doc_il, docNome: r.doc_nome || '', docApprovato: r.doc_approvato || null });
   const descRich = r => r.tipo === 'permesso' ? `${TIPI[r.tipo]} ${fmtG(r.dal)}, ${r.ora_da}–${r.ora_a}` : (r.dal === r.al ? `${TIPI[r.tipo]} ${fmtG(r.dal)}` : `${TIPI[r.tipo]} dal ${fmtG(r.dal)} al ${fmtG(r.al)}`);
 
   // Approvazione: scala ferie/permessi e passa i turni al sostituto (se quel giorno è libero)
@@ -333,6 +336,8 @@ module.exports = function sp(app, ctx) {
       vicino: (x.figura === p.figura ? 2 : 0) + (x.sedi.some(s2 => p.sedi.includes(s2)) ? 1 : 0) })).sort((a, b) => b.vicino - a.vicino || a.nome.localeCompare(b.nome));
     const { rows: tags } = await q('select cod, sede_id from sp_tag where sede_id is not null');
     const smartOggi = !p.medico && await smartIl(p.id, g);
+    // i miei documenti: certificati caricati dalla persona e approvati dall'amministrazione (solo da leggere)
+    const { rows: miei } = await q(`select id, tipo, dal, al, doc_nome, doc_il, doc_approvato from sp_richieste where user_id = $1 and doc_approvato is not null and stato <> 'annullata' order by doc_il desc`, [p.id]);
     res.json({
       oggi: g, ora: roma().hm,
       me: { id: p.id, nome: p.nome, figura: p.figura, medico: p.medico, admin: req.user.role === 'admin', tipo: p.tipo, tipoOk: p.tipoOk, ore: p.ore, senzaNfc: p.senzaNfc, smartOggi, onb: p.onb,
@@ -342,7 +347,8 @@ module.exports = function sp(app, ctx) {
       richieste: mie.map(r => ({ ...richShape(r, nomi), desc: descRich(r) })),
       sostituzioni: sost.map(r => ({ ...richShape(r, nomi), desc: descRich(r) })),
       movimenti: mov.map(m => ({ voce: m.voce, tipo: m.tipo, valore: Number(m.valore), data: m.data, causale: m.causale })),
-      colleghi, docs, perf: perfS, sedi: ss.map(x => ({ id: x.id, nome: x.nome })), tagSedi: tags.length,
+      colleghi, docs, perf: perfS,
+      miei: miei.map(r => ({ id: r.id, titolo: (r.tipo === 'lutto' ? 'Certificato di morte' : 'Certificato') + ' · ' + descRich(r), nome: r.doc_nome, caricato: r.doc_il, approvato: r.doc_approvato })), sedi: ss.map(x => ({ id: x.id, nome: x.nome })), tagSedi: tags.length,
     });
   }));
 
@@ -860,15 +866,16 @@ module.exports = function sp(app, ctx) {
   // richieste e saldi
   app.get('/api/sp/admin/richieste', needAd, wrap(async (req, res) => {
     const pp = await persone(), nomi = new Map(pp.map(p => [p.id, p.nome]));
-    const [{ rows: aperte }, { rows: recenti }, s, { rows: manc }, { rows: dacomp }] = await Promise.all([
+    const [{ rows: aperte }, { rows: recenti }, s, { rows: manc }, { rows: dacomp }, { rows: dacontr }] = await Promise.all([
       q(`select ${RCOLS} from sp_richieste where stato in ('attesa_sost','attesa_admin') order by dal`),
       q(`select ${RCOLS} from sp_richieste where stato in ('approvata','rifiutata','revocata') order by coalesce(decisa_il, creata) desc limit 60`),
       saldi(pp.map(p => p.id)),
       q(`select * from sp_mancate where giorno >= $1 order by giorno desc`, [addG(oggi(), -45)]),
       q(`select ${RCOLS} from sp_richieste where stato = 'approvata' and doc_stato = 'attesa' order by scadenza, dal`),
+      q(`select ${RCOLS} from sp_richieste where doc_stato = 'ok' and doc_il is not null and doc_approvato is null and stato <> 'annullata' order by doc_il`),
     ]);
     const sh = r => ({ ...richShape(r, nomi), desc: descRich(r) });
-    res.json({ aperte: aperte.map(sh), recenti: recenti.map(sh), daCompletare: dacomp.map(sh),
+    res.json({ aperte: aperte.map(sh), recenti: recenti.map(sh), daCompletare: dacomp.map(sh), certificati: dacontr.map(sh),
       saldi: pp.filter(isDip).map(p => ({ id: p.id, nome: p.nome, figura: p.figura, ...s[p.id] })),
       mancate: manc.map(m => ({ user: m.user_id, nome: nomi.get(m.user_id) || '', giorno: m.giorno, esito: m.esito, valore: m.valore != null ? Number(m.valore) : null, annullata: m.annullata, motivo: m.motivo || '' })),
       persone: pp.map(p => ({ id: p.id, nome: p.nome, tipo: p.tipo, medico: p.medico })) });
@@ -882,6 +889,22 @@ module.exports = function sp(app, ctx) {
     if (ok) await applicaApprovazione(r, req.user.email);
     avvisa([r.user_id], { title: ok ? 'Richiesta approvata' : 'Richiesta rifiutata', body: descRich(r) + (ok ? ' approvata.' : ' rifiutata.'), url: '/?sez=assenze' });
     if (ok && r.sost_id) avvisa([r.sost_id], { title: 'Sostituzione confermata', body: `${descRich(r)}: confermata dall'amministrazione.`, url: '/?sez=turni' });
+    res.json({ ok: true });
+  }));
+  // certificato: l'amministrazione lo legge e lo approva (va nei «I miei documenti») oppure lo segna non valido (va ricaricato)
+  app.post('/api/sp/admin/richieste/:id/certificato', needAd, wrap(async (req, res) => {
+    const ok = !!req.body.ok, nota = str(req.body.nota, 300);
+    const { rows: [r] } = await q(`select ${RCOLS} from sp_richieste where id = $1 and doc_il is not null and doc_stato = 'ok'`, [req.params.id]);
+    if (!r) return bad(res, 400, 'Nessun certificato da controllare per questa richiesta.');
+    if (ok) {
+      await q(`update sp_richieste set doc_approvato = now(), doc_approvato_da = $2 where id = $1`, [r.id, req.user.email]);
+      avvisa([r.user_id], { title: 'Certificato approvato', body: `${descRich(r)}: lo trovi in Documenti → I miei documenti.`, url: '/?sez=doc' });
+    } else {
+      // da ricaricare: la scadenza resta, ma almeno fino a fine giornata
+      await q(`update sp_richieste set doc_stato = 'attesa', doc_il = null, doc_nome = null, doc_tipo = null, doc_dati = null, doc_iv = null, doc_tag = null, doc_approvato = null,
+        scadenza = greatest(scadenza, $2::date) where id = $1`, [r.id, oggi()]);
+      avvisa([r.user_id], { title: 'Certificato da ricaricare', body: `${descRich(r)}: il certificato non va bene${nota ? ' (' + nota + ')' : ''}. Caricalo di nuovo nella sezione Assenze.`, url: '/?sez=assenze' });
+    }
     res.json({ ok: true });
   }));
   // revoca (anche di richieste già approvate): ferie/ROL restituiti, turni tornati alla persona, avvisi

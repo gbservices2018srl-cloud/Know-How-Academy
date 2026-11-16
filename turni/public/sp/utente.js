@@ -287,8 +287,19 @@ async function vistaPerfU(m){
 let DTAB = null;
 async function vistaDocU(m){
   const me = ME.me;
-  const tabs = me.medico ? [['cu', 'CU'], ['contratti', 'Contratti']] : me.tipo === 'piva' ? [['contratti', 'Contratto e altri'], ['cu', 'CU']] : [['buste', 'Buste paga'], ['cu', 'CU'], ['contratti', 'Contratto e altri']];
+  const tabs = (me.medico ? [['cu', 'CU'], ['contratti', 'Contratti']] : me.tipo === 'piva' ? [['contratti', 'Contratto e altri'], ['cu', 'CU']] : [['buste', 'Buste paga'], ['cu', 'CU'], ['contratti', 'Contratto e altri']]).concat([['miei', 'I miei documenti']]);
   if (!tabs.some(t => t[0] === DTAB)) DTAB = tabs[0][0];
+  if (DTAB === 'miei') {
+    // solo da leggere: qui non si carica niente
+    const mm = ME.miei || [];
+    m.innerHTML = `<div class="chips" style="margin-bottom:14px">${tabs.map(([k, t]) => `<button class="chip" data-tab="${k}" aria-pressed="${DTAB === k}">${t}</button>`).join('')}</div>
+      <div class="card">${mm.length ? `<div class="lista">${mm.map(d => `<div class="li"><span class="grow"><span class="t">${esc(d.titolo)}</span><span class="s">Caricato il ${fmtD(d.caricato)} · approvato dall'amministrazione il ${fmtD(d.approvato)}</span></span>
+        <a class="btn small" href="/api/sp/richieste/${d.id}/certificato" target="_blank" rel="noopener">Apri</a></div>`).join('')}</div>`
+        : '<p class="muted small" style="margin:0">Qui compaiono da soli i certificati che hai caricato (per esempio il certificato di morte per il lutto), dopo che l\'amministrazione li ha letti e approvati.</p>'}</div>
+      <p class="muted xs">I documenti si caricano dalla richiesta in Assenze, non da qui. Li vedi solo tu e l'amministrazione.</p>`;
+    m.onclick = e => { const t = e.target.closest('[data-tab]'); if (t) { DTAB = t.dataset.tab; vistaDocU(m); } };
+    return;
+  }
   const filt = { buste: d => d.tipo === 'busta', cu: d => d.tipo === 'cu', contratti: d => d.tipo === 'contratto' || d.tipo === 'altro' }[DTAB];
   const lista = ME.docs.filter(filt);
   m.innerHTML = `<div class="chips" style="margin-bottom:14px">${tabs.map(([k, t]) => `<button class="chip" data-tab="${k}" aria-pressed="${DTAB === k}">${t}</button>`).join('')}</div>
