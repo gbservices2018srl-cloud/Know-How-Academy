@@ -27,6 +27,8 @@ const num = v => Number(v) || 0;
 const PUB = path.join(__dirname, 'public');
 const KEY = 'cassa', KEY_P = 'produzione';
 const METODI = { contanti: 'Contanti', pos: 'POS', assegno: 'Assegno' };
+// voci del Consuntivo (Gestione finanziaria, To Smile) a cui l'amministratore associa le spese di cassa
+const VOCI = ['Spese per unità locali', 'Cancelleria', 'Farmacia', 'Marche da bollo', 'Sponsor territoriali'];
 // quanti giorni indietro l'operatore può fare o correggere una chiusura (l'amministratore sempre)
 const GIORNI_CHIUSURA = 7;
 
@@ -96,7 +98,17 @@ app.get('/api/stato', needAny, (req, res) => {
 
 /* ============ USCITE DI CASSA ============ */
 const formaU = r => ({ id: r.id, sede: r.sede_id, sedeNome: r.sede_nome, data: r.data, importo: num(r.importo), nota: r.nota, chi: r.creato_nome, il: r.creato_il,
-  metodo: r.metodo || 'contanti', annullata: r.annullata, annullataMotivo: r.annullata_motivo || '', mia: false });
+  metodo: r.metodo || 'contanti', annullata: r.annullata, annullataMotivo: r.annullata_motivo || '', mia: false,
+  voce: r.voce || '', inviata: r.inviata_voce ? { voce: r.inviata_voce, importo: num(r.inviata_importo), il: r.inviata_il } : null, statoInvio: statoInvio(r) });
+// cosa deve esserci nel Consuntivo per questa spesa, e cosa c'è già (mandato prima)
+const voluto = r => !r.annullata && r.voce ? { voce: r.voce, importo: num(r.importo), anno: Number(String(r.data).slice(0, 4)), mese: Number(String(r.data).slice(5, 7)) } : null;
+const mandato = r => r.inviata_voce ? { voce: r.inviata_voce, importo: num(r.inviata_importo), anno: r.inviata_anno, mese: r.inviata_mese } : null;
+const uguali = (a, b) => (!a && !b) || (a && b && a.voce === b.voce && a.importo === b.importo && a.anno === b.anno && a.mese === b.mese);
+function statoInvio(r) {
+  const v = voluto(r), m = mandato(r);
+  if (uguali(v, m)) return m ? 'nel_consuntivo' : (r.annullata ? '' : 'senza_voce');
+  return v ? 'da_mandare' : 'da_togliere';
+}
 app.get('/api/uscite', needVedere, wrap(async (req, res) => {
   const sedi = sediRichieste(req); if (!sedi) return bad(res, 403, 'Sede non tua.');
   const p = periodo(req.query.periodo);
@@ -122,6 +134,66 @@ app.post('/api/uscite', needUser, wrap(async (req, res) => {
   log('uscita', id, req.me.nome, null, { sede: sede.nome, importo, nota, metodo });
   res.json({ ok: true, id });
 }));
+// l'amministratore associa la spesa a una voce del Consuntivo ('' = nessuna)
+app.put('/api/uscite/:id/voce', needAdmin, wrap(async (req, res) => {
+  const voce = str(req.body?.voce, 60);
+  if (voce && !VOCI.includes(voce)) return bad(res, 400, 'Voce non valida.');
+  const { rowCount } = await db.q('update uscite set voce = $2 where id = $1', [req.params.id, voce || null]);
+  if (!rowCount) return bad(res, 404, 'Uscita non trovata.');
+  res.json({ ok: true });
+}));
+// manda nel Consuntivo le spese da allineare (aggiunge, oppure toglie se annullate o con la voce cambiata)
+async function inviaUscite(ids) {
+  const { rows } = await db.q('select * from uscite where id = any($1)', [ids]);
+  const daFare = rows.filter(r => !uguali(voluto(r), mandato(r)));
+  if (!daFare.length) return { ok: true, mandate: 0 };
+  const az = await finanza.aziendaToSmile();
+  if (!az) throw Object.assign(new Error('Non trovo l\'azienda To Smile in Gestione finanziaria.'), { status: 400 });
+  const perAnno = new Map();
+  for (const r of daFare) {
+    const v = voluto(r), m = mandato(r);
+    for (const x of [m && { ...m, delta: -m.importo }, v && { ...v, delta: v.importo }].filter(Boolean)) {
+      if (!perAnno.has(x.anno)) perAnno.set(x.anno, []);
+      perAnno.get(x.anno).push({ r, ...x });
+    }
+  }
+  let mandate = 0;
+  for (const [anno, lista] of perAnno) {
+    const cons = await finanza.chiama(`/api/_appgestione/consuntivo?azienda=${encodeURIComponent(az)}&anno=${anno}&mese=1`);
+    if (cons.annoNelGestionale !== anno) throw Object.assign(new Error(`Nella Gestione finanziaria il consuntivo aperto è del ${cons.annoNelGestionale}: le spese del ${anno} non si possono mandare.`), { status: 409 });
+    const movimenti = lista.map(x => {
+      const f = sedeFin(cons, x.r.sede_nome);
+      if (!f) throw Object.assign(new Error(`La sede ${x.r.sede_nome} non c'è in Gestione finanziaria (controlla che abbia lo stesso nome).`), { status: 400 });
+      return { sedeId: f.id, mese: x.mese, voce: x.voce, delta: x.delta };
+    });
+    await finanza.scrivi('/api/_appgestione/costi-cassa', { azienda: az, anno, movimenti });
+    const fatte = new Set(lista.map(x => x.r.id));
+    for (const r of daFare.filter(r => fatte.has(r.id))) {
+      const v = voluto(r);
+      await db.q(`update uscite set inviata_voce = $2, inviata_importo = $3, inviata_anno = $4, inviata_mese = $5, inviata_il = now() where id = $1`,
+        [r.id, v?.voce || null, v?.importo ?? null, v?.anno ?? null, v?.mese ?? null]);
+      mandate++;
+    }
+  }
+  return { ok: true, mandate };
+}
+app.post('/api/uscite/invia', needAdmin, wrap(async (req, res) => {
+  const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).map(x => str(x, 60)).filter(Boolean).slice(0, 500);
+  if (!ids.length) return bad(res, 400, 'Nessuna spesa da mandare.');
+  try {
+    const x = await inviaUscite(ids);
+    log('spese mandate nel consuntivo', ids.length + ' spese', req.me.nome, null, { mandate: x.mandate });
+    res.json(x);
+  } catch (e) { bad(res, e.status || 502, finanza.messaggio(e)); }
+}));
+// quali delle voci ci sono davvero nella Gestione finanziaria
+app.get('/api/voci', needAdmin, wrap(async (req, res) => {
+  try {
+    const az = await finanza.aziendaToSmile();
+    const v = az && await finanza.chiama(`/api/_appgestione/voci?azienda=${encodeURIComponent(az)}&nomi=${encodeURIComponent(VOCI.join('|'))}`);
+    res.json({ voci: VOCI, mancanti: v ? VOCI.filter(n => !v.voci?.[n]) : [], errore: az ? null : 'Non trovo l\'azienda To Smile in Gestione finanziaria.' });
+  } catch (e) { res.json({ voci: VOCI, mancanti: [], errore: finanza.messaggio(e) }); }
+}));
 app.post('/api/uscite/:id/annulla', needVedere, wrap(async (req, res) => {
   const { rows: [r] } = await db.q('select * from uscite where id = $1', [req.params.id]);
   if (!r || !sedeVedere(req, r.sede_id)) return bad(res, 404, 'Uscita non trovata.');
@@ -130,7 +202,10 @@ app.post('/api/uscite/:id/annulla', needVedere, wrap(async (req, res) => {
   const motivo = str(req.body?.motivo, 300);
   await db.q(`update uscite set annullata = true, annullata_da = $2, annullata_il = now(), annullata_motivo = $3 where id = $1`, [r.id, req.me.nome, motivo]);
   log('uscita annullata', r.id, req.me.nome, { importo: num(r.importo), nota: r.nota }, { motivo });
-  res.json({ ok: true });
+  // se era già nel Consuntivo, si toglie subito
+  let tolta = null;
+  if (r.inviata_voce) { try { await inviaUscite([r.id]); tolta = true; } catch (e) { tolta = false; console.warn('REC: storno non riuscito:', e.message); } }
+  res.json({ ok: true, tolta });
 }));
 
 /* ============ CHIUSURA DI CASSA ============ */
@@ -201,6 +276,9 @@ app.get('/api/pannello', needAdmin, wrap(async (req, res) => {
     ieri, senzaChiusuraIeri: sedi.filter(s => !fatteIeri.some(f => f.sede_id === s.id)).map(s => s.nome) });
 }));
 
+// sede della suite → sede della Gestione finanziaria (Sestu = la sede direzionale, se il nome non coincide)
+const sedeFin = (cons, nome) => finanza.trova(cons.sedi, nome) || (/sestu/i.test(nome) ? (cons.sedi || []).find(x => x.id === cons.direzione?.sedeId) : null);
+
 /* ============ PRODUZIONE DI UL ============ */
 // ogni sede carica la produzione del mese (un totale in €); va nel Consuntivo della Gestione finanziaria
 // solo quando l'amministratore la approva (se la carica l'amministratore, va subito)
@@ -220,7 +298,7 @@ async function sincronizza(r) {
   if (!az) throw new Error('Non trovo l\'azienda To Smile in Gestione finanziaria.');
   const cons = await finanza.chiama(`/api/_appgestione/consuntivo?azienda=${encodeURIComponent(az)}&anno=${r.anno}&mese=${r.mese}`);
   if (cons.annoNelGestionale !== r.anno) throw new Error(`In Gestione finanziaria il consuntivo aperto è del ${cons.annoNelGestionale}, non del ${r.anno}.`);
-  const f = finanza.trova(cons.sedi, r.sede_nome) || (/sestu/i.test(r.sede_nome) ? (cons.sedi || []).find(x => x.id === cons.direzione?.sedeId) : null);
+  const f = sedeFin(cons, r.sede_nome);
   if (!f) throw new Error(`La sede ${r.sede_nome} non c'è in Gestione finanziaria (controlla che abbia lo stesso nome).`);
   return finanza.scrivi('/api/_appgestione/produzione', { azienda: az, sedeId: f.id, anno: r.anno, mese: r.mese, valore: num(r.valore) });
 }

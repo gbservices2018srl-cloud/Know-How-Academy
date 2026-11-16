@@ -368,19 +368,27 @@ async function vChiusura() {
 }
 
 /* ================= PANNELLO CASSA (amministrazione: solo da guardare) ================= */
-const PN = { sede: 'tutte', vista: 'uscite' };
+const PN = { sede: 'tutte', vista: 'uscite', voci: null };
+const STATO_INV = { nel_consuntivo: ['Nel consuntivo', 'ok'], da_mandare: ['Da mandare', 'todo'], da_togliere: ['Da togliere dal consuntivo', 'ko'], senza_voce: ['Senza voce', 'plain'] };
 async function vPannello() {
   const sq = encodeURIComponent(PN.sede);
   let d, us, ch;
   try { [d, us, ch] = await Promise.all([api('GET', `api/pannello?periodo=${S.periodo}`), api('GET', `api/uscite?sede=${sq}&periodo=${S.periodo}`), api('GET', `api/chiusure?sede=${sq}&periodo=${S.periodo}`)]); }
   catch (x) { return toast(x.message); }
+  if (!PN.voci) { try { PN.voci = await api('GET', 'api/voci'); } catch { PN.voci = { voci: [], mancanti: [] }; } }
+  const daAllineare = us.uscite.filter(u => u.statoInvio === 'da_mandare' || u.statoInvio === 'da_togliere');
   const T = d.totali, anno = /^\d{4}$/.test(S.periodo), sedi = S.st.tutteSedi, tutte = PN.sede === 'tutte';
   // uscite raggruppate per sede, con il totale di ogni sede
   const perSede = {}; us.uscite.forEach(u => { (perSede[u.sedeNome] = perSede[u.sedeNome] || []).push(u); });
   const totSede = l => l.filter(u => !u.annullata).reduce((a, u) => a + u.importo, 0);
-  const rigaU = u => `<div class="riga ${u.annullata ? 'off' : ''}"><div class="gr"><div class="t">${esc(u.nota)}</div>
+  const rigaU = u => { const si = STATO_INV[u.statoInvio]; return `<div class="riga ${u.annullata ? 'off' : ''}" style="flex-wrap:wrap"><div class="gr"><div class="t">${esc(u.nota)}</div>
       <div class="s"><b>${esc(METODI[u.metodo] || u.metodo)}</b> · ${esc(fD(u.data))} · ${esc(fOra(u.il))} · ${esc(u.chi)}${u.annullata ? ' · <b>annullata</b>' + (u.annullataMotivo ? ': ' + esc(u.annullataMotivo) : '') : ''}</div></div>
-      <div class="imp">${fE(u.importo)}</div>${u.puoiAnnullare ? `<button class="btn sm danger" data-ann="${esc(u.id)}">Annulla</button>` : ''}</div>`;
+      <div class="imp">${fE(u.importo)}</div>${u.puoiAnnullare ? `<button class="btn sm danger" data-ann="${esc(u.id)}">Annulla</button>` : ''}
+      <div style="flex-basis:100%;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">
+        ${u.annullata ? '' : `<select data-voce="${esc(u.id)}" aria-label="Voce del consuntivo" style="border:1px solid var(--line);border-radius:9px;padding:6px 9px;min-height:36px;background:${u.voce ? 'var(--surface-2)' : 'var(--warn-soft)'}">${opt('', '— Voce del consuntivo —', !u.voce)}${(PN.voci.voci || []).map(v => opt(v, v, v === u.voce)).join('')}</select>`}
+        ${si ? `<span class="tag ${si[1]}">${si[0]}${u.inviata && u.statoInvio !== 'nel_consuntivo' ? ' · ora: ' + esc(u.inviata.voce) : ''}</span>` : ''}
+        ${u.statoInvio === 'da_mandare' || u.statoInvio === 'da_togliere' ? `<button class="btn sm" data-inv="${esc(u.id)}">${u.statoInvio === 'da_togliere' ? 'Togli' : 'Manda'}</button>` : ''}
+      </div></div>`; };
   const C = ch.totali;
   $('#main').innerHTML = `
   <div class="head"><div><h2 class="view">Pannello cassa</h2><p>Uscite di cassa (importi, note e come sono state pagate) e chiusure serali (contanti, POS, assegni) di ogni sede e complessive.</p></div></div>
@@ -404,6 +412,9 @@ async function vPannello() {
   </div>` : ''}
   <div class="seg" style="margin:18px 0 10px"><button type="button" class="${PN.vista === 'uscite' ? 'on' : ''}" data-pvista="uscite">Uscite di cassa</button><button type="button" class="${PN.vista === 'chiusure' ? 'on' : ''}" data-pvista="chiusure">Chiusure di cassa</button></div>
   ${PN.vista === 'uscite' ? `<div class="card pad">
+    ${PN.voci.errore ? `<div class="avviso giallo" style="margin-bottom:10px">${esc(PN.voci.errore)}</div>` : PN.voci.mancanti?.length ? `<div class="avviso giallo" style="margin-bottom:10px">Nella Gestione finanziaria mancano queste voci: ${esc(PN.voci.mancanti.join(', '))}. Creale (stesso nome) prima di mandarci delle spese.</div>` : ''}
+    <div class="sez-t" style="margin-bottom:10px"><span class="muted" style="font-size:13.5px">Scegli per ogni spesa la voce del Consuntivo della sede: si aggiunge a quello che c'è già, nel mese della spesa.</span>
+      ${daAllineare.length ? `<button class="btn primary sm" id="invTutte">Manda nel consuntivo (${daAllineare.length})</button>` : ''}</div>
     <div class="sez-t"><h3>Uscite di cassa · ${esc(nomeP(us.periodo))}</h3><div class="tot"><span>Totale <b>${fE(us.totale)}</b></span>${us.totale ? `<span>${esc(metTxt(us.perMetodo))}</span>` : ''}</div></div>
     ${us.uscite.length ? Object.entries(perSede).map(([nome, l]) => `${tutte ? `<div class="sez-t" style="margin:14px 0 0;padding-top:8px;border-top:2px solid var(--line)"><b>${esc(nome)}</b><span class="tot" style="margin:0">Totale sede <b>${fE(totSede(l))}</b></span></div>` : ''}${l.map(rigaU).join('')}`).join('')
       : '<div class="empty"><b>Nessuna uscita</b>In questo periodo non ci sono uscite registrate.</div>'}
@@ -419,9 +430,19 @@ async function vPannello() {
   $('#bAnno').onclick = () => { S.periodo = anno ? S.st.oggi.slice(0, 7) : S.periodo.slice(0, 4); vPannello(); };
   $('#main').querySelectorAll('[data-psede]').forEach(td => td.onclick = () => { PN.sede = td.dataset.psede; vPannello(); scrollTo({ top: 0, behavior: 'smooth' }); });
   $('#main').querySelectorAll('[data-pvista]').forEach(b => b.onclick = () => { PN.vista = b.dataset.pvista; vPannello(); });
-  $('#main').querySelectorAll('[data-ann]').forEach(b => b.onclick = () => conferma('Annullare questa uscita?', 'Resta nello storico, barrata, e non conta più nei totali.', true, async motivo => {
-    await api('POST', `api/uscite/${b.dataset.ann}/annulla`, { motivo }); toast('Uscita annullata.'); vPannello();
+  $('#main').querySelectorAll('[data-ann]').forEach(b => b.onclick = () => conferma('Annullare questa uscita?', 'Resta nello storico, barrata, e non conta più nei totali. Se era già nel consuntivo, si toglie.', true, async motivo => {
+    const r = await api('POST', `api/uscite/${b.dataset.ann}/annulla`, { motivo }); toast(r.tolta === false ? 'Annullata, ma non sono riuscito a toglierla dal consuntivo: riprova con «Togli».' : r.tolta ? 'Annullata e tolta dal consuntivo.' : 'Uscita annullata.', 5000); vPannello();
   }));
+  $('#main').querySelectorAll('[data-voce]').forEach(sel => sel.onchange = async () => {
+    try { await api('PUT', `api/uscite/${sel.dataset.voce}/voce`, { voce: sel.value }); vPannello(); } catch (x) { toast(x.message); }
+  });
+  const invia = async (ids, b) => {
+    if (b) b.disabled = true;
+    try { const r = await api('POST', 'api/uscite/invia', { ids }); toast(r.mandate ? `Fatto: ${r.mandate} ${r.mandate === 1 ? 'spesa allineata' : 'spese allineate'} nel consuntivo.` : 'Era già tutto nel consuntivo.'); vPannello(); }
+    catch (x) { if (b) b.disabled = false; toast(x.message, 8000); }
+  };
+  $('#main').querySelectorAll('[data-inv]').forEach(b => b.onclick = () => invia([b.dataset.inv], b));
+  const it = $('#invTutte'); if (it) it.onclick = () => conferma(`Mandare ${daAllineare.length} ${daAllineare.length === 1 ? 'spesa' : 'spese'} nel consuntivo?`, 'Ogni importo si aggiunge alla voce scelta della sede, nel mese della spesa. Le spese annullate o con la voce cambiata si tolgono da dove erano.', false, () => invia(daAllineare.map(u => u.id), it));
 }
 
 /* ================= PRODUZIONE DI UL ================= */

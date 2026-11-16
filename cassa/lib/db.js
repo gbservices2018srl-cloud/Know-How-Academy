@@ -30,6 +30,13 @@ async function migrate() {
     );
     create index if not exists uscite_sede_idx on uscite(sede_id, data);
     alter table uscite add column if not exists metodo text not null default 'contanti';
+    -- voce del Consuntivo (Gestione finanziaria) scelta dall'amministratore, e cosa è già stato mandato (per non mandarlo due volte)
+    alter table uscite add column if not exists voce text;
+    alter table uscite add column if not exists inviata_voce text;
+    alter table uscite add column if not exists inviata_importo numeric(12,2);
+    alter table uscite add column if not exists inviata_anno smallint;
+    alter table uscite add column if not exists inviata_mese smallint;
+    alter table uscite add column if not exists inviata_il timestamptz;
     create table if not exists chiusure (
       sede_id text not null,
       data date not null,
