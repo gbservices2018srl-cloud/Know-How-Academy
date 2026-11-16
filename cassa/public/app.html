@@ -153,6 +153,16 @@ svg.ch text{font-size:11.5px;fill:var(--muted)}
 svg.ch .lab{fill:var(--fg)}
 
 /* ---------- Gestione Cassa UL ---------- */
+.vbox{border-radius:16px;padding:14px;margin:0 0 14px;border:2px solid}
+.vbox .vtit{font:800 17px var(--f-display);margin-bottom:10px}
+.vbox.vcon{background:var(--ok-soft);border-color:var(--ok)}.vbox.vcon .vtit{color:var(--ok)}
+.vbox.vcon input{background:var(--surface);border-color:var(--ok)}
+.vbox.vass{background:var(--purple-soft);border-color:var(--brand-purple)}.vbox.vass .vtit{color:var(--brand-purple)}
+.vrow{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.vrow input{flex:1 1 180px;min-width:0;border:1px solid var(--brand-purple);background:var(--surface);border-radius:10px;padding:10px 12px;min-height:46px;font-size:16px}
+.vrow input.vimp{flex:0 1 130px;font-weight:700}
+.btn.vadd{background:var(--brand-purple);border-color:var(--brand-purple);color:#fff;min-height:54px;font-size:17px}
+.btn.vadd:hover{filter:brightness(1.08);background:var(--brand-purple)}
 @media (max-width:700px){.top{flex-wrap:wrap;row-gap:6px}.tabs{order:3;flex-basis:100%}.who{margin-left:auto}}
 .tiles{grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr))}
 @media (max-width:560px){.tiles{grid-template-columns:1fr 1fr}.tile .v{font-size:21px}.tile.fin{grid-column:1/-1}}
@@ -279,11 +289,12 @@ async function vUscite() {
   </form>
   <div class="card pad form" style="margin:0 0 16px">
     ${VF ? `<form id="fv" novalidate><div class="sez-t"><h3>Versamento in banca · ${esc(sedeNome(S.sede))}</h3><span class="auto">Data: oggi ${esc(fD(S.st.oggi))}</span></div>
-      <div class="field"><label for="v-con">Contanti versati (€)</label><input id="v-con" class="big-in" inputmode="decimal" placeholder="0,00" value="${esc(VF.contanti)}"></div>
-      <span class="lbl">Assegni versati: uno per riga, con nome e cognome del paziente <span class="req">*</span></span>
-      ${VF.assegni.map((a, i) => `<div class="grid2" style="margin-top:6px"><div class="field" style="margin:0"><input data-vpaz="${i}" placeholder="Nome e cognome del paziente" value="${esc(a.paziente)}" autocomplete="off"></div>
-        <div class="field" style="margin:0;flex-direction:row;gap:6px"><input data-vimp="${i}" inputmode="decimal" placeholder="Importo €" value="${esc(a.importo)}"><button type="button" class="btn sm" data-vdel="${i}" aria-label="Togli assegno">✕</button></div></div>`).join('')}
-      <button type="button" class="link" id="vAdd">+ Aggiungi assegno</button>
+      <div class="vbox vcon"><div class="vtit">💶 Contanti versati</div>
+        <div class="field" style="margin:0"><label for="v-con" class="sr">Contanti versati (€)</label><input id="v-con" class="big-in" inputmode="decimal" placeholder="0,00 €" value="${esc(VF.contanti)}"></div></div>
+      <div class="vbox vass"><div class="vtit">🧾 Assegni versati <span style="font-weight:600;font-size:13px">· uno per assegno, con nome e cognome del paziente (obbligatorio)</span></div>
+        ${VF.assegni.map((a, i) => `<div class="vrow"><input data-vpaz="${i}" placeholder="Nome e cognome del paziente" value="${esc(a.paziente)}" autocomplete="off">
+          <input data-vimp="${i}" class="vimp" inputmode="decimal" placeholder="Importo €" value="${esc(a.importo)}"><button type="button" class="btn sm" data-vdel="${i}" aria-label="Togli assegno">✕</button></div>`).join('')}
+        <button type="button" class="btn wide vadd" id="vAdd">＋ Aggiungi assegno</button></div>
       <div class="somma"><span>Totale versato</span><b id="v-tot">${fE(0)}</b></div>
       <div class="field"><label for="v-nota">Note (facoltative: banca, numero distinta…)</label><input id="v-nota" maxlength="500" value="${esc(VF.nota)}"></div>
       <div class="grid2"><button type="button" class="btn" id="vNo">Annulla</button><button class="btn primary" type="submit">Invia all'amministrazione</button></div>
