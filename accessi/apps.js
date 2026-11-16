@@ -9,12 +9,20 @@
 module.exports = [
   // Gestione amministrativa (prima "Controllo di gestione"): Gestione finanziaria, App di bilancio e Raffronto prezzi
   { key: 'controllo', name: 'Gestione amministrativa', url: 'https://appgestione.it/c/controllo', color: 'teal', virtuale: true,
-    gruppo: ['finanza', 'bilancio', 'prezzi'],
+    gruppo: ['finanza', 'bilancio', 'prezzi', 'cassa'],
     desc: 'Gestione finanziaria, bilancio e raffronto dei prezzi tra listini e fatture dei fornitori.' },
   { key: 'finanza', name: 'Gestione finanziaria', url: 'https://finanza.appgestione.it', color: 'teal', dentro: 'controllo',
     desc: 'Andamento economico e dati finanziari del gruppo.' },
   { key: 'bilancio', name: 'Controllo di gestione · Bilancio', url: 'https://finanza.appgestione.it/bilancio', color: 'purple', dentro: 'controllo',
     desc: 'Dal bilancio a 4 sezioni: budget, consuntivo, scostamenti, costi fissi e variabili, break even, EBITDA e utile.' },
+  // Gestione Cassa UL: uscite di cassa (data automatica) e chiusura giornaliera (contanti, POS, assegni); l'amministrazione vede tutte le sedi
+  { key: 'cassa', name: 'Gestione Cassa UL', url: 'https://appgestione.it/cassa/', color: 'teal', dentro: 'controllo',
+    enti: 'sedi',
+    livelli: [
+      { key: 'admin', label: 'Amministratore (tutte le sedi e pannello)', role: 'admin' },
+      { key: 'operatore', label: 'Operatore', ente: 'sedi', enteLabel: 'Quale sede', multi: true },
+    ],
+    desc: 'Uscite di cassa con la nota e la data automatica, chiusura di cassa giornaliera (contanti, POS, assegni) con i totali per giorno e per mese.' },
   // Raffronto prezzi: listini dei fornitori salvati; la fattura si confronta con il listino (della fattura non si salva niente)
   { key: 'prezzi', name: 'Raffronto prezzi', url: 'https://appgestione.it/amm/prezzi', color: 'yellow', dentro: 'controllo',
     desc: 'Carica i listini dei fornitori (PDF, foto o Excel) e confronta le fatture: voci corrette, più care, più economiche o non a listino.' },
