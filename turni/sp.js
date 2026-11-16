@@ -380,10 +380,13 @@ module.exports = function sp(app, ctx) {
 
   /* ---------- timbratura ---------- */
   // Il tag NFC apre turni.appgestione.it/nfc/<codice>?e=…&c=… (dati firmati dal tag a ogni lettura)
+  // codice del tag: "1", "01", " 01 " sono lo stesso tag (numeri a due cifre)
+  const codTag = c => { const x = String(c || '').trim().replace(/[^0-9A-Za-z]/g, '').slice(0, 10).toUpperCase(); return /^\d{1,2}$/.test(x) ? x.padStart(2, '0') : x; };
   async function leggiTag(cod, e, c) {
-    const { rows } = await q('select * from sp_tag where cod = $1', [String(cod || '').slice(0, 20)]);
+    const k = codTag(cod);
+    const { rows } = await q('select * from sp_tag where cod = $1', [k]);
     const t = rows[0];
-    if (!t || !t.sede_id) throw Object.assign(new Error('Questo tag non è collegato a nessuna sede. Avvisa l\'amministrazione.'), { status: 400 });
+    if (!t || !t.sede_id) throw Object.assign(new Error(`Il tag ${k || '?'} non è collegato a nessuna sede. Avvisa l'amministrazione.`), { status: 400 });
     if (e || c) {
       const v = sun.verifica(String(e || ''), String(c || ''));
       if (!v) throw Object.assign(new Error('Tag non valido. Riappoggia il telefono al tag.'), { status: 400 });
@@ -1025,7 +1028,7 @@ module.exports = function sp(app, ctx) {
       sedi: (await sch.sedi()).map(x => ({ id: x.id, nome: x.nome })), chiaveFabbrica: sun.chiaveDiFabbrica() });
   }));
   app.put('/api/sp/admin/tag/:cod', needAd, wrap(async (req, res) => {
-    const cod = String(req.params.cod).replace(/[^0-9A-Za-z]/g, '').slice(0, 10);
+    const cod = codTag(req.params.cod);
     if (!cod) return bad(res, 400, 'Codice non valido.');
     const ss = new Set((await sch.sedi()).map(s => s.id));
     const sede = ss.has(req.body.sede) ? req.body.sede : null;
