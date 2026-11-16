@@ -60,13 +60,16 @@ async function vistaTimbra(m){
   m.innerHTML = `${pushBanner()}
     <div class="stato ${dentro ? 'in' : ''}"><span class="k">Oggi, ${fmtG(ME.oggi)}</span><span class="v">${dentro ? 'In servizio' : t.length ? 'Uscito' : 'Non in servizio'}</span>
       <span class="small">${dentro ? `Dalle ${ultima.ora}${ultima.sede ? ' · ' + esc(ultima.sede) : ''}` : t.length ? `Uscita alle ${ultima.ora}` : 'Appoggia il telefono al tag all\'ingresso'}</span></div>
+    ${me.smartOggi ? `<div class="card"><h3 style="margin-top:0">Oggi sei in smart working</h3>
+      <p class="muted small">Puoi timbrare senza tag. Il telefono ti chiede la posizione: viene presa solo nel momento in cui timbri, in modo approssimato (circa 100 metri), e la vede solo l'amministrazione. Nessun controllo durante la giornata.</p>
+      <button class="btn primary big" id="smartT">Timbra ${dentro ? 'USCITA' : 'INGRESSO'} da casa</button></div>` : ''}
     <div class="nfcbox">${svg('timbra')}<b>Avvicina il telefono al tag NFC</b>
       <span class="muted small">${isIOS ? 'iPhone: sblocca il telefono e avvicina la parte alta al tag, poi tocca la notifica che compare.' : 'Android: tieni l\'NFC acceso e appoggia il retro del telefono al tag.'} Si apre la timbratura da confermare.</span></div>
     ${me.senzaNfc ? `<div class="card"><p class="muted small" style="margin-top:0">L'amministrazione ti ha autorizzato a timbrare senza NFC.</p>
       ${me.sedi.length > 1 ? `<label class="f" style="margin-bottom:10px">Sede<select id="sedeT">${me.sedi.map(s => `<option value="${s.id}">${esc(s.nome)}</option>`).join('')}</select></label>` : ''}
       <button class="btn primary big" id="senzaNfc">Timbra ${dentro ? 'USCITA' : 'INGRESSO'} senza NFC</button></div>`
     : `<p class="muted xs" style="text-align:center;margin:-6px 0 16px">Si timbra solo con il tag NFC. Telefono senza NFC? Chiedi l'autorizzazione all'amministrazione.</p>`}
-    <div class="card"><h3>Timbrature di oggi</h3>${t.length ? `<div class="lista">${t.map(x => `<div class="li"><span class="grow">${x.tipo === 'in' ? 'Ingresso' : 'Uscita'}${x.sede ? ' · ' + esc(x.sede) : ''}${x.modo !== 'nfc' ? ` <span class="tag">${x.modo === 'app' ? 'senza NFC' : 'corretta'}</span>` : ''}</span><b>${x.ora}</b></div>`).join('')}</div>` : '<p class="muted small" style="margin:0">Nessuna timbratura.</p>'}</div>
+    <div class="card"><h3>Timbrature di oggi</h3>${t.length ? `<div class="lista">${t.map(x => `<div class="li"><span class="grow">${x.tipo === 'in' ? 'Ingresso' : 'Uscita'}${x.sede ? ' · ' + esc(x.sede) : ''}${x.modo !== 'nfc' && x.modo !== 'smart' ? ` <span class="tag">${x.modo === 'app' ? 'senza NFC' : 'corretta'}</span>` : ''}</span><b>${x.ora}</b></div>`).join('')}</div>` : '<p class="muted small" style="margin:0">Nessuna timbratura.</p>'}</div>
     ${me.admin ? '' : `<div class="card"><div class="row"><h3 class="grow" style="margin:0">Il mio contratto</h3>${!me.tipoOk ? '<button class="btn small" id="modOnb">Modifica</button>' : ''}</div>
       <div class="li" style="border:0"><span class="grow muted small">Tipo</span><b>${me.tipo === 'piva' ? 'Partita IVA' : me.tipo === 'dip' ? 'Dipendente' : '—'}</b></div>
       ${me.tipo === 'dip' ? `<div class="li"><span class="grow muted small">Ore settimanali</span><b>${nume(me.ore ?? '—')} h</b></div>` : ''}
@@ -74,10 +77,23 @@ async function vistaTimbra(m){
   const b = $('#senzaNfc');
   if (b) b.onclick = () => confermaTimbra({ tipo: dentro ? 'out' : 'in', ora: new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome'}), sede: me.sedi.find(s => s.id === ($('#sedeT')?.value || me.sedi[0]?.id))?.nome || '', protetto: false },
     { senzaNfc: true, sede: $('#sedeT')?.value || me.sedi[0]?.id }, () => window.dopoTimbra ? window.dopoTimbra() : ricarica());
+  const st = $('#smartT');
+  if (st) st.onclick = () => {
+    if (!navigator.geolocation) return toast('Questo telefono non dà la posizione: chiedi all\'amministrazione.');
+    st.disabled = true; st.textContent = 'Prendo la posizione…';
+    navigator.geolocation.getCurrentPosition(p => {
+      st.disabled = false; st.textContent = `Timbra ${dentro ? 'USCITA' : 'INGRESSO'} da casa`;
+      confermaTimbra({ tipo: dentro ? 'out' : 'in', ora: new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome'}), sede: 'Smart working', protetto: false },
+        { smart: true, lat: p.coords.latitude, lon: p.coords.longitude, prec: p.coords.accuracy }, () => ricarica());
+    }, er => {
+      st.disabled = false; st.textContent = `Timbra ${dentro ? 'USCITA' : 'INGRESSO'} da casa`;
+      toast(er.code === 1 ? 'Serve il permesso alla posizione: attivalo nelle impostazioni del telefono per questo sito e riprova.' : 'Posizione non disponibile: controlla che la localizzazione sia accesa e riprova.');
+    }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 });
+  };
   const mo = $('#modOnb'); if (mo) mo.onclick = () => vistaOnb(m, true);
 }
 function confermaTimbra(a, corpo, dopo){
-  const d = finestra(`<span class="tag ${a.protetto ? 'ok' : 'info'}">${a.protetto ? 'Tag NFC verificato' : corpo.senzaNfc ? 'Timbratura autorizzata senza NFC' : 'Tag NFC'}${a.sede ? ' · ' + esc(a.sede) : ''}</span>
+  const d = finestra(`<span class="tag ${a.protetto ? 'ok' : 'info'}">${a.protetto ? 'Tag NFC verificato' : corpo.smart ? 'Smart working approvato · posizione presa' : corpo.senzaNfc ? 'Timbratura autorizzata senza NFC' : 'Tag NFC'}${a.sede && !corpo.smart ? ' · ' + esc(a.sede) : ''}</span>
     <h2 style="margin-top:12px;font-size:24px">Timbra ${a.tipo === 'in' ? 'INGRESSO' : 'USCITA'} alle ${a.ora}?</h2>
     <p class="muted small">Se è sbagliato, puoi cambiarlo: <button class="btn small" id="cambia">È ${a.tipo === 'in' ? 'un\'uscita' : 'un ingresso'}</button></p>
     <button class="btn primary big" id="ok">Conferma</button><button class="btn big" style="border:0;margin-top:6px" id="no">Annulla</button>`);
@@ -116,14 +132,15 @@ async function vistaAssenze(m){
     m.innerHTML = `${s ? `<div class="grid2" style="margin-bottom:16px"><div class="stat"><div class="k">Ferie residue</div><div class="v">${nume(s.ferie)} gg</div></div><div class="stat"><div class="k">Permessi residui</div><div class="v">${nume(s.permessi)} h</div></div></div>` : ''}
       ${sostDa.length ? `<div class="card"><h3>Ti chiedono di sostituirli</h3>${sostDa.map(r => `<div class="li"><span class="grow"><b>${esc(r.nome)}</b> · ${esc(r.desc.toLowerCase())}</span><button class="btn small primary" data-si="${r.id}">Accetto</button><button class="btn small" data-no="${r.id}">Non posso</button></div>`).join('')}</div>` : ''}
       <div class="card"><h3>Nuova richiesta</h3>
-        <div class="chips" style="margin-bottom:12px">${[['ferie', 'Ferie'], ['permesso', 'Permesso (ore)'], ['malattia', 'Malattia'], ['altro', 'Altro']].map(([k, t]) => `<button class="chip" data-tipo="${k}" aria-pressed="${tipo === k}">${t}</button>`).join('')}</div>
+        <div class="chips" style="margin-bottom:12px">${[['ferie', 'Ferie'], ['permesso', 'Permesso (ore)'], ['malattia', 'Malattia'], ...(me.medico ? [] : [['smart', 'Smart working']]), ['altro', 'Altro']].map(([k, t]) => `<button class="chip" data-tipo="${k}" aria-pressed="${tipo === k}">${t}</button>`).join('')}</div>
         <div class="grid2">${tipo === 'permesso' ? `<label class="f">Giorno<input type="date" id="dal" min="${ME.oggi}" value="${ME.oggi}"></label><span></span>
             <label class="f">Dalle<input type="time" id="oraDa" value="16:00"></label><label class="f">Alle<input type="time" id="oraA" value="18:30"></label>`
           : `<label class="f">Dal<input type="date" id="dal" ${tipo !== 'malattia' ? `min="${ME.oggi}"` : ''} value="${ME.oggi}"></label><label class="f">Al<input type="date" id="al" value="${ME.oggi}"></label>`}</div>
         ${tipo === 'malattia' ? `<label class="f" style="margin-top:10px">Numero di protocollo del certificato<input type="text" id="prot" placeholder="dal certificato del medico"></label>` : ''}
-        ${tipo !== 'malattia' || true ? `<label class="f" style="margin-top:10px">Chi ti sostituisce?${serveSost ? ' (deve accettare)' : ' (facoltativo)'}<select id="sost"><option value="">${serveSost ? 'Scegli un collega…' : 'Nessuno'}</option>${ME.colleghi.map(c => `<option value="${c.id}">${esc(c.nome)}${c.figura ? ' · ' + esc(c.figura) : ''}</option>`).join('')}</select></label>` : ''}
+        ${tipo === 'smart' ? '<p class="muted small" style="margin:10px 0 0">Lavori da casa. Deve approvarlo l\'amministrazione: nei giorni approvati timbri dall\'app, con la posizione presa solo al momento della timbratura.</p>' : ''}
+        ${tipo !== 'smart' ? `<label class="f" style="margin-top:10px">Chi ti sostituisce?${serveSost ? ' (deve accettare)' : ' (facoltativo)'}<select id="sost"><option value="">${serveSost ? 'Scegli un collega…' : 'Nessuno'}</option>${ME.colleghi.map(c => `<option value="${c.id}">${esc(c.nome)}${c.figura ? ' · ' + esc(c.figura) : ''}</option>`).join('')}</select></label>` : ''}
         <label class="f" style="margin-top:10px">Note (facoltative)<input type="text" id="nota" maxlength="300" placeholder="${tipo === 'altro' ? 'Scrivi il motivo' : ''}"></label>
-        <button class="btn primary big" id="invia" style="margin-top:14px">${tipo === 'malattia' ? 'Comunica la malattia' : 'Invia richiesta'}</button></div>
+        <button class="btn primary big" id="invia" style="margin-top:14px">${tipo === 'malattia' ? 'Comunica la malattia' : tipo === 'smart' ? 'Chiedi lo smart working' : 'Invia richiesta'}</button></div>
       <div class="card"><h3>Le mie richieste</h3>${ME.richieste.length ? `<div class="lista">${ME.richieste.map(r => `<div class="li"><span class="grow"><span class="t">${esc(r.desc)}</span><span class="s">${r.quanti != null ? (r.tipo === 'ferie' ? `${nume(r.quanti)} giorni` : `${nume(r.quanti)} ore`) + ' · ' : ''}${r.sostNome ? 'sostituto ' + esc(r.sostNome) : ''}${r.notaAdmin ? ' · ' + esc(r.notaAdmin) : ''}</span></span>
         <span class="tag ${STATI[r.stato]?.[1] || ''}">${STATI[r.stato]?.[0] || r.stato}</span>${['attesa_sost', 'attesa_admin'].includes(r.stato) ? `<button class="btn small" data-ann="${r.id}">Annulla</button>` : ''}</div>`).join('')}</div>` : '<p class="muted small" style="margin:0">Nessuna richiesta.</p>'}</div>
       ${s ? `<div class="card"><h3>Movimenti di ferie e permessi</h3>${ME.movimenti.length ? `<div class="lista">${ME.movimenti.map(x => `<div class="li"><span class="grow"><span class="t" style="font-weight:600">${esc(x.causale)}</span><span class="s">${fmtG(x.data)}</span></span><b style="white-space:nowrap">${x.tipo === 'saldo' ? 'saldo ' : x.valore > 0 ? '+' : ''}${nume(x.valore)} ${x.voce === 'ferie' ? 'gg ferie' : 'h permessi'}</b></div>`).join('')}</div>` : '<p class="muted small" style="margin:0">Il saldo arriva con la prossima busta paga.</p>'}</div>` : ''}`;

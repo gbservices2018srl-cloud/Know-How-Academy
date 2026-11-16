@@ -53,6 +53,10 @@ module.exports = function sp(app, ctx) {
       create table if not exists sp_timbrature (id text primary key, user_id text not null, giorno date not null, ora text not null, il timestamptz not null default now(),
         tipo text not null, sede_id text, modo text not null, tag text, nota text not null default '', annullata boolean not null default false, da text);
       create index if not exists sp_timbrature_g on sp_timbrature (giorno, user_id);
+      -- smart working: posizione presa solo al momento della timbratura, arrotondata (circa 100 m)
+      alter table sp_timbrature add column if not exists lat numeric(7,3);
+      alter table sp_timbrature add column if not exists lon numeric(7,3);
+      alter table sp_timbrature add column if not exists prec int;
       create table if not exists sp_turni (id text primary key, user_id text not null, giorno date not null, sede_id text, da text not null, a text not null,
         pausa int not null default 0, nota text not null default '', aggiornato timestamptz not null default now());
       create index if not exists sp_turni_g on sp_turni (giorno, user_id);
@@ -188,7 +192,7 @@ module.exports = function sp(app, ctx) {
     let n = 0; for (let g = dal; g <= al; g = addG(g, 1)) if (dow(g) >= 1 && dow(g) <= 5) n++;
     return n;
   }
-  const TIPI = { ferie: 'Ferie', permesso: 'Permesso', malattia: 'Malattia', altro: 'Altra assenza' };
+  const TIPI = { ferie: 'Ferie', permesso: 'Permesso', malattia: 'Malattia', altro: 'Altra assenza', smart: 'Smart working' };
   const richShape = (r, nomi) => ({ id: r.id, user: r.user_id, nome: nomi?.get(r.user_id) || '', tipo: r.tipo, tipoTxt: TIPI[r.tipo], dal: r.dal, al: r.al, oraDa: r.ora_da, oraA: r.ora_a,
     quanti: r.quanti != null ? Number(r.quanti) : null, sost: r.sost_id, sostNome: nomi?.get(r.sost_id) || '', sostOk: r.sost_ok, stato: r.stato, nota: r.nota, prot: r.prot,
     creata: r.creata, decisaIl: r.decisa_il, notaAdmin: r.nota_admin });
@@ -236,7 +240,7 @@ module.exports = function sp(app, ctx) {
       for (const [k, minuti] of perGiorno) {
         if (timS.has(k) || fatteS.has(k)) continue;
         const [uid, g] = k.split('|');
-        if (ric.some(r => r.user_id === uid && r.dal <= g && r.al >= g)) continue;
+        if (ric.some(r => r.user_id === uid && r.dal <= g && r.al >= g && r.tipo !== 'smart')) continue;
         const s = (await saldi([uid]))[uid], ore = r2(minuti / 60);
         let esito = 'ingiustificata', valore = null, mov = null;
         if (s.ferie >= 1) { esito = 'ferie'; valore = 1; mov = await movimento(uid, 'ferie', 'delta', -1, g, `Mancata timbratura ${fmtG(g)} (automatico)`, 'manc:' + g, 'automatico'); }
@@ -270,11 +274,12 @@ module.exports = function sp(app, ctx) {
     const colleghi = tutti.filter(x => x.id !== p.id && !x.owner).map(x => ({ id: x.id, nome: x.nome, figura: x.figura,
       vicino: (x.figura === p.figura ? 2 : 0) + (x.sedi.some(s2 => p.sedi.includes(s2)) ? 1 : 0) })).sort((a, b) => b.vicino - a.vicino || a.nome.localeCompare(b.nome));
     const { rows: tags } = await q('select cod, sede_id from sp_tag where sede_id is not null');
+    const smartOggi = !p.medico && await smartIl(p.id, g);
     res.json({
       oggi: g, ora: roma().hm,
-      me: { id: p.id, nome: p.nome, figura: p.figura, medico: p.medico, admin: req.user.role === 'admin', tipo: p.tipo, tipoOk: p.tipoOk, ore: p.ore, senzaNfc: p.senzaNfc, onb: p.onb,
+      me: { id: p.id, nome: p.nome, figura: p.figura, medico: p.medico, admin: req.user.role === 'admin', tipo: p.tipo, tipoOk: p.tipoOk, ore: p.ore, senzaNfc: p.senzaNfc, smartOggi, onb: p.onb,
         sedi: p.sedi.map(id => ({ id, nome: sedeNome.get(id) || '' })) },
-      timbrature: tim.map(t => ({ id: t.id, tipo: t.tipo, ora: t.ora, sede: sedeNome.get(t.sede_id) || '', modo: t.modo })),
+      timbrature: tim.map(t => ({ id: t.id, tipo: t.tipo, ora: t.ora, sede: t.modo === 'smart' ? 'Smart working' : sedeNome.get(t.sede_id) || '', modo: t.modo })),
       saldi: isDip(p) ? s[p.id] : null,
       richieste: mie.map(r => ({ ...richShape(r, nomi), desc: descRich(r) })),
       sostituzioni: sost.map(r => ({ ...richShape(r, nomi), desc: descRich(r) })),
@@ -318,6 +323,11 @@ module.exports = function sp(app, ctx) {
     if (t.protetto) throw Object.assign(new Error('Lettura non valida: appoggia il telefono al tag (non usare link salvati).'), { status: 400 });
     return { t, v: null };
   }
+  // smart working approvato dall'amministrazione per quel giorno
+  async function smartIl(uid, g) {
+    const { rows } = await q(`select 1 from sp_richieste where user_id = $1 and tipo = 'smart' and stato = 'approvata' and dal <= $2 and al >= $2 limit 1`, [uid, g]);
+    return !!rows[0];
+  }
   async function prossimoTipo(uid, g) {
     const { rows } = await q(`select tipo from sp_timbrature where user_id = $1 and giorno = $2 and not annullata order by il desc limit 1`, [uid, g]);
     return rows[0]?.tipo === 'in' ? 'out' : 'in';
@@ -333,8 +343,14 @@ module.exports = function sp(app, ctx) {
     const p = await io(req);
     if (p.medico) return bad(res, 400, 'I medici non timbrano.');
     const n = roma(), b = req.body;
-    let sede = null, tagCod = null, modo = 'nfc';
-    if (b.senzaNfc) {
+    let sede = null, tagCod = null, modo = 'nfc', pos = null;
+    if (b.smart) {
+      if (!(await smartIl(p.id, n.giorno))) return bad(res, 403, 'Oggi non hai uno smart working approvato: si timbra con il tag NFC.');
+      const lat = Number(b.lat), lon = Number(b.lon);
+      if (!isFinite(lat) || !isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180 || (!lat && !lon)) return bad(res, 400, 'Per timbrare in smart working serve la posizione del telefono.');
+      modo = 'smart';
+      pos = [Math.round(lat * 1000) / 1000, Math.round(lon * 1000) / 1000, Math.min(99999, Math.max(0, Math.round(Number(b.prec) || 0)))];
+    } else if (b.senzaNfc) {
       if (!p.senzaNfc) return bad(res, 403, 'Si timbra solo con il tag NFC. Se il telefono non ha l\'NFC chiedi l\'autorizzazione all\'amministrazione.');
       modo = 'app';
       sede = p.sedi.includes(b.sede) ? b.sede : p.sedi[0] || null;
@@ -348,9 +364,10 @@ module.exports = function sp(app, ctx) {
     }
     const tipo = b.tipo === 'in' || b.tipo === 'out' ? b.tipo : await prossimoTipo(p.id, n.giorno);
     const id = db.newId();
-    await q(`insert into sp_timbrature (id, user_id, giorno, ora, tipo, sede_id, modo, tag) values ($1,$2,$3,$4,$5,$6,$7,$8)`, [id, p.id, n.giorno, n.hm, tipo, sede, modo, tagCod]);
+    await q(`insert into sp_timbrature (id, user_id, giorno, ora, tipo, sede_id, modo, tag, lat, lon, prec) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [id, p.id, n.giorno, n.hm, tipo, sede, modo, tagCod, pos ? pos[0] : null, pos ? pos[1] : null, pos ? pos[2] : null]);
     const ss = await sch.sedi();
-    res.json({ ok: true, tipo, ora: n.hm, sede: ss.find(s => s.id === sede)?.nome || '' });
+    res.json({ ok: true, tipo, ora: n.hm, sede: modo === 'smart' ? 'Smart working' : ss.find(s => s.id === sede)?.nome || '' });
   }));
 
   /* ---------- turni (utente: i suoi) ---------- */
@@ -378,6 +395,7 @@ module.exports = function sp(app, ctx) {
     if (!per) return bad(res, 400, 'Persona non trovata.');
     const tipo = TIPI[b.tipo] ? b.tipo : null;
     if (!tipo) return bad(res, 400, 'Scegli il tipo di assenza.');
+    if (tipo === 'smart' && per.medico) return bad(res, 400, 'Lo smart working è per chi timbra.');
     const dal = str(b.dal, 10), al = tipo === 'permesso' ? dal : str(b.al || b.dal, 10);
     if (!isG(dal) || !isG(al) || al < dal) return bad(res, 400, 'Controlla le date.');
     let quanti = null, oraDa = null, oraA = null;
@@ -667,7 +685,8 @@ module.exports = function sp(app, ctx) {
         let minuti = 0, aperta = false;
         for (const c of coppie(mt)) { if (c.in && c.out) minuti += Math.max(0, min(c.out.ora) - min(c.in.ora)); else aperta = true; }
         let nota = '', k = 'ok';
-        if (as) { nota = as.tipo === 'permesso' ? `Permesso ${as.ora_da}–${as.ora_a}` : TIPI[as.tipo]; k = 'info'; }
+        if (as && as.tipo === 'smart') { nota = 'Smart working'; k = 'info'; if (!mt.length && g < oggi()) { nota = 'Smart working · nessuna timbratura'; k = 'no'; } else if (aperta && g < oggi()) { nota = 'Smart working · uscita non timbrata'; k = 'wait'; } }
+        else if (as) { nota = as.tipo === 'permesso' ? `Permesso ${as.ora_da}–${as.ora_a}` : TIPI[as.tipo]; k = 'info'; }
         if (mc) { nota = mc.esito === 'ingiustificata' ? 'Assenza ingiustificata' : `Mancata timbratura · ${mc.esito === 'ferie' ? 'ferie' : 'permessi'} (automatico)`; k = mc.esito === 'ingiustificata' ? 'no' : 'wait'; }
         if (!nota && mturni.length && !mt.length) { nota = g < oggi() ? 'Nessuna timbratura' : g === oggi() ? 'Non ancora timbrato' : 'In turno'; k = g < oggi() ? 'no' : 'info'; }
         if (!nota && aperta) { nota = 'Uscita non timbrata'; k = 'wait'; }
@@ -676,7 +695,7 @@ module.exports = function sp(app, ctx) {
         righe.push({ user: p.id, giorno: g, nome: p.nome, figura: p.figura, tipo: p.tipo,
           sede: [...new Set(mt.map(t => ss.get(t.sede_id)).concat(mturni.map(t => ss.get(t.sede))).filter(Boolean))].join(', '),
           turno: mturni.map(t => `${t.da}–${t.a}`).join(' + '),
-          timbrature: mt.map(t => ({ id: t.id, tipo: t.tipo, ora: t.ora, modo: t.modo, nota: t.nota })), ore: minuti, nota, k, mancata: mc ? mc.esito : null });
+          timbrature: mt.map(t => ({ id: t.id, tipo: t.tipo, ora: t.ora, modo: t.modo, nota: t.nota, ...(t.lat != null ? { lat: Number(t.lat), lon: Number(t.lon), prec: t.prec } : {}) })), ore: minuti, nota, k, mancata: mc ? mc.esito : null });
       }
     }
     righe.sort((a, b) => a.giorno.localeCompare(b.giorno) || a.nome.localeCompare(b.nome));
@@ -692,7 +711,7 @@ module.exports = function sp(app, ctx) {
     const lav = g.filter(x => dow(x) >= 1 && dow(x) <= 5).length;
     const ss = new Map((await sch.sedi()).map(s => [s.id, s.nome]));
     return { mese: m, giorni: g.map(x => ({ g: x, n: +x.slice(8), w: 'DLMMGVS'[dow(x)], fest: dow(x) === 0 || dow(x) === 6 })), righe: filtra(pp, sede, fig).filter(isDip).map(p => {
-      let tot = 0; const c = { F: 0, P: 0, M: 0, AI: 0 };
+      let tot = 0; const c = { F: 0, P: 0, M: 0, AI: 0, SW: 0 };
       const celle = g.map(x => {
         const mt = tim.filter(t => t.user_id === p.id && t.giorno === x), mturni = ts.filter(t => t.user === p.id && t.giorno === x);
         const as = ric.find(r => r.user_id === p.id && r.dal <= x && r.al >= x), mc = manc.find(r => r.user_id === p.id && r.giorno === x);
@@ -702,12 +721,15 @@ module.exports = function sp(app, ctx) {
           for (const cp of coppie(mt)) if (cp.in && cp.out) ov += Math.max(0, Math.min(min(cp.out.ora), b) - Math.max(min(cp.in.ora), a));
           ricon += Math.min(ov, durata(t));
         }
+        const smart = as && as.tipo === 'smart';
+        // smart working senza turno: contano le ore timbrate (il tetto del contratto resta)
+        if (smart && !mturni.length) for (const cp of coppie(mt)) if (cp.in && cp.out) ricon += Math.max(0, min(cp.out.ora) - min(cp.in.ora));
         tot += ricon;
         let cod = '';
         if (mc) { cod = mc.esito === 'ferie' ? 'F*' : mc.esito === 'permessi' ? 'P*' : 'AI'; c[mc.esito === 'ferie' ? 'F' : mc.esito === 'permessi' ? 'P' : 'AI']++; }
-        else if (as) { cod = as.tipo === 'ferie' ? 'F' : as.tipo === 'malattia' ? 'M' : as.tipo === 'permesso' ? 'P' : 'A'; if (c[cod] !== undefined) c[cod]++; }
-        const fuori = mt.length && !mturni.length;
-        return { min: ricon, cod, fuori, corto: mturni.length && ricon < mturni.reduce((s, t) => s + durata(t), 0) && !as };
+        else if (as) { cod = as.tipo === 'ferie' ? 'F' : as.tipo === 'malattia' ? 'M' : as.tipo === 'permesso' ? 'P' : smart ? 'SW' : 'A'; if (c[cod] !== undefined) c[cod]++; }
+        const fuori = mt.length && !mturni.length && !smart;
+        return { min: ricon, cod, fuori, corto: mturni.length && ricon < mturni.reduce((s, t) => s + durata(t), 0) && (!as || smart) };
       });
       const tetto = Math.round((p.ore || 0) * 60 * lav / 5);
       return { user: p.id, nome: p.nome, figura: p.figura, sedi: p.sedi.map(s => ss.get(s)).filter(Boolean).join(', '), ore: p.ore, celle,
@@ -719,9 +741,9 @@ module.exports = function sp(app, ctx) {
     const r = await oreRiconosciute(m, req.query.sede, req.query.figura);
     if (req.query.csv) {
       const h = v => v ? hmDi(v) : '';
-      return csv(res, `ore_riconosciute_${m}.csv`, [['Persona', 'Mansione', 'Ore contratto/sett.', ...r.giorni.map(x => `${x.w} ${x.n}`), 'Totale riconosciuto', 'Tetto contratto', 'Ferie', 'Permessi', 'Malattia', 'Ass. ingiustificate'],
-        ...r.righe.map(p => [p.nome, p.figura, p.ore ?? '', ...p.celle.map(c => [h(c.min), c.cod].filter(Boolean).join(' ')), hmDi(p.totale), hmDi(p.tetto), p.conta.F, p.conta.P, p.conta.M, p.conta.AI]),
-        [], ['Legenda: F ferie, P permesso, M malattia, AI assenza ingiustificata, * = scalato in automatico per mancata timbratura. Ogni giorno conta al massimo il turno; il totale non supera il tetto del contratto.']]);
+      return csv(res, `ore_riconosciute_${m}.csv`, [['Persona', 'Mansione', 'Ore contratto/sett.', ...r.giorni.map(x => `${x.w} ${x.n}`), 'Totale riconosciuto', 'Tetto contratto', 'Ferie', 'Permessi', 'Malattia', 'Ass. ingiustificate', 'Smart working'],
+        ...r.righe.map(p => [p.nome, p.figura, p.ore ?? '', ...p.celle.map(c => [h(c.min), c.cod].filter(Boolean).join(' ')), hmDi(p.totale), hmDi(p.tetto), p.conta.F, p.conta.P, p.conta.M, p.conta.AI, p.conta.SW]),
+        [], ['Legenda: F ferie, P permesso, M malattia, AI assenza ingiustificata, SW smart working, * = scalato in automatico per mancata timbratura. Ogni giorno conta al massimo il turno; il totale non supera il tetto del contratto.']]);
     }
     res.json(r);
   }));
