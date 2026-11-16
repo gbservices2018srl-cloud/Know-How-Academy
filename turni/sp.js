@@ -484,6 +484,7 @@ module.exports = function sp(app, ctx) {
     }
     if (stato === 'approvata') await applicaApprovazione(r, req.user.email);
     if (tipo === 'malattia' && fuoriAdmin) avvisaAdmin({ title: 'Malattia comunicata', body: `${per.nome}: ${descRich(r).toLowerCase()}${r.prot ? '' : ' (protocollo da inserire entro oggi)'}.`, url: '/?sez=richieste' });
+    if (['lutto', 'malattia'].includes(tipo) && fuoriAdmin && sost) avvisa([sost], { title: 'Sostituisci un collega', body: `${per.nome}: ${descRich(r).toLowerCase()}. I suoi turni di quei giorni passano a te, se sei libero.`, url: '/?sez=turni' });
     if (tipo === 'lutto' && fuoriAdmin) avvisaAdmin({ title: 'Lutto comunicato (per conoscenza)', body: `${per.nome}: ${descRich(r).toLowerCase()}. Certificato da caricare entro il ${fmtG(r.scadenza)}.`, url: '/?sez=richieste' });
     if (stato === 'attesa_sost') avvisa([sost], { title: 'Ti chiedono una sostituzione', body: `${per.nome}: ${descRich(r).toLowerCase()}. Accetta o rifiuta nella sezione Assenze.`, url: '/?sez=assenze' });
     if (stato === 'attesa_admin') avvisaAdmin({ title: 'Richiesta da approvare', body: `${per.nome}: ${descRich(r).toLowerCase()}.`, url: '/?sez=richieste' });

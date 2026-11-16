@@ -122,6 +122,7 @@ window.timbraDaTag = async function(cod, qs){
 };
 
 /* ---------- assenze ---------- */
+const sostLbl = c => c.nome + (c.figura ? ' · ' + c.figura : '');
 const STATI = { attesa_sost: ['In attesa del sostituto', 'warn'], attesa_admin: ['In attesa dell\'amministrazione', 'warn'], approvata: ['Approvata', 'ok'], rifiutata: ['Rifiutata', 'no'] };
 async function vistaAssenze(m){
   const me = ME.me, s = ME.saldi;
@@ -144,7 +145,7 @@ async function vistaAssenze(m){
           <p class="muted small" style="margin:6px 0 0">Se non lo hai ancora, invia lo stesso e inseriscilo <b>entro le 23:59 di oggi</b>. Altrimenti i giorni si scalano dalle ferie, o se non ne hai diventano assenza ingiustificata.</p>` : ''}
         ${tipo === 'lutto' ? `<p class="muted small" style="margin:10px 0 0">Spettano <b>3 giorni lavorativi</b> da questa data. Sono approvati subito: l'amministrazione riceve solo un avviso. Poi carica il <b>certificato di morte</b> entro la fine del mese, altrimenti i giorni si scalano dalle ferie, o se non ne hai diventano assenza ingiustificata.</p>` : ''}
         ${tipo === 'smart' ? '<p class="muted small" style="margin:10px 0 0">Lavori da casa. Deve approvarlo l\'amministrazione: nei giorni approvati timbri dall\'app, con la posizione presa solo al momento della timbratura.</p>' : ''}
-        ${tipo !== 'smart' ? `<label class="f" style="margin-top:10px">Chi ti sostituisce?${serveSost ? ' (deve accettare)' : ' (facoltativo)'}<select id="sost"><option value="">${serveSost ? 'Scegli un collega…' : 'Nessuno'}</option>${ME.colleghi.map(c => `<option value="${c.id}">${esc(c.nome)}${c.figura ? ' · ' + esc(c.figura) : ''}</option>`).join('')}</select></label>` : ''}
+        ${tipo !== 'smart' ? `<label class="f" style="margin-top:10px">Chi ti sostituisce?${serveSost ? ' (deve accettare)' : ' (facoltativo)'}<input type="search" id="sost" list="colleghiDL" autocomplete="off" placeholder="Scrivi il nome del collega${serveSost ? '' : ' (o lascia vuoto)'}"><datalist id="colleghiDL">${ME.colleghi.map(c => `<option value="${esc(sostLbl(c))}"></option>`).join('')}</datalist></label>` : ''}
         <label class="f" style="margin-top:10px">Note (facoltative)<input type="text" id="nota" maxlength="300" placeholder="${tipo === 'altro' ? 'Scrivi il motivo' : ''}"></label>
         <button class="btn primary big" id="invia" style="margin-top:14px">${tipo === 'malattia' ? 'Comunica la malattia' : tipo === 'lutto' ? 'Comunica il lutto' : tipo === 'smart' ? 'Chiedi lo smart working' : 'Invia richiesta'}</button></div>
       <div class="card"><h3>Le mie richieste</h3>${ME.richieste.length ? `<div class="lista">${ME.richieste.map(r => `<div class="li"><span class="grow"><span class="t">${esc(r.desc)}</span><span class="s">${r.quanti != null ? (['ferie', 'lutto'].includes(r.tipo) ? `${nume(r.quanti)} giorni` : `${nume(r.quanti)} ore`) + ' · ' : ''}${r.sostNome ? 'sostituto ' + esc(r.sostNome) : ''}${r.notaAdmin ? ' · ' + esc(r.notaAdmin) : ''}</span></span>
@@ -162,8 +163,13 @@ async function vistaAssenze(m){
       if (pr) { await api('POST', `/api/sp/richieste/${pr.dataset.prot}/protocollo`, {prot: m.querySelector(`[data-protin="${pr.dataset.prot}"]`).value}); toast('Protocollo salvato.'); return ricarica(); }
       if (an) { if (!confirm('Annullare la richiesta?')) return; await api('POST', `/api/sp/richieste/${an.dataset.ann}/annulla`, {}); toast('Richiesta annullata.'); return ricarica(); }
       if (e.target.id === 'invia') {
+        // il sostituto si scrive: deve essere uno dei colleghi proposti
+        const sv = ($('#sost')?.value || '').trim().toLowerCase();
+        const sc = sv ? ME.colleghi.find(c => sostLbl(c).toLowerCase() === sv) || (() => { const t = ME.colleghi.filter(c => c.nome.toLowerCase().includes(sv)); return t.length === 1 ? t[0] : null; })() : null;
+        if (sv && !sc) return toast('Non trovo questo collega: scegli il nome dall\'elenco che compare mentre scrivi.');
+        const sostId = sc ? sc.id : '';
         const r = await api('POST', '/api/sp/richieste', { tipo, dal: $('#dal').value, al: $('#al')?.value || $('#dal').value, oraDa: $('#oraDa')?.value, oraA: $('#oraA')?.value,
-          sost: $('#sost')?.value, prot: $('#prot')?.value, nota: $('#nota').value });
+          sost: sostId, prot: $('#prot')?.value, nota: $('#nota').value });
         toast(r.scadenza ? (tipo === 'lutto' ? 'Registrato. Ora carica il certificato di morte.' : 'Registrata. Inserisci il protocollo entro le 23:59.') : r.stato === 'attesa_sost' ? 'Richiesta inviata al sostituto.' : r.stato === 'approvata' ? 'Registrata.' : 'Richiesta inviata all\'amministrazione.');
         if (r.avviso) setTimeout(() => toast(r.avviso), 3300);
         return ricarica();
