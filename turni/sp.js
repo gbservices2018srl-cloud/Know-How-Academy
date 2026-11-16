@@ -70,6 +70,13 @@ module.exports = function sp(app, ctx) {
       -- certificati letti e approvati dall'amministrazione: compaiono nei «I miei documenti» della persona
       alter table sp_richieste add column if not exists doc_approvato timestamptz;
       alter table sp_richieste add column if not exists doc_approvato_da text;
+      -- firma con il dito (firma elettronica semplice): immagine cifrata, data, dispositivo e impronta del documento firmato
+      alter table sp_docs add column if not exists firma bytea;
+      alter table sp_docs add column if not exists firma_iv bytea;
+      alter table sp_docs add column if not exists firma_tag bytea;
+      alter table sp_docs add column if not exists firmato timestamptz;
+      alter table sp_docs add column if not exists firma_disp text;
+      alter table sp_docs add column if not exists firma_impronta text;
       create table if not exists sp_turni (id text primary key, user_id text not null, giorno date not null, sede_id text, da text not null, a text not null,
         pausa int not null default 0, nota text not null default '', aggiornato timestamptz not null default now());
       create index if not exists sp_turni_g on sp_turni (giorno, user_id);
@@ -326,7 +333,7 @@ module.exports = function sp(app, ctx) {
       q(`select ${RCOLS} from sp_richieste where user_id = $1 and stato <> 'annullata' order by dal desc limit 40`, [p.id]),
       q(`select ${RCOLS} from sp_richieste where sost_id = $1 and stato in ('attesa_sost','attesa_admin') and al >= $2 order by dal`, [p.id, g]),
       q(`select voce, tipo, valore, data, causale from sp_movimenti where user_id = $1 and not annullato order by data desc, il desc limit 30`, [p.id]),
-      q(`select id, tipo, periodo, titolo, pubblicato, visto, ricevuto from sp_docs where user_id = $1 and stato = 'pubblicato' order by periodo desc, pubblicato desc`, [p.id]),
+      q(`select id, tipo, periodo, titolo, pubblicato, visto, ricevuto, firmato from sp_docs where user_id = $1 and stato = 'pubblicato' order by periodo desc, pubblicato desc`, [p.id]),
       perfUtente(p.id),
     ]);
     const tutti = await persone(), nomi = new Map(tutti.map(x => [x.id, x.nome]));
@@ -697,6 +704,30 @@ module.exports = function sp(app, ctx) {
     res.json({ ok: true });
   }));
 
+  // firma per ricevuta con il dito: vale anche come conferma di ricezione
+  app.post('/api/sp/doc/:id/firma', needSp, wrap(async (req, res) => {
+    const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(String(req.body.png || ''));
+    if (!m) return bad(res, 400, 'Firma non valida: firma nel riquadro e riprova.');
+    const png = Buffer.from(m[1], 'base64');
+    if (png.length < 300 || png.length > 400 * 1024) return bad(res, 400, 'Firma non valida: firma nel riquadro e riprova.');
+    const { rows: [d] } = await q(`select * from sp_docs where id = $1 and user_id = $2 and stato = 'pubblicato'`, [req.params.id, req.user.sso_id]);
+    if (!d) return bad(res, 404, 'Documento non trovato');
+    if (d.firmato) return bad(res, 400, 'Hai già firmato questo documento.');
+    const impronta = crypto.createHash('sha256').update(decifra(d)).digest('hex');
+    const c = cifraOk() ? cifra(png) : { file: png, iv: null, tag: null };
+    const disp = buste.dispositivo(req.get('user-agent'));
+    await q(`update sp_docs set firma = $2, firma_iv = $3, firma_tag = $4, firmato = now(), firma_disp = $5, firma_impronta = $6,
+        ricevuto = coalesce(ricevuto, now()), ricevuto_disp = coalesce(ricevuto_disp, $5), visto = coalesce(visto, now()) where id = $1 and firmato is null`,
+      [d.id, c.file, c.iv, c.tag, disp, impronta]);
+    res.json({ ok: true });
+  }));
+  app.get('/api/sp/doc/:id/firma', needSp, wrap(async (req, res) => {
+    const { rows: [d] } = await q('select user_id, firma, firma_iv, firma_tag from sp_docs where id = $1', [req.params.id]);
+    if (!d || !d.firma || (req.user.role !== 'admin' && d.user_id !== req.user.sso_id)) return bad(res, 404, 'Firma non disponibile');
+    res.set({ 'Content-Type': 'image/png', 'Cache-Control': 'private, no-store' });
+    res.send(d.firma_iv ? decifra({ file: d.firma, iv: d.firma_iv, tag: d.firma_tag }) : d.firma);
+  }));
+
   /* ================= amministratore ================= */
   const needAd = [needAdmin, needSp];
 
@@ -1005,7 +1036,7 @@ module.exports = function sp(app, ctx) {
 
   // documenti: buste paga e CU divise per codice fiscale, contratti e altri per persona
   app.get('/api/sp/admin/doc', needAd, wrap(async (req, res) => {
-    const { rows } = await q(`select id, user_id, tipo, periodo, titolo, pagine, stato, saldi, origine, pagina, suggerito, caricato, pubblicato, visto, ricevuto
+    const { rows } = await q(`select id, user_id, tipo, periodo, titolo, pagine, stato, saldi, origine, pagina, suggerito, caricato, pubblicato, visto, ricevuto, firmato, firma_disp, firma_impronta
       from sp_docs where stato not in ('ritirato','unita') order by periodo desc, caricato desc limit 600`);
     const pp = await persone();
     res.json({ docs: rows, cifra: cifraOk(), persone: pp.map(p => ({ id: p.id, nome: p.nome, haCf: !!p.cf, tipo: p.tipo, ore: p.ore })) });

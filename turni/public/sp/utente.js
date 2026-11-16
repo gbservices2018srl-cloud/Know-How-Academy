@@ -16,10 +16,12 @@ window.avvioUtente = async function(st){
   USEZ = voci.includes(sez) ? sez : voci[0];
   disegnaUtente();
 };
+// da firmare: ogni documento caricato dall'amministrazione (le buste confermate prima della firma restano valide)
+const daFirmare = d => !d.firmato && !(d.tipo === 'busta' && d.ricevuto);
 function navUtente(){
   const n = $('#unav'); n.hidden = false;
   const badge = { assenze: ME.sostituzioni.filter(r => r.stato === 'attesa_sost').length + ME.richieste.filter(r => r.docStato === 'attesa').length, info: INFO.docs.some(d => d.tipo === 'regolamento' && !d.letto) ? 1 : 0,
-    doc: ME.docs.some(d => d.tipo === 'busta' && !d.ricevuto) ? 1 : 0 };
+    doc: ME.docs.some(daFirmare) ? 1 : 0 };
   n.innerHTML = sezioniUtente().map(([k, t]) => `<button data-u="${k}" aria-selected="${k === USEZ}"><span class="${badge[k] ? 'dot' : ''}">${svg(k)}</span><span>${t}</span></button>`).join('');
   n.onclick = e => { const b = e.target.closest('[data-u]'); if (b) { USEZ = b.dataset.u; history.replaceState(null, '', '/?sez=' + USEZ); disegnaUtente(); scrollTo(0, 0); } };
 }
@@ -303,14 +305,38 @@ async function vistaDocU(m){
   const filt = { buste: d => d.tipo === 'busta', cu: d => d.tipo === 'cu', contratti: d => d.tipo === 'contratto' || d.tipo === 'altro' }[DTAB];
   const lista = ME.docs.filter(filt);
   m.innerHTML = `<div class="chips" style="margin-bottom:14px">${tabs.map(([k, t]) => `<button class="chip" data-tab="${k}" aria-pressed="${DTAB === k}">${t}</button>`).join('')}</div>
-    <div class="card">${lista.length ? `<div class="lista">${lista.map(d => `<div class="li"><span class="grow"><span class="t">${esc(d.titolo)}</span><span class="s">${d.tipo === 'busta' ? (d.ricevuto ? 'Ricevuta confermata il ' + fmtD(d.ricevuto) : 'Da confermare') : 'Caricato il ' + fmtD(d.pubblicato)}</span></span>
-      <button class="btn small" data-apri="${d.id}">Apri</button>${d.tipo === 'busta' && !d.ricevuto ? `<button class="btn small primary" data-ric="${d.id}">Confermo la ricezione</button>` : ''}</div>`).join('')}</div>`
+    <div class="card">${lista.length ? `<div class="lista">${lista.map(d => `<div class="li"><span class="grow"><span class="t">${esc(d.titolo)}</span><span class="s">${d.firmato ? 'Firmato il ' + fmtD(d.firmato) : d.tipo === 'busta' && d.ricevuto ? 'Ricevuta confermata il ' + fmtD(d.ricevuto) : (d.tipo === 'busta' ? '' : 'Caricato il ' + fmtD(d.pubblicato) + ' · ') + 'Da firmare'}</span></span>
+      <button class="btn small" data-apri="${d.id}">Apri</button>${daFirmare(d) ? `<button class="btn small primary" data-firma="${d.id}">Firma</button>` : ''}</div>`).join('')}</div>`
       : `<p class="muted small" style="margin:0">${DTAB === 'buste' ? 'Le buste paga compaiono qui appena l\'amministrazione le pubblica.' : DTAB === 'cu' ? 'La CU compare qui appena l\'amministrazione la pubblica.' : 'Nessun documento.'}</p>`}</div>
     <p class="muted xs">Sono documenti tuoi: puoi aprirli e scaricarli. Li vedi solo tu e l'amministrazione.</p>`;
   m.onclick = async e => {
     const t = e.target.closest('[data-tab]'); if (t) { DTAB = t.dataset.tab; return vistaDocU(m); }
     const a = e.target.closest('[data-apri]'); if (a) { window.open(`/api/sp/doc/${a.dataset.apri}/file`, '_blank', 'noopener'); return; }
-    const r = e.target.closest('[data-ric]');
-    if (r) { try { await api('POST', `/api/sp/doc/${r.dataset.ric}/ricevuto`, {}); toast('Ricezione confermata.'); ricarica(); } catch (er) { toast(er.message); } }
+    const f = e.target.closest('[data-firma]');
+    if (f) firmaDoc(ME.docs.find(d => d.id === f.dataset.firma));
+  };
+}
+// firma con il dito sullo schermo
+function firmaDoc(doc){
+  const d = finestra(`<h2>Firma per ricevuta</h2><p class="small" style="margin:0 0 10px">Firmando confermi di aver ricevuto <b>${esc(doc.titolo)}</b>. Se non l'hai ancora letto, <button class="btn small" id="fApri" type="button">aprilo</button></p>
+    <div style="position:relative;border:1.5px dashed var(--line);border-radius:14px;background:#fff;touch-action:none"><canvas id="fCan" style="display:block;width:100%;height:200px;touch-action:none"></canvas>
+      <span id="fQui" class="muted small" style="position:absolute;left:14px;bottom:10px;pointer-events:none">Firma qui con il dito</span></div>
+    <p class="muted xs" style="margin:8px 0 0">Si salvano la firma, la data e l'ora, il dispositivo e l'impronta del documento. La vedete solo tu e l'amministrazione.</p>
+    <div class="acts"><button class="btn" id="fCanc" type="button">Cancella</button><span class="grow"></span><button class="btn" id="chiudi" type="button">Annulla</button><button class="btn primary" id="fOk" type="button" disabled>Firma</button></div>`);
+  const c = d.querySelector('#fCan'), r = c.getBoundingClientRect(), k = window.devicePixelRatio || 1;
+  c.width = r.width * k; c.height = r.height * k;
+  const x = c.getContext('2d'); x.scale(k, k); x.lineWidth = 2.4; x.lineCap = 'round'; x.lineJoin = 'round'; x.strokeStyle = '#1b2a6b';
+  let giu = false, tratti = 0, lun = 0, last = null;
+  const pt = e => { const b = c.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; };
+  c.onpointerdown = e => { giu = true; last = pt(e); c.setPointerCapture(e.pointerId); tratti++; d.querySelector('#fQui').hidden = true; };
+  c.onpointermove = e => { if (!giu) return; const p = pt(e); x.beginPath(); x.moveTo(last.x, last.y); x.lineTo(p.x, p.y); x.stroke(); lun += Math.hypot(p.x - last.x, p.y - last.y); last = p; d.querySelector('#fOk').disabled = lun < 60; };
+  c.onpointerup = c.onpointercancel = () => { giu = false; };
+  d.querySelector('#fCanc').onclick = () => { x.clearRect(0, 0, c.width, c.height); lun = 0; tratti = 0; d.querySelector('#fOk').disabled = true; d.querySelector('#fQui').hidden = false; };
+  d.querySelector('#fApri').onclick = () => window.open(`/api/sp/doc/${doc.id}/file`, '_blank', 'noopener');
+  d.querySelector('#chiudi').onclick = chiudi;
+  d.querySelector('#fOk').onclick = async e => {
+    e.target.disabled = true;
+    try { await api('POST', `/api/sp/doc/${doc.id}/firma`, { png: c.toDataURL('image/png') }); chiudi(); toast('Firmato.'); ricarica(); }
+    catch (er) { e.target.disabled = false; toast(er.message); }
   };
 }
