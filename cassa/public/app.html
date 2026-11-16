@@ -210,6 +210,17 @@ const opt = (v, t, sel) => `<option value="${esc(v)}" ${sel ? 'selected' : ''}>$
 const parseE = v => { let s = String(v ?? '').trim().replace(/[€\s]/g, ''); if (!s) return 0; if (s.includes(',') || /^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '').replace(',', '.'); const n = Number(s); return isFinite(n) && n >= 0 ? n : NaN; };
 const METODI = { contanti: 'Contanti', pos: 'POS', assegno: 'Assegno' };
 const metTxt = (pm) => Object.entries(METODI).filter(([k]) => pm && pm[k]).map(([k, t]) => `${t} ${fE(pm[k])}`).join(' · ');
+// dettaglio del netto di un giorno: scritto in chiusura − uscite pagate così − versamenti approvati
+const dettNet = (r, k) => { const ins = r.inseriti?.[k] || 0, u = r.usciteDett?.[k] || 0, v = r.versati?.[k] || 0; if (!u && !v) return '';
+  return `<div class="muted" style="font-size:11.5px;white-space:normal">${fE(ins)}${u ? ' − uscite ' + fE(u) : ''}${v ? ' − versati ' + fE(v) : ''}</div>`; };
+const STATO_V = { attesa: ['Da approvare', 'todo'], approvato: ['Approvato', 'ok'], rifiutato: ['Non approvato', 'ko'] };
+const rigaVers = (v, admin) => `<div class="riga"><div class="gr"><div class="t">Versamento in banca${admin ? ' · ' + esc(v.sedeNome) : ''}</div>
+  <div class="s">${esc(fD(v.data))} · ${esc(fOra(v.il))} · ${esc(v.chi)}${v.nota ? ' · ' + esc(v.nota) : ''}</div>
+  <div class="s">Contanti <b>${fE(v.contanti)}</b> · Assegni <b>${fE(v.assegni)}</b>${(v.assegniRighe || []).length ? ': ' + v.assegniRighe.map(a => `${esc(a.paziente)} ${fE(a.importo)}`).join(', ') : ''}</div>
+  ${v.notaAdmin ? `<div class="s">Amministrazione: ${esc(v.notaAdmin)}</div>` : ''}</div>
+  <div class="imp">${fE(v.totale)}</div><span class="tag ${STATO_V[v.stato]?.[1] || 'plain'}">${STATO_V[v.stato]?.[0] || v.stato}</span>
+  ${v.puoiAnnullare && !admin ? `<button class="btn sm danger" data-vann="${esc(v.id)}">Annulla</button>` : ''}
+  ${admin && v.stato === 'attesa' ? `<button class="btn sm danger" data-vno="${esc(v.id)}">Rifiuta</button><button class="btn sm primary" data-vok="${esc(v.id)}">Approva</button>` : ''}</div>`;
 const SEZ = [['uscite', 'Uscite di cassa'], ['chiusura', 'Chiusura di cassa'], ['pannello', 'Pannello cassa'], ['produzione', 'Produzione di UL']];
 const S = { st: null, v: null, sede: '', periodo: '' };
 
@@ -247,12 +258,13 @@ function legaBarra(rifai) {
 const sedeNome = id => S.st.sedi.find(s => s.id === id)?.nome || '';
 
 /* ================= USCITE DI CASSA ================= */
+let VF = null; // versamento in banca in compilazione
 async function vUscite() {
   if (!S.st.sedi.length) return nessunaSede();
   if (S.sede === 'tutte' || !S.st.sedi.some(x => x.id === S.sede)) S.sede = S.st.sedi[0].id;
   const tutte = S.sede === 'tutte';
-  let d;
-  try { d = await api('GET', `api/uscite?sede=${encodeURIComponent(S.sede)}&periodo=${S.periodo}`); } catch (x) { return toast(x.message); }
+  let d, vs;
+  try { [d, vs] = await Promise.all([api('GET', `api/uscite?sede=${encodeURIComponent(S.sede)}&periodo=${S.periodo}`), api('GET', `api/versamenti?sede=${encodeURIComponent(S.sede)}&periodo=${S.periodo}`)]); } catch (x) { return toast(x.message); }
   const meseOra = S.periodo === S.st.oggi.slice(0, 7);
   $('#main').innerHTML = `
   <div class="head"><div><h2 class="view">Uscite di cassa</h2><p>Ogni soldo che esce dalla cassa: quanto e a cosa si riferisce. La data si mette da sola.</p></div></div>
@@ -264,7 +276,20 @@ async function vUscite() {
     <div class="field"><label for="u-nota">Note: a cosa si riferisce <span class="req">*</span></label><textarea id="u-nota" maxlength="1000" placeholder="es. Acquisto cancelleria, rimborso spese corriere…"></textarea></div>
     <div class="field"><span class="lbl">Come hai pagato <span class="req">*</span></span><div class="seg" id="u-met">${Object.entries(METODI).map(([k, t]) => `<button type="button" data-met="${k}">${t}</button>`).join('')}</div></div>
     <button class="btn primary wide" type="submit">Registra uscita</button>
-  </form>`}
+  </form>
+  <div class="card pad form" style="margin:0 0 16px">
+    ${VF ? `<form id="fv" novalidate><div class="sez-t"><h3>Versamento in banca · ${esc(sedeNome(S.sede))}</h3><span class="auto">Data: oggi ${esc(fD(S.st.oggi))}</span></div>
+      <div class="field"><label for="v-con">Contanti versati (€)</label><input id="v-con" class="big-in" inputmode="decimal" placeholder="0,00" value="${esc(VF.contanti)}"></div>
+      <span class="lbl">Assegni versati: uno per riga, con nome e cognome del paziente <span class="req">*</span></span>
+      ${VF.assegni.map((a, i) => `<div class="grid2" style="margin-top:6px"><div class="field" style="margin:0"><input data-vpaz="${i}" placeholder="Nome e cognome del paziente" value="${esc(a.paziente)}" autocomplete="off"></div>
+        <div class="field" style="margin:0;flex-direction:row;gap:6px"><input data-vimp="${i}" inputmode="decimal" placeholder="Importo €" value="${esc(a.importo)}"><button type="button" class="btn sm" data-vdel="${i}" aria-label="Togli assegno">✕</button></div></div>`).join('')}
+      <button type="button" class="link" id="vAdd">+ Aggiungi assegno</button>
+      <div class="somma"><span>Totale versato</span><b id="v-tot">${fE(0)}</b></div>
+      <div class="field"><label for="v-nota">Note (facoltative: banca, numero distinta…)</label><input id="v-nota" maxlength="500" value="${esc(VF.nota)}"></div>
+      <div class="grid2"><button type="button" class="btn" id="vNo">Annulla</button><button class="btn primary" type="submit">Invia all'amministrazione</button></div>
+      <p class="muted" style="font-size:13px;margin:8px 0 0">Quando l'amministrazione lo approva, contanti e assegni versati si tolgono dalla chiusura di cassa di oggi.</p></form>`
+    : `<button class="btn wide" id="vApri" type="button">🏦 Versamenti in banca</button>`}
+  </div>`}
   <div class="card pad">
     <div class="sez-t"><h3>${esc(nomeP(d.periodo))}${tutte ? ' · tutte le sedi' : ''}</h3>
       <div class="tot">${meseOra ? `<span>Oggi <b>${fE(d.totaleOggi)}</b></span>` : ''}<span>Totale del mese <b>${fE(d.totale)}</b></span></div></div>
@@ -275,6 +300,33 @@ async function vUscite() {
       : '<div class="empty"><b>Nessuna uscita</b>In questo mese non ci sono uscite registrate.</div>'}
   </div>`;
   legaBarra(vUscite);
+  // versamenti: elenco del mese
+  if (vs.versamenti.length) $('#main').insertAdjacentHTML('beforeend', `<div class="card pad" style="margin-top:16px"><h3 style="margin-bottom:6px">Versamenti in banca · ${esc(nomeP(vs.periodo))}</h3>${vs.versamenti.map(v => rigaVers(v, false)).join('')}</div>`);
+  const leggiVF = () => { if (!VF) return; VF.contanti = $('#v-con').value; VF.nota = $('#v-nota').value;
+    VF.assegni = VF.assegni.map((a, i) => ({ paziente: $(`[data-vpaz="${i}"]`).value, importo: $(`[data-vimp="${i}"]`).value })); };
+  const totVF = () => { leggiVF(); const t = parseE(VF.contanti) + VF.assegni.reduce((s, a) => s + (parseE(a.importo) || 0), 0); $('#v-tot').textContent = isNaN(t) ? 'controlla le cifre' : fE(t); };
+  if ($('#vApri')) $('#vApri').onclick = () => { VF = { contanti: '', nota: '', assegni: [] }; vUscite(); };
+  const fv = $('#fv');
+  if (fv) {
+    totVF();
+    fv.oninput = totVF;
+    $('#vAdd').onclick = () => { leggiVF(); VF.assegni.push({ paziente: '', importo: '' }); vUscite(); };
+    fv.querySelectorAll('[data-vdel]').forEach(b => b.onclick = () => { leggiVF(); VF.assegni.splice(+b.dataset.vdel, 1); vUscite(); });
+    $('#vNo').onclick = () => { VF = null; vUscite(); };
+    fv.onsubmit = async e => {
+      e.preventDefault(); leggiVF();
+      const righe = VF.assegni.filter(a => a.paziente.trim() || a.importo.trim());
+      if (righe.some(a => a.paziente.trim().split(/\s+/).length < 2)) return toast('Per ogni assegno scrivi nome e cognome del paziente.');
+      if (righe.some(a => !(parseE(a.importo) > 0))) return toast('Scrivi l\'importo di ogni assegno.');
+      const tot = (parseE(VF.contanti) || 0) + righe.reduce((s, a) => s + parseE(a.importo), 0);
+      if (!(tot > 0)) return toast('Scrivi quanto hai versato in contanti e/o in assegni.');
+      const b = fv.querySelector('button[type=submit]'); b.disabled = true;
+      try { await api('POST', 'api/versamenti', { sede: S.sede, contanti: VF.contanti, assegniRighe: righe, nota: VF.nota }); VF = null; toast(`Versamento di ${fE(tot)} inviato: l'amministrazione lo approva.`, 5000); vUscite(); }
+      catch (x) { b.disabled = false; toast(x.message); }
+    };
+  }
+  $('#main').querySelectorAll('[data-vann]').forEach(b => b.onclick = () => conferma('Annullare questo versamento?', 'Non è ancora stato approvato: si toglie dall\'elenco.', false, async () => {
+    await api('POST', `api/versamenti/${b.dataset.vann}/annulla`, {}); toast('Versamento annullato.'); vUscite(); }));
   const f = $('#fu');
   let met = '';
   if (f) f.querySelectorAll('[data-met]').forEach(b => b.onclick = () => { met = b.dataset.met; f.querySelectorAll('[data-met]').forEach(x => x.classList.toggle('on', x === b)); });
@@ -317,7 +369,7 @@ async function vChiusura() {
   const minD = S.st.admin ? '' : (() => { const x = new Date(S.st.oggi + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() - S.st.giorniChiusura); return x.toISOString().slice(0, 10); })();
   const T = lst.totali;
   $('#main').innerHTML = `
-  <div class="head"><div><h2 class="view">Chiusura di cassa</h2><p>Ogni sera: quanti soldi ci sono in cassa in contanti, POS e assegni. I totali si fanno da soli.</p></div></div>
+  <div class="head"><div><h2 class="view">Chiusura di cassa</h2><p>Ogni sera: quanti soldi ci sono in cassa in contanti, POS e assegni. Le uscite pagate in contanti o con assegno e i versamenti in banca approvati si tolgono da soli.</p></div></div>
   ${barra(false)}
   ${tutte ? '' : `
   <form class="card pad form" id="fc" style="margin:0 0 16px" novalidate>
@@ -331,6 +383,10 @@ async function vChiusura() {
     </div>
     <div class="somma"><span>Totale della giornata</span><b id="c-tot">${fE(c ? c.totale : 0)}</b></div>
     <p class="muted" style="margin:-6px 0 12px;font-size:13.5px">Uscite di cassa registrate in questo giorno: <b>${fE(g.uscite)}</b>${g.usciteN ? ` (${g.usciteN})` : ''}</p>
+    ${g.usciteC || g.usciteA || g.versatiC || g.versatiA ? `<div class="avviso giallo" style="margin:-4px 0 12px;display:block">Dalla chiusura si tolgono da sole:
+      ${g.usciteC ? `<br>· uscite pagate in contanti <b>${fE(g.usciteC)}</b>` : ''}${g.usciteA ? `<br>· uscite pagate con assegno <b>${fE(g.usciteA)}</b>` : ''}
+      ${g.versatiC ? `<br>· contanti versati in banca (approvati) <b>${fE(g.versatiC)}</b>` : ''}${g.versatiA ? `<br>· assegni versati in banca (approvati) <b>${fE(g.versatiA)}</b>` : ''}
+      <br>Restano in cassa: contanti <b id="c-netC">—</b>, assegni <b id="c-netA">—</b></div>` : ''}
     <div class="field"><label for="c-note">Note (facoltative)</label><textarea id="c-note" maxlength="1000">${c ? esc(c.note) : ''}</textarea></div>
     <button class="btn primary wide" type="submit">${c ? 'Aggiorna la chiusura' : 'Salva la chiusura'}</button>
   </form>`}
@@ -343,14 +399,16 @@ async function vChiusura() {
       <div class="card tile fin"><div class="l">Totale del mese</div><div class="v">${fE(T.totale)}</div></div>
     </div>
     ${lst.chiusure.length ? `<div class="tw"><table class="t"><thead><tr><th>Giorno</th>${tutte ? '<th>Sede</th>' : ''}<th class="n">Contanti</th><th class="n">POS</th><th class="n">Assegni</th><th class="n">Totale</th><th class="n">Uscite</th><th>Note</th></tr></thead>
-      <tbody>${lst.chiusure.map(r => `<tr><td ${tutte ? '' : `class="click" data-giorno="${r.data}" title="Apri per correggere"`}>${esc(fD(r.data))}</td>${tutte ? `<td>${esc(r.sedeNome)}</td>` : ''}<td class="n">${fE(r.contanti)}</td><td class="n">${fE(r.pos)}</td><td class="n">${fE(r.assegni)}</td><td class="n"><b>${fE(r.totale)}</b></td><td class="n">${fE(r.uscite)}</td><td class="wrap">${esc(r.note)}</td></tr>`).join('')}</tbody>
+      <tbody>${lst.chiusure.map(r => `<tr><td ${tutte ? '' : `class="click" data-giorno="${r.data}" title="Apri per correggere"`}>${esc(fD(r.data))}${r.fatta ? '' : '<div class="cnt">manca la chiusura</div>'}</td>${tutte ? `<td>${esc(r.sedeNome)}</td>` : ''}<td class="n">${fE(r.contanti)}${dettNet(r, 'contanti')}</td><td class="n">${fE(r.pos)}</td><td class="n">${fE(r.assegni)}${dettNet(r, 'assegni')}</td><td class="n"><b>${fE(r.totale)}</b></td><td class="n">${fE(r.uscite)}</td><td class="wrap">${esc(r.note)}</td></tr>`).join('')}</tbody>
       <tfoot><tr><td>Totale</td>${tutte ? '<td></td>' : ''}<td class="n">${fE(T.contanti)}</td><td class="n">${fE(T.pos)}</td><td class="n">${fE(T.assegni)}</td><td class="n">${fE(T.totale)}</td><td class="n">${fE(T.uscite)}</td><td></td></tr></tfoot></table></div>`
       : '<div class="empty"><b>Nessuna chiusura</b>In questo mese non ci sono chiusure di cassa.</div>'}
   </div>`;
   legaBarra(vChiusura);
   const f = $('#fc');
   if (f) {
-    const ricalcola = () => { const t = ['c-con', 'c-pos', 'c-ass'].map(id => parseE($('#' + id).value)); $('#c-tot').textContent = t.some(isNaN) ? 'controlla le cifre' : fE(t.reduce((a, b) => a + b, 0)); };
+    const ricalcola = () => { const t = ['c-con', 'c-pos', 'c-ass'].map(id => parseE($('#' + id).value)); $('#c-tot').textContent = t.some(isNaN) ? 'controlla le cifre' : fE(t.reduce((a, b) => a + b, 0));
+      if ($('#c-netC')) { $('#c-netC').textContent = fE((t[0] || 0) - g.usciteC - g.versatiC); $('#c-netA').textContent = fE((t[2] || 0) - g.usciteA - g.versatiA); } };
+    ricalcola();
     ['c-con', 'c-pos', 'c-ass'].forEach(id => $('#' + id).oninput = ricalcola);
     $('#c-data').onchange = e => { if (e.target.value) { CD = e.target.value; vChiusura(); } };
     f.onsubmit = async e => {
@@ -372,8 +430,8 @@ const PN = { sede: 'tutte', vista: 'uscite', voci: null };
 const STATO_INV = { nel_consuntivo: ['Nel consuntivo', 'ok'], da_mandare: ['Da mandare', 'todo'], da_togliere: ['Da togliere dal consuntivo', 'ko'], senza_voce: ['Senza voce', 'plain'] };
 async function vPannello() {
   const sq = encodeURIComponent(PN.sede);
-  let d, us, ch;
-  try { [d, us, ch] = await Promise.all([api('GET', `api/pannello?periodo=${S.periodo}`), api('GET', `api/uscite?sede=${sq}&periodo=${S.periodo}`), api('GET', `api/chiusure?sede=${sq}&periodo=${S.periodo}`)]); }
+  let d, us, ch, vs;
+  try { [d, us, ch, vs] = await Promise.all([api('GET', `api/pannello?periodo=${S.periodo}`), api('GET', `api/uscite?sede=${sq}&periodo=${S.periodo}`), api('GET', `api/chiusure?sede=${sq}&periodo=${S.periodo}`), api('GET', `api/versamenti?sede=${sq}&periodo=${S.periodo}`)]); }
   catch (x) { return toast(x.message); }
   if (!PN.voci) { try { PN.voci = await api('GET', 'api/voci'); } catch { PN.voci = { voci: [], mancanti: [] }; } }
   const daAllineare = us.uscite.filter(u => u.statoInvio === 'da_mandare' || u.statoInvio === 'da_togliere');
@@ -395,13 +453,16 @@ async function vPannello() {
   <div class="sedebar"><select id="pSede" aria-label="Sede">${opt('tutte', 'Tutte le sedi', tutte)}${sedi.map(x => opt(x.id, x.nome, x.id === PN.sede)).join('')}</select>
     <input type="month" id="bMese" value="${esc(anno ? S.st.oggi.slice(0, 7) : S.periodo)}" max="${esc(S.st.oggi.slice(0, 7))}" aria-label="Mese">
     <button class="btn sm ${anno ? 'primary' : ''}" id="bAnno">Tutto il ${esc(S.periodo.slice(0, 4))}</button></div>
+  ${vs.attesa.length ? `<div class="card pad" style="margin-bottom:14px;border-color:var(--warn)"><h3 style="margin-bottom:6px">Versamenti in banca da approvare · ${vs.attesa.length}</h3>
+    <p class="muted" style="margin:0 0 6px;font-size:13px">Quando approvi, contanti e assegni versati si tolgono dalla chiusura di cassa di quel giorno.</p>${vs.attesa.map(v => rigaVers(v, true)).join('')}</div>` : ''}
   ${tutte && !anno && d.senzaChiusuraIeri.length ? `<div class="avviso giallo" style="margin-bottom:14px">Senza chiusura di cassa ieri (${esc(fD(d.ieri))}): ${esc(d.senzaChiusuraIeri.join(', '))}</div>` : ''}
   <div class="tiles">
     <div class="card tile"><div class="l">Uscite di cassa</div><div class="v">${fE(us.totale)}</div><div class="b">${us.uscite.filter(u => !u.annullata).length} uscite${us.totale ? '<br>' + esc(metTxt(us.perMetodo)) : ''}</div></div>
     <div class="card tile"><div class="l">Contanti</div><div class="v">${fE(C.contanti)}</div></div>
     <div class="card tile"><div class="l">POS</div><div class="v">${fE(C.pos)}</div></div>
     <div class="card tile"><div class="l">Assegni</div><div class="v">${fE(C.assegni)}</div></div>
-    <div class="card tile fin"><div class="l">Incassi totali</div><div class="v">${fE(C.totale)}</div><div class="b">${esc(nomeP(S.periodo))}${tutte ? '' : ' · ' + esc(sedi.find(x => x.id === PN.sede)?.nome || '')}</div></div>
+    <div class="card tile"><div class="l">Versato in banca</div><div class="v">${fE(C.versatiContanti + C.versatiAssegni)}</div><div class="b">contanti ${fE(C.versatiContanti)} · assegni ${fE(C.versatiAssegni)}</div></div>
+    <div class="card tile fin"><div class="l">Incassi totali (netti)</div><div class="v">${fE(C.totale)}</div><div class="b">${esc(nomeP(S.periodo))}${tutte ? '' : ' · ' + esc(sedi.find(x => x.id === PN.sede)?.nome || '')}</div></div>
   </div>
   ${tutte ? `<div class="card pad" style="margin-top:14px">
     <div class="sez-t"><h3>Per sede · ${esc(nomeP(d.periodo))}</h3><span class="muted" style="font-size:13px">Tocca una sede per vedere solo quella.</span></div>
@@ -410,8 +471,10 @@ async function vPannello() {
       <td class="n"><b>${fE(r.incassi)}</b></td><td class="n">${r.giorni}</td><td class="muted" style="font-size:12.5px">${r.ultima ? 'ultima ' + esc(fD(r.ultima)) : 'nessuna'}</td></tr>`).join('')}</tbody>
     <tfoot><tr><td>Totale</td><td class="n">${fE(T.uscite)}</td><td class="n">${fE(T.contanti)}</td><td class="n">${fE(T.pos)}</td><td class="n">${fE(T.assegni)}</td><td class="n">${fE(T.incassi)}</td><td class="n">${T.giorni}</td><td></td></tr></tfoot></table></div>
   </div>` : ''}
-  <div class="seg" style="margin:18px 0 10px"><button type="button" class="${PN.vista === 'uscite' ? 'on' : ''}" data-pvista="uscite">Uscite di cassa</button><button type="button" class="${PN.vista === 'chiusure' ? 'on' : ''}" data-pvista="chiusure">Chiusure di cassa</button></div>
-  ${PN.vista === 'uscite' ? `<div class="card pad">
+  <div class="seg" style="margin:18px 0 10px"><button type="button" class="${PN.vista === 'uscite' ? 'on' : ''}" data-pvista="uscite">Uscite di cassa</button><button type="button" class="${PN.vista === 'chiusure' ? 'on' : ''}" data-pvista="chiusure">Chiusure di cassa</button><button type="button" class="${PN.vista === 'versamenti' ? 'on' : ''}" data-pvista="versamenti">Versamenti in banca</button></div>
+  ${PN.vista === 'versamenti' ? `<div class="card pad"><div class="sez-t"><h3>Versamenti in banca · ${esc(nomeP(vs.periodo))}</h3><div class="tot"><span>Approvati: contanti <b>${fE(C.versatiContanti)}</b> · assegni <b>${fE(C.versatiAssegni)}</b></span></div></div>
+    ${vs.versamenti.length ? vs.versamenti.map(v => rigaVers(v, true)).join('') : '<div class="empty"><b>Nessun versamento</b>In questo periodo non ci sono versamenti in banca.</div>'}</div>` : ''}
+  ${PN.vista === 'versamenti' ? '' : PN.vista === 'uscite' ? `<div class="card pad">
     ${PN.voci.errore ? `<div class="avviso giallo" style="margin-bottom:10px">${esc(PN.voci.errore)}</div>` : PN.voci.mancanti?.length ? `<div class="avviso giallo" style="margin-bottom:10px">Nella Gestione finanziaria mancano queste voci: ${esc(PN.voci.mancanti.join(', '))}. Creale (stesso nome) prima di mandarci delle spese.</div>` : ''}
     <div class="sez-t" style="margin-bottom:10px"><span class="muted" style="font-size:13.5px">Scegli per ogni spesa la voce del Consuntivo della sede: si aggiunge a quello che c'è già, nel mese della spesa.</span>
       ${daAllineare.length ? `<button class="btn primary sm" id="invTutte">Manda nel consuntivo (${daAllineare.length})</button>` : ''}</div>
@@ -421,7 +484,7 @@ async function vPannello() {
   </div>` : `<div class="card pad">
     <div class="sez-t"><h3>Chiusure di cassa · ${esc(nomeP(ch.periodo))}</h3><span class="muted" style="font-size:13.5px">${C.giorni} ${C.giorni === 1 ? 'chiusura' : 'chiusure'}</span></div>
     ${ch.chiusure.length ? `<div class="tw"><table class="t"><thead><tr><th>Giorno</th>${tutte ? '<th>Sede</th>' : ''}<th class="n">Contanti</th><th class="n">POS</th><th class="n">Assegni</th><th class="n">Totale</th><th class="n">Uscite</th><th>Fatta da</th><th>Note</th></tr></thead>
-      <tbody>${ch.chiusure.map(r => `<tr><td>${esc(fD(r.data))}</td>${tutte ? `<td>${esc(r.sedeNome)}</td>` : ''}<td class="n">${fE(r.contanti)}</td><td class="n">${fE(r.pos)}</td><td class="n">${fE(r.assegni)}</td><td class="n"><b>${fE(r.totale)}</b></td><td class="n">${fE(r.uscite)}</td><td>${esc(r.chi)}</td><td class="wrap">${esc(r.note)}</td></tr>`).join('')}</tbody>
+      <tbody>${ch.chiusure.map(r => `<tr><td>${esc(fD(r.data))}${r.fatta ? '' : '<div class="cnt">manca la chiusura</div>'}</td>${tutte ? `<td>${esc(r.sedeNome)}</td>` : ''}<td class="n">${fE(r.contanti)}${dettNet(r, 'contanti')}</td><td class="n">${fE(r.pos)}</td><td class="n">${fE(r.assegni)}${dettNet(r, 'assegni')}</td><td class="n"><b>${fE(r.totale)}</b></td><td class="n">${fE(r.uscite)}</td><td>${esc(r.chi)}</td><td class="wrap">${esc(r.note)}</td></tr>`).join('')}</tbody>
       <tfoot><tr><td>Totale</td>${tutte ? '<td></td>' : ''}<td class="n">${fE(C.contanti)}</td><td class="n">${fE(C.pos)}</td><td class="n">${fE(C.assegni)}</td><td class="n">${fE(C.totale)}</td><td class="n">${fE(C.uscite)}</td><td></td><td></td></tr></tfoot></table></div>`
       : '<div class="empty"><b>Nessuna chiusura</b>In questo periodo non ci sono chiusure di cassa.</div>'}
   </div>`}`;
@@ -433,6 +496,9 @@ async function vPannello() {
   $('#main').querySelectorAll('[data-ann]').forEach(b => b.onclick = () => conferma('Annullare questa uscita?', 'Resta nello storico, barrata, e non conta più nei totali. Se era già nel consuntivo, si toglie.', true, async motivo => {
     const r = await api('POST', `api/uscite/${b.dataset.ann}/annulla`, { motivo }); toast(r.tolta === false ? 'Annullata, ma non sono riuscito a toglierla dal consuntivo: riprova con «Togli».' : r.tolta ? 'Annullata e tolta dal consuntivo.' : 'Uscita annullata.', 5000); vPannello();
   }));
+  $('#main').querySelectorAll('[data-vok]').forEach(b => b.onclick = async () => { b.disabled = true; try { await api('POST', `api/versamenti/${b.dataset.vok}/decidi`, { ok: true }); toast('Versamento approvato: tolto dalla chiusura di quel giorno.'); vPannello(); } catch (x) { b.disabled = false; toast(x.message); } });
+  $('#main').querySelectorAll('[data-vno]').forEach(b => b.onclick = () => conferma('Non approvare questo versamento?', 'Chi l\'ha inserito riceve un avviso. La chiusura di cassa non cambia.', true, async nota => {
+    await api('POST', `api/versamenti/${b.dataset.vno}/decidi`, { ok: false, nota }); toast('Versamento non approvato.'); vPannello(); }));
   $('#main').querySelectorAll('[data-voce]').forEach(sel => sel.onchange = async () => {
     try { await api('PUT', `api/uscite/${sel.dataset.voce}/voce`, { voce: sel.value }); vPannello(); } catch (x) { toast(x.message); }
   });

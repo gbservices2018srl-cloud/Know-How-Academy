@@ -209,29 +209,52 @@ app.post('/api/uscite/:id/annulla', needVedere, wrap(async (req, res) => {
 }));
 
 /* ============ CHIUSURA DI CASSA ============ */
+// Ogni giorno: contanti e assegni della chiusura MENO le uscite pagate in contanti/assegno e i versamenti in banca approvati
+// di quel giorno (i numeri scritti dall'operatore restano salvati: il netto si calcola). Il POS resta com'è.
 const formaC = r => ({ sede: r.sede_id, sedeNome: r.sede_nome, data: r.data, contanti: num(r.contanti), pos: num(r.pos), assegni: num(r.assegni),
   totale: num(r.contanti) + num(r.pos) + num(r.assegni), note: r.note, chi: r.aggiornato_nome || r.creato_nome, il: r.aggiornato_il });
+async function giorniCassa(ids, dal, al) {
+  const [{ rows: ch }, { rows: us }, { rows: vs }] = await Promise.all([
+    db.q(`select * from chiusure where sede_id = any($1) and data between $2 and $3`, [ids, dal, al]),
+    db.q(`select sede_id, sede_nome, data, sum(importo) as t, sum(importo) filter (where metodo = 'contanti') as c, sum(importo) filter (where metodo = 'assegno') as a
+      from uscite where sede_id = any($1) and data between $2 and $3 and not annullata group by sede_id, sede_nome, data`, [ids, dal, al]),
+    db.q(`select sede_id, sede_nome, data, sum(contanti) as c, sum(assegni) as a from versamenti where sede_id = any($1) and data between $2 and $3 and stato = 'approvato'
+      group by sede_id, sede_nome, data`, [ids, dal, al]),
+  ]);
+  const g = new Map(), k = (s, d) => s + '|' + d;
+  const giorno = (s, nome, d) => { if (!g.has(k(s, d))) g.set(k(s, d), { sede: s, sedeNome: nome, data: d, fatta: false, inseriti: { contanti: 0, pos: 0, assegni: 0 },
+    usciteTot: 0, uscite: { contanti: 0, assegni: 0 }, versati: { contanti: 0, assegni: 0 }, note: '', chi: '', il: null }); return g.get(k(s, d)); };
+  for (const r of ch) Object.assign(giorno(r.sede_id, r.sede_nome, r.data), { fatta: true, inseriti: { contanti: num(r.contanti), pos: num(r.pos), assegni: num(r.assegni) },
+    note: r.note, chi: r.aggiornato_nome || r.creato_nome, il: r.aggiornato_il });
+  for (const r of us) { const x = giorno(r.sede_id, r.sede_nome, r.data); x.usciteTot = num(r.t); x.uscite = { contanti: num(r.c), assegni: num(r.a) }; }
+  for (const r of vs) giorno(r.sede_id, r.sede_nome, r.data).versati = { contanti: num(r.c), assegni: num(r.a) };
+  // un giorno senza chiusura compare solo se ha tolto contanti/assegni (uscite o versamenti)
+  return [...g.values()].filter(x => x.fatta || x.uscite.contanti || x.uscite.assegni || x.versati.contanti || x.versati.assegni).map(x => {
+    x.contanti = x.inseriti.contanti - x.uscite.contanti - x.versati.contanti;
+    x.assegni = x.inseriti.assegni - x.uscite.assegni - x.versati.assegni;
+    x.pos = x.inseriti.pos; x.totale = x.contanti + x.pos + x.assegni;
+    return x;
+  }).sort((a, b) => b.data.localeCompare(a.data) || a.sedeNome.localeCompare(b.sedeNome));
+}
 app.get('/api/chiusure', needVedere, wrap(async (req, res) => {
   const sedi = sediRichieste(req); if (!sedi) return bad(res, 403, 'Sede non tua.');
   const p = periodo(req.query.periodo), ids = sedi.map(s => s.id);
-  const [{ rows }, { rows: us }] = await Promise.all([
-    db.q(`select * from chiusure where sede_id = any($1) and data between $2 and $3 order by data desc, sede_nome`, [ids, p.dal, p.al]),
-    db.q(`select sede_id, data, sum(importo) as t from uscite where sede_id = any($1) and data between $2 and $3 and not annullata group by sede_id, data`, [ids, p.dal, p.al]),
-  ]);
-  const uscDi = new Map(us.map(u => [u.sede_id + '|' + u.data, num(u.t)]));
-  const lista = rows.map(r => ({ ...formaC(r), uscite: uscDi.get(r.sede_id + '|' + r.data) || 0 }));
-  const tot = k => lista.reduce((s, r) => s + r[k], 0);
-  res.json({ periodo: p.chiave, chiusure: lista, totali: { contanti: tot('contanti'), pos: tot('pos'), assegni: tot('assegni'), totale: tot('totale'),
-    uscite: us.reduce((s, u) => s + num(u.t), 0), giorni: lista.length } });
+  const lista = await giorniCassa(ids, p.dal, p.al);
+  const { rows: [u] } = await db.q(`select coalesce(sum(importo),0) as t from uscite where sede_id = any($1) and data between $2 and $3 and not annullata`, [ids, p.dal, p.al]);
+  const tot = f => lista.reduce((s, r) => s + f(r), 0);
+  res.json({ periodo: p.chiave, chiusure: lista.map(r => ({ ...r, usciteDett: r.uscite, uscite: r.usciteTot })), totali: { contanti: tot(r => r.contanti), pos: tot(r => r.pos), assegni: tot(r => r.assegni), totale: tot(r => r.totale),
+    uscite: num(u.t), versatiContanti: tot(r => r.versati.contanti), versatiAssegni: tot(r => r.versati.assegni), giorni: lista.filter(r => r.fatta).length } });
 }));
 app.get('/api/chiusura', needUser, wrap(async (req, res) => {
   const sede = sedeOk(req, str(req.query.sede, 60)); if (!sede) return bad(res, 400, 'Scegli la sede.');
   const data = str(req.query.data, 10); if (!isDate(data)) return bad(res, 400, 'Data non valida.');
-  const [{ rows: [r] }, { rows: [u] }] = await Promise.all([
+  const [{ rows: [r] }, { rows: [u] }, { rows: [v] }] = await Promise.all([
     db.q('select * from chiusure where sede_id = $1 and data = $2', [sede.id, data]),
-    db.q('select coalesce(sum(importo),0) as t, count(*)::int as n from uscite where sede_id = $1 and data = $2 and not annullata', [sede.id, data]),
+    db.q(`select coalesce(sum(importo),0) as t, count(*)::int as n, coalesce(sum(importo) filter (where metodo = 'contanti'),0) as c, coalesce(sum(importo) filter (where metodo = 'assegno'),0) as a
+      from uscite where sede_id = $1 and data = $2 and not annullata`, [sede.id, data]),
+    db.q(`select coalesce(sum(contanti),0) as c, coalesce(sum(assegni),0) as a from versamenti where sede_id = $1 and data = $2 and stato = 'approvato'`, [sede.id, data]),
   ]);
-  res.json({ chiusura: r ? formaC(r) : null, uscite: num(u.t), usciteN: u.n });
+  res.json({ chiusura: r ? formaC(r) : null, uscite: num(u.t), usciteN: u.n, usciteC: num(u.c), usciteA: num(u.a), versatiC: num(v.c), versatiA: num(v.a) });
 }));
 app.put('/api/chiusura', needUser, wrap(async (req, res) => {
   const b = req.body || {};
@@ -253,18 +276,76 @@ app.put('/api/chiusura', needUser, wrap(async (req, res) => {
   res.json({ ok: true, corretta: !!prima });
 }));
 
+/* ============ VERSAMENTI IN BANCA ============ */
+const formaV = r => ({ id: r.id, sede: r.sede_id, sedeNome: r.sede_nome, data: r.data, contanti: num(r.contanti), assegni: num(r.assegni), totale: num(r.contanti) + num(r.assegni),
+  assegniRighe: r.assegni_righe || [], nota: r.nota, stato: r.stato, chi: r.creato_nome, il: r.creato_il, decisoDa: r.deciso_nome || '', decisoIl: r.deciso_il, notaAdmin: r.nota_admin || '' });
+async function adminCassa() {
+  const { rows } = await store.q(`select u.id from users u where u.status = 'active' and (u.owner or exists (select 1 from user_apps a where a.user_id = u.id and a.app = $1 and a.role = 'admin' and not a.sospesa))`, [KEY]);
+  return rows.map(r => r.id);
+}
+const avvisaCassa = (ids, payload) => require('../accessi/lib/notifiche').notifica(ids, KEY, payload).catch(e => console.warn('REC notifica:', e.message));
+app.get('/api/versamenti', needVedere, wrap(async (req, res) => {
+  const sedi = sediRichieste(req); if (!sedi) return bad(res, 403, 'Sede non tua.');
+  const p = periodo(req.query.periodo), ids = sedi.map(s => s.id);
+  const { rows } = await db.q(`select * from versamenti where sede_id = any($1) and data between $2 and $3 and stato <> 'annullato' order by data desc, creato_il desc`, [ids, p.dal, p.al]);
+  // all'amministrazione anche tutti quelli da approvare, di qualunque periodo
+  const attesa = req.me.pan ? (await db.q(`select * from versamenti where stato = 'attesa' order by creato_il`)).rows.map(formaV) : [];
+  res.json({ periodo: p.chiave, versamenti: rows.map(r => ({ ...formaV(r), puoiAnnullare: r.stato === 'attesa' && r.creato_da === req.me.id })), attesa });
+}));
+app.post('/api/versamenti', needUser, wrap(async (req, res) => {
+  const b = req.body || {};
+  const sede = sedeOk(req, str(b.sede, 60)); if (!sede) return bad(res, 400, 'Scegli la sede.');
+  const contanti = euro(b.contanti);
+  if (contanti == null) return bad(res, 400, 'Controlla l\'importo dei contanti: solo numeri, anche 0.');
+  // assegni: uno per riga, con nome e cognome del paziente che l'ha dato (obbligatorio)
+  const righe = (Array.isArray(b.assegniRighe) ? b.assegniRighe : []).slice(0, 50).map(x => ({ paziente: str(x?.paziente, 120), importo: euro(x?.importo) }))
+    .filter(x => x.paziente || x.importo);
+  for (const x of righe) {
+    if (x.paziente.split(' ').filter(Boolean).length < 2) return bad(res, 400, 'Per ogni assegno scrivi nome e cognome del paziente che l\'ha dato.');
+    if (!(x.importo > 0)) return bad(res, 400, `Scrivi l'importo dell'assegno di ${x.paziente}.`);
+  }
+  const assegni = Math.round(righe.reduce((s, x) => s + x.importo, 0) * 100) / 100;
+  if (!(contanti + assegni > 0)) return bad(res, 400, 'Scrivi quanto hai versato in contanti e/o in assegni.');
+  if (contanti + assegni > 1000000) return bad(res, 400, 'Importo troppo alto: controlla le cifre.');
+  const nota = String(b.nota ?? '').trim().slice(0, 500);
+  const id = db.newId();
+  await db.q(`insert into versamenti (id, sede_id, sede_nome, data, contanti, assegni, assegni_righe, nota, creato_da, creato_nome) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+    [id, sede.id, sede.nome, oggi(), contanti, assegni, JSON.stringify(righe), nota, req.me.id, req.me.nome]);
+  // nello storico solo gli importi, non i nomi dei pazienti
+  log('versamento', id, req.me.nome, null, { sede: sede.nome, contanti, assegni, nAssegni: righe.length });
+  avvisaCassa(await adminCassa(), { title: 'Versamento in banca da approvare', body: `${sede.nome}: contanti ${euroTxt(contanti)}, assegni ${euroTxt(assegni)} (da ${req.me.nome}).`, url: 'https://appgestione.it/cassa/?v=pannello' });
+  res.json({ ok: true, id });
+}));
+app.post('/api/versamenti/:id/annulla', needUser, wrap(async (req, res) => {
+  const { rowCount } = await db.q(`update versamenti set stato = 'annullato' where id = $1 and creato_da = $2 and stato = 'attesa'`, [req.params.id, req.me.id]);
+  if (!rowCount) return bad(res, 400, 'Si può annullare solo un versamento tuo ancora da approvare.');
+  res.json({ ok: true });
+}));
+app.post('/api/versamenti/:id/decidi', needAdmin, wrap(async (req, res) => {
+  const ok = !!req.body?.ok, nota = str(req.body?.nota, 300);
+  const { rows: [r] } = await db.q(`update versamenti set stato = $2, deciso_da = $3, deciso_nome = $4, deciso_il = now(), nota_admin = $5 where id = $1 and stato = 'attesa' returning *`,
+    [req.params.id, ok ? 'approvato' : 'rifiutato', req.me.id, req.me.nome, nota || null]);
+  if (!r) return bad(res, 400, 'Questo versamento non è più da approvare.');
+  log(ok ? 'versamento approvato' : 'versamento rifiutato', r.id, req.me.nome, null, { nota });
+  avvisaCassa([r.creato_da], { title: ok ? 'Versamento approvato' : 'Versamento non approvato', body: `${r.sede_nome}, versamento del ${String(r.data).split('-').reverse().join('/')}: ${ok ? 'approvato, tolto dalla chiusura di cassa' : 'non approvato' + (nota ? ' (' + nota + ')' : '')}.`, url: 'https://appgestione.it/cassa/?v=uscite' });
+  res.json({ ok: true });
+}));
+
 /* ============ PANNELLO (amministrazione) ============ */
 app.get('/api/pannello', needAdmin, wrap(async (req, res) => {
   const p = periodo(req.query.periodo), sedi = req.me.pan.sedi, ids = sedi.map(s => s.id);
-  const [{ rows: us }, { rows: ch }] = await Promise.all([
+  const [{ rows: us }, giorni] = await Promise.all([
     db.q(`select sede_id, sum(importo) as t, count(*)::int as n, sum(importo) filter (where metodo = 'contanti') as uc, sum(importo) filter (where metodo = 'pos') as up,
       sum(importo) filter (where metodo = 'assegno') as ua from uscite where sede_id = any($1) and data between $2 and $3 and not annullata group by sede_id`, [ids, p.dal, p.al]),
-    db.q(`select sede_id, sum(contanti) as c, sum(pos) as p, sum(assegni) as a, count(*)::int as g, max(data) as ultima from chiusure where sede_id = any($1) and data between $2 and $3 group by sede_id`, [ids, p.dal, p.al]),
+    giorniCassa(ids, p.dal, p.al),
   ]);
-  const U = new Map(us.map(r => [r.sede_id, r])), C = new Map(ch.map(r => [r.sede_id, r]));
+  const U = new Map(us.map(r => [r.sede_id, r]));
   const righe = sedi.map(s => {
-    const u = U.get(s.id) || {}, c = C.get(s.id) || {};
-    const r = { sede: s.id, nome: s.nome, uscite: num(u.t), usciteN: u.n || 0, usciteMetodo: { contanti: num(u.uc), pos: num(u.up), assegno: num(u.ua) }, contanti: num(c.c), pos: num(c.p), assegni: num(c.a), giorni: c.g || 0, ultima: c.ultima || null };
+    const u = U.get(s.id) || {}, gg = giorni.filter(x => x.sede === s.id), somma = f => gg.reduce((a, x) => a + f(x), 0);
+    const fatte = gg.filter(x => x.fatta);
+    const r = { sede: s.id, nome: s.nome, uscite: num(u.t), usciteN: u.n || 0, usciteMetodo: { contanti: num(u.uc), pos: num(u.up), assegno: num(u.ua) },
+      contanti: somma(x => x.contanti), pos: somma(x => x.pos), assegni: somma(x => x.assegni), versati: somma(x => x.versati.contanti + x.versati.assegni),
+      giorni: fatte.length, ultima: fatte.length ? fatte.map(x => x.data).sort().pop() : null };
     r.incassi = r.contanti + r.pos + r.assegni;
     return r;
   });
@@ -272,7 +353,7 @@ app.get('/api/pannello', needAdmin, wrap(async (req, res) => {
   // chiusure mancanti di ieri (solo guardando il mese in corso)
   const ieri = addG(oggi(), -1);
   const { rows: fatteIeri } = await db.q('select sede_id from chiusure where data = $1', [ieri]);
-  res.json({ periodo: p.chiave, righe, totali: { uscite: tot('uscite'), usciteN: tot('usciteN'), contanti: tot('contanti'), pos: tot('pos'), assegni: tot('assegni'), incassi: tot('incassi'), giorni: tot('giorni') },
+  res.json({ periodo: p.chiave, righe, totali: { uscite: tot('uscite'), usciteN: tot('usciteN'), contanti: tot('contanti'), pos: tot('pos'), assegni: tot('assegni'), incassi: tot('incassi'), versati: tot('versati'), giorni: tot('giorni') },
     ieri, senzaChiusuraIeri: sedi.filter(s => !fatteIeri.some(f => f.sede_id === s.id)).map(s => s.nome) });
 }));
 

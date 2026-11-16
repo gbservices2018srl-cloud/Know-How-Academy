@@ -61,6 +61,22 @@ async function migrate() {
       sincronizzato_il timestamptz, valore_prima numeric(14,2), errore text not null default '',
       primary key (sede_id, anno, mese)
     );
+    -- versamenti in banca (contanti e assegni): dopo l'approvazione dell'amministrazione si tolgono dalla chiusura di quel giorno
+    create table if not exists versamenti (
+      id text primary key,
+      sede_id text not null,
+      sede_nome text not null default '',
+      data date not null,
+      contanti numeric(12,2) not null default 0,
+      assegni numeric(12,2) not null default 0,
+      nota text not null default '',
+      stato text not null default 'attesa' check (stato in ('attesa','approvato','rifiutato','annullato')),
+      creato_da text not null default '', creato_nome text not null default '', creato_il timestamptz not null default now(),
+      deciso_da text, deciso_nome text, deciso_il timestamptz, nota_admin text
+    );
+    create index if not exists versamenti_sede_idx on versamenti(sede_id, data);
+    -- un assegno per riga: paziente che l'ha dato (nome e cognome, obbligatorio) e importo. Dati personali: solo in REC
+    alter table versamenti add column if not exists assegni_righe jsonb not null default '[]';
     create table if not exists storico (
       id bigserial primary key,
       cosa text not null, rif text not null, chi text not null default '',
