@@ -204,7 +204,7 @@ module.exports = function sp(app, ctx) {
   }
   // le colonne delle richieste senza il file del certificato (si legge solo quando serve)
   const RCOLS = `id, user_id, tipo, dal, al, ora_da, ora_a, quanti, sost_id, sost_ok, stato, nota, prot, creata, decisa_il, decisa_da, nota_admin, doc_stato, scadenza, doc_il`;
-  const TIPI = { ferie: 'Ferie', permesso: 'Permesso', malattia: 'Malattia', altro: 'Altra assenza', smart: 'Smart working', lutto: 'Lutto' };
+  const TIPI = { ferie: 'Ferie', permesso: 'ROL', malattia: 'Malattia', altro: 'Altra assenza', smart: 'Smart working', lutto: 'Lutto' };
   const richShape = (r, nomi) => ({ id: r.id, user: r.user_id, nome: nomi?.get(r.user_id) || '', tipo: r.tipo, tipoTxt: TIPI[r.tipo], dal: r.dal, al: r.al, oraDa: r.ora_da, oraA: r.ora_a,
     quanti: r.quanti != null ? Number(r.quanti) : null, sost: r.sost_id, sostNome: nomi?.get(r.sost_id) || '', sostOk: r.sost_ok, stato: r.stato, nota: r.nota, prot: r.prot,
     creata: r.creata, decisaIl: r.decisa_il, notaAdmin: r.nota_admin, docStato: r.doc_stato || '', scadenza: r.scadenza || null, haDoc: !!r.doc_il });
@@ -305,7 +305,7 @@ module.exports = function sp(app, ctx) {
         else if (ore > 0 && s.permessi >= ore) { esito = 'permessi'; valore = ore; mov = await movimento(uid, 'permessi', 'delta', -ore, g, `Mancata timbratura ${fmtG(g)} (automatico)`, 'manc:' + g, 'automatico'); }
         const ins = await q(`insert into sp_mancate (user_id, giorno, esito, valore, mov_id) values ($1,$2,$3,$4,$5) on conflict do nothing`, [uid, g, esito, valore, mov]);
         if (!ins.rowCount && mov) await q('update sp_movimenti set annullato = true where id = $1', [mov]);
-        else avvisa([uid], { title: 'Mancata timbratura', body: `${fmtG(g)}: ${esito === 'ferie' ? 'scalato 1 giorno di ferie' : esito === 'permessi' ? `scalate ${ore} ore di permesso` : 'segnata come assenza ingiustificata'}. Se hai lavorato, avvisa l'amministrazione.` });
+        else avvisa([uid], { title: 'Mancata timbratura', body: `${fmtG(g)}: ${esito === 'ferie' ? 'scalato 1 giorno di ferie' : esito === 'permessi' ? `scalate ${ore} ore di ROL` : 'segnata come assenza ingiustificata'}. Se hai lavorato, avvisa l'amministrazione.` });
       }
     } catch (e) { console.warn('Scheda personale, mancate timbrature:', e.message); }
     finally { elaborando = false; }
@@ -492,7 +492,7 @@ module.exports = function sp(app, ctx) {
     if (per.tipo === 'dip' && ['ferie', 'permesso'].includes(tipo)) {
       const s = (await saldi([per.id]))[per.id];
       if (tipo === 'ferie' && s.ferie < quanti) avviso = `Attenzione: hai ${s.ferie} giorni di ferie e ne chiedi ${quanti}.`;
-      if (tipo === 'permesso' && s.permessi < quanti) avviso = `Attenzione: hai ${s.permessi} ore di permesso e ne chiedi ${quanti}.`;
+      if (tipo === 'permesso' && s.permessi < quanti) avviso = `Attenzione: hai ${s.permessi} ore di ROL e ne chiedi ${quanti}.`;
     }
     res.json({ ok: true, stato, avviso, scadenza: r.doc_stato === 'attesa' ? r.scadenza : null });
   }));
