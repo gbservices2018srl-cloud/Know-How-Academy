@@ -471,5 +471,35 @@ app.use((err, req, res, next) => {
   bad(res, err.status || 500, 'Errore del server. Riprova.');
 });
 
-async function start() { await db.migrate(); }
+// Azzeramento di Gestione Cassa dopo le prove (chiesto il 16/11/2026), una volta sola:
+// 1) le spese di prova già mandate nel Consuntivo si tolgono (storno); 2) uscite, chiusure e versamenti si copiano
+// in tabelle di riserva (*_prove, non usate dall'app) e poi si svuotano. La Produzione di UL non si tocca.
+async function azzeraProve() {
+  const FLAG = '_azzera_cassa_2026_11_16';
+  await db.q('create table if not exists flags (k text primary key, il timestamptz not null default now())');
+  if ((await db.q('select 1 from flags where k = $1', [FLAG])).rowCount) return;
+  const { rows: mandate } = await db.q('select id from uscite where inviata_voce is not null');
+  if (mandate.length) {
+    await db.q('update uscite set annullata = true where id = any($1)', [mandate.map(r => r.id)]);
+    await inviaUscite(mandate.map(r => r.id)); // se la Gestione finanziaria non risponde, si ferma qui e riprova al prossimo avvio
+  }
+  const c = await db.pool.connect();
+  try {
+    await c.query('begin');
+    const n = {};
+    for (const t of ['uscite', 'chiusure', 'versamenti']) {
+      await c.query(`create table if not exists ${t}_prove as select * from ${t} where false`);
+      await c.query(`insert into ${t}_prove select * from ${t}`);
+      n[t] = (await c.query(`delete from ${t}`)).rowCount;
+    }
+    await c.query(`delete from storico where cosa not like 'produzione%'`);
+    await c.query('insert into flags (k) values ($1)', [FLAG]);
+    await c.query('commit');
+    console.log(`REC: Gestione Cassa azzerata (uscite ${n.uscite}, chiusure ${n.chiusure}, versamenti ${n.versamenti}; tolte dal consuntivo ${mandate.length}).`);
+  } catch (e) { await c.query('rollback').catch(() => {}); throw e; } finally { c.release(); }
+}
+async function start() {
+  await db.migrate();
+  azzeraProve().catch(e => console.warn('REC: azzeramento non riuscito, riprovo al prossimo avvio:', e.message));
+}
 module.exports = { app, start };
