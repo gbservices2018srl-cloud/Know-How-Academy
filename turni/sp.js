@@ -862,7 +862,7 @@ module.exports = function sp(app, ctx) {
     const pp = await persone(), nomi = new Map(pp.map(p => [p.id, p.nome]));
     const [{ rows: aperte }, { rows: recenti }, s, { rows: manc }, { rows: dacomp }] = await Promise.all([
       q(`select ${RCOLS} from sp_richieste where stato in ('attesa_sost','attesa_admin') order by dal`),
-      q(`select ${RCOLS} from sp_richieste where stato in ('approvata','rifiutata') order by coalesce(decisa_il, creata) desc limit 40`),
+      q(`select ${RCOLS} from sp_richieste where stato in ('approvata','rifiutata','revocata') order by coalesce(decisa_il, creata) desc limit 60`),
       saldi(pp.map(p => p.id)),
       q(`select * from sp_mancate where giorno >= $1 order by giorno desc`, [addG(oggi(), -45)]),
       q(`select ${RCOLS} from sp_richieste where stato = 'approvata' and doc_stato = 'attesa' order by scadenza, dal`),
@@ -883,6 +883,28 @@ module.exports = function sp(app, ctx) {
     avvisa([r.user_id], { title: ok ? 'Richiesta approvata' : 'Richiesta rifiutata', body: descRich(r) + (ok ? ' approvata.' : ' rifiutata.'), url: '/?sez=assenze' });
     if (ok && r.sost_id) avvisa([r.sost_id], { title: 'Sostituzione confermata', body: `${descRich(r)}: confermata dall'amministrazione.`, url: '/?sez=turni' });
     res.json({ ok: true });
+  }));
+  // revoca (anche di richieste già approvate): ferie/ROL restituiti, turni tornati alla persona, avvisi
+  app.post('/api/sp/admin/richieste/:id/revoca', needAd, wrap(async (req, res) => {
+    const nota = str(req.body.nota, 300);
+    const { rows } = await q(`update sp_richieste set stato = 'revocata', decisa_il = now(), decisa_da = $2, nota_admin = $3,
+        doc_stato = case when doc_stato = 'attesa' then '' else doc_stato end
+      where id = $1 and stato in ('attesa_sost','attesa_admin','approvata') returning ${RCOLS}`, [req.params.id, req.user.email, nota]);
+    if (!rows[0]) return bad(res, 400, 'Questa richiesta non si può revocare (forse è già rifiutata, annullata o revocata).');
+    const r = rows[0];
+    // ferie e ROL scalati all'approvazione tornano indietro
+    await q(`update sp_movimenti set annullato = true where rif = $1 and not annullato`, ['rich:' + r.id]);
+    // i turni passati al sostituto tornano alla persona (solo quelli spostati da questa richiesta)
+    let turniTornati = 0;
+    if (r.sost_id) {
+      const p = await personaDi(r.user_id);
+      const up = await q(`update sp_turni set user_id = $1, nota = '', aggiornato = now() where user_id = $2 and giorno between $3 and $4 and nota = $5`,
+        [r.user_id, r.sost_id, r.dal, r.al, `Sostituisce ${p?.nome || ''}`.slice(0, 120)]);
+      turniTornati = up.rowCount;
+    }
+    avvisa([r.user_id], { title: 'Richiesta revocata', body: `${descRich(r)}: revocata dall'amministrazione${nota ? ' · ' + nota : ''}.`, url: '/?sez=assenze' });
+    if (r.sost_id) avvisa([r.sost_id], { title: 'Sostituzione revocata', body: `${descRich(r)}: non serve più la tua sostituzione${turniTornati ? ', i turni sono tornati alla collega o al collega' : ''}.`, url: '/?sez=turni' });
+    res.json({ ok: true, turniTornati });
   }));
   app.get('/api/sp/admin/movimenti/:user', needAd, wrap(async (req, res) => {
     const { rows } = await q(`select * from sp_movimenti where user_id = $1 order by data desc, il desc limit 100`, [req.params.user]);

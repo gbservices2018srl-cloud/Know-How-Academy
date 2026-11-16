@@ -123,7 +123,7 @@ window.timbraDaTag = async function(cod, qs){
 
 /* ---------- assenze ---------- */
 const sostLbl = c => c.nome + (c.figura ? ' · ' + c.figura : '');
-const STATI = { attesa_sost: ['In attesa del sostituto', 'warn'], attesa_admin: ['In attesa dell\'amministrazione', 'warn'], approvata: ['Approvata', 'ok'], rifiutata: ['Rifiutata', 'no'] };
+const STATI = { attesa_sost: ['In attesa del sostituto', 'warn'], attesa_admin: ['In attesa dell\'amministrazione', 'warn'], approvata: ['Approvata', 'ok'], rifiutata: ['Rifiutata', 'no'], revocata: ['Revocata dall\'amministrazione', 'no'] };
 async function vistaAssenze(m){
   const me = ME.me, s = ME.saldi;
   let tipo = 'ferie';
