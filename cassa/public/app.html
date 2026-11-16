@@ -219,9 +219,9 @@ async function boot() {
   S.sede = S.st.sedi[0]?.id || '';
   S.periodo = S.st.oggi.slice(0, 7);
   const want = new URLSearchParams(location.search).get('v');
-  go(visibili().some(([k]) => k === want) ? want : !S.st.cassa ? 'produzione' : S.st.admin ? 'pannello' : 'uscite', true);
+  go(visibili().some(([k]) => k === want) ? want : S.st.cassa ? 'uscite' : S.st.pannello ? 'pannello' : 'produzione', true);
 }
-const visibili = () => SEZ.filter(([k]) => k === 'produzione' ? !!S.st.prod : k === 'pannello' ? S.st.admin : S.st.cassa);
+const visibili = () => SEZ.filter(([k]) => k === 'produzione' ? !!S.st.prod : k === 'pannello' ? S.st.pannello : S.st.cassa);
 function go(v, replace) {
   S.v = v;
   const u = new URL(location.href); u.searchParams.set('v', v);
@@ -247,15 +247,15 @@ const sedeNome = id => S.st.sedi.find(s => s.id === id)?.nome || '';
 /* ================= USCITE DI CASSA ================= */
 async function vUscite() {
   if (!S.st.sedi.length) return nessunaSede();
-  if (S.sede === 'tutte' && !S.st.admin) S.sede = S.st.sedi[0].id;
+  if (S.sede === 'tutte' || !S.st.sedi.some(x => x.id === S.sede)) S.sede = S.st.sedi[0].id;
   const tutte = S.sede === 'tutte';
   let d;
   try { d = await api('GET', `api/uscite?sede=${encodeURIComponent(S.sede)}&periodo=${S.periodo}`); } catch (x) { return toast(x.message); }
   const meseOra = S.periodo === S.st.oggi.slice(0, 7);
   $('#main').innerHTML = `
   <div class="head"><div><h2 class="view">Uscite di cassa</h2><p>Ogni soldo che esce dalla cassa: quanto e a cosa si riferisce. La data si mette da sola.</p></div></div>
-  ${barra(S.st.admin)}
-  ${tutte ? '<div class="avviso giallo" style="margin-bottom:14px">Stai guardando tutte le sedi. Per registrare un\'uscita scegli una sede.</div>' : `
+  ${barra(false)}
+  ${tutte ? '' : `
   <form class="card pad form" id="fu" style="margin:0 0 16px" novalidate>
     <div class="sez-t"><h3>Nuova uscita · ${esc(sedeNome(S.sede))}</h3><span class="auto">Data: oggi ${esc(fD(S.st.oggi))}</span></div>
     <div class="field"><label for="u-imp">Importo (€) <span class="req">*</span></label><input id="u-imp" class="big-in" inputmode="decimal" placeholder="0,00" autocomplete="off"></div>
@@ -298,7 +298,8 @@ function conferma(titolo, testo, conMotivo, fai) {
 let CD = null; // giorno della chiusura in compilazione
 async function vChiusura() {
   if (!S.st.sedi.length) return nessunaSede();
-  const tutte = S.sede === 'tutte';
+  if (S.sede === 'tutte' || !S.st.sedi.some(x => x.id === S.sede)) S.sede = S.st.sedi[0].id;
+  const tutte = false;
   if (!CD) CD = S.st.oggi;
   let lst, g = null;
   try {
@@ -310,8 +311,8 @@ async function vChiusura() {
   const T = lst.totali;
   $('#main').innerHTML = `
   <div class="head"><div><h2 class="view">Chiusura di cassa</h2><p>A fine giornata: quanto è entrato in contanti, con il POS e con gli assegni. I totali si fanno da soli.</p></div></div>
-  ${barra(S.st.admin)}
-  ${tutte ? '<div class="avviso giallo" style="margin-bottom:14px">Stai guardando tutte le sedi. Per fare una chiusura scegli una sede.</div>' : `
+  ${barra(false)}
+  ${tutte ? '' : `
   <form class="card pad form" id="fc" style="margin:0 0 16px" novalidate>
     <div class="sez-t"><h3>${c ? 'Chiusura già fatta · correggi' : 'Chiudi la cassa'} · ${esc(sedeNome(S.sede))}</h3>
       <input type="date" id="c-data" value="${esc(CD)}" max="${esc(S.st.oggi)}" ${minD ? `min="${minD}"` : ''} aria-label="Giorno" style="border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:42px;background:var(--surface-2)"></div>
@@ -359,34 +360,63 @@ async function vChiusura() {
   $('#main').querySelectorAll('[data-giorno]').forEach(td => td.onclick = () => { CD = td.dataset.giorno; vChiusura(); scrollTo({ top: 0, behavior: 'smooth' }); });
 }
 
-/* ================= PANNELLO (amministrazione) ================= */
+/* ================= PANNELLO CASSA (amministrazione: solo da guardare) ================= */
+const PN = { sede: 'tutte', vista: 'uscite' };
 async function vPannello() {
-  let d;
-  try { d = await api('GET', `api/pannello?periodo=${S.periodo}`); } catch (x) { return toast(x.message); }
-  const T = d.totali;
+  const sq = encodeURIComponent(PN.sede);
+  let d, us, ch;
+  try { [d, us, ch] = await Promise.all([api('GET', `api/pannello?periodo=${S.periodo}`), api('GET', `api/uscite?sede=${sq}&periodo=${S.periodo}`), api('GET', `api/chiusure?sede=${sq}&periodo=${S.periodo}`)]); }
+  catch (x) { return toast(x.message); }
+  const T = d.totali, anno = /^\d{4}$/.test(S.periodo), sedi = S.st.tutteSedi, tutte = PN.sede === 'tutte';
+  // uscite raggruppate per sede, con il totale di ogni sede
+  const perSede = {}; us.uscite.forEach(u => { (perSede[u.sedeNome] = perSede[u.sedeNome] || []).push(u); });
+  const totSede = l => l.filter(u => !u.annullata).reduce((a, u) => a + u.importo, 0);
+  const rigaU = u => `<div class="riga ${u.annullata ? 'off' : ''}"><div class="gr"><div class="t">${esc(u.nota)}</div>
+      <div class="s">${esc(fD(u.data))} · ${esc(fOra(u.il))} · ${esc(u.chi)}${u.annullata ? ' · <b>annullata</b>' + (u.annullataMotivo ? ': ' + esc(u.annullataMotivo) : '') : ''}</div></div>
+      <div class="imp">${fE(u.importo)}</div>${u.puoiAnnullare ? `<button class="btn sm danger" data-ann="${esc(u.id)}">Annulla</button>` : ''}</div>`;
+  const C = ch.totali;
   $('#main').innerHTML = `
-  <div class="head"><div><h2 class="view">Pannello</h2><p>Uscite e incassi di cassa (contanti, POS, assegni) di ogni sede e in totale.</p></div></div>
-  <div class="sedebar"><input type="month" id="bMese" value="${esc(/^\d{4}$/.test(S.periodo) ? S.st.oggi.slice(0, 7) : S.periodo)}" max="${esc(S.st.oggi.slice(0, 7))}" aria-label="Mese">
-    <button class="btn sm ${/^\d{4}$/.test(S.periodo) ? 'primary' : ''}" id="bAnno">Tutto il ${esc((S.periodo || S.st.oggi).slice(0, 4))}</button></div>
-  ${d.senzaChiusuraIeri.length ? `<div class="avviso giallo" style="margin-bottom:14px">Senza chiusura di cassa ieri (${esc(fD(d.ieri))}): ${esc(d.senzaChiusuraIeri.join(', '))}</div>` : ''}
+  <div class="head"><div><h2 class="view">Pannello cassa</h2><p>Uscite di cassa con importi e note, e chiusure (contanti, POS, assegni) di ogni sede e in totale.</p></div></div>
+  <div class="sedebar"><select id="pSede" aria-label="Sede">${opt('tutte', 'Tutte le sedi', tutte)}${sedi.map(x => opt(x.id, x.nome, x.id === PN.sede)).join('')}</select>
+    <input type="month" id="bMese" value="${esc(anno ? S.st.oggi.slice(0, 7) : S.periodo)}" max="${esc(S.st.oggi.slice(0, 7))}" aria-label="Mese">
+    <button class="btn sm ${anno ? 'primary' : ''}" id="bAnno">Tutto il ${esc(S.periodo.slice(0, 4))}</button></div>
+  ${tutte && !anno && d.senzaChiusuraIeri.length ? `<div class="avviso giallo" style="margin-bottom:14px">Senza chiusura di cassa ieri (${esc(fD(d.ieri))}): ${esc(d.senzaChiusuraIeri.join(', '))}</div>` : ''}
   <div class="tiles">
-    <div class="card tile"><div class="l">Uscite di cassa</div><div class="v">${fE(T.uscite)}</div><div class="b">${T.usciteN} ${T.usciteN === 1 ? 'uscita' : 'uscite'}</div></div>
-    <div class="card tile"><div class="l">Contanti</div><div class="v">${fE(T.contanti)}</div></div>
-    <div class="card tile"><div class="l">POS</div><div class="v">${fE(T.pos)}</div></div>
-    <div class="card tile"><div class="l">Assegni</div><div class="v">${fE(T.assegni)}</div></div>
-    <div class="card tile fin"><div class="l">Incassi totali</div><div class="v">${fE(T.incassi)}</div><div class="b">${esc(nomeP(d.periodo))}</div></div>
+    <div class="card tile"><div class="l">Uscite di cassa</div><div class="v">${fE(us.totale)}</div><div class="b">${us.uscite.filter(u => !u.annullata).length} uscite</div></div>
+    <div class="card tile"><div class="l">Contanti</div><div class="v">${fE(C.contanti)}</div></div>
+    <div class="card tile"><div class="l">POS</div><div class="v">${fE(C.pos)}</div></div>
+    <div class="card tile"><div class="l">Assegni</div><div class="v">${fE(C.assegni)}</div></div>
+    <div class="card tile fin"><div class="l">Incassi totali</div><div class="v">${fE(C.totale)}</div><div class="b">${esc(nomeP(S.periodo))}${tutte ? '' : ' · ' + esc(sedi.find(x => x.id === PN.sede)?.nome || '')}</div></div>
   </div>
-  <div class="card pad" style="margin-top:14px">
-    <div class="sez-t"><h3>Per sede · ${esc(nomeP(d.periodo))}</h3><span class="muted" style="font-size:13px">Tocca una sede per vedere le uscite o le chiusure.</span></div>
+  ${tutte ? `<div class="card pad" style="margin-top:14px">
+    <div class="sez-t"><h3>Per sede · ${esc(nomeP(d.periodo))}</h3><span class="muted" style="font-size:13px">Tocca una sede per vedere solo quella.</span></div>
     <div class="tw"><table class="t"><thead><tr><th>Sede</th><th class="n">Uscite</th><th class="n">Contanti</th><th class="n">POS</th><th class="n">Assegni</th><th class="n">Incassi totali</th><th class="n">Chiusure</th><th></th></tr></thead>
-    <tbody>${d.righe.map(r => `<tr><td><b>${esc(r.nome)}</b></td><td class="n click" data-vai="uscite" data-sede="${esc(r.sede)}">${fE(r.uscite)}</td><td class="n">${fE(r.contanti)}</td><td class="n">${fE(r.pos)}</td><td class="n">${fE(r.assegni)}</td>
-      <td class="n click" data-vai="chiusura" data-sede="${esc(r.sede)}"><b>${fE(r.incassi)}</b></td><td class="n">${r.giorni}</td><td class="muted" style="font-size:12.5px">${r.ultima ? 'ultima ' + esc(fD(r.ultima)) : 'nessuna'}</td></tr>`).join('')}</tbody>
+    <tbody>${d.righe.map(r => `<tr><td class="click" data-psede="${esc(r.sede)}">${esc(r.nome)}</td><td class="n">${fE(r.uscite)}</td><td class="n">${fE(r.contanti)}</td><td class="n">${fE(r.pos)}</td><td class="n">${fE(r.assegni)}</td>
+      <td class="n"><b>${fE(r.incassi)}</b></td><td class="n">${r.giorni}</td><td class="muted" style="font-size:12.5px">${r.ultima ? 'ultima ' + esc(fD(r.ultima)) : 'nessuna'}</td></tr>`).join('')}</tbody>
     <tfoot><tr><td>Totale</td><td class="n">${fE(T.uscite)}</td><td class="n">${fE(T.contanti)}</td><td class="n">${fE(T.pos)}</td><td class="n">${fE(T.assegni)}</td><td class="n">${fE(T.incassi)}</td><td class="n">${T.giorni}</td><td></td></tr></tfoot></table></div>
-  </div>`;
+  </div>` : ''}
+  <div class="seg" style="margin:18px 0 10px"><button type="button" class="${PN.vista === 'uscite' ? 'on' : ''}" data-pvista="uscite">Uscite di cassa</button><button type="button" class="${PN.vista === 'chiusure' ? 'on' : ''}" data-pvista="chiusure">Chiusure di cassa</button></div>
+  ${PN.vista === 'uscite' ? `<div class="card pad">
+    <div class="sez-t"><h3>Uscite di cassa · ${esc(nomeP(us.periodo))}</h3><div class="tot"><span>Totale <b>${fE(us.totale)}</b></span></div></div>
+    ${us.uscite.length ? Object.entries(perSede).map(([nome, l]) => `${tutte ? `<div class="sez-t" style="margin:14px 0 0;padding-top:8px;border-top:2px solid var(--line)"><b>${esc(nome)}</b><span class="tot" style="margin:0">Totale sede <b>${fE(totSede(l))}</b></span></div>` : ''}${l.map(rigaU).join('')}`).join('')
+      : '<div class="empty"><b>Nessuna uscita</b>In questo periodo non ci sono uscite registrate.</div>'}
+  </div>` : `<div class="card pad">
+    <div class="sez-t"><h3>Chiusure di cassa · ${esc(nomeP(ch.periodo))}</h3><span class="muted" style="font-size:13.5px">${C.giorni} ${C.giorni === 1 ? 'chiusura' : 'chiusure'}</span></div>
+    ${ch.chiusure.length ? `<div class="tw"><table class="t"><thead><tr><th>Giorno</th>${tutte ? '<th>Sede</th>' : ''}<th class="n">Contanti</th><th class="n">POS</th><th class="n">Assegni</th><th class="n">Totale</th><th class="n">Uscite</th><th>Fatta da</th><th>Note</th></tr></thead>
+      <tbody>${ch.chiusure.map(r => `<tr><td>${esc(fD(r.data))}</td>${tutte ? `<td>${esc(r.sedeNome)}</td>` : ''}<td class="n">${fE(r.contanti)}</td><td class="n">${fE(r.pos)}</td><td class="n">${fE(r.assegni)}</td><td class="n"><b>${fE(r.totale)}</b></td><td class="n">${fE(r.uscite)}</td><td>${esc(r.chi)}</td><td class="wrap">${esc(r.note)}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td>Totale</td>${tutte ? '<td></td>' : ''}<td class="n">${fE(C.contanti)}</td><td class="n">${fE(C.pos)}</td><td class="n">${fE(C.assegni)}</td><td class="n">${fE(C.totale)}</td><td class="n">${fE(C.uscite)}</td><td></td><td></td></tr></tfoot></table></div>`
+      : '<div class="empty"><b>Nessuna chiusura</b>In questo periodo non ci sono chiusure di cassa.</div>'}
+  </div>`}`;
+  $('#pSede').onchange = e => { PN.sede = e.target.value; vPannello(); };
   $('#bMese').onchange = e => { if (e.target.value) { S.periodo = e.target.value; vPannello(); } };
-  $('#bAnno').onclick = () => { S.periodo = /^\d{4}$/.test(S.periodo) ? S.st.oggi.slice(0, 7) : (S.periodo || S.st.oggi).slice(0, 4); vPannello(); };
-  $('#main').querySelectorAll('[data-vai]').forEach(td => td.onclick = () => { S.sede = td.dataset.sede; if (/^\d{4}$/.test(S.periodo)) S.periodo = S.st.oggi.slice(0, 7); go(td.dataset.vai); });
+  $('#bAnno').onclick = () => { S.periodo = anno ? S.st.oggi.slice(0, 7) : S.periodo.slice(0, 4); vPannello(); };
+  $('#main').querySelectorAll('[data-psede]').forEach(td => td.onclick = () => { PN.sede = td.dataset.psede; vPannello(); scrollTo({ top: 0, behavior: 'smooth' }); });
+  $('#main').querySelectorAll('[data-pvista]').forEach(b => b.onclick = () => { PN.vista = b.dataset.pvista; vPannello(); });
+  $('#main').querySelectorAll('[data-ann]').forEach(b => b.onclick = () => conferma('Annullare questa uscita?', 'Resta nello storico, barrata, e non conta più nei totali.', true, async motivo => {
+    await api('POST', `api/uscite/${b.dataset.ann}/annulla`, { motivo }); toast('Uscita annullata.'); vPannello();
+  }));
 }
+
 /* ================= PRODUZIONE DI UL ================= */
 const P = { anno: null, sede: '' };
 const MESI_C = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];

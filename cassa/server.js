@@ -25,7 +25,7 @@ const addG = (g, n) => { const d = new Date(g + 'T12:00:00Z'); d.setUTCDate(d.ge
 const euro = v => { let s = String(v ?? '').trim().replace(/[€\s]/g, ''); if (s === '') return 0; s = s.includes(',') || /^\d{1,3}(\.\d{3})+$/.test(s) ? s.replace(/\./g, '').replace(',', '.') : s; const n = Number(s); return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null; };
 const num = v => Number(v) || 0;
 const PUB = path.join(__dirname, 'public');
-const KEY = 'cassa', KEY_P = 'produzione';
+const KEY = 'cassa', KEY_P = 'produzione', KEY_PAN = 'cassa_pannello';
 // quanti giorni indietro l'operatore può fare o correggere una chiusura (l'amministratore sempre)
 const GIORNI_CHIUSURA = 7;
 
@@ -55,14 +55,21 @@ app.use(wrap(async (req, res, next) => {
     const mie = (lv[k]?.enti || []).map(e => e.id);
     return { admin: false, sedi: tutte.filter(s => mie.includes(s.id)) };
   };
-  req.me = { id: u.id, nome: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email, perm: await permDi(KEY), prod: await permDi(KEY_P) };
+  // Cassa sede: solo chi inserisce (l'amministratore guarda dal Pannello cassa, non inserisce)
+  const pc = owner ? null : await permDi(KEY);
+  const pan = owner || c.apps[KEY_PAN] === 'admin' ? { admin: true, sedi: tutte } : null;
+  req.me = { id: u.id, nome: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email, perm: pc && !pc.admin ? pc : null, pan, prod: await permDi(KEY_P) };
   next();
 }));
 const needUser = (req, res, next) => req.me?.perm ? next() : bad(res, req.me ? 403 : 401, req.me ? 'Non sei abilitato a Gestione Cassa UL.' : 'Accesso richiesto');
 const needProd = (req, res, next) => req.me?.prod ? next() : bad(res, req.me ? 403 : 401, req.me ? 'Non sei abilitato a Produzione di UL.' : 'Accesso richiesto');
-const needAny = (req, res, next) => req.me?.perm || req.me?.prod ? next() : bad(res, req.me ? 403 : 401, req.me ? 'Non sei abilitato a REC.' : 'Accesso richiesto');
-const needAdmin = (req, res, next) => req.me?.perm?.admin ? next() : bad(res, 403, 'Solo per l\'amministrazione.');
-const sedeOk = (req, id) => req.me.perm.sedi.find(s => s.id === id) || null;
+const needAny = (req, res, next) => req.me?.perm || req.me?.pan || req.me?.prod ? next() : bad(res, req.me ? 403 : 401, req.me ? 'Non sei abilitato a REC.' : 'Accesso richiesto');
+const needAdmin = (req, res, next) => req.me?.pan ? next() : bad(res, 403, 'Solo per l\'amministrazione.');
+// per guardare: le sedi di chi inserisce, oppure tutte per il Pannello cassa
+const needVedere = (req, res, next) => req.me?.perm || req.me?.pan ? next() : bad(res, req.me ? 403 : 401, req.me ? 'Non sei abilitato alla cassa.' : 'Accesso richiesto');
+const sediVedere = req => req.me.pan ? req.me.pan.sedi : req.me.perm.sedi;
+const sedeOk = (req, id) => req.me.perm?.sedi.find(s => s.id === id) || null;
+const sedeVedere = (req, id) => sediVedere(req).find(s => s.id === id) || null;
 app.use('/api', (req, res, next) => (['GET', 'HEAD', 'DELETE'].includes(req.method) || req.is('application/json')) ? next() : bad(res, 415, 'Formato non valido'));
 const log = (cosa, rif, chi, prima, dopo) => db.q('insert into storico (cosa, rif, chi, prima, dopo) values ($1,$2,$3,$4,$5)', [cosa, rif, chi, prima ? JSON.stringify(prima) : null, dopo ? JSON.stringify(dopo) : null]).catch(() => {});
 
@@ -76,25 +83,25 @@ function periodo(p) {
 // quali sedi guardare: una sola, oppure tutte quelle della persona
 function sediRichieste(req) {
   const s = str(req.query.sede, 60);
-  if (s && s !== 'tutte') { const x = sedeOk(req, s); return x ? [x] : null; }
-  return req.me.perm.sedi;
+  if (s && s !== 'tutte') { const x = sedeVedere(req, s); return x ? [x] : null; }
+  return sediVedere(req);
 }
 
 /* ---------- stato ---------- */
 app.get('/api/stato', needAny, (req, res) => {
-  res.json({ me: { id: req.me.id, nome: req.me.nome }, cassa: !!req.me.perm, admin: !!req.me.perm?.admin, sedi: req.me.perm?.sedi || [],
+  res.json({ me: { id: req.me.id, nome: req.me.nome }, cassa: !!req.me.perm, pannello: !!req.me.pan, admin: false, sedi: req.me.perm?.sedi || [], tutteSedi: req.me.pan?.sedi || [],
     prod: req.me.prod ? { admin: req.me.prod.admin, sedi: req.me.prod.sedi } : null, oggi: oggi(), giorniChiusura: GIORNI_CHIUSURA, home: accessi.publicUrl() });
 });
 
 /* ============ USCITE DI CASSA ============ */
 const formaU = r => ({ id: r.id, sede: r.sede_id, sedeNome: r.sede_nome, data: r.data, importo: num(r.importo), nota: r.nota, chi: r.creato_nome, il: r.creato_il,
   annullata: r.annullata, annullataMotivo: r.annullata_motivo || '', mia: false });
-app.get('/api/uscite', needUser, wrap(async (req, res) => {
+app.get('/api/uscite', needVedere, wrap(async (req, res) => {
   const sedi = sediRichieste(req); if (!sedi) return bad(res, 403, 'Sede non tua.');
   const p = periodo(req.query.periodo);
   const { rows } = await db.q(`select * from uscite where sede_id = any($1) and data between $2 and $3 order by data desc, creato_il desc`, [sedi.map(s => s.id), p.dal, p.al]);
   const g = oggi();
-  const lista = rows.map(r => ({ ...formaU(r), puoiAnnullare: !r.annullata && (req.me.perm.admin || (r.creato_da === req.me.id && r.data === g)) }));
+  const lista = rows.map(r => ({ ...formaU(r), puoiAnnullare: !r.annullata && (!!req.me.pan || (r.creato_da === req.me.id && r.data === g)) }));
   const valide = rows.filter(r => !r.annullata);
   res.json({ periodo: p.chiave, uscite: lista, totale: valide.reduce((s, r) => s + num(r.importo), 0),
     totaleOggi: valide.filter(r => r.data === g).reduce((s, r) => s + num(r.importo), 0) });
@@ -112,11 +119,11 @@ app.post('/api/uscite', needUser, wrap(async (req, res) => {
   log('uscita', id, req.me.nome, null, { sede: sede.nome, importo, nota });
   res.json({ ok: true, id });
 }));
-app.post('/api/uscite/:id/annulla', needUser, wrap(async (req, res) => {
+app.post('/api/uscite/:id/annulla', needVedere, wrap(async (req, res) => {
   const { rows: [r] } = await db.q('select * from uscite where id = $1', [req.params.id]);
-  if (!r || !sedeOk(req, r.sede_id)) return bad(res, 404, 'Uscita non trovata.');
+  if (!r || !sedeVedere(req, r.sede_id)) return bad(res, 404, 'Uscita non trovata.');
   if (r.annullata) return bad(res, 400, 'È già annullata.');
-  if (!req.me.perm.admin && !(r.creato_da === req.me.id && r.data === oggi())) return bad(res, 403, 'Puoi annullare solo le uscite che hai registrato tu oggi. Per le altre chiedi all\'amministrazione.');
+  if (!req.me.pan && !(r.creato_da === req.me.id && r.data === oggi())) return bad(res, 403, 'Puoi annullare solo le uscite che hai registrato tu oggi. Per le altre chiedi all\'amministrazione.');
   const motivo = str(req.body?.motivo, 300);
   await db.q(`update uscite set annullata = true, annullata_da = $2, annullata_il = now(), annullata_motivo = $3 where id = $1`, [r.id, req.me.nome, motivo]);
   log('uscita annullata', r.id, req.me.nome, { importo: num(r.importo), nota: r.nota }, { motivo });
@@ -126,7 +133,7 @@ app.post('/api/uscite/:id/annulla', needUser, wrap(async (req, res) => {
 /* ============ CHIUSURA DI CASSA ============ */
 const formaC = r => ({ sede: r.sede_id, sedeNome: r.sede_nome, data: r.data, contanti: num(r.contanti), pos: num(r.pos), assegni: num(r.assegni),
   totale: num(r.contanti) + num(r.pos) + num(r.assegni), note: r.note, chi: r.aggiornato_nome || r.creato_nome, il: r.aggiornato_il });
-app.get('/api/chiusure', needUser, wrap(async (req, res) => {
+app.get('/api/chiusure', needVedere, wrap(async (req, res) => {
   const sedi = sediRichieste(req); if (!sedi) return bad(res, 403, 'Sede non tua.');
   const p = periodo(req.query.periodo), ids = sedi.map(s => s.id);
   const [{ rows }, { rows: us }] = await Promise.all([
@@ -153,7 +160,7 @@ app.put('/api/chiusura', needUser, wrap(async (req, res) => {
   const sede = sedeOk(req, str(b.sede, 60)); if (!sede) return bad(res, 400, 'Scegli la sede.');
   const data = str(b.data, 10) || oggi(); if (!isDate(data)) return bad(res, 400, 'Data non valida.');
   if (data > oggi()) return bad(res, 400, 'Non si chiude la cassa di un giorno che deve ancora venire.');
-  if (!req.me.perm.admin && data < addG(oggi(), -GIORNI_CHIUSURA)) return bad(res, 403, `Puoi chiudere o correggere solo gli ultimi ${GIORNI_CHIUSURA} giorni. Per le date più vecchie chiedi all'amministrazione.`);
+  if (data < addG(oggi(), -GIORNI_CHIUSURA)) return bad(res, 403, `Puoi chiudere o correggere solo gli ultimi ${GIORNI_CHIUSURA} giorni. Per le date più vecchie chiedi all'amministrazione.`);
   const contanti = euro(b.contanti), pos = euro(b.pos), assegni = euro(b.assegni);
   if (contanti == null || pos == null || assegni == null) return bad(res, 400, 'Controlla gli importi: solo numeri, anche 0.');
   if (contanti + pos + assegni > 1000000) return bad(res, 400, 'Importo troppo alto: controlla le cifre.');
@@ -169,8 +176,8 @@ app.put('/api/chiusura', needUser, wrap(async (req, res) => {
 }));
 
 /* ============ PANNELLO (amministrazione) ============ */
-app.get('/api/pannello', needUser, needAdmin, wrap(async (req, res) => {
-  const p = periodo(req.query.periodo), sedi = req.me.perm.sedi, ids = sedi.map(s => s.id);
+app.get('/api/pannello', needAdmin, wrap(async (req, res) => {
+  const p = periodo(req.query.periodo), sedi = req.me.pan.sedi, ids = sedi.map(s => s.id);
   const [{ rows: us }, { rows: ch }] = await Promise.all([
     db.q(`select sede_id, sum(importo) as t, count(*)::int as n from uscite where sede_id = any($1) and data between $2 and $3 and not annullata group by sede_id`, [ids, p.dal, p.al]),
     db.q(`select sede_id, sum(contanti) as c, sum(pos) as p, sum(assegni) as a, count(*)::int as g, max(data) as ultima from chiusure where sede_id = any($1) and data between $2 and $3 group by sede_id`, [ids, p.dal, p.al]),
@@ -291,7 +298,7 @@ app.post('/api/produzione/decidi', needProd, wrap(async (req, res) => {
 app.get('/', (req, res) => {
   res.set('Cache-Control', 'no-store');
   if (!req.me) return res.redirect(accessi.loginUrl(`${req.protocol}://${req.get('host')}${req.originalUrl}`));
-  if (!req.me.perm && !req.me.prod) return res.redirect(`${accessi.publicUrl()}/?noaccess=rec`);
+  if (!req.me.perm && !req.me.pan && !req.me.prod) return res.redirect(`${accessi.publicUrl()}/?noaccess=rec`);
   res.sendFile(path.join(PUB, 'app.html'));
 });
 app.use(express.static(PUB, { index: false, maxAge: '1h' }));
