@@ -36,9 +36,9 @@ module.exports = function scheda(app, { db, needUser, needAdmin, wrap, bad, uplo
 
   // persona del pannello accessi (nome, figura) a partire dall'utente locale di Turni
   async function persona(u) {
-    const { rows } = await store.q('select id, first_name, last_name, figura from users where id = $1', [u.sso_id]);
+    const { rows } = await store.q('select id, first_name, last_name, figura, contratto_tipo from users where id = $1', [u.sso_id]);
     const p = rows[0] || {};
-    return { ssoId: u.sso_id, nome: `${p.first_name || ''} ${p.last_name || ''}`.trim() || u.name, figura: p.figura || '' };
+    return { ssoId: u.sso_id, nome: `${p.first_name || ''} ${p.last_name || ''}`.trim() || u.name, figura: p.figura || '', contratto: p.contratto_tipo || '' };
   }
   async function sedi() { return (await store.listSedi()).filter(s => s.attiva); }
   // Medici e loro sedi: sempre dal pannello accessi, dall'assegnazione di Nuovalab (livello "Medico" con uno o più
@@ -84,6 +84,7 @@ module.exports = function scheda(app, { db, needUser, needAdmin, wrap, bad, uplo
       medici: meds.filter(m => m.sedi.some(s => admin || mieSedi.includes(s))).map(m => ({ id: m.id, nome: m.nome, sedi: m.sedi,
         branche: Object.fromEntries(br.filter(b => b.medico_id === m.id).map(b => [b.sede_id, b.branche])) })),
       docs: docs.filter(visDoc).map(d => docShape(d, lm[d.id])),
+      convenzioni: (await store.convenzioni(admin ? null : mieSedi, me.contratto).catch(() => [])).map(c => ({ id: c.id, titolo: c.titolo, descrizione: c.descrizione, link: c.link, sedi: c.sedi, per: c.per })),
       contatti: (await store.contattiUtili(admin ? null : mieSedi).catch(() => [])).map(c => ({ id: c.id, riferimento: c.riferimento, email: c.email, telefono: c.telefono, sedi: c.sedi })),
       attiva: !!(await imp('attiva')),
     };

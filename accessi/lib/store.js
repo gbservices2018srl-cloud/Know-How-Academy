@@ -149,7 +149,11 @@ async function migrate() {
     -- contatti utili (Gestione accessi → Sedi): li vedono in Info utili le persone delle sedi spuntate. «Togli» li archivia.
     create table if not exists contatti_utili (id text primary key, riferimento text not null, email text not null default '',
       telefono text not null default '', sedi jsonb not null default '[]', attivo boolean not null default true,
-      sort int not null default 0, creato timestamptz not null default now());`);
+      sort int not null default 0, creato timestamptz not null default now());
+    -- convenzioni per il personale (Gestione accessi → Sedi): per sede e per tipo di contratto (dip = CCNL, piva = partita IVA)
+    create table if not exists convenzioni (id text primary key, titolo text not null, descrizione text not null default '',
+      link text not null default '', sedi jsonb not null default '[]', per jsonb not null default '["dip","piva"]',
+      attivo boolean not null default true, sort int not null default 0, creato timestamptz not null default now());`);
   // Turni: la figura scelta prima nel permesso diventa la figura della persona
   await q(`update users u set figura = ua.ente from user_apps ua
     where ua.user_id = u.id and ua.app = 'turni' and u.figura is null and ua.ente = any($1)`, [FIGURE.map(f => f.id)]);
@@ -557,11 +561,19 @@ async function contattiUtili(sedi) {
   return rows;
 }
 
+// convenzioni visibili per sedi e tipo di contratto (tutte se sedi = null)
+async function convenzioni(sedi, tipo) {
+  const { rows } = await q(`select id, titolo, descrizione, link, sedi, per from convenzioni where attivo
+    and ($1::jsonb is null or (sedi ?| (select array_agg(x) from jsonb_array_elements_text($1::jsonb) x) and per ? coalesce($2::text, '')))
+    order by sort, titolo`, [sedi ? JSON.stringify(sedi) : null, tipo || null]);
+  return rows;
+}
+
 // funzioni che le altre app registrano qui (es. la Scheda personale: documentiPersonali(userId) → [{ nome, buf }])
 const hooks = {};
 
 module.exports = {
-  hooks, contattiUtili,
+  hooks, contattiUtili, convenzioni,
   accessiAutomatici, allineaSeguaci, fondiSeguaci, capo, appSpente, appSpenteAggiorna,
   utenteDaToken, pool, q, SCHEMA, APPS, APP_KEYS, events, migrate, ensureOwner,
   cleanEmail, validEmail, cleanName, cleanDate, cleanFigura, FIGURE, cleanCf, validCf, cleanProv, cleanAlbo, appsOf, publicUser, getUser, findByEmail, createUser, setPassword,

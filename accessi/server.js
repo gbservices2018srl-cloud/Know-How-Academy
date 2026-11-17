@@ -849,6 +849,39 @@ app.delete('/api/admin/contatti/:id', needAdmin, wrap(async (req, res) => {
   res.json({ contatti: await tuttiContatti() });
 }));
 
+/* ---------- convenzioni (Info utili → Convenzioni per te), per sede e per tipo di contratto ---------- */
+const convBody = async b => {
+  const titolo = String(b.titolo || '').trim().slice(0, 120), descrizione = String(b.descrizione || '').trim().slice(0, 1000);
+  let link = String(b.link || '').trim().slice(0, 300);
+  if (!titolo) throw Object.assign(new Error('Scrivi il nome della convenzione.'), { status: 400 });
+  if (link && !/^https?:\/\//i.test(link)) link = 'https://' + link;
+  if (link && !/^https?:\/\/[^\s<>"]+\.[^\s<>"]+$/i.test(link)) throw Object.assign(new Error('Il link non è valido.'), { status: 400 });
+  const ids = new Set((await store.listSedi()).map(s => s.id));
+  const sedi = [...new Set([].concat(b.sedi || []).map(String))].filter(id => ids.has(id));
+  const per = ['dip', 'piva'].filter(t => [].concat(b.per || []).includes(t));
+  if (!sedi.length) throw Object.assign(new Error('Spunta almeno una sede.'), { status: 400 });
+  if (!per.length) throw Object.assign(new Error('Scegli per chi vale: CCNL, partita IVA o entrambi.'), { status: 400 });
+  return { titolo, descrizione, link, sedi, per };
+};
+const tutteConv = () => store.convenzioni(null);
+app.get('/api/admin/convenzioni', needAdmin, wrap(async (req, res) => res.json({ convenzioni: await tutteConv() })));
+app.post('/api/admin/convenzioni', needAdmin, wrap(async (req, res) => {
+  const c = await convBody(req.body || {});
+  await store.q(`insert into convenzioni (id, titolo, descrizione, link, sedi, per, sort) values ($1,$2,$3,$4,$5,$6,(select coalesce(max(sort),0)+1 from convenzioni))`,
+    [require('crypto').randomUUID(), c.titolo, c.descrizione, c.link, JSON.stringify(c.sedi), JSON.stringify(c.per)]);
+  res.json({ convenzioni: await tutteConv() });
+}));
+app.put('/api/admin/convenzioni/:id', needAdmin, wrap(async (req, res) => {
+  const c = await convBody(req.body || {});
+  await store.q('update convenzioni set titolo = $2, descrizione = $3, link = $4, sedi = $5, per = $6 where id = $1', [req.params.id, c.titolo, c.descrizione, c.link, JSON.stringify(c.sedi), JSON.stringify(c.per)]);
+  res.json({ convenzioni: await tutteConv() });
+}));
+// «Togli»: non si vede più ma resta archiviata
+app.delete('/api/admin/convenzioni/:id', needAdmin, wrap(async (req, res) => {
+  await store.q('update convenzioni set attivo = false where id = $1', [req.params.id]);
+  res.json({ convenzioni: await tutteConv() });
+}));
+
 /* ---------- procedura guidata: cosa manca per ogni sede, e persone senza sede ---------- */
 // orari (Scheda personale → Info utili), sede in Gestione finanziaria, email (serve a Nuovalab), riuniti, persone che ci lavorano
 async function statoSedi() {

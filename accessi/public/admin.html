@@ -573,10 +573,11 @@ async function caricaAi(mese) {
   });
   $('#aiMese').onchange = e => caricaAi(e.target.value);
 }
-let CONTATTI = null;
+let CONTATTI = null, CONV = null;
 async function caricaSedi() {
   try { SEDI = (await api('GET', '/api/admin/sedi')).sedi; } catch (e) { toast(e.message); SEDI = []; }
   try { CONTATTI = (await api('GET', '/api/admin/contatti')).contatti; } catch { CONTATTI = []; }
+  try { CONV = (await api('GET', '/api/admin/convenzioni')).convenzioni; } catch { CONV = []; }
   renderSedi();
 }
 // Contatti utili: riferimento, email, telefono e le sedi che li vedono (Scheda personale → Info utili)
@@ -591,6 +592,45 @@ function contattiHtml() {
       <div class="actions"><button class="btn small" data-contatto-edit="${c.id}">Modifica</button><button class="btn small" data-contatto-togli="${c.id}">Togli</button></div></div>`).join('')
       : '<p class="muted" style="margin:6px 0 0">Nessun contatto ancora.</p>'}</div>`;
 }
+// Convenzioni: nome, descrizione, link; per quali sedi e per chi (CCNL / partita IVA). Le vedono in Info utili.
+const PER = { dip: 'CCNL', piva: 'Partita IVA' };
+function convHtml() {
+  const nomeS = id => (SEDI || []).find(x => x.id === id)?.sigla || '';
+  const att = (SEDI || []).filter(x => x.attiva);
+  return `<div class="card" style="margin-top:14px"><div class="tools" style="margin:0 0 6px"><div style="flex:1 1 260px"><b>Convenzioni</b><p class="hint" style="margin:2px 0 0">Le persone le trovano in Info utili → «Convenzioni per te», solo per le sedi e i contratti spuntati.</p></div>
+      <button class="btn primary" data-conv-new>+ Nuova convenzione</button></div>
+    ${(CONV || []).length ? CONV.map(c => `<div class="sede"><div style="min-width:0;grid-column:1/3"><b>${esc(c.titolo)}</b>
+        ${c.descrizione ? `<div class="meta"><span>${esc(c.descrizione.length > 120 ? c.descrizione.slice(0, 120) + '…' : c.descrizione)}</span></div>` : ''}
+        <div class="meta"><span>${c.sedi.length >= att.length && att.length > 1 ? 'Tutte le sedi' : esc(c.sedi.map(nomeS).filter(Boolean).join(', '))}</span><span>${c.per.map(t => PER[t]).join(' + ')}</span></div></div>
+      <div class="actions"><button class="btn small" data-conv-edit="${c.id}">Modifica</button><button class="btn small" data-conv-togli="${c.id}">Togli</button></div></div>`).join('')
+      : '<p class="muted" style="margin:6px 0 0">Nessuna convenzione ancora.</p>'}</div>`;
+}
+function apriConv(c) {
+  const v = c || { titolo: '', descrizione: '', link: '', sedi: [], per: ['dip', 'piva'] };
+  const att = (SEDI || []).filter(x => x.attiva);
+  open(`<h2>${c ? 'Modifica convenzione' : 'Nuova convenzione'}</h2>
+    <label class="field">Nome<input id="v-tit" value="${esc(v.titolo)}" maxlength="120" placeholder="es. Palestra FitLife – sconto 20%" required></label>
+    <label class="field">Descrizione <small class="muted" style="font-weight:500">come si usa, sconto, contatti</small><textarea id="v-desc" rows="3" maxlength="1000">${esc(v.descrizione)}</textarea></label>
+    <label class="field">Link <small class="muted" style="font-weight:500">facoltativo</small><input id="v-link" value="${esc(v.link)}" maxlength="300" placeholder="es. www.sito.it"></label>
+    <div class="field"><span>Per chi</span><div class="sedibox" style="flex-direction:row;flex-wrap:wrap">${Object.entries(PER).map(([k, n]) => `<button type="button" class="schip ${v.per.includes(k) ? 'on' : ''}" data-v-per="${k}">${n}</button>`).join('')}</div></div>
+    <div class="field"><span>In quali sedi <button type="button" class="btn small" data-c-tutte style="margin-left:6px">Tutte</button></span>
+      <div class="sedibox" style="flex-direction:row;flex-wrap:wrap">${att.map(x => `<button type="button" class="schip ${v.sedi.includes(x.id) ? 'on' : ''}" data-c-sede="${x.id}">${esc(x.nome)}</button>`).join('')}</div></div>
+    ${footer(c ? 'Salva' : 'Aggiungi')}`, async () => {
+    const body = { titolo: val('v-tit'), descrizione: dlgf.querySelector('#v-desc').value, link: val('v-link'),
+      sedi: [...dlgf.querySelectorAll('[data-c-sede].on')].map(b => b.dataset.cSede), per: [...dlgf.querySelectorAll('[data-v-per].on')].map(b => b.dataset.vPer) };
+    const r = await api(c ? 'PUT' : 'POST', c ? '/api/admin/convenzioni/' + c.id : '/api/admin/convenzioni', body);
+    CONV = r.convenzioni; renderSedi(); dlg.close(); toast(c ? 'Convenzione aggiornata' : 'Convenzione aggiunta');
+  });
+}
+document.addEventListener('click', async e => {
+  const vp = e.target.closest('[data-v-per]'); if (vp) { vp.classList.toggle('on'); return; }
+  if (e.target.closest('[data-conv-new]')) return apriConv(null);
+  const ed = e.target.closest('[data-conv-edit]'); if (ed) return apriConv(CONV.find(c => c.id === ed.dataset.convEdit));
+  const tg = e.target.closest('[data-conv-togli]');
+  if (tg) { const c = CONV.find(x => x.id === tg.dataset.convTogli);
+    if (!confirm(`Togliere la convenzione «${c.titolo}»? Non la vedrà più nessuno.`)) return;
+    try { CONV = (await api('DELETE', '/api/admin/convenzioni/' + c.id)).convenzioni; renderSedi(); toast('Convenzione tolta'); } catch (err) { toast(err.message); } }
+});
 function apriContatto(c) {
   const v = c || { riferimento: '', email: '', telefono: '', sedi: [] };
   const att = (SEDI || []).filter(x => x.attiva);
@@ -627,7 +667,7 @@ function renderSedi() {
   box.innerHTML = `<div class="tools"><p class="hint" style="flex:1 1 300px">Le sedi del gruppo valgono per tutte le app: si copiano da sole in Turni (con i riuniti), Manutenzione attrezzature (riuniti e aspiratori con il loro nome), Calendario (luoghi degli eventi), Ticket (studi, con la società) e Nuovalab (studi, serve l'email della sede).</p>
       <button class="btn" data-sede-sync>Aggiorna le app</button><button class="btn primary" data-sede-new>+ Nuova sede</button></div>
     ${SEDI && !SEDI.length ? `<div class="card empty">Nessuna sede ancora. <button class="btn small primary" data-sede-import style="margin-left:8px">Importa le sedi già presenti in Nuovalab e Ticket</button></div>` : `<div class="card" style="padding:0">${righe || '<div class="empty">Caricamento…</div>'}</div>`}
-    ${SEDI && SEDI.length ? contattiHtml() : ''}`;
+    ${SEDI && SEDI.length ? contattiHtml() + convHtml() : ''}`;
 }
 // riuniti e aspiratori della sede: quanti sono e come si chiamano (li legge Manutenzione attrezzature)
 const ICO_RIU = '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M13.5 17.5l3.6-.8 4.6 17.8-4.4 1z"/><path d="M19 36.5h22.5l11 8.5"/><path d="M30 40.5v11M21 54h18"/><path d="M38 6.5h15.5v7"/></svg>';
