@@ -214,11 +214,20 @@ module.exports = function sp(app, ctx) {
   }
   // le colonne delle richieste senza il file del certificato (si legge solo quando serve)
   const RCOLS = `id, user_id, tipo, dal, al, ora_da, ora_a, quanti, sost_id, sost_ok, stato, nota, prot, creata, decisa_il, decisa_da, nota_admin, doc_stato, scadenza, doc_il, doc_nome, doc_approvato`;
-  const TIPI = { ferie: 'Ferie', permesso: 'ROL', malattia: 'Malattia', altro: 'Altra assenza', smart: 'Smart working', lutto: 'Lutto' };
+  const TIPI = { ferie: 'Ferie', permesso: 'ROL', malattia: 'Malattia', altro: 'Altra assenza', smart: 'Smart working', lutto: 'Lutto',
+    parentale: 'Congedo parentale', maternita: 'Maternità', pnr: 'Permesso non retribuito' };
+  // congedo parentale: preavviso minimo e al massimo metà delle ore giornaliere del contratto
+  const PREAVVISO_PARENTALE = 5;
+  const LEGGE_PREAVVISO = 'art. 32, comma 3, D.Lgs. 26 marzo 2001 n. 151 (Testo unico maternità e paternità)';
   const richShape = (r, nomi) => ({ id: r.id, user: r.user_id, nome: nomi?.get(r.user_id) || '', tipo: r.tipo, tipoTxt: TIPI[r.tipo], dal: r.dal, al: r.al, oraDa: r.ora_da, oraA: r.ora_a,
     quanti: r.quanti != null ? Number(r.quanti) : null, sost: r.sost_id, sostNome: nomi?.get(r.sost_id) || '', sostOk: r.sost_ok, stato: r.stato, nota: r.nota, prot: r.prot,
     creata: r.creata, decisaIl: r.decisa_il, notaAdmin: r.nota_admin, docStato: r.doc_stato || '', scadenza: r.scadenza || null, haDoc: !!r.doc_il, docNome: r.doc_nome || '', docApprovato: r.doc_approvato || null });
-  const descRich = r => r.tipo === 'permesso' ? `${TIPI[r.tipo]} ${fmtG(r.dal)}, ${r.ora_da}–${r.ora_a}` : (r.dal === r.al ? `${TIPI[r.tipo]} ${fmtG(r.dal)}` : `${TIPI[r.tipo]} dal ${fmtG(r.dal)} al ${fmtG(r.al)}`);
+  const descRich = r => {
+    const ore = r.ora_da && r.ora_a ? `, ${r.ora_da}–${r.ora_a}` : '';
+    if (r.tipo === 'permesso') return `${TIPI[r.tipo]} ${fmtG(r.dal)}${ore}`;
+    const t = TIPI[r.tipo] + (r.tipo === 'maternita' ? (r.dal === r.al ? '' : ' (fine presunta)') : '');
+    return (r.dal === r.al ? `${TIPI[r.tipo]} ${fmtG(r.dal)}` : `${t} dal ${fmtG(r.dal)} al ${fmtG(r.al)}`) + (r.tipo === 'parentale' || r.tipo === 'pnr' ? ore : '');
+  };
 
   // Approvazione: scala ferie/permessi e passa i turni al sostituto (se quel giorno è libero)
   async function applicaApprovazione(r, chi) {
@@ -308,7 +317,7 @@ module.exports = function sp(app, ctx) {
       for (const [k, minuti] of perGiorno) {
         if (timS.has(k) || fatteS.has(k)) continue;
         const [uid, g] = k.split('|');
-        if (ric.some(r => r.user_id === uid && r.dal <= g && r.al >= g && r.tipo !== 'smart')) continue;
+        if (ric.some(r => r.user_id === uid && r.dal <= g && r.al >= g && r.tipo !== 'smart' && r.tipo !== 'parentale' && !(r.tipo === 'pnr' && r.ora_da))) continue;
         const s = (await saldi([uid]))[uid], ore = r2(minuti / 60);
         let esito = 'ingiustificata', valore = null, mov = null;
         if (s.ferie >= 1) { esito = 'ferie'; valore = 1; mov = await movimento(uid, 'ferie', 'delta', -1, g, `Mancata timbratura ${fmtG(g)} (automatico)`, 'manc:' + g, 'automatico'); }
@@ -355,7 +364,7 @@ module.exports = function sp(app, ctx) {
       sostituzioni: sost.map(r => ({ ...richShape(r, nomi), desc: descRich(r) })),
       movimenti: mov.map(m => ({ voce: m.voce, tipo: m.tipo, valore: Number(m.valore), data: m.data, causale: m.causale })),
       colleghi, docs, perf: perfS,
-      miei: miei.map(r => ({ id: r.id, titolo: (r.tipo === 'lutto' ? 'Certificato di morte' : 'Certificato') + ' · ' + descRich(r), nome: r.doc_nome, caricato: r.doc_il, approvato: r.doc_approvato })), sedi: ss.map(x => ({ id: x.id, nome: x.nome })), tagSedi: tags.length,
+      miei: miei.map(r => ({ id: r.id, titolo: (r.tipo === 'lutto' ? 'Certificato di morte' : r.tipo === 'maternita' ? 'Certificato di maternità' : 'Certificato') + ' · ' + descRich(r), nome: r.doc_nome, caricato: r.doc_il, approvato: r.doc_approvato })), sedi: ss.map(x => ({ id: x.id, nome: x.nome })), tagSedi: tags.length,
     });
   }));
 
@@ -473,21 +482,42 @@ module.exports = function sp(app, ctx) {
     const dal = str(b.dal, 10); let al = tipo === 'permesso' || tipo === 'lutto' ? dal : str(b.al || b.dal, 10);
     if (!isG(dal) || !isG(al) || al < dal) return bad(res, 400, 'Controlla le date.');
     let quanti = null, oraDa = null, oraA = null;
+    const fuoriAdmin = !(admin && b.user);
     if (tipo === 'permesso') {
       oraDa = str(b.oraDa, 5); oraA = str(b.oraA, 5);
       if (!isHM(oraDa) || !isHM(oraA) || min(oraA) <= min(oraDa)) return bad(res, 400, 'Indica l\'ora di inizio e di fine del permesso.');
       quanti = r2((min(oraA) - min(oraDa)) / 60);
     } else if (tipo === 'ferie') quanti = await contaGiorni(per.id, dal, al);
-    const fuoriAdmin = !(admin && b.user);
+    else if (tipo === 'parentale') {
+      // a ore: ogni giorno dalle–alle, al massimo metà delle ore giornaliere del contratto; preavviso minimo
+      oraDa = str(b.oraDa, 5); oraA = str(b.oraA, 5);
+      if (!isHM(oraDa) || !isHM(oraA) || min(oraA) <= min(oraDa)) return bad(res, 400, 'Indica dalle che ora a che ora, ogni giorno.');
+      quanti = r2((min(oraA) - min(oraDa)) / 60);
+      const maxOre = oreGiorno(per) / 2;
+      if (!maxOre) return bad(res, 400, 'Nel tuo contratto non ci sono ancora le ore settimanali: chiedi all\'amministrazione.');
+      if (quanti > maxOre + 0.001) return bad(res, 400, `Il congedo parentale si può chiedere al massimo per metà delle tue ore giornaliere: ${String(r2(maxOre)).replace('.', ',')} ore al giorno.`);
+      if (fuoriAdmin && dal < addG(oggi(), PREAVVISO_PARENTALE)) return bad(res, 400, `Preavviso non rispettato: il congedo parentale va chiesto almeno ${PREAVVISO_PARENTALE} giorni prima dell'inizio (${LEGGE_PREAVVISO}). Il primo giorno possibile è il ${fmtG(addG(oggi(), PREAVVISO_PARENTALE))}.`);
+    } else if (tipo === 'pnr') {
+      // giorni interi, oppure a ore in un giorno solo
+      if (b.oraDa || b.oraA) {
+        oraDa = str(b.oraDa, 5); oraA = str(b.oraA, 5);
+        if (!isHM(oraDa) || !isHM(oraA) || min(oraA) <= min(oraDa)) return bad(res, 400, 'Indica l\'ora di inizio e di fine del permesso.');
+        if (al !== dal) return bad(res, 400, 'Il permesso a ore è per un giorno solo.');
+        quanti = r2((min(oraA) - min(oraDa)) / 60);
+      } else quanti = await contaGiorni(per.id, dal, al);
+    } else if (tipo === 'maternita') {
+      if (fuoriAdmin && !b.conCertificato) return bad(res, 400, 'Carica il certificato di maternità.');
+      quanti = Math.round((Date.parse(al) - Date.parse(dal)) / 86400000) + 1;
+    }
     if (tipo === 'lutto') { al = await fineLutto(per.id, dal); quanti = 3; }
-    if (fuoriAdmin && tipo !== 'malattia' && dal < oggi()) return bad(res, 400, 'Le richieste si fanno per oggi o per i giorni futuri.');
+    if (fuoriAdmin && !['malattia', 'maternita'].includes(tipo) && dal < oggi()) return bad(res, 400, 'Le richieste si fanno per oggi o per i giorni futuri.');
     const sost = str(b.sost, 64) || null;
     if (sost === per.id) return bad(res, 400, 'Il sostituto deve essere un\'altra persona.');
     if (fuoriAdmin && ['ferie', 'permesso'].includes(tipo) && !sost && !per.medico && per.tipo !== 'piva') return bad(res, 400, 'Indica chi ti sostituisce.');
     const { rows: sov } = await q(`select 1 from sp_richieste where user_id = $1 and stato in ('attesa_sost','attesa_admin','approvata') and dal <= $3 and al >= $2
-      and (tipo <> 'permesso' or $4 <> 'permesso')`, [per.id, dal, al, tipo]);
+      and not (ora_da is not null and $4::text is not null)`, [per.id, dal, al, oraDa]);
     if (sov.length) return bad(res, 400, 'Hai già una richiesta per quei giorni.');
-    const stato = admin && b.user ? 'approvata' : ['malattia', 'lutto'].includes(tipo) ? 'approvata' : sost ? 'attesa_sost' : 'attesa_admin';
+    const stato = admin && b.user ? 'approvata' : ['malattia', 'lutto', 'maternita'].includes(tipo) ? 'approvata' : sost ? 'attesa_sost' : 'attesa_admin';
     const id = db.newId();
     const { rows } = await q(`insert into sp_richieste (id, user_id, tipo, dal, al, ora_da, ora_a, quanti, sost_id, sost_ok, stato, nota, prot, decisa_il, decisa_da)
       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) returning *`,
@@ -498,6 +528,9 @@ module.exports = function sp(app, ctx) {
     if (fuoriAdmin && (tipo === 'lutto' || (tipo === 'malattia' && !r.prot))) {
       r = (await q(`update sp_richieste set doc_stato = 'attesa', scadenza = $2 where id = $1 returning *`, [r.id, tipo === 'lutto' ? fineMese(r.al) : oggi()])).rows[0];
     }
+    // maternità: il certificato si carica subito dopo (senza scadenza: niente ferie scalate)
+    if (fuoriAdmin && tipo === 'maternita') r = (await q(`update sp_richieste set doc_stato = 'attesa', scadenza = null where id = $1 returning *`, [r.id])).rows[0];
+    if (tipo === 'maternita' && fuoriAdmin) avvisaAdmin({ title: 'Maternità comunicata', body: `${per.nome}: ${descRich(r).toLowerCase()}. Il certificato è in Certificati da controllare.`, url: '/?sez=richieste' });
     if (stato === 'approvata') await applicaApprovazione(r, req.user.email);
     if (tipo === 'malattia' && fuoriAdmin) avvisaAdmin({ title: 'Malattia comunicata', body: `${per.nome}: ${descRich(r).toLowerCase()}${r.prot ? '' : ' (protocollo da inserire entro oggi)'}.`, url: '/?sez=richieste' });
     if (['lutto', 'malattia'].includes(tipo) && fuoriAdmin && sost) avvisa([sost], { title: 'Sostituisci un collega', body: `${per.nome}: ${descRich(r).toLowerCase()}. I suoi turni di quei giorni passano a te, se sei libero.`, url: '/?sez=turni' });
@@ -511,11 +544,22 @@ module.exports = function sp(app, ctx) {
       if (tipo === 'ferie' && s.ferie < quanti) avviso = `Attenzione: hai ${s.ferie} giorni di ferie e ne chiedi ${quanti}.`;
       if (tipo === 'permesso' && s.permessi < quanti) avviso = `Attenzione: hai ${s.permessi} ore di ROL e ne chiedi ${quanti}.`;
     }
-    res.json({ ok: true, stato, avviso, scadenza: r.doc_stato === 'attesa' ? r.scadenza : null });
+    res.json({ ok: true, id: r.id, stato, avviso, scadenza: r.doc_stato === 'attesa' && r.scadenza ? r.scadenza : null });
+  }));
+  // maternità: la data di fine è presunta, la persona o l'amministrazione la aggiornano
+  app.put('/api/sp/richieste/:id/fine', needSp, wrap(async (req, res) => {
+    const al = str(req.body.al, 10);
+    const { rows: [r] } = await q(`select ${RCOLS} from sp_richieste where id = $1 and tipo = 'maternita' and stato = 'approvata'`, [req.params.id]);
+    if (!r || (req.user.role !== 'admin' && r.user_id !== req.user.sso_id)) return bad(res, 404, 'Richiesta non trovata.');
+    if (!isG(al) || al < r.dal) return bad(res, 400, 'La fine non può essere prima dell\'inizio.');
+    const n = Math.round((Date.parse(al) - Date.parse(r.dal)) / 86400000) + 1;
+    await q('update sp_richieste set al = $2, quanti = $3 where id = $1', [r.id, al, n]);
+    if (req.user.role !== 'admin') { const p = await personaDi(r.user_id); avvisaAdmin({ title: 'Maternità: nuova data di fine', body: `${p?.nome || ''}: fine il ${fmtG(al)}.`, url: '/?sez=richieste' }); }
+    res.json({ ok: true });
   }));
   // completare: certificato di morte (lutto) o numero di protocollo (malattia), entro la scadenza
   async function richiestaDaCompletare(req, tipo) {
-    const { rows: [r] } = await q(`select ${RCOLS} from sp_richieste where id = $1 and user_id = $2 and tipo = $3`, [req.params.id, req.user.sso_id, tipo]);
+    const { rows: [r] } = await q(`select ${RCOLS} from sp_richieste where id = $1 and user_id = $2 and tipo = any($3)`, [req.params.id, req.user.sso_id, [].concat(tipo)]);
     if (!r) throw Object.assign(new Error('Richiesta non trovata.'), { status: 404 });
     if (r.doc_stato === 'scaduta') throw Object.assign(new Error('Il tempo è scaduto: parla con l\'amministrazione.'), { status: 400 });
     if (r.doc_stato !== 'attesa') throw Object.assign(new Error('Questa richiesta è già completa.'), { status: 400 });
@@ -523,7 +567,7 @@ module.exports = function sp(app, ctx) {
     return r;
   }
   app.post('/api/sp/richieste/:id/certificato', needSp, upload.single('file'), wrap(async (req, res) => {
-    const r = await richiestaDaCompletare(req, 'lutto'), f = req.file;
+    const r = await richiestaDaCompletare(req, ['lutto', 'maternita']), f = req.file;
     if (!f || !f.size) return bad(res, 400, 'Scegli il file del certificato (foto o PDF).');
     if (f.size > 15 * 1024 * 1024) return bad(res, 400, 'Il file è troppo grande (massimo 15 MB).');
     if (!/^(image\/|application\/pdf)/.test(f.mimetype || '')) return bad(res, 400, 'Carica una foto o un PDF.');
@@ -852,7 +896,7 @@ module.exports = function sp(app, ctx) {
     const lav = g.filter(x => dow(x) >= 1 && dow(x) <= 5).length;
     const ss = new Map((await sch.sedi()).map(s => [s.id, s.nome]));
     return { mese: m, giorni: g.map(x => ({ g: x, n: +x.slice(8), w: 'DLMMGVS'[dow(x)], fest: dow(x) === 0 || dow(x) === 6 })), righe: filtra(pp, sede, fig).filter(isDip).map(p => {
-      let tot = 0; const c = { F: 0, P: 0, M: 0, AI: 0, SW: 0, L: 0 };
+      let tot = 0; const c = { F: 0, P: 0, M: 0, AI: 0, SW: 0, L: 0, CP: 0, MAT: 0, PNR: 0 };
       const celle = g.map(x => {
         const mt = tim.filter(t => t.user_id === p.id && t.giorno === x), mturni = ts.filter(t => t.user === p.id && t.giorno === x);
         const as = ric.find(r => r.user_id === p.id && r.dal <= x && r.al >= x), mc = manc.find(r => r.user_id === p.id && r.giorno === x);
@@ -871,7 +915,7 @@ module.exports = function sp(app, ctx) {
         tot += ricon;
         let cod = '';
         if (mc) { cod = mc.esito === 'ferie' ? 'F*' : mc.esito === 'permessi' ? 'P*' : 'AI'; c[mc.esito === 'ferie' ? 'F' : mc.esito === 'permessi' ? 'P' : 'AI']++; }
-        else if (as) { cod = as.tipo === 'ferie' ? 'F' : as.tipo === 'malattia' ? 'M' : as.tipo === 'permesso' ? 'P' : smart ? 'SW' : lutto ? 'L' : 'A'; if (c[cod] !== undefined) c[cod]++; }
+        else if (as) { cod = { ferie: 'F', malattia: 'M', permesso: 'P', smart: 'SW', lutto: 'L', parentale: 'CP', maternita: 'MAT', pnr: 'PNR' }[as.tipo] || 'A'; if (c[cod] !== undefined) c[cod]++; }
         const fuori = mt.length && !mturni.length && !smart;
         return { min: ricon, cod, fuori, corto: mturni.length && ricon < mturni.reduce((s, t) => s + durata(t), 0) && (!as || smart), attesa: !!(as && as.doc_stato === 'attesa') };
       });
@@ -885,9 +929,9 @@ module.exports = function sp(app, ctx) {
     const r = await oreRiconosciute(m, req.query.sede, req.query.figura);
     if (req.query.csv) {
       const h = v => v ? hmDi(v) : '';
-      return csv(res, `ore_riconosciute_${m}.csv`, [['Persona', 'Mansione', 'Ore contratto/sett.', ...r.giorni.map(x => `${x.w} ${x.n}`), 'Totale riconosciuto', 'Tetto contratto', 'Ferie', 'Permessi', 'Malattia', 'Ass. ingiustificate', 'Smart working', 'Lutto'],
-        ...r.righe.map(p => [p.nome, p.figura, p.ore ?? '', ...p.celle.map(c => [h(c.min), c.cod].filter(Boolean).join(' ')), hmDi(p.totale), hmDi(p.tetto), p.conta.F, p.conta.P, p.conta.M, p.conta.AI, p.conta.SW, p.conta.L]),
-        [], ['Legenda: F ferie, P permesso, M malattia, AI assenza ingiustificata, SW smart working, L lutto (con certificato conta come turno), * = scalato in automatico per mancata timbratura. Ogni giorno conta al massimo il turno; il totale non supera il tetto del contratto.']]);
+      return csv(res, `ore_riconosciute_${m}.csv`, [['Persona', 'Mansione', 'Ore contratto/sett.', ...r.giorni.map(x => `${x.w} ${x.n}`), 'Totale riconosciuto', 'Tetto contratto', 'Ferie', 'Permessi', 'Malattia', 'Ass. ingiustificate', 'Smart working', 'Lutto', 'Congedo parentale', 'Maternità', 'Permesso non retribuito'],
+        ...r.righe.map(p => [p.nome, p.figura, p.ore ?? '', ...p.celle.map(c => [h(c.min), c.cod].filter(Boolean).join(' ')), hmDi(p.totale), hmDi(p.tetto), p.conta.F, p.conta.P, p.conta.M, p.conta.AI, p.conta.SW, p.conta.L, p.conta.CP, p.conta.MAT, p.conta.PNR]),
+        [], ['Legenda: F ferie, P permesso, M malattia, AI assenza ingiustificata, SW smart working, L lutto (con certificato conta come turno), CP congedo parentale (a ore), MAT maternità, PNR permesso non retribuito, * = scalato in automatico per mancata timbratura. Ogni giorno conta al massimo il turno; il totale non supera il tetto del contratto.']]);
     }
     res.json(r);
   }));

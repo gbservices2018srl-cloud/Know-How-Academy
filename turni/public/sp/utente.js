@@ -131,33 +131,62 @@ async function vistaAssenze(m){
   let tipo = 'ferie';
   const sostDa = ME.sostituzioni.filter(r => r.stato === 'attesa_sost' && r.sost === me.id);
   const daComp = ME.richieste.filter(r => r.docStato === 'attesa');
+  const PREAVV_PAR = 5;
+  const primoParentale = (() => { const d = new Date(ME.oggi + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + PREAVV_PAR); return d.toISOString().slice(0, 10); })();
+  const maxParentale = me.ore ? Math.round(me.ore / 5 / 2 * 100) / 100 : 0;
+  // congedo parentale: avviso subito se mancano i giorni di preavviso o se le ore superano la metà della giornata
+  const controllaParentale = () => {
+    const box = $('#parAvv'); if (!box) return true;
+    const dal = $('#dal').value, da = $('#oraDa').value, a = $('#oraA').value; let msg = '';
+    if (dal && dal < primoParentale) msg = `<b>Preavviso non rispettato.</b> Il congedo parentale va chiesto almeno ${PREAVV_PAR} giorni prima dell'inizio, come prevede l'art. 32, comma 3, del D.Lgs. 26 marzo 2001 n. 151 (Testo unico maternità e paternità). Il primo giorno possibile è il ${fmtG(primoParentale)}.`;
+    else if (!maxParentale) msg = 'Nel tuo contratto non ci sono ancora le ore settimanali: chiedi all\'amministrazione prima di fare la richiesta.';
+    else if (da && a) { const h = (+a.slice(0, 2) * 60 + +a.slice(3) - (+da.slice(0, 2) * 60 + +da.slice(3))) / 60; if (h > maxParentale + 0.001) msg = `<b>Troppe ore.</b> Il congedo parentale a ore si può chiedere al massimo per metà delle tue ore giornaliere: ${nume(maxParentale)} ore al giorno (art. 32, comma 1-ter, D.Lgs. 151/2001).`; }
+    box.innerHTML = msg ? `<div class="banner bad" style="margin-top:10px;font-weight:500">${msg}</div>` : '';
+    const b = $('#invia'); if (b) b.disabled = !!msg;
+    return !msg;
+  };
   const draw = () => {
     const serveSost = ['ferie', 'permesso'].includes(tipo) && !me.medico && me.tipo !== 'piva';
     m.innerHTML = `${s ? `<div class="grid2" style="margin-bottom:16px"><div class="stat"><div class="k">Ferie residue</div><div class="v">${nume(s.ferie)} gg</div></div><div class="stat"><div class="k">ROL residui</div><div class="v">${nume(s.permessi)} h</div></div></div>` : ''}
       ${sostDa.length ? `<div class="card"><h3>Ti chiedono di sostituirli</h3>${sostDa.map(r => `<div class="li"><span class="grow"><b>${esc(r.nome)}</b> · ${esc(r.desc.toLowerCase())}</span><button class="btn small primary" data-si="${r.id}">Accetto</button><button class="btn small" data-no="${r.id}">Non posso</button></div>`).join('')}</div>` : ''}
-      ${daComp.length ? `<div class="card" style="border-color:var(--warn)"><h3>Da completare</h3>${daComp.map(r => `<div class="li" style="flex-wrap:wrap"><span class="grow"><span class="t">${esc(r.desc)}</span><span class="s">${r.tipo === 'lutto' ? 'Carica il certificato di morte' : 'Inserisci il numero di protocollo'} entro ${r.scadenza === ME.oggi ? 'le 23:59 di oggi' : 'il ' + fmtG(r.scadenza)}</span></span>
-        ${r.tipo === 'lutto' ? `<label class="btn small primary" style="cursor:pointer">Carica certificato di morte<input type="file" accept="image/*,application/pdf" data-cert="${r.id}" hidden></label>`
+      ${daComp.length ? `<div class="card" style="border-color:var(--warn)"><h3>Da completare</h3>${daComp.map(r => `<div class="li" style="flex-wrap:wrap"><span class="grow"><span class="t">${esc(r.desc)}</span><span class="s">${r.tipo === 'lutto' ? 'Carica il certificato di morte' : r.tipo === 'maternita' ? 'Carica il certificato di maternità' : 'Inserisci il numero di protocollo'}${r.scadenza ? ' entro ' + (r.scadenza === ME.oggi ? 'le 23:59 di oggi' : 'il ' + fmtG(r.scadenza)) : ''}</span></span>
+        ${['lutto', 'maternita'].includes(r.tipo) ? `<label class="btn small primary" style="cursor:pointer">Carica certificato<input type="file" accept="image/*,application/pdf" data-cert="${r.id}" hidden></label>`
           : `<input type="text" data-protin="${r.id}" placeholder="numero di protocollo" style="max-width:200px"><button class="btn small primary" data-prot="${r.id}">Salva</button>`}</div>`).join('')}</div>` : ''}
       <div class="card"><h3>Nuova richiesta</h3>
-        <div class="chips" style="margin-bottom:12px">${[['ferie', 'Ferie'], ['permesso', 'ROL (ore)'], ['malattia', 'Malattia'], ['lutto', 'Lutto'], ...(me.medico ? [] : [['smart', 'Smart working']]), ['altro', 'Altro']].map(([k, t]) => `<button class="chip" data-tipo="${k}" aria-pressed="${tipo === k}">${t}</button>`).join('')}</div>
+        <div class="chips" style="margin-bottom:12px">${[['ferie', 'Ferie'], ['permesso', 'ROL (ore)'], ['malattia', 'Malattia'], ['lutto', 'Lutto'], ...(me.medico ? [] : [['smart', 'Smart working'], ['parentale', 'Congedo parentale'], ['maternita', 'Maternità'], ['pnr', 'Permesso non retribuito']]), ['altro', 'Altro']].map(([k, t]) => `<button class="chip" data-tipo="${k}" aria-pressed="${tipo === k}">${t}</button>`).join('')}</div>
         <div class="grid2">${tipo === 'lutto' ? `<label class="f">Dal giorno<input type="date" id="dal" min="${ME.oggi}" value="${ME.oggi}"></label><span></span>` : tipo === 'permesso' ? `<label class="f">Giorno<input type="date" id="dal" min="${ME.oggi}" value="${ME.oggi}"></label><span></span>
             <label class="f">Dalle<input type="time" id="oraDa" value="16:00"></label><label class="f">Alle<input type="time" id="oraA" value="18:30"></label>`
+          : tipo === 'parentale' ? `<label class="f">Dal<input type="date" id="dal" min="${ME.oggi}" value="${primoParentale}"></label><label class="f">Al<input type="date" id="al" value="${primoParentale}"></label>
+            <label class="f">Ogni giorno dalle<input type="time" id="oraDa" value="${maxParentale ? '09:00' : ''}"></label><label class="f">Alle<input type="time" id="oraA"></label>`
+          : tipo === 'maternita' ? `<label class="f">Inizio<input type="date" id="dal" value="${ME.oggi}"></label><label class="f">Fine presunta<input type="date" id="al" value="${ME.oggi}"></label>`
+          : tipo === 'pnr' ? `<label class="f">Dal<input type="date" id="dal" min="${ME.oggi}" value="${ME.oggi}"></label><label class="f">Al<input type="date" id="al" value="${ME.oggi}"></label>
+            <label class="f">Solo alcune ore? Dalle<input type="time" id="oraDa"></label><label class="f">Alle<input type="time" id="oraA"></label>`
           : `<label class="f">Dal<input type="date" id="dal" ${tipo !== 'malattia' ? `min="${ME.oggi}"` : ''} value="${ME.oggi}"></label><label class="f">Al<input type="date" id="al" value="${ME.oggi}"></label>`}</div>
+        ${tipo === 'parentale' ? `<div id="parAvv"></div><p class="muted small" style="margin:8px 0 0">A ore: ogni giorno al massimo <b>${maxParentale ? nume(maxParentale) + ' ore' : '—'}</b> (metà delle tue ore giornaliere). Va chiesto almeno <b>${PREAVV_PAR} giorni prima</b> (art. 32, comma 3, D.Lgs. 151/2001). Lo approva l'amministrazione.</p>` : ''}
+        ${tipo === 'maternita' ? `<label class="f" style="margin-top:10px">Certificato di maternità (foto o PDF) <span style="color:var(--bad)">*</span><input type="file" id="matCert" accept="image/*,application/pdf"></label>
+          <p class="muted small" style="margin:6px 0 0">Si registra subito. La data di fine è presunta: la puoi cambiare dopo in «Le mie richieste».</p>` : ''}
+        ${tipo === 'pnr' ? '<p class="muted small" style="margin:8px 0 0">Giorni interi, oppure un giorno solo con le ore. Lo approva l\'amministrazione e non è retribuito. Se si manca senza richiesta e senza timbrare, vale come mancata timbratura.</p>' : ''}
         ${tipo === 'malattia' ? `<label class="f" style="margin-top:10px">Numero di protocollo del certificato<input type="text" id="prot" placeholder="dal certificato del medico"></label>
           <p class="muted small" style="margin:6px 0 0">Se non lo hai ancora, invia lo stesso e inseriscilo <b>entro le 23:59 di oggi</b>. Altrimenti i giorni si scalano dalle ferie, o se non ne hai diventano assenza ingiustificata.</p>` : ''}
         ${tipo === 'lutto' ? `<p class="muted small" style="margin:10px 0 0">Spettano <b>3 giorni lavorativi</b> da questa data. Sono approvati subito: l'amministrazione riceve solo un avviso. Poi carica il <b>certificato di morte</b> entro la fine del mese, altrimenti i giorni si scalano dalle ferie, o se non ne hai diventano assenza ingiustificata.</p>` : ''}
         ${tipo === 'smart' ? '<p class="muted small" style="margin:10px 0 0">Lavori da casa. Deve approvarlo l\'amministrazione: nei giorni approvati timbri dall\'app, con la posizione presa solo al momento della timbratura.</p>' : ''}
-        ${tipo !== 'smart' ? `<label class="f" style="margin-top:10px">Chi ti sostituisce?${serveSost ? ' (deve accettare)' : ' (facoltativo)'}<input type="search" id="sost" list="colleghiDL" autocomplete="off" placeholder="Scrivi il nome del collega${serveSost ? '' : ' (o lascia vuoto)'}"><datalist id="colleghiDL">${ME.colleghi.map(c => `<option value="${esc(sostLbl(c))}"></option>`).join('')}</datalist></label>` : ''}
+        ${!['smart', 'maternita'].includes(tipo) ? `<label class="f" style="margin-top:10px">Chi ti sostituisce?${serveSost ? ' (deve accettare)' : ' (facoltativo)'}<input type="search" id="sost" list="colleghiDL" autocomplete="off" placeholder="Scrivi il nome del collega${serveSost ? '' : ' (o lascia vuoto)'}"><datalist id="colleghiDL">${ME.colleghi.map(c => `<option value="${esc(sostLbl(c))}"></option>`).join('')}</datalist></label>` : ''}
         <label class="f" style="margin-top:10px">Note (facoltative)<input type="text" id="nota" maxlength="300" placeholder="${tipo === 'altro' ? 'Scrivi il motivo' : ''}"></label>
-        <button class="btn primary big" id="invia" style="margin-top:14px">${tipo === 'malattia' ? 'Comunica la malattia' : tipo === 'lutto' ? 'Comunica il lutto' : tipo === 'smart' ? 'Chiedi lo smart working' : 'Invia richiesta'}</button></div>
-      <div class="card"><h3>Le mie richieste</h3>${ME.richieste.length ? `<div class="lista">${ME.richieste.map(r => `<div class="li"><span class="grow"><span class="t">${esc(r.desc)}</span><span class="s">${r.quanti != null ? (['ferie', 'lutto'].includes(r.tipo) ? `${nume(r.quanti)} giorni` : `${nume(r.quanti)} ore`) + ' · ' : ''}${r.sostNome ? 'sostituto ' + esc(r.sostNome) : ''}${r.notaAdmin ? ' · ' + esc(r.notaAdmin) : ''}</span></span>
-        ${r.docStato === 'attesa' ? `<span class="tag warn">${r.tipo === 'lutto' ? 'Certificato da caricare' : 'Protocollo da inserire'}</span>` : r.docStato === 'scaduta' ? `<span class="tag no">${r.tipo === 'lutto' ? 'Certificato' : 'Protocollo'} non arrivato: scalato</span>` : r.haDoc ? `<a class="btn small" href="/api/sp/richieste/${r.id}/certificato" target="_blank" rel="noopener">Certificato</a>` : ''}
+        <button class="btn primary big" id="invia" style="margin-top:14px">${tipo === 'malattia' ? 'Comunica la malattia' : tipo === 'lutto' ? 'Comunica il lutto' : tipo === 'smart' ? 'Chiedi lo smart working' : tipo === 'maternita' ? 'Registra la maternità' : 'Invia richiesta'}</button></div>
+      <div class="card"><h3>Le mie richieste</h3>${ME.richieste.length ? `<div class="lista">${ME.richieste.map(r => `<div class="li"><span class="grow"><span class="t">${esc(r.desc)}</span><span class="s">${r.quanti != null ? (['ferie', 'lutto', 'maternita'].includes(r.tipo) || (r.tipo === 'pnr' && !/–/.test(r.desc)) ? `${nume(r.quanti)} giorni` : `${nume(r.quanti)} ore${r.tipo === 'parentale' ? ' al giorno' : ''}`) + ' · ' : ''}${r.sostNome ? 'sostituto ' + esc(r.sostNome) : ''}${r.notaAdmin ? ' · ' + esc(r.notaAdmin) : ''}</span></span>
+        ${r.tipo === 'maternita' && r.stato === 'approvata' ? `<input type="date" data-finein="${r.id}" value="${r.al}" min="${r.dal}" style="max-width:150px" aria-label="Fine presunta"><button class="btn small" data-fine="${r.id}">Cambia fine</button>` : ''}
+        ${r.docStato === 'attesa' ? `<span class="tag warn">${['lutto', 'maternita'].includes(r.tipo) ? 'Certificato da caricare' : 'Protocollo da inserire'}</span>` : r.docStato === 'scaduta' ? `<span class="tag no">${r.tipo === 'lutto' ? 'Certificato' : 'Protocollo'} non arrivato: scalato</span>` : r.haDoc ? `<a class="btn small" href="/api/sp/richieste/${r.id}/certificato" target="_blank" rel="noopener">Certificato</a>` : ''}
         <span class="tag ${STATI[r.stato]?.[1] || ''}">${STATI[r.stato]?.[0] || r.stato}</span>${['attesa_sost', 'attesa_admin'].includes(r.stato) ? `<button class="btn small" data-ann="${r.id}">Annulla</button>` : ''}</div>`).join('')}</div>` : '<p class="muted small" style="margin:0">Nessuna richiesta.</p>'}</div>
       ${s ? `<div class="card"><h3>Movimenti di ferie e ROL</h3>${ME.movimenti.length ? `<div class="lista">${ME.movimenti.map(x => `<div class="li"><span class="grow"><span class="t" style="font-weight:600">${esc(x.causale)}</span><span class="s">${fmtG(x.data)}</span></span><b style="white-space:nowrap">${x.tipo === 'saldo' ? 'saldo ' : x.valore > 0 ? '+' : ''}${nume(x.valore)} ${x.voce === 'ferie' ? 'gg ferie' : 'h ROL'}</b></div>`).join('')}</div>` : '<p class="muted small" style="margin:0">Il saldo arriva con la prossima busta paga.</p>'}</div>` : ''}`;
   };
-  draw();
+  const draw0 = draw;
+  const drawAll = () => { draw0(); controllaParentale(); };
+  drawAll();
+  m.oninput = e => { if (['dal', 'oraDa', 'oraA'].includes(e.target.id)) controllaParentale(); };
   m.onclick = async e => {
-    const t = e.target.closest('[data-tipo]'); if (t) { tipo = t.dataset.tipo; return draw(); }
+    const t = e.target.closest('[data-tipo]'); if (t) { tipo = t.dataset.tipo; return drawAll(); }
+    const fi = e.target.closest('[data-fine]');
+    if (fi) { const al = m.querySelector(`[data-finein="${fi.dataset.fine}"]`).value; try { await api('PUT', `/api/sp/richieste/${fi.dataset.fine}/fine`, {al}); toast('Data di fine aggiornata.'); return ricarica(); } catch (er) { return toast(er.message); } }
     const si = e.target.closest('[data-si]'), no = e.target.closest('[data-no]'), an = e.target.closest('[data-ann]');
     try {
       if (si || no) { await api('POST', `/api/sp/richieste/${(si || no).dataset[si ? 'si' : 'no']}/sostituto`, {ok: !!si}); toast(si ? 'Hai accettato: ora decide l\'amministrazione.' : 'Risposta inviata.'); return ricarica(); }
@@ -170,8 +199,12 @@ async function vistaAssenze(m){
         const sc = sv ? ME.colleghi.find(c => sostLbl(c).toLowerCase() === sv) || (() => { const t = ME.colleghi.filter(c => c.nome.toLowerCase().includes(sv)); return t.length === 1 ? t[0] : null; })() : null;
         if (sv && !sc) return toast('Non trovo questo collega: scegli il nome dall\'elenco che compare mentre scrivi.');
         const sostId = sc ? sc.id : '';
+        if (tipo === 'parentale' && !controllaParentale()) return;
+        const cert = tipo === 'maternita' ? $('#matCert')?.files[0] : null;
+        if (tipo === 'maternita' && !cert) return toast('Carica il certificato di maternità.');
         const r = await api('POST', '/api/sp/richieste', { tipo, dal: $('#dal').value, al: $('#al')?.value || $('#dal').value, oraDa: $('#oraDa')?.value, oraA: $('#oraA')?.value,
-          sost: sostId, prot: $('#prot')?.value, nota: $('#nota').value });
+          sost: sostId, prot: $('#prot')?.value, nota: $('#nota').value, conCertificato: !!cert });
+        if (cert && r.id) { const fd = new FormData(); fd.append('file', cert); try { await api('POST', `/api/sp/richieste/${r.id}/certificato`, undefined, fd); } catch (er) { toast('Registrata, ma il certificato non è partito: ricaricalo da «Da completare». ' + er.message, 6000); return ricarica(); } }
         toast(r.scadenza ? (tipo === 'lutto' ? 'Registrato. Ora carica il certificato di morte.' : 'Registrata. Inserisci il protocollo entro le 23:59.') : r.stato === 'attesa_sost' ? 'Richiesta inviata al sostituto.' : r.stato === 'approvata' ? 'Registrata.' : 'Richiesta inviata all\'amministrazione.');
         if (r.avviso) setTimeout(() => toast(r.avviso), 3300);
         return ricarica();
