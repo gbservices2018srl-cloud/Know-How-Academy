@@ -150,6 +150,7 @@ table.t{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:
 .t tr.eA:hover td,.t tr.eS:hover td,.t tr.eR:hover td{filter:brightness(.97)}
 .es.S,.esiti button.on.S{background:var(--giallo-soft)!important;border-color:var(--giallo)!important;color:var(--giallo)!important}
 .edr{border:0;background:none;padding:0;font:inherit;color:inherit;cursor:pointer;text-align:left} .edr:hover b{text-decoration:underline}
+.edr .amb{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-top:2px}
 .edr .pen{color:var(--muted);font-weight:600;margin-left:6px;font-size:12px}
 .ed2{display:grid;grid-template-columns:1fr 1fr;gap:10px} @media (max-width:560px){.ed2{grid-template-columns:1fr}}
 .t th button{all:unset;cursor:pointer}
@@ -271,7 +272,7 @@ const opt = (v, t, sel) => `<option value="${esc(v)}" ${sel ? 'selected' : ''}>$
 
 /* ================= INSERIMENTO PREVENTIVI ================= */
 let F = null;
-const nuovoF = (keep = {}) => ({ sede: keep.sede || sedePrima('preventivi')?.id || sediDi('preventivi')[0]?.id || '', data: S.st.oggi, paziente: '', annoNascita: '', commerciale: keep.commerciale || '', medici: [],
+const nuovoF = (keep = {}) => ({ sede: keep.sede || sedePrima('preventivi')?.id || sediDi('preventivi')[0]?.id || '', data: S.st.oggi, paziente: '', ambassador: '', annoNascita: '', commerciale: keep.commerciale || '', medici: [],
   tipoOv: '', marketing: '', pdc: '', tipoPdc: '', esito: '', pagato: '', note: '' });
 const persone = {};
 async function personeDi(sede) { if (!persone[sede]) persone[sede] = await api('GET', 'api/persone?sede=' + encodeURIComponent(sede)); return persone[sede]; }
@@ -284,7 +285,7 @@ async function vPrev() {
   if (!F.commerciale && P.commerciali.some(c => c.id === S.st.me.id)) F.commerciale = S.st.me.id;
   const L = S.st.liste;
   $('#main').innerHTML = `<div class="form">
-  <div class="head"><div><h2 class="view">Inserimento Preventivo</h2><p>Ogni preventivo presentato. Tutti i campi sono obbligatori.</p></div></div>
+  <div class="head"><div><h2 class="view">Inserimento Preventivo</h2><p>Ogni preventivo presentato. I campi con * sono obbligatori.</p></div></div>
   <form id="fp" novalidate>
   <div class="card sez"><h3>Trattativa</h3>
     <div class="grid2">
@@ -311,6 +312,7 @@ async function vPrev() {
     </div>
     <div class="field"><span class="lbl">Esito <span class="req">*</span></span>
       <div class="esiti" id="f-esito">${Object.entries(ESITI).map(([k, t]) => `<button type="button" data-esito="${k}" class="${k} ${F.esito === k ? 'on' : ''}">${k} — ${t}</button>`).join('')}</div></div>
+    <div class="field"><label for="f-amb">Paziente che lo ha mandato (ambassador) <span class="muted" style="font-weight:500">facoltativo</span></label><input id="f-amb" name="ambassador" autocomplete="off" placeholder="Cognome Nome di chi lo ha consigliato" value="${esc(F.ambassador)}"></div>
     <div class="field"><label for="f-pag">Importo pagato <span class="req">*</span></label><input id="f-pag" name="pagato" inputmode="decimal" placeholder="0" value="${esc(F.pagato)}"></div>
   </div>
   <div class="card sez"><h3>Note</h3>
@@ -369,7 +371,7 @@ async function vRich() {
 }
 function filtrate() {
   const q = R.q.trim().toLowerCase();
-  return R.righe.filter(r => (!q || r.paziente.toLowerCase().includes(q)) && RCOL.every(([k]) => !R.f[k] || String(r[k] ?? '') === R.f[k])
+  return R.righe.filter(r => (!q || r.paziente.toLowerCase().includes(q) || (r.ambassador || '').toLowerCase().includes(q)) && RCOL.every(([k]) => !R.f[k] || String(r[k] ?? '') === R.f[k])
     && (!R.f.pdc || FASCE_PDC.find(f => f[0] === R.f.pdc)[2](r.pdc)) && (!R.f.pag || FASCE_PAG.find(f => f[0] === R.f.pag)[2](r.pagato))
     && (!R.f.eta || FASCE_ETA.find(f => f[0] === R.f.eta)[2](r.eta)));
 }
@@ -380,7 +382,7 @@ function drawRich(full) {
   const sel = (k, t, opts) => `<select data-rf="${k}" class="${R.f[k] ? 'on' : ''}" aria-label="${esc(t)}"><option value="">${esc(t)}: tutti</option>${opts.map(([v, l]) => opt(v, l, R.f[k] === v)).join('')}</select>`;
   if (full) $('#main').innerHTML = `<div class="head"><div><h2 class="view">Richiami commerciali</h2><p>I pazienti con preventivo. Parti dalla tua sede; con il filtro Sede vedi anche le altre. Note ed esito si cambiano qui.</p></div><span class="spacer"></span>
     <select id="r-anno" class="btn sm" aria-label="Anno">${S.st.anni.map(a => opt(a, a, a == R.anno)).join('')}</select></div>
-    <div class="bar"><input type="search" id="r-q" placeholder="Cerca il paziente per nome…" value="${esc(R.q)}" autocomplete="off"><button class="btn sm" id="r-reset" type="button">Togli i filtri</button></div>
+    <div class="bar"><input type="search" id="r-q" placeholder="Cerca il paziente (o chi lo ha mandato) per nome…" value="${esc(R.q)}" autocomplete="off"><button class="btn sm" id="r-reset" type="button">Togli i filtri</button></div>
     <details class="fd" id="r-fd" ${innerWidth > 700 ? 'open' : ''}><summary id="r-fsum">Filtri</summary><div class="fil" id="r-fil"></div></details><div id="r-out"></div>`;
   $('#r-fil').innerHTML = RCOL.map(([k, t]) => sel(k, t, val(k).map(v => [v, lab(k, v)]))).join('')
     + sel('pdc', '€ Piano di cura', FASCE_PDC.map(f => [f[0], f[1]])) + sel('pag', 'Importo pagato', FASCE_PAG.map(f => [f[0], f[1]])) + sel('eta', 'Età', FASCE_ETA.map(f => [f[0], f[1]]));
@@ -393,7 +395,7 @@ function drawRich(full) {
   $('#r-out').innerHTML = `<div class="tot"><span><b>${rows.length.toLocaleString('it-IT')}</b> preventivi</span><span>Piani di cura <b>${fE(tot.pdc)}</b></span><span>Pagato <b>${fE(tot.pag)}</b></span>
       <span>A <b>${tot.A}</b> · S <b>${tot.S}</b> · R <b>${tot.R}</b></span></div>
     ${rows.length ? `<div class="card tw"><table class="t"><thead><tr>${th('paziente', 'Nome e cognome')}${th('data', 'Data preventivo')}${th('tipo_ov', 'Tipo opportunità')}${th('marketing', 'Marketing')}${th('pdc', '€ Piano di cura', 1)}${th('pagato', 'Importo pagato', 1)}${th('tipo_pdc', 'Tipo di piano di cura')}${th('eta', 'Età', 1)}${th('commerciale', 'Commerciale')}${th('medico', 'Medico')}${th('esito', 'Esito')}<th>Note</th>${sediDi('richiami').length > 1 ? th('sede_nome', 'Sede') : ''}</tr></thead>
-    <tbody>${vis.map(r => `<tr class="${r.esito ? 'e' + esc(r.esito) : ''}"><td><button class="edr" data-modr="${esc(r.id)}" title="Modifica tutti i campi"><b>${esc(r.paziente)}</b><span class="pen">✎ Modifica</span></button></td><td>${fD(r.data)}</td><td>${esc(r.tipo_ov)}</td><td>${esc(r.marketing)}</td><td class="n">${fE(r.pdc)}</td><td class="n">${fE(r.pagato)}</td>
+    <tbody>${vis.map(r => `<tr class="${r.esito ? 'e' + esc(r.esito) : ''}"><td><button class="edr" data-modr="${esc(r.id)}" title="Modifica tutti i campi"><b>${esc(r.paziente)}</b><span class="pen">✎ Modifica</span>${r.ambassador ? `<span class="amb">Mandato da: ${esc(r.ambassador)}</span>` : ''}</button></td><td>${fD(r.data)}</td><td>${esc(r.tipo_ov)}</td><td>${esc(r.marketing)}</td><td class="n">${fE(r.pdc)}</td><td class="n">${fE(r.pagato)}</td>
       <td>${esc(r.tipo_pdc)}</td><td class="n">${r.eta ?? '—'}</td><td>${esc(r.commerciale)}</td><td>${esc(r.medico)}</td>
       <td><select class="es ${esc(r.esito)}" data-esito-r="${esc(r.id)}" aria-label="Esito">${r.esito ? '' : '<option value="">—</option>'}${Object.entries(ESITI).map(([k, t]) => `<option value="${k}" ${r.esito === k ? 'selected' : ''} title="${t}">${k}</option>`).join('')}</select></td>
       <td><button class="notab" data-nota="${esc(r.id)}" title="Scrivi o leggi le note">${r.note ? esc(r.note.slice(0, 40)) + (r.note.length > 40 ? '…' : '') : '<span class="muted">+ nota</span>'}</button></td>
@@ -444,6 +446,7 @@ async function apriModRich(r) {
   const sedi = sediDi('richiami');
   d.innerHTML = `<form method="dialog" id="mr-f"><div class="db"><h3 style="margin-bottom:10px">Modifica preventivo</h3>
     <div class="field"><label for="mr-paz">Nome e cognome</label><input id="mr-paz" value="${esc(r.paziente)}" maxlength="120"></div>
+    <div class="field"><label for="mr-amb">Paziente che lo ha mandato (ambassador)</label><input id="mr-amb" value="${esc(r.ambassador || '')}" maxlength="120" placeholder="facoltativo"></div>
     <div class="ed2"><div class="field"><label for="mr-data">Data preventivo</label><input id="mr-data" type="date" value="${esc(r.data || '')}"></div>
       <div class="field"><label for="mr-an">Anno di nascita</label><input id="mr-an" inputmode="numeric" maxlength="4" value="${an}"></div>
       <div class="field"><label for="mr-tov">Tipo opportunità</label><select id="mr-tov">${lista(L.tipo_ov, r.tipo_ov)}</select></div>
@@ -462,7 +465,7 @@ async function apriModRich(r) {
 }
 async function salvaModRich() {
   const d = $('#dlg'), r = R.righe.find(x => x.id === d.dataset.id), v = id => ($('#' + id) || {}).value;
-  const body = { paziente: v('mr-paz'), data: v('mr-data'), annoNascita: v('mr-an'), tipoOv: v('mr-tov'), marketing: v('mr-mk'), pdc: v('mr-pdc'), pagato: v('mr-pag'),
+  const body = { paziente: v('mr-paz'), ambassador: v('mr-amb'), data: v('mr-data'), annoNascita: v('mr-an'), tipoOv: v('mr-tov'), marketing: v('mr-mk'), pdc: v('mr-pdc'), pagato: v('mr-pag'),
     tipoPdc: v('mr-tpdc'), esito: v('mr-es'), note: v('mr-note'), commerciale: v('mr-com') || undefined, medici: v('mr-med') ? [v('mr-med')] : undefined, sede: v('mr-sede') };
   const b = $('#mr-ok'); b.disabled = true;
   try { await api('PATCH', 'api/richiami/' + r.id, body); d.close(); toast('Modifiche salvate.');

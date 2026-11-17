@@ -69,6 +69,8 @@ async function migrate() {
     );
     create table if not exists impostazioni (k text primary key, v jsonb not null);
     -- nome del commerciale scritto a mano nel vecchio foglio (es. "LUCA") → persona di Gestione accessi
+    -- nome del paziente che ha mandato questo paziente (ambassador). Dato personale: mai nei KPI, nell'AI o nei log.
+    alter table preventivi add column if not exists ambassador text not null default '';
     create table if not exists alias_commerciali (nome text primary key, user_id text not null, user_nome text not null default '');
     -- sedi di commerciali e medici nel CRM (Liste). sedi null = come in Gestione accessi.
     create table if not exists persone_sedi (user_id text primary key, sedi jsonb, aggiornato_da text not null default '', aggiornato_il timestamptz not null default now());

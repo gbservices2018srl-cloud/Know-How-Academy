@@ -2,7 +2,7 @@
 // Prende il posto del vecchio CRM su Google Sheets: i dati dei pazienti stanno solo nel database su Render (Europa).
 // Micro app: Inserimento Preventivi, Richiami commerciali, Dashboard dati, Chiedi al CRM, Liste (solo amministratore).
 // Permessi dal pannello Gestione accessi: Amministratore = tutte le sedi; Operatore/Commerciale = le sedi scelte.
-// Dati personali (paziente, anno di nascita, note): solo in Inserimento e Richiami, mai nei KPI, nell'AI o nei log.
+// Dati personali (paziente, ambassador, anno di nascita, note): solo in Inserimento e Richiami, mai nei KPI, nell'AI o nei log.
 const path = require('path');
 const express = require('express');
 const multer = require('multer');
@@ -136,6 +136,7 @@ app.post('/api/preventivi', needUser, need('preventivi'), wrap(async (req, res) 
   const tipoPdc = (L.tipo_pdc.find(x => x.attivo && x.valore === str(b.tipoPdc, 80).toUpperCase()) || {}).valore;
   if (!tipoPdc) return bad(res, 400, "Scegli il tipo di piano di cura dall'elenco.");
   const esito = str(b.esito, 1).toUpperCase(); if (!ESITI.includes(esito)) return bad(res, 400, "Scegli l'esito.");
+  const ambassador = str(b.ambassador, 120).toUpperCase();
   const note = String(b.note ?? '').trim().slice(0, 4000); if (note.length < 50) return bad(res, 400, `Note troppo brevi: minimo 50 caratteri (${note.length} scritti).`);
   const ids = [str(b.commerciale, 60), ...(Array.isArray(b.medici) ? b.medici : []).map(x => str(x, 60))].filter(Boolean);
   const { rows: us } = await store.q(`select id, first_name, last_name, figura from users where id = any($1) and status = 'active'`, [ids]);
@@ -145,10 +146,10 @@ app.post('/api/preventivi', needUser, need('preventivi'), wrap(async (req, res) 
   const id = db.newId();
   // medico come nel vecchio CRM: cognomi in maiuscolo, più medici separati da "/"
   await db.q(`insert into preventivi (id, sede_id, sede_nome, data, anno, mese, paziente, tipo_ov, marketing, pdc, esito, pagato, anno_nascita, tipo_pdc, note,
-      commerciale_id, commerciale, medici_ids, medico, origine, creato_da, aggiornato_da)
-    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,'app',$20,$20)`,
+      commerciale_id, commerciale, medici_ids, medico, origine, creato_da, aggiornato_da, ambassador)
+    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,'app',$20,$20,$21)`,
     [id, sede.id, sede.nome, data, Number(data.slice(0, 4)), Number(data.slice(5, 7)), paziente, tipo, mk, pdc, esito, pagato, an, tipoPdc, note,
-      comm.id, nomeDi(comm).toUpperCase(), JSON.stringify(meds.map(m => m.id)), meds.map(m => String(m.last_name || m.first_name).toUpperCase()).join(' / '), req.me.id]);
+      comm.id, nomeDi(comm).toUpperCase(), JSON.stringify(meds.map(m => m.id)), meds.map(m => String(m.last_name || m.first_name).toUpperCase()).join(' / '), req.me.id, ambassador]);
   res.json({ ok: true, id });
 }));
 
@@ -156,7 +157,7 @@ app.post('/api/preventivi', needUser, need('preventivi'), wrap(async (req, res) 
 app.get('/api/richiami', needUser, need('richiami'), wrap(async (req, res) => {
   const sedi = sediDi(req, 'richiami').map(s => s.id);
   const anno = parseInt(req.query.anno, 10) || Number(oggi().slice(0, 4));
-  const { rows } = await db.q(`select id, sede_id, sede_nome, to_char(data, 'YYYY-MM-DD') as data, anno, mese, paziente, tipo_ov, marketing, pdc::float, esito,
+  const { rows } = await db.q(`select id, sede_id, sede_nome, to_char(data, 'YYYY-MM-DD') as data, anno, mese, paziente, ambassador, tipo_ov, marketing, pdc::float, esito,
       pagato::float, anno_nascita, tipo_pdc, note, commerciale, medico, aggiornato_il
     from preventivi where sede_id = any($1) and anno = $2 order by data desc nulls last, creato_il desc`, [sedi, anno]);
   const annoOra = Number(oggi().slice(0, 4)), al = await aliasComm();
@@ -166,7 +167,7 @@ app.get('/api/richiami', needUser, need('richiami'), wrap(async (req, res) => {
 // Richiami: ogni campo della riga si può modificare. Ogni cambio finisce nello storico (chi, campo, prima, dopo).
 app.patch('/api/richiami/:id', needUser, need('richiami'), wrap(async (req, res) => {
   const id = str(req.params.id, 60), b = req.body || {};
-  const { rows: [r] } = await db.q(`select id, sede_id, sede_nome, to_char(data, 'YYYY-MM-DD') as data, paziente, anno_nascita, tipo_ov, marketing, pdc::float, pagato::float,
+  const { rows: [r] } = await db.q(`select id, sede_id, sede_nome, to_char(data, 'YYYY-MM-DD') as data, paziente, ambassador, anno_nascita, tipo_ov, marketing, pdc::float, pagato::float,
       tipo_pdc, esito, note, commerciale_id, commerciale, medici_ids, medico from preventivi where id = $1`, [id]);
   if (!r || !sedeOk(req, 'richiami', r.sede_id)) return bad(res, 404, 'Preventivo non trovato.');
   const set = {};
@@ -180,6 +181,7 @@ app.patch('/api/richiami/:id', needUser, need('richiami'), wrap(async (req, res)
     if (b.esito !== undefined) { const e = str(b.esito, 1).toUpperCase(); if (!ESITI.includes(e)) return bad(res, 400, 'Esito non valido.'); set.esito = e; }
     if (b.note !== undefined) set.note = String(b.note ?? '').trim().slice(0, 4000);
     if (b.paziente !== undefined) { const v = str(b.paziente, 120).toUpperCase(); if (v.length < 3) return bad(res, 400, 'Scrivi cognome e nome del paziente.'); set.paziente = v; }
+    if (b.ambassador !== undefined) set.ambassador = str(b.ambassador, 120).toUpperCase();
     if (b.data !== undefined) { const v = str(b.data, 10); if (!isDate(v)) return bad(res, 400, 'Data non valida.'); set.data = v; }
     if (b.annoNascita !== undefined) { const an = String(b.annoNascita ?? '').trim() === '' ? null : parseInt(b.annoNascita, 10);
       if (an != null && !(an >= 1910 && an <= Number(oggi().slice(0, 4)))) return bad(res, 400, "Anno di nascita non valido (4 cifre, es. 1985)."); set.anno_nascita = an; }
