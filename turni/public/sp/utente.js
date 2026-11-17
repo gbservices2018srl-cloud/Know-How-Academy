@@ -349,14 +349,16 @@ function vistaGuadagni(mesi){
   const tr = g.trimestre;
   return `<div class="card"><div class="row" style="justify-content:space-between;align-items:baseline;flex-wrap:wrap"><h2 style="margin:0">${esc(g.nomeMese)}</h2><span class="xs muted">${g.archivio ? 'dall\'archivio' : 'aggiornato oggi · ' + esc(g.ruolo)}</span></div>
     ${s.errore ? `<div class="banner warn" style="margin-top:10px">${esc(s.errore)}</div>` : ''}
-    <div class="duo" style="margin-top:12px"><div><span class="xs muted" style="font-weight:800;text-transform:uppercase">Fatturato della sede${(s.nomi || []).length ? ' · ' + esc(s.nomi.join(', ')) : ''}</span>
+    <div class="duo" style="margin-top:12px"><div><span class="xs muted" style="font-weight:800;text-transform:uppercase">${s.area ? 'Fatturato di area · ' + (s.nomi || []).length + ' sedi' : 'Fatturato della sede' + ((s.nomi || []).length ? ' · ' + esc(s.nomi.join(', ')) : '')}</span>
         <div style="font:800 24px var(--f-display);margin-top:2px">${eurU(s.fatturato)}</div>${bar(s.pct)}
-        <div class="xs muted" style="margin-top:4px">Target ${eurU(s.target)}${s.pct != null ? ' · ' + s.pct + '%' : ''}</div>
+        <div class="xs muted" style="margin-top:4px">${s.area ? 'Target di area' : 'Target'} ${eurU(s.target)}${s.pct != null ? ' · ' + s.pct + '%' : ''}</div>
+        ${(s.dettaglio || []).length ? `<div style="margin-top:10px">${s.dettaglio.map(d => `<div style="padding:6px 0;border-bottom:1px solid var(--line)"><div class="row small" style="justify-content:space-between"><b>${esc(d.nome)}</b><span>${d.trovata ? eurU(d.fatturato) : '<span class="muted xs">non in Gestione finanziaria</span>'}</span></div>
+          ${d.trovata ? `${bar(d.pct)}<div class="xs muted" style="margin-top:3px">Target ${eurU(d.target)}${d.pct != null ? ' · ' + d.pct + '%' : ''}</div>` : ''}</div>`).join('')}</div>` : ''}
         <div class="kv" style="margin-top:8px"><span>Accordi presi${s.accordiNota ? `<span class="why xs muted" style="display:block">${esc(s.accordiNota)}</span>` : ''}</span><b>− ${eurU(s.accordi)}</b></div>
         <div class="kv"><span>Netto</span><b>${eurU(s.netto)}</b></div></div>
       ${P ? `<div><span class="xs muted" style="font-weight:800;text-transform:uppercase">Il tuo fatturato personale</span>
         <div style="font:800 24px var(--f-display);margin-top:2px">${eurU(P.fatt)}</div>${bar(P.pct)}
-        <div class="xs muted" style="margin-top:4px">Target personale ${eurU(P.target)} (${String(P.targetPerc).replace('.', ',')}% del target della sede)${P.pct != null ? ' · ' + P.pct + '%' : ''}</div>
+        <div class="xs muted" style="margin-top:4px">Target personale ${eurU(P.target)} (${String(P.targetPerc).replace('.', ',')}% del target ${s.area ? 'di area' : 'della sede'})${P.pct != null ? ' · ' + P.pct + '%' : ''}</div>
         <div class="kv" style="margin-top:8px"><span>Preventivi accettati</span><b>${P.na} di ${P.n}</b></div>
         <div class="kv"><span>Concretizzazione</span><b>${String(P.conc).replace('.', ',')}%</b></div><div class="kv"><span>TMV</span><b>${eurU(P.tmv)}</b></div>
         ${P.errore ? `<p class="xs muted">${esc(P.errore)}</p>` : ''}</div>` : ''}</div></div>

@@ -549,7 +549,8 @@ async function guadagniAdmin(h){
     const s = x.sede || {}, ap = GAPERTO === x.id;
     const man = (x.regole || []).filter(r => r.tipo === 'manuale');
     return `<tr><td><b>${esc(x.nome)}</b><br><span class="xs muted">${esc(x.ruolo || '')} · ${esc(x.piano)}</span></td>
-      <td class="small">${s.errore ? `<span class="muted xs">${esc(s.errore)}</span>` : `${esc((s.nomi || []).join(', '))}<br>${eu(s.fatturato)}${s.pct != null ? ` · <b>${s.pct}%</b>` : ''}`}</td>
+      <td class="small">${s.errore ? `<span class="muted xs">${esc(s.errore)}</span>` : `${s.area ? '<b>Area</b> · ' : ''}${esc((s.nomi || []).join(', '))}<br>${eu(s.fatturato)}${s.pct != null ? ` · <b>${s.pct}%</b>` : ''}
+        ${(s.dettaglio || []).map(d => `<br><span class="xs muted">${esc(d.nome)}: ${d.trovata ? eu(d.fatturato) + (d.pct != null ? ' · ' + d.pct + '%' : '') : 'non trovata'}</span>`).join('')}`}</td>
       <td class="small">${x.personale ? `${eu(x.personale.fatt)} · <b>${x.personale.pct ?? '—'}%</b><br><span class="xs muted">target ${String(x.personale.targetPerc).replace('.', ',')}%</span>` : '—'}</td>
       <td style="text-align:right">${eu(x.fisso)}${x.fissoMan != null ? '<br><span class="xs muted">a mano</span>' : ''}</td><td style="text-align:right">${eu(x.bonusPagato)}</td>
       <td style="text-align:right">${x.trimestre ? (x.trimestre.fineTrim ? eu(x.trimestre.importo) : `<span class="xs muted">maturato ${eu(x.trimestre.maturato)}</span>`) : '—'}</td>

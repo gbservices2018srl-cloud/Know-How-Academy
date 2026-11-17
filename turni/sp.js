@@ -707,13 +707,14 @@ module.exports = function sp(app, ctx) {
     for (const id of sediIds) {
       const nome = nomi.get(id) || ''; if (!nome) continue;
       const s = trovaSede(c, nome);
-      out.sedi.push({ id, nome, trovata: !!s });
+      const sd = { id, nome, trovata: !!s, mesi: {} }; out.sedi.push(sd);
       if (!s) { out.errore = `La sede ${nome} non si trova in Gestione finanziaria.`; continue; }
       for (const m of mesi) {
         const i = Number(m.slice(5)) - 1, x = out.mesi[m] || (out.mesi[m] = { fatt: 0, target: 0, dati: true });
         const f = Array.isArray(s.fatturatoMesi) ? s.fatturatoMesi[i] : null;
         if (f == null) x.dati = false;
         x.fatt += Number(f) || 0; x.target += Number(s.target) || 0;
+        sd.mesi[m] = { fatt: Number(f) || 0, target: Number(s.target) || 0 };   // ogni sede da sola (per chi ne ha più di una)
       }
     }
     return out;
@@ -752,7 +753,7 @@ module.exports = function sp(app, ctx) {
       tmv: (na => na ? ms.reduce((t, m) => t + pers(m).fatt, 0) / na : 0)(ms.reduce((t, m) => t + pers(m).na, 0)) });
     const calcola = (r, v) => {
       const c = r.cond || {}, motivi = [];
-      if (c.ul) { if (!v.ulT) motivi.push('manca il target della sede'); else if (v.ulF < v.ulT * c.ul) motivi.push(`sede al ${Math.round(v.ulF / v.ulT * 100)}% (serve ${Math.round(c.ul * 100)}%)`); }
+      if (c.ul) { if (!v.ulT) motivi.push('manca il target della sede'); else if (v.ulF < v.ulT * c.ul) motivi.push(`${F.sedi.length > 1 ? 'area' : 'sede'} al ${Math.round(v.ulF / v.ulT * 100)}% (serve ${Math.round(c.ul * 100)}%)`); }
       if (c.pers) { if (!v.pT) motivi.push('manca il target personale'); else if (v.pF < v.pT * c.pers) motivi.push(`personale al ${Math.round(v.pF / v.pT * 100)}% (serve ${Math.round(c.pers * 100)}%)`); }
       if (c.conc && v.conc < c.conc) motivi.push(`concretizzazione ${Math.round(v.conc)}% (serve ${c.conc}%)`);
       if (c.tmv && v.tmv < c.tmv) motivi.push(`TMV € ${Math.round(v.tmv).toLocaleString('it-IT')} (serve € ${c.tmv.toLocaleString('it-IT')})`);
@@ -779,7 +780,9 @@ module.exports = function sp(app, ctx) {
     const u = ul(mese), bonusMeseNetto = malus ? 0 : bm.totale;
     const dati = {
       mese, nomeMese: meseNome(mese), ruolo: livello?.ruolo || '', aggiornato: new Date().toISOString(),
-      sede: { nomi: F.sedi.map(x => x.nome), fatturato: r2(u.fatt), target: r2(u.target), pct: u.target ? Math.round(u.fatt / u.target * 100) : null,
+      sede: { nomi: F.sedi.map(x => x.nome), area: F.sedi.length > 1,
+        dettaglio: F.sedi.length > 1 ? F.sedi.map(x => { const v = x.mesi[mese] || { fatt: 0, target: 0 }; return { nome: x.nome, trovata: x.trovata, fatturato: r2(v.fatt), target: r2(v.target), pct: v.target ? Math.round(v.fatt / v.target * 100) : null }; }) : [],
+        fatturato: r2(u.fatt), target: r2(u.target), pct: u.target ? Math.round(u.fatt / u.target * 100) : null,
         accordi: r2(acc[0]?.t || 0), accordiNota: acc[0]?.n || '', netto: r2(u.fatt - (acc[0]?.t || 0)), dati: u.dati, errore: F.errore },
       personale: usaPers ? { ...pers(mese), target: tPers(mese), targetPerc: tPerc(mese), pct: tPers(mese) ? Math.round(pers(mese).fatt / tPers(mese) * 100) : null, errore: errPers } : null,
       fisso, bonus: bm.voci, bonusTotale: bm.totale, malus, malusNota: mm?.malus_nota || '', bonusPagato: bonusMeseNetto,
