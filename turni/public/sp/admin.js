@@ -403,7 +403,8 @@ function editorOrari(s){
 let PTAB = 'persone', PSEL = null, IMESE = null;
 async function aPerf(m){
   const r = await api('GET', '/api/sp/admin/perf');
-  const tabs = [['persone', 'Persone'], ['piani', 'Piano di crescita'], ['incentivi', 'Incentivi del mese']];
+  const tabs = [['persone', 'Persone'], ['piani', 'Piano di crescita'], [r.piani.some(x => x.fonte) ? 'guadagni' : 'incentivi', r.piani.some(x => x.fonte) ? 'Guadagni del mese' : 'Incentivi del mese']];
+  if (PTAB === 'incentivi' && r.piani.some(x => x.fonte)) PTAB = 'guadagni';
   const ST = { pass: ['Approvato', 'ok'], verifica: ['Da verificare', 'warn'], no: ['Non approvato', 'no'], fare: ['Da fare', 'info'] };
   let corpo = '';
   if (PTAB === 'persone') {
@@ -421,19 +422,24 @@ async function aPerf(m){
     const dettaglio = !sp ? '' : `<div class="card"><div class="row" style="flex-wrap:wrap;justify-content:space-between;gap:8px"><h2 style="margin:0">${esc(sp.nome)}</h2>
         <div class="row" style="gap:6px;flex-wrap:wrap"><select data-piano="${sp.id}" aria-label="Piano"><option value="">Nessun piano</option>${r.piani.map(x => `<option value="${x.id}" ${sp.piano === x.id ? 'selected' : ''}>${esc(x.nome)}</option>`).join('')}</select>
         ${pi ? `<select data-liv="${sp.id}" aria-label="Ruolo attuale">${pi.livelli.map(l => `<option value="${l.n}" ${sp.livello === l.n ? 'selected' : ''}>${esc(l.ruolo)}</option>`).join('')}</select>` : ''}</div></div>
-      ${st ? `${st.prossimo ? `<p class="muted small">Obiettivi per diventare <b>${esc(st.prossimo.ruolo)}</b></p>${st.obiettivi.length ? `<div class="lista">${st.obiettivi.map(o => `<div class="li" style="align-items:flex-start;gap:10px">
+      ${st ? `${st.prossimo ? `<p class="muted small">${st.daExcel ? `Obiettivi per superare <b>${esc(st.ruolo)}</b> (poi ${esc(st.prossimo.ruolo)})` : `Obiettivi per diventare <b>${esc(st.prossimo.ruolo)}</b>`}</p>${st.obiettivi.length ? `<div class="lista">${st.obiettivi.map(o => `<div class="li" style="align-items:flex-start;gap:10px">
           <span class="grow"><span class="t">${esc(o.testo)}</span>
           <span class="s">${o.file && o.datoId ? `<a href="/api/sp/perf/prova/${o.datoId}" target="_blank" rel="noopener">📎 ${esc(o.file)}</a> · ` : ''}${o.dato && o.dato !== '(prova caricata)' ? '«' + esc(o.dato) + '» · ' : ''}${o.il ? fmtDT(o.il) : ''}${o.nota ? ' · nota: ' + esc(o.nota) : ''}</span></span>
           ${o.stato === 'verifica' && o.datoId ? `<button class="btn small" data-dno="${o.datoId}">Non basta</button><button class="btn small primary" data-dok="${o.datoId}">Approva</button>` : `<span class="tag ${ST[o.stato][1]}">${ST[o.stato][0]}</span>`}</div>`).join('')}</div>` : '<p class="muted small">Il ruolo successivo non ha obiettivi: il passaggio lo decidi tu cambiando il ruolo qui sopra.</p>'}
         <div class="card testbox ${st.test?.disponibile ? 'on' : ''}" style="margin:12px 0 0;box-shadow:none"><b class="small">${st.inAttesa ? 'Passaggio in attesa della tua approvazione' : st.test?.stato === 'superato' ? 'Test superato' : st.test?.stato === 'da_ripetere' ? 'Test da ripetere' : st.test?.stato ? 'Test generato: la persona lo sta facendo' : st.test?.disponibile ? 'Tutti i pass approvati: la persona può generare il test' : 'Test bloccato'}</b>
           <p class="xs muted" style="margin:4px 0 0">${st.test?.disponibile || st.test?.stato ? 'Il test pesca dai Protocolli della sua mansione; superato, il passaggio di ruolo arriva qui da confermare.' : 'Si sblocca per la persona quando approvi tutte le prove.'}</p></div>` : '<p class="muted small">È all\'ultimo livello del suo piano.</p>'}
-      <div style="margin-top:12px">${boxIncentivo(st.incentivo, 'Incentivo · ' + st.ruolo)}</div>` : '<p class="muted small">Scegli un piano e il ruolo attuale per vedere obiettivi e incentivo.</p>'}</div>`;
+      ${st.daExcel ? `<div class="card" style="box-shadow:none;border:1px solid var(--line);margin-top:12px" id="ipBox" data-uid="${sp.id}"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:6px"><b>I-Profile</b>${st.iprofile ? `<span class="xs muted">salvato il ${fmtD(st.iprofile.il)}</span>` : ''}</div>
+          ${st.iprofile ? `<div style="margin-top:8px">${graficoIprofile(st.iprofile.valori)}</div>` : '<p class="small muted" style="margin:4px 0 0">Non ancora caricato: la persona lo vedrà in alto nella sua Performance.</p>'}
+          <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:10px"><label class="btn small" style="cursor:pointer">${st.iprofile ? 'Carica un nuovo I-Profile' : 'Carica la foto del grafico'}<input type="file" id="ipF" accept="image/*" hidden></label><button class="btn small" id="ipMano">Inserisci a mano</button></div>
+          <div id="ipForm"></div></div>
+        <p class="muted xs" style="margin-top:12px">Fisso, bonus e malus: scheda «Guadagni del mese».</p>` : `<div style="margin-top:12px">${boxIncentivo(st.incentivo, 'Incentivo · ' + st.ruolo)}</div>`}` : '<p class="muted small">Scegli un piano e il ruolo attuale per vedere obiettivi e incentivo.</p>'}</div>`;
     corpo = `${pas.length ? `<div class="card"><h2>Passaggi di ruolo da confermare</h2><div class="lista">${pas.map(x => `<div class="li"><span class="grow"><span class="t">${esc(x.nome)}: ${esc(x.da)} → ${esc(x.a)}</span><span class="s">Test superato${x.bonus ? ' · bonus ' + esc(x.bonus) : ''}</span></span><button class="btn small" data-pno="${x.id}">Rimanda</button><button class="btn small primary" data-pok="${x.id}">Conferma</button></div>`).join('')}</div></div>` : ''}
       ${nelPiano.length ? `<p class="muted small" style="margin:0 0 8px">Ogni termometro mostra a che punto è la persona con gli obiettivi del ruolo successivo. Tocca una persona per vedere le prove e l'incentivo.</p><div class="termgrid">${nelPiano.map(card).join('')}</div>` : `<div class="card"><p class="muted" style="margin:0">${r.piani.length ? 'Nessuno è ancora in un piano: scegli una persona qui sotto e assegnale piano e ruolo.' : 'Prima carica il piano di crescita (scheda «Piano di crescita»).'}</p></div>`}
       ${senza.length ? `<details class="card" ${nelPiano.length ? '' : 'open'}><summary><b>Senza piano (${senza.length})</b></summary><div class="chips" style="margin-top:8px">${senza.map(p => `<button class="chip" data-psel="${p.id}" aria-pressed="${PSEL === p.id}">${esc(p.nome)}</button>`).join('')}</div></details>` : ''}
       ${dettaglio}`;
   }
-  if (PTAB === 'piani') corpo = `<div id="pianiEd"></div>`;
+  if (PTAB === 'piani') corpo = `<div id="pianiXl"></div><div id="pianiEd"></div>`;
+  if (PTAB === 'guadagni') corpo = `<div id="guadA"><div class="card"><p class="muted" style="margin:0">Calcolo dei guadagni…</p></div></div>`;
   if (PTAB === 'incentivi') {
     let inc = null, err = '', az = null;
     try { inc = await api('GET', '/api/sp/admin/incentivi' + (IMESE ? '?mese=' + IMESE : '')); } catch (e) { err = e.message; }
@@ -452,10 +458,26 @@ async function aPerf(m){
   }
   m.innerHTML = `<h1>Performance</h1><p class="sub">Piano di crescita, obiettivi con le prove delle persone, test di passaggio e incentivi calcolati dal fatturato.</p>
     <div class="chips" style="margin-bottom:14px">${tabs.map(([k, t]) => `<button class="chip" data-pt="${k}" aria-pressed="${PTAB === k}">${t}${k === 'persone' && (r.dati.length + r.passaggi.length) ? ` (${r.dati.length + r.passaggi.length})` : ''}</button>`).join('')}</div>${corpo}`;
-  if (PTAB === 'piani') editorPiani($('#pianiEd'), r.piani, () => aPerf(m), r.regole);
+  if (PTAB === 'piani') { pianiExcel($('#pianiXl'), () => aPerf(m), r.piani); editorPiani($('#pianiEd'), r.piani, () => aPerf(m), r.regole); }
+  if (PTAB === 'guadagni') { guadagniAdmin($('#guadA')); m.onclick = async e => { const t = e.target.closest('[data-pt]'); if (t) { PTAB = t.dataset.pt; return aPerf(m); } }; m.onchange = null; return; }
+  // I-Profile: foto → lettura dei numeri (come l'app I-Profile) → controllo → salva
+  const ipForm = (v = {}) => { const f = $('#ipForm'); if (!f) return;
+    f.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:10px">${[...IP_TRATTI, ...IP_LATO].map(([k, l]) => `<label class="f xs">${l}<input type="number" min="-100" max="100" data-ip="${k}" value="${v[k] ?? ''}"></label>`).join('')}</div>
+      <p class="xs muted">Controlla i numeri con il grafico, poi salva. Si salvano solo i numeri, non la foto.</p><div class="row"><span class="grow"></span><button class="btn primary small" id="ipSalva">Salva I-Profile</button></div>`; };
+  const ipLeggi = async inp => {
+    if (!inp.files[0]) return;
+    const f = inp.files[0], img = await createImageBitmap(f), sc = Math.min(1, 1800 / Math.max(img.width, img.height)), cv = document.createElement('canvas');
+    cv.width = Math.round(img.width * sc); cv.height = Math.round(img.height * sc); const cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height); cx.drawImage(img, 0, 0, cv.width, cv.height);
+    const b = await new Promise(r => cv.toBlob(r, 'image/jpeg', .88)), fd = new FormData(); fd.append('foto', b, 'iprofile.jpg');
+    $('#ipForm').innerHTML = '<p class="small muted">Lettura del grafico in corso…</p>';
+    try { const r = await api('POST', '/api/sp/admin/iprofile/leggi', undefined, fd); ipForm(r.valori); toast('Valori letti: controllali e salva.'); } catch (er) { toast(er.message); ipForm(); }
+  };
   m.onclick = async e => {
     const t = e.target.closest('[data-pt]'); if (t) { PTAB = t.dataset.pt; return aPerf(m); }
     const ps = e.target.closest('[data-psel]'); if (ps) { PSEL = ps.dataset.psel; return aPerf(m); }
+    if (e.target.id === 'ipMano') return ipForm(r.persone.find(x => x.id === PSEL)?.stato?.iprofile?.valori || {});
+    if (e.target.id === 'ipSalva') { const v = {}; m.querySelectorAll('[data-ip]').forEach(i => v[i.dataset.ip] = i.value);
+      try { await api('PUT', `/api/sp/admin/iprofile/${PSEL}`, {valori: v}); toast('I-Profile salvato.'); return aPerf(m); } catch (er) { return toast(er.message); } }
     const k = ['dok', 'dno', 'pok', 'pno'].find(x => e.target.closest(`[data-${x}]`));
     if (!k) return;
     const id = e.target.closest(`[data-${k}]`).dataset[k];
@@ -466,6 +488,7 @@ async function aPerf(m){
     } catch (er) { toast(er.message); }
   };
   m.onchange = async e => {
+    if (e.target.id === 'ipF') return ipLeggi(e.target);
     const p = e.target.closest('[data-piano]'), l = e.target.closest('[data-liv]');
     try {
       if (p) await api('PUT', `/api/sp/admin/perf/${p.dataset.piano}`, {piano: p.value});
@@ -474,6 +497,102 @@ async function aPerf(m){
       if (e.target.id === 'iMese') IMESE = e.target.value;
       if (p || l || e.target.id === 'finAz' || e.target.id === 'iMese') aPerf(m);
     } catch (er) { toast(er.message); }
+  };
+}
+// Piani da Excel: anteprima (livelli, obiettivi, regole dei bonus, chi va dove) e sostituzione dei piani attuali
+function pianiExcel(h, dopo, piani){
+  let F = null, A = null;
+  const eurA = n => '€ ' + Number(n).toLocaleString('it-IT', { maximumFractionDigits: 2, useGrouping: 'always' });
+  const tipoTag = r => r.tipo === 'perc' ? '<span class="tag ok">automatico</span>' : r.tipo === 'manuale' ? '<span class="tag warn">a mano</span>' : '<span class="tag">nota</span>';
+  const draw = () => {
+    const fonti = piani.filter(x => x.fonte).map(x => `${x.nome} (${x.fonte})`).join(' · ');
+    h.innerHTML = `<div class="card"><h2 style="margin:0">Carica i piani da Excel</h2>
+      <p class="muted small" style="margin:6px 0 10px">Il file «Piano di inserimento e crescita» (colonne RUOLO · FISSO · VARIABILE · OBIETTIVI · SOTTO OBIETTIVI · SOFT SKILL · SCUOLA DI FORMAZIONE). Puoi scegliere insieme il file CCNL e quello Partita IVA.
+      Confermando, i piani di adesso si archiviano (le prove già inviate restano salvate) e ognuno va nel piano del suo contratto.${fonti ? `<br><b>Caricati adesso:</b> ${esc(fonti)}` : ''}</p>
+      <div class="row" style="gap:8px;flex-wrap:wrap"><label class="btn" style="cursor:pointer">Scegli i file .xlsx<input type="file" id="xlF" accept=".xlsx" multiple hidden></label><span class="small muted grow" id="xlN">${F ? [...F].map(f => esc(f.name)).join(', ') : 'Nessun file scelto'}</span>
+        <button class="btn primary" id="xlA" ${F ? '' : 'disabled'}>Anteprima</button></div>
+      ${A ? `<div style="margin-top:14px">${A.piani.map(p => `<details class="card" style="background:var(--sunken);box-shadow:none" open><summary><b>${esc(p.nome)}</b> <span class="muted small">· ${p.livelli.length} livelli · ${p.livelli.reduce((t, l) => t + l.obiettivi.length, 0)} righe · ${esc(p.file)}</span></summary>
+          ${p.livelli.map(l => `<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--line)"><b>${esc(l.ruolo)}</b> <span class="muted small">· fisso ${esc(l.fisso || '—')} · ${l.obiettivi.length} obiettivi</span>
+            ${l.regole.length ? `<div style="margin-top:4px">${l.regole.map(r => `<div class="small" style="display:flex;gap:8px;align-items:baseline;margin:3px 0">${tipoTag(r)}<span><span class="muted">${esc(r.testo)}</span><br>→ ${esc(r.spiega)}</span></div>`).join('')}</div>` : '<div class="small muted">Nessun variabile.</div>'}</div>`).join('')}</details>`).join('')}
+        <div class="card" style="box-shadow:none;border:1px solid var(--line)"><h3 style="margin:0 0 6px">Chi va dove</h3><p class="xs muted" style="margin:0 0 8px">Proposta: piano del suo contratto, stesso ruolo di adesso o il primo della sua figura. Puoi cambiarla qui.</p>
+          <div class="tw"><table class="t"><thead><tr><th>Persona</th><th>Contratto</th><th>Adesso</th><th>Dopo</th></tr></thead><tbody>
+          ${A.persone.map(x => `<tr><td><b>${esc(x.nome)}</b><br><span class="xs muted">${esc(x.figura)}</span></td><td>${x.contratto === 'piva' ? 'P.IVA' : x.contratto === 'dip' ? 'CCNL' : '—'}</td><td class="small">${esc(x.da || '—')}</td>
+            <td><select data-xs="${esc(x.id)}"><option value="">Nessun piano</option>${A.piani.map(p => `<optgroup label="${esc(p.nome)}">${p.livelli.map((l, i) => `<option value="${p.contratto}|${i + 1}" ${x.piano === p.contratto && x.livello === i + 1 ? 'selected' : ''}>${esc(p.nome)} · ${esc(l.ruolo)}</option>`).join('')}</optgroup>`).join('')}</select></td></tr>`).join('')}
+          </tbody></table></div></div>
+        <div class="row"><span class="grow"></span><button class="btn" id="xlX">Annulla</button><button class="btn primary" id="xlOk">Conferma e sostituisci i piani</button></div></div>` : ''}</div>`;
+  };
+  const fd = () => { const f = new FormData(); [...F].forEach(x => f.append('file', x)); return f; };
+  h.onchange = e => { if (e.target.id === 'xlF') { F = e.target.files.length ? e.target.files : null; A = null; draw(); } };
+  h.onclick = async e => {
+    if (e.target.id === 'xlA') { e.target.disabled = true; try { A = await api('POST', '/api/sp/admin/piani/excel/anteprima', undefined, fd()); draw(); } catch (er) { toast(er.message); e.target.disabled = false; } }
+    if (e.target.id === 'xlX') { A = null; F = null; draw(); }
+    if (e.target.id === 'xlOk') {
+      if (!confirm('Sostituire i piani di adesso con quelli del file? I piani di prima si archiviano, le prove già inviate restano salvate.')) return;
+      const scelte = {}; h.querySelectorAll('[data-xs]').forEach(sl => { const [pc, lv] = sl.value.split('|'); scelte[sl.dataset.xs] = { piano: pc || '', livello: lv || '' }; });
+      const f = fd(); f.append('scelte', JSON.stringify(scelte)); e.target.disabled = true;
+      try { await api('POST', '/api/sp/admin/piani/excel/conferma', undefined, f); toast('Piani caricati e persone assegnate.'); A = null; F = null; dopo(); } catch (er) { toast(er.message); e.target.disabled = false; }
+    }
+  };
+  draw();
+}
+
+// Guadagni del mese (amministratore): accordi per sede, e per ogni persona malus con motivo, target personale, voci a mano, fisso/variabile
+let GMESE = null, GAPERTO = null;
+async function guadagniAdmin(h){
+  let d, az = null;
+  try { d = await api('GET', '/api/sp/admin/guadagni' + (GMESE ? '?mese=' + GMESE : '')); } catch (e) { h.innerHTML = `<div class="banner warn">${esc(e.message)}</div>`; return; }
+  try { az = await api('GET', '/api/sp/admin/finanza/aziende'); } catch {}
+  GMESE = d.mese;
+  const eu = n => n == null ? '—' : '€ ' + Number(n).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' });
+  const nm = x => new Date(x + '-15').toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+  const riga = x => {
+    const s = x.sede || {}, ap = GAPERTO === x.id;
+    const man = (x.regole || []).filter(r => r.tipo === 'manuale');
+    return `<tr><td><b>${esc(x.nome)}</b><br><span class="xs muted">${esc(x.ruolo || '')} · ${esc(x.piano)}</span></td>
+      <td class="small">${s.errore ? `<span class="muted xs">${esc(s.errore)}</span>` : `${esc((s.nomi || []).join(', '))}<br>${eu(s.fatturato)}${s.pct != null ? ` · <b>${s.pct}%</b>` : ''}`}</td>
+      <td class="small">${x.personale ? `${eu(x.personale.fatt)} · <b>${x.personale.pct ?? '—'}%</b><br><span class="xs muted">target ${String(x.personale.targetPerc).replace('.', ',')}%</span>` : '—'}</td>
+      <td style="text-align:right">${eu(x.fisso)}${x.fissoMan != null ? '<br><span class="xs muted">a mano</span>' : ''}</td><td style="text-align:right">${eu(x.bonusPagato)}</td>
+      <td style="text-align:right">${x.trimestre ? (x.trimestre.fineTrim ? eu(x.trimestre.importo) : `<span class="xs muted">maturato ${eu(x.trimestre.maturato)}</span>`) : '—'}</td>
+      <td>${x.malus ? `<span class="tag no" title="${esc(x.malusNota)}">Malus</span>` : '—'}</td><td style="text-align:right;font-weight:800">${eu(x.totale)}</td>
+      <td><button class="btn small" data-gap="${esc(x.id)}">${ap ? 'Chiudi' : 'Modifica'}</button></td></tr>
+      ${ap ? `<tr><td colspan="9" style="background:var(--sunken)"><div style="display:grid;gap:10px;max-width:760px">
+        <div><b class="small">Bonus del mese</b>${(x.bonus || []).map(b => `<div class="small" style="display:flex;justify-content:space-between;gap:10px;padding:3px 0"><span>${esc(b.testo)}<br><span class="xs muted">${esc(b.manuale ? 'a mano' : b.ok ? b.regola : 'non maturato: ' + b.motivo)}</span></span>
+          ${b.manuale ? `<input type="text" inputmode="decimal" data-man="${b.id}" value="${b.importo || ''}" placeholder="€" style="width:110px">` : `<b>${eu(b.importo)}</b>`}</div>`).join('') || '<div class="small muted">Nessun bonus nel ruolo.</div>'}</div>
+        <label class="row" style="gap:8px"><input type="checkbox" id="gMal" ${x.malus ? 'checked' : ''}><b class="small">Malus questo mese</b> <span class="xs muted">(annulla i bonus del mese e la stessa cifra si toglie dal trimestre)</span></label>
+        <label class="f">Motivo del malus <span class="xs muted">· lo legge la persona</span><textarea id="gMalN" rows="2">${esc(x.malusNota || '')}</textarea></label>
+        ${x.personale ? `<label class="f" style="max-width:260px">Target personale (% del target della sede)<input type="text" inputmode="decimal" id="gTp" value="${x.personale.targetPerc}" placeholder="35"></label>` : ''}
+        <div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end"><label class="f" style="max-width:200px">Fisso (vuoto = del livello: ${eu(x.fissoLivello)})<input type="text" inputmode="decimal" id="gFi" value="${x.fissoMan ?? ''}"></label>
+          <label class="f grow">Variabile scritta per la persona (vuoto = del livello)<textarea id="gVa" rows="2">${esc(x.variabileMan || '')}</textarea></label></div>
+        <div class="row"><span class="grow"></span><button class="btn primary" data-gsalva="${esc(x.id)}">Salva</button></div></div></td></tr>` : ''}`;
+  };
+  h.innerHTML = `<div class="card"><div class="row" style="flex-wrap:wrap;gap:8px;justify-content:space-between"><div><h2 style="margin:0">Guadagni · ${esc(d.nomeMese)}</h2><p class="muted small" style="margin:4px 0 0">Fatturato lordo delle sedi da Gestione finanziaria (target = Budget), fatturato personale dal CRM (€ piano di cura dei preventivi A). Regole dal piano di ogni persona.</p></div>
+      <div class="row" style="gap:6px;flex-wrap:wrap">${az ? `<select id="gAz" aria-label="Azienda in Gestione finanziaria"><option value="">Azienda in Gestione finanziaria…</option>${az.aziende.map(a => `<option value="${esc(a.id)}" ${az.scelta === a.id ? 'selected' : ''}>${esc(a.nome)}</option>`).join('')}</select>` : ''}
+      <select id="gMese" aria-label="Mese">${d.mesi.map(x => `<option value="${x}" ${x === d.mese ? 'selected' : ''}>${nm(x)}</option>`).join('')}</select></div></div>
+    <div class="tw" style="margin-top:12px"><table class="t"><thead><tr><th>Persona</th><th>Sede</th><th>Personale</th><th style="text-align:right">Fisso</th><th style="text-align:right">Bonus mese</th><th style="text-align:right">Trimestre</th><th>Malus</th><th style="text-align:right">Totale</th><th></th></tr></thead>
+      <tbody>${d.righe.map(riga).join('') || '<tr><td colspan="9" class="muted">Nessuna persona in un piano da Excel.</td></tr>'}</tbody>
+      <tfoot><tr><td colspan="7"><b>Totale</b></td><td style="text-align:right;font-weight:800">${eu(d.totale)}</td><td></td></tr></tfoot></table></div></div>
+    <div class="card"><h3>Accordi presi · ${esc(d.nomeMese)}</h3><p class="muted small" style="margin:-4px 0 8px">Cifra del mese tolta dal fatturato della sede: le persone vedono il netto. I bonus si calcolano sul lordo.</p>
+      ${d.accordi.map(a => `<div class="row" style="gap:8px;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--line)"><b class="small" style="width:140px">${esc(a.nome)}</b>
+        <input type="text" inputmode="decimal" data-acc="${esc(a.id)}" value="${a.importo || ''}" placeholder="€ 0" style="width:130px"><input type="text" data-accn="${esc(a.id)}" value="${esc(a.nota)}" placeholder="Nota (facoltativa)" class="grow"></div>`).join('')}</div>`;
+  h.onchange = async e => {
+    if (e.target.id === 'gMese') { GMESE = e.target.value; GAPERTO = null; return guadagniAdmin(h); }
+    if (e.target.id === 'gAz') { try { await api('PUT', '/api/sp/admin/finanza/azienda', {azienda: e.target.value}); toast('Azienda salvata.'); guadagniAdmin(h); } catch (er) { toast(er.message); } return; }
+    const a = e.target.closest('[data-acc],[data-accn]');
+    if (a) { const id = a.dataset.acc || a.dataset.accn;
+      try { await api('PUT', '/api/sp/admin/accordi', {mese: GMESE, sede: id, importo: h.querySelector(`[data-acc="${id}"]`).value || '0', nota: h.querySelector(`[data-accn="${id}"]`).value}); toast('Accordi salvati.'); } catch (er) { toast(er.message); } }
+  };
+  h.onclick = async e => {
+    const g = e.target.closest('[data-gap]'); if (g) { GAPERTO = GAPERTO === g.dataset.gap ? null : g.dataset.gap; return guadagniAdmin(h); }
+    const sv = e.target.closest('[data-gsalva]');
+    if (sv) {
+      const uid = sv.dataset.gsalva, man = {}; h.querySelectorAll('[data-man]').forEach(i => { if (i.value.trim()) man[i.dataset.man] = i.value; });
+      sv.disabled = true;
+      try {
+        await api('PUT', `/api/sp/admin/mese/${uid}`, {mese: GMESE, malus: $('#gMal').checked, malusNota: $('#gMalN').value, targetPerc: $('#gTp')?.value ?? '', manuali: man});
+        await api('PUT', `/api/sp/admin/perf/${uid}/compenso`, {fisso: $('#gFi').value, variabile: $('#gVa').value});
+        toast('Salvato.'); GAPERTO = null; guadagniAdmin(h);
+      } catch (er) { toast(er.message); sv.disabled = false; }
+    }
   };
 }
 function editorPiani(h, piani, dopo, regole){

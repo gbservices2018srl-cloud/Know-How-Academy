@@ -112,6 +112,30 @@ module.exports = function sp(app, ctx) {
         nota text not null default '', il timestamptz not null default now(), deciso_il timestamptz);
       create table if not exists sp_passaggi (id text primary key, user_id text not null, piano_id text not null, da_n int not null, a_n int not null,
         stato text not null default 'attesa', bonus text not null default '', il timestamptz not null default now(), deciso_il timestamptz, deciso_da text);
+      -- piani caricati da Excel (Piano di inserimento e crescita): colonne del file conservate come sono
+      alter table sp_piani add column if not exists contratto text not null default '';
+      alter table sp_piani add column if not exists fonte text not null default '';
+      alter table sp_piani add column if not exists intestazioni jsonb not null default '[]';
+      alter table sp_piani add column if not exists note text not null default '';
+      alter table sp_livelli add column if not exists regole jsonb not null default '[]';
+      alter table sp_livelli add column if not exists fisso_num numeric;
+      alter table sp_obiettivi add column if not exists sotto text not null default '';
+      alter table sp_obiettivi add column if not exists soft text not null default '';
+      alter table sp_obiettivi add column if not exists scuola text not null default '';
+      alter table sp_obiettivi add column if not exists r_fisso text not null default '';
+      alter table sp_obiettivi add column if not exists r_variabile text not null default '';
+      alter table sp_obiettivi add column if not exists test boolean not null default false;
+      -- compenso della persona: se l'amministratore lo cambia, vale questo invece di quello del livello
+      alter table sp_perf add column if not exists fisso_man numeric;
+      alter table sp_perf add column if not exists variabile_man text;
+      -- guadagni: accordi presi per sede e mese (cifra tolta dal fatturato per il netto), dati del mese per persona, archivio
+      create table if not exists sp_accordi (sede_id text not null, mese text not null, importo numeric not null default 0, nota text not null default '',
+        aggiornato timestamptz not null default now(), primary key (sede_id, mese));
+      create table if not exists sp_mese (user_id text not null, mese text not null, malus boolean not null default false, malus_nota text not null default '',
+        target_perc numeric, manuali jsonb not null default '{}', aggiornato timestamptz not null default now(), da text not null default '', primary key (user_id, mese));
+      -- I-Profile della persona: solo i numeri del grafico (la foto non si conserva). Lo carica l'amministratore.
+      create table if not exists sp_iprofile (user_id text primary key, valori jsonb not null, il timestamptz not null default now(), da text not null default '');
+      create table if not exists sp_guadagni (user_id text not null, mese text not null, dati jsonb not null, aggiornato timestamptz not null default now(), primary key (user_id, mese));
     `);
     // turni tipo per riempire il calendario in fretta (si cambiano in Turni di lavoro)
     const { rows } = await q('select count(*)::int n from sp_preset');
@@ -616,10 +640,12 @@ module.exports = function sp(app, ctx) {
       q('select * from sp_livelli where not archiviato order by n'),
       q('select * from sp_obiettivi where not archiviato order by ordine'),
     ]);
-    return piani.map(p => ({ id: p.id, nome: p.nome, livelli: liv.filter(l => l.piano_id === p.id).map(l => ({ id: l.id, n: l.n, ruolo: l.ruolo, bonus: l.bonus,
-      fisso: l.fisso || '', variabile: l.variabile || '', area: l.area || '', skill: Array.isArray(l.skill) ? l.skill : [],
-      incPerc: l.inc_perc != null ? Number(l.inc_perc) : null, incSoglia: l.inc_soglia || 'target',
-      obiettivi: ob.filter(o => o.livello_id === l.id).map(o => ({ id: o.id, testo: o.testo, misura: o.misura })) })) }));
+    return piani.map(p => ({ id: p.id, nome: p.nome, contratto: p.contratto || '', fonte: p.fonte || '', intestazioni: Array.isArray(p.intestazioni) ? p.intestazioni : [], note: p.note || '',
+      livelli: liv.filter(l => l.piano_id === p.id).map(l => ({ id: l.id, n: l.n, ruolo: l.ruolo, bonus: l.bonus,
+      fisso: l.fisso || '', fissoNum: l.fisso_num != null ? Number(l.fisso_num) : null, variabile: l.variabile || '', area: l.area || '', skill: Array.isArray(l.skill) ? l.skill : [],
+      incPerc: l.inc_perc != null ? Number(l.inc_perc) : null, incSoglia: l.inc_soglia || 'target', regole: Array.isArray(l.regole) ? l.regole : [],
+      obiettivi: ob.filter(o => o.livello_id === l.id).map(o => ({ id: o.id, testo: o.testo, misura: o.misura, sotto: o.sotto || '', soft: o.soft || '', scuola: o.scuola || '',
+        rFisso: o.r_fisso || '', rVariabile: o.r_variabile || '', test: !!o.test })) })) }));
   }
   /* ---------- incentivi: fatturato a consuntivo della sede da Gestione finanziaria ---------- */
   const FIN_URL = () => (process.env.FINANZA_URL || 'https://finanza.appgestione.it').replace(/\/$/, '');
@@ -658,6 +684,124 @@ module.exports = function sp(app, ctx) {
       valore: Math.round(valore * 100) / 100, testo: { fatturato: eur(s.fatturato), target: s.target ? eur(s.target) : '—', valore: eur(valore) } };
   }
 
+  /* ---------- guadagni: fisso + bonus del mese e del trimestre, malus, fatturato personale (CRM) ---------- */
+  // Regole del livello (dal piano Excel): { tipo: 'perc'|'manuale'|'nota', perc, base: 'ul'|'pers', periodo: 'mese'|'trim', cond: { ul, pers, conc, tmv } }
+  // ul/pers in cond = moltiplicatore del target (1 = a target, 1.15 = overtarget +15%). Fatturato della sede: lordo, da Gestione finanziaria.
+  // Target personale = % (35 di base, l'amministratore la cambia mese per mese) del target della sede.
+  // Malus: azzera i bonus del mese; la stessa cifra si toglie dal bonus del trimestre.
+  const TARGET_PERS = 35;
+  const meseOra = () => new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Rome' })).toISOString().slice(0, 7);
+  const meseAdd = (m, d) => { const [a, b] = m.split('-').map(Number), x = new Date(Date.UTC(a, b - 1 + d, 15)); return x.toISOString().slice(0, 7); };
+  const meseNome = m => new Date(m + '-15').toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+  const r2 = n => Math.round((Number(n) || 0) * 100) / 100;
+  const mesiTrim = m => { const [a, b] = m.split('-').map(Number), q0 = Math.floor((b - 1) / 3) * 3; return [1, 2, 3].map(i => `${a}-${String(q0 + i).padStart(2, '0')}`); };
+  // sede della persona in Gestione finanziaria (per nome)
+  const trovaSede = (c, nome) => c.sedi.find(x => normSede(x.nome) === normSede(nome)) || c.sedi.find(x => normSede(nome).length >= 3 && (normSede(x.nome).includes(normSede(nome)) || normSede(nome).includes(normSede(x.nome))));
+  // fatturato e target (somma delle sedi della persona) per i mesi richiesti dello stesso anno
+  async function fattSedi(sediIds, mesi) {
+    const out = { mesi: {}, sedi: [], errore: null };
+    if (!(sediIds || []).length) { out.errore = 'Nella tua anagrafica non c’è una sede.'; return out; }
+    let c; try { c = await consuntivo(mesi[mesi.length - 1]); } catch (e) { out.errore = e.message; return out; }
+    if (!c) { out.errore = 'Gestione finanziaria non è ancora collegata (Performance → Guadagni).'; return out; }
+    const nomi = new Map((await sch.sedi()).map(x => [x.id, x.nome]));
+    for (const id of sediIds) {
+      const nome = nomi.get(id) || ''; if (!nome) continue;
+      const s = trovaSede(c, nome);
+      out.sedi.push({ id, nome, trovata: !!s });
+      if (!s) { out.errore = `La sede ${nome} non si trova in Gestione finanziaria.`; continue; }
+      for (const m of mesi) {
+        const i = Number(m.slice(5)) - 1, x = out.mesi[m] || (out.mesi[m] = { fatt: 0, target: 0, dati: true });
+        const f = Array.isArray(s.fatturatoMesi) ? s.fatturatoMesi[i] : null;
+        if (f == null) x.dati = false;
+        x.fatt += Number(f) || 0; x.target += Number(s.target) || 0;
+      }
+    }
+    return out;
+  }
+  // fatturato personale dal CRM Commerciale: € piano di cura dei preventivi con esito A (Accettato) del commerciale
+  async function crmPersonale(uid, mesi) {
+    const crm = require('../crm/lib/db'), anno = Number(mesi[0].slice(0, 4)), mm = mesi.map(m => Number(m.slice(5)));
+    const { rows: al } = await crm.q('select nome from alias_commerciali where user_id = $1', [uid]);
+    const { rows } = await crm.q(`select mese, count(*)::int n, count(*) filter (where esito = 'A')::int na, coalesce(sum(pdc) filter (where esito = 'A'), 0)::float fatt
+      from preventivi where anno = $1 and mese = any($2) and (commerciale_id = $3 or upper(commerciale) = any($4)) group by mese`, [anno, mm, uid, al.map(a => String(a.nome).toUpperCase())]);
+    const out = {};
+    for (const m of mesi) { const r = rows.find(x => x.mese === Number(m.slice(5))) || { n: 0, na: 0, fatt: 0 };
+      out[m] = { fatt: r2(r.fatt), n: r.n, na: r.na, conc: r.n ? Math.round(r.na / r.n * 1000) / 10 : 0, tmv: r.na ? r2(r.fatt / r.na) : 0 }; }
+    return out;
+  }
+  const spiegaRegola = r => require('./lib/pianoExcel').spiega(r);
+  // calcolo di un mese per una persona (senza scrivere nulla tranne l'archivio)
+  async function guadagni(uid, mese, persona, livello, perfRow) {
+    const regole = (livello?.regole || []);
+    const { rows: [mm] } = await q('select * from sp_mese where user_id = $1 and mese = $2', [uid, mese]);
+    const trim = mesiTrim(mese).filter(m => m <= mese), fineTrim = mesiTrim(mese)[2] === mese;
+    const { rows: mt } = await q('select * from sp_mese where user_id = $1 and mese = any($2)', [uid, trim]);
+    const sedi = persona?.sedi || [];
+    const F = await fattSedi(sedi, mesiTrim(mese));
+    const usaPers = regole.some(r => r.tipo === 'perc' && (r.base === 'pers' || r.cond?.pers || r.cond?.conc || r.cond?.tmv));
+    let P = null, errPers = null;
+    if (usaPers) { try { P = await crmPersonale(uid, trim); } catch (e) { errPers = 'CRM Commerciale non raggiungibile: ' + e.message; } }
+    const tPerc = m => { const x = mt.find(y => y.mese === m); return x?.target_perc != null ? Number(x.target_perc) : TARGET_PERS; };
+    const ul = m => F.mesi[m] || { fatt: 0, target: 0, dati: false };
+    const pers = m => P?.[m] || { fatt: 0, n: 0, na: 0, conc: 0, tmv: 0 };
+    const tPers = m => r2(ul(m).target * tPerc(m) / 100);
+    // valori del periodo (mese o trimestre fino a questo mese)
+    const periodo = ms => ({ ulF: ms.reduce((t, m) => t + ul(m).fatt, 0), ulT: ms.reduce((t, m) => t + ul(m).target, 0),
+      pF: ms.reduce((t, m) => t + pers(m).fatt, 0), pT: ms.reduce((t, m) => t + tPers(m), 0),
+      conc: (n => n ? ms.reduce((t, m) => t + pers(m).na, 0) / n * 100 : 0)(ms.reduce((t, m) => t + pers(m).n, 0)),
+      tmv: (na => na ? ms.reduce((t, m) => t + pers(m).fatt, 0) / na : 0)(ms.reduce((t, m) => t + pers(m).na, 0)) });
+    const calcola = (r, v) => {
+      const c = r.cond || {}, motivi = [];
+      if (c.ul) { if (!v.ulT) motivi.push('manca il target della sede'); else if (v.ulF < v.ulT * c.ul) motivi.push(`sede al ${Math.round(v.ulF / v.ulT * 100)}% (serve ${Math.round(c.ul * 100)}%)`); }
+      if (c.pers) { if (!v.pT) motivi.push('manca il target personale'); else if (v.pF < v.pT * c.pers) motivi.push(`personale al ${Math.round(v.pF / v.pT * 100)}% (serve ${Math.round(c.pers * 100)}%)`); }
+      if (c.conc && v.conc < c.conc) motivi.push(`concretizzazione ${Math.round(v.conc)}% (serve ${c.conc}%)`);
+      if (c.tmv && v.tmv < c.tmv) motivi.push(`TMV € ${Math.round(v.tmv).toLocaleString('it-IT')} (serve € ${c.tmv.toLocaleString('it-IT')})`);
+      const base = r.base === 'pers' ? v.pF : v.ulF;
+      return { importo: motivi.length ? 0 : r2(base * r.perc / 100), base: r2(base), ok: !motivi.length, motivo: motivi.join(' · ') };
+    };
+    // bonus del mese (regole mensili + voci a mano) di un mese qualsiasi del trimestre
+    const bonusMese = m => {
+      const v = periodo([m]), man = (mt.find(y => y.mese === m)?.manuali) || {};
+      const voci = regole.filter(r => r.tipo === 'perc' && r.periodo === 'mese').map(r => ({ id: r.id, testo: r.testo, regola: spiegaRegola(r), ...calcola(r, v) }))
+        .concat(regole.filter(r => r.tipo === 'manuale').map(r => ({ id: r.id, testo: r.testo, regola: 'Importo scritto dall’amministrazione', manuale: true, importo: r2(man[r.id] || 0), ok: true })));
+      return { voci, totale: r2(voci.reduce((t, x) => t + x.importo, 0)), malus: !!mt.find(y => y.mese === m)?.malus };
+    };
+    const bm = bonusMese(mese), malus = !!mm?.malus;
+    // trimestre: si paga a fine trimestre; si tolgono i bonus mensili annullati dal malus nei mesi del trimestre
+    const vT = periodo(trim);
+    const vociT = regole.filter(r => r.tipo === 'perc' && r.periodo === 'trim').map(r => ({ id: r.id, testo: r.testo, regola: spiegaRegola(r), ...calcola(r, vT) }));
+    const lordoT = r2(vociT.reduce((t, x) => t + x.importo, 0));
+    const annullati = r2(trim.reduce((t, m) => { const b = bonusMese(m); return t + (b.malus ? b.totale : 0); }, 0));
+    const trimestre = vociT.length ? { voci: vociT, lordo: lordoT, annullati, importo: fineTrim ? r2(Math.max(0, lordoT - annullati)) : 0, maturato: r2(Math.max(0, lordoT - annullati)), fineTrim,
+      mesi: trim, fine: meseNome(mesiTrim(mese)[2]) } : null;
+    const fisso = perfRow?.fisso_man != null ? Number(perfRow.fisso_man) : livello?.fissoNum ?? null;
+    const { rows: acc } = await q('select coalesce(sum(importo), 0)::float t, string_agg(nullif(nota, \'\'), \' · \') n from sp_accordi where mese = $1 and sede_id = any($2)', [mese, sedi]);
+    const u = ul(mese), bonusMeseNetto = malus ? 0 : bm.totale;
+    const dati = {
+      mese, nomeMese: meseNome(mese), ruolo: livello?.ruolo || '', aggiornato: new Date().toISOString(),
+      sede: { nomi: F.sedi.map(x => x.nome), fatturato: r2(u.fatt), target: r2(u.target), pct: u.target ? Math.round(u.fatt / u.target * 100) : null,
+        accordi: r2(acc[0]?.t || 0), accordiNota: acc[0]?.n || '', netto: r2(u.fatt - (acc[0]?.t || 0)), dati: u.dati, errore: F.errore },
+      personale: usaPers ? { ...pers(mese), target: tPers(mese), targetPerc: tPerc(mese), pct: tPers(mese) ? Math.round(pers(mese).fatt / tPers(mese) * 100) : null, errore: errPers } : null,
+      fisso, bonus: bm.voci, bonusTotale: bm.totale, malus, malusNota: mm?.malus_nota || '', bonusPagato: bonusMeseNetto,
+      trimestre, note: regole.filter(r => r.tipo === 'nota').map(r => r.testo),
+      totale: r2((fisso || 0) + bonusMeseNetto + (trimestre?.importo || 0)),
+    };
+    return dati;
+  }
+  // guadagni da mostrare: il mese in corso (aggiornato ogni giorno) e i 2 mesi prima (poi spariscono: gennaio sparisce il 1° aprile).
+  // Ogni calcolo si salva in archivio; se Gestione finanziaria non ha più i dati (es. anno nuovo) si usa l'archivio.
+  async function guadagniPersona(uid, persona, livello, perfRow) {
+    const ora = meseOra(), out = [];
+    for (const m of [ora, meseAdd(ora, -1), meseAdd(ora, -2)]) {
+      let d = null;
+      try { d = await guadagni(uid, m, persona, livello, perfRow); } catch (e) { console.warn('Guadagni', uid, m, e.message); }
+      const { rows: [arch] } = await q('select dati from sp_guadagni where user_id = $1 and mese = $2', [uid, m]);
+      if (d && (d.sede.dati || !arch)) { await q(`insert into sp_guadagni (user_id, mese, dati, aggiornato) values ($1,$2,$3,now()) on conflict (user_id, mese) do update set dati = excluded.dati, aggiornato = now()`, [uid, m, JSON.stringify(d)]); out.push(d); }
+      else if (arch) out.push({ ...arch.dati, archivio: true });
+    }
+    return out;
+  }
+
   async function perfUtente(uid, persona = null) {
     await migrate();
     const { rows } = await q('select * from sp_perf where user_id = $1', [uid]);
@@ -667,8 +811,13 @@ module.exports = function sp(app, ctx) {
     const cur = piano.livelli.find(l => l.n === rows[0].livello_n), next = piano.livelli.find(l => l.n > rows[0].livello_n);
     const { rows: dati } = await q(`select id, obiettivo_id, dato, stato, nota, il, file_nome from sp_perf_dati where user_id = $1 order by il desc`, [uid]);
     const { rows: pas } = await q(`select * from sp_passaggi where user_id = $1 and stato = 'attesa' limit 1`, [uid]);
-    const ob = (next?.obiettivi || []).map(o => { const d = dati.find(x => x.obiettivo_id === o.id);
-      return { ...o, stato: d?.stato || 'fare', dato: d?.dato || '', nota: d?.nota || '', datoId: d?.id || null, file: d?.file_nome || '', il: d?.il || null }; });
+    // piani da Excel: gli obiettivi sono quelli del livello attuale (per superarlo); piani di prima: quelli del livello successivo.
+    // La riga «Superamento del test…» non è un obiettivo da provare: è il test che si fa a termometro pieno.
+    const daExcel = !!piano.fonte;
+    const conStato = o => { const d = dati.find(x => x.obiettivo_id === o.id);
+      return { ...o, stato: o.test ? 'test' : d?.stato || 'fare', dato: d?.dato || '', nota: d?.nota || '', datoId: d?.id || null, file: d?.file_nome || '', il: d?.il || null }; };
+    const righe = daExcel ? (cur?.obiettivi || []).map(conStato) : [];
+    const ob = daExcel ? righe.filter(o => !o.test) : (next?.obiettivi || []).map(conStato);
     const comp = l => l ? { fisso: l.fisso, variabile: l.variabile, area: l.area } : null;
     const pass = ob.filter(o => o.stato === 'pass').length;
     // test di passaggio (dai Protocolli): si sblocca con tutti i pass; superato → passaggio di ruolo da approvare
@@ -685,11 +834,27 @@ module.exports = function sp(app, ctx) {
     }
     const per = persona || (await persone()).find(p => p.id === uid);
     const mese = meseScorso();
-    return { piano: piano.nome, pianoId: piano.id, livello: rows[0].livello_n, ruolo: cur?.ruolo || '', attuale: comp(cur), regole: (await sch.imp('sp_regole')) || '',
+    const nomiSedi = new Map((await sch.sedi()).map(x => [x.id, x.nome]));
+    // la tua situazione: contratto, sede, ore, fisso e variabile (quelli del livello, o quelli scritti dall'amministratore)
+    const situazione = { contratto: per?.tipo === 'piva' ? 'Partita IVA' : per?.tipo === 'dip' ? 'CCNL' : '', sedi: (per?.sedi || []).map(x => nomiSedi.get(x)).filter(Boolean), ore: per?.ore ?? null,
+      fisso: rows[0].fisso_man != null ? Number(rows[0].fisso_man) : cur?.fissoNum ?? null, fissoTesto: rows[0].fisso_man != null ? '' : cur?.fisso || '', fissoMan: rows[0].fisso_man != null,
+      variabile: rows[0].variabile_man != null ? rows[0].variabile_man : cur?.variabile || '', variabileMan: rows[0].variabile_man != null };
+    const { rows: [ip] } = await q('select valori, il from sp_iprofile where user_id = $1', [uid]);
+    return { iprofile: ip ? { valori: ip.valori, il: ip.il } : null, piano: piano.nome, pianoId: piano.id, daExcel, intestazioni: piano.intestazioni, righe, situazione, livello: rows[0].livello_n, ruolo: cur?.ruolo || '', attuale: comp(cur), regole: (await sch.imp('sp_regole')) || '',
+
       prossimo: next ? { ruolo: next.ruolo, bonus: next.bonus, ...comp(next), skill: next.skill } : null, obiettivi: ob,
       pass, inAttesa: !!pas[0], test,
       incentivo: await incentivo(cur, per?.sedi, mese), incentivoProssimo: next && next.incPerc != null && (cur?.incPerc == null) ? await incentivo(next, per?.sedi, mese) : null };
   }
+  // i miei guadagni: mese in corso + i 2 mesi prima (solo piani da Excel)
+  async function guadagniDi(uid, persona) {
+    const { rows: [a] } = await q('select * from sp_perf where user_id = $1', [uid]); if (!a) return null;
+    const pi = (await struttura()).find(x => x.id === a.piano_id); if (!pi?.fonte) return null;
+    const l = pi.livelli.find(x => x.n === a.livello_n);
+    return guadagniPersona(uid, persona || await personaDi(uid), l, a);
+  }
+  app.get('/api/sp/perf/guadagni', needSp, wrap(async (req, res) => res.json({ mesi: (await guadagniDi(req.user.sso_id)) || [] })));
+
   // la persona carica la prova di un obiettivo (foto o file, con una nota): va all'amministratore da verificare
   app.post('/api/sp/perf/dato', needSp, upload.single('file'), wrap(async (req, res) => {
     const dato = str(req.body.dato, 1000), oid = str(req.body.obiettivo, 64), f = req.file;
@@ -1241,6 +1406,135 @@ module.exports = function sp(app, ctx) {
     righe.sort((x, y) => x.nome.localeCompare(y.nome, 'it'));
     res.json({ mese, righe, totale: righe.reduce((t, r) => t + (r.valore || 0), 0) });
   }));
+  /* ---------- piani da Excel: anteprima e sostituzione dei piani attuali ---------- */
+  const PX = require('./lib/pianoExcel');
+  async function leggiPianiExcel(files) {
+    if (!files?.length) throw Object.assign(new Error('Scegli i file Excel dei piani (.xlsx).'), { status: 400 });
+    const piani = [];
+    for (const f of files.slice(0, 4)) piani.push(await PX.leggi(f.buffer, String(f.originalname || 'piano.xlsx')));
+    const doppi = piani.map(p => p.contratto).filter((c, i, a) => c && a.indexOf(c) !== i);
+    if (doppi.length) throw Object.assign(new Error('Hai scelto due file per lo stesso contratto: carica un file CCNL e uno Partita IVA.'), { status: 400 });
+    return piani;
+  }
+  // chi va dove: piano per contratto (CCNL / P.IVA), ruolo uguale a quello di adesso, altrimenti il primo ruolo della sua figura
+  async function mappaPersone(piani) {
+    const pp = (await persone()).filter(p => !p.medico && !p.owner), vecchi = await struttura(), { rows: as } = await q('select * from sp_perf');
+    return pp.map(p => {
+      const a = as.find(x => x.user_id === p.id), vp = a && vecchi.find(x => x.id === a.piano_id), vl = vp?.livelli.find(x => x.n === a.livello_n);
+      const np = piani.find(x => x.contratto && x.contratto === p.tipo);
+      let li = -1;
+      if (np) {
+        const N = l => PX.normRuolo(l.ruolo);
+        if (vl) li = np.livelli.findIndex(l => N(l) === PX.normRuolo(vl.ruolo));
+        if (li < 0 && vl) li = np.livelli.findIndex(l => N(l).startsWith(PX.normRuolo(vl.ruolo) + ' '));
+        if (li < 0 && p.figura) li = np.livelli.findIndex(l => N(l) === PX.normRuolo(p.figura) || N(l).startsWith(PX.normRuolo(p.figura) + ' '));
+      }
+      return { id: p.id, nome: p.nome, contratto: p.tipo || '', figura: p.figura || '', da: vl ? `${vp.nome} · ${vl.ruolo}` : '', piano: np && li >= 0 ? np.contratto : null, livello: li >= 0 ? li + 1 : null, a: np && li >= 0 ? `${np.nome} · ${np.livelli[li].ruolo}` : '' };
+    }).sort((x, y) => x.nome.localeCompare(y.nome, 'it'));
+  }
+  app.post('/api/sp/admin/piani/excel/anteprima', needAd, upload.array('file', 4), wrap(async (req, res) => {
+    const piani = await leggiPianiExcel(req.files);
+    res.json({ piani: piani.map(p => ({ ...p, livelli: p.livelli.map(l => ({ ...l, regole: l.regole.map(r => ({ ...r, spiega: PX.spiega(r) })) })) })), persone: await mappaPersone(piani) });
+  }));
+  // conferma: i piani di adesso si archiviano (le prove già inviate restano), si creano quelli del file e si assegnano le persone
+  app.post('/api/sp/admin/piani/excel/conferma', needAd, upload.array('file', 4), wrap(async (req, res) => {
+    const piani = await leggiPianiExcel(req.files), mappa = await mappaPersone(piani);
+    const scelte = (() => { try { return JSON.parse(req.body.scelte || '{}'); } catch { return {}; } })();
+    const ids = {};
+    await db.tx(async tq => {
+      await tq('update sp_piani set archiviato = true where not archiviato');
+      await tq('update sp_livelli set archiviato = true where not archiviato');
+      await tq('update sp_obiettivi set archiviato = true where not archiviato');
+      let pi = 0;
+      for (const p of piani) {
+        const pid = db.newId(); ids[p.contratto || pid] = pid;
+        await tq('insert into sp_piani (id, nome, ordine, contratto, fonte, intestazioni, note) values ($1,$2,$3,$4,$5,$6,$7)',
+          [pid, p.nome, pi++, p.contratto, p.file.slice(0, 200), JSON.stringify(p.intestazioni), p.note.slice(0, 20000)]);
+        let n = 1;
+        for (const l of p.livelli) {
+          const lid = db.newId();
+          await tq(`insert into sp_livelli (id, piano_id, n, ruolo, fisso, fisso_num, variabile, regole) values ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [lid, pid, n++, l.ruolo.slice(0, 80), l.fisso.slice(0, 160), l.fissoNum, l.variabile.slice(0, 4000), JSON.stringify(l.regole)]);
+          let oi = 0;
+          for (const o of l.obiettivi) await tq(`insert into sp_obiettivi (id, livello_id, testo, ordine, sotto, soft, scuola, r_fisso, r_variabile, test) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+            [db.newId(), lid, (o.testo || '—').slice(0, 400), oi++, o.sotto.slice(0, 8000), o.soft.slice(0, 2000), o.scuola.slice(0, 2000), o.fisso.slice(0, 200), o.variabile.slice(0, 4000), o.test]);
+        }
+      }
+      for (const m of mappa) {
+        const sc = scelte[m.id];   // l'amministratore può cambiare la proposta nell'anteprima: { piano: 'dip'|'piva'|'', livello }
+        const pc = sc ? sc.piano : m.piano, lv = sc ? parseInt(sc.livello) : m.livello;
+        if (!pc || !ids[pc] || !(lv >= 1)) continue;
+        await tq(`insert into sp_perf (user_id, piano_id, livello_n, dal) values ($1,$2,$3,current_date)
+          on conflict (user_id) do update set piano_id = excluded.piano_id, livello_n = excluded.livello_n, dal = current_date, test_invio = null, fisso_man = null, variabile_man = null`, [m.id, ids[pc], lv]);
+      }
+    });
+    res.json({ ok: true, piani: piani.length });
+  }));
+
+  /* ---------- I-Profile (amministratore): lettura dalla foto come nell'app I-Profile, poi si salvano solo i numeri ---------- */
+  const CHIAVI_IP = ['org', 'auto', 'gp', 'ad', 'det', 'vend', 'hr', 'pro', 'com', 'esp', 'rc', 'fin', 'suc', 'pri', 'lin', 'va', 'wi'];
+  app.post('/api/sp/admin/iprofile/leggi', needAd, upload.single('foto'), wrap(async (req, res) => {
+    const f = req.file; if (!f || !/^image\/(jpeg|png|webp)$/.test(f.mimetype)) return bad(res, 400, 'Scegli una foto o uno screenshot del grafico (JPG o PNG).');
+    if (!store.hooks.leggiIprofile) return bad(res, 503, 'Lettura automatica non disponibile: inserisci i valori a mano.');
+    try { res.json({ valori: await store.hooks.leggiIprofile(`data:${f.mimetype};base64,${f.buffer.toString('base64')}`) }); } catch (e) { bad(res, e.status || 502, e.message); }
+  }));
+  app.put('/api/sp/admin/iprofile/:uid', needAd, wrap(async (req, res) => {
+    const v = {}; for (const k of CHIAVI_IP) { const x = req.body.valori?.[k]; if (x !== '' && x != null && isFinite(Number(x))) v[k] = Math.max(-100, Math.min(100, Math.round(Number(x)))); }
+    if (CHIAVI_IP.slice(0, 10).some(k => v[k] == null)) return bad(res, 400, 'Servono tutti i 10 tratti del grafico.');
+    const me = await io(req);
+    await q(`insert into sp_iprofile (user_id, valori, il, da) values ($1,$2,now(),$3) on conflict (user_id) do update set valori = excluded.valori, il = now(), da = excluded.da`, [str(req.params.uid, 64), JSON.stringify(v), me.nome]);
+    res.json({ ok: true });
+  }));
+
+  /* ---------- guadagni (amministratore): tabella del mese, accordi per sede, malus, target personale, voci a mano, compenso ---------- */
+  app.get('/api/sp/admin/guadagni', needAd, wrap(async (req, res) => {
+    const mese = /^\d{4}-\d{2}$/.test(req.query.mese || '') ? req.query.mese : meseOra();
+    const pp = await persone(), piani = await struttura(), { rows: as } = await q('select * from sp_perf');
+    const righe = [];
+    for (const a of as) {
+      const p = pp.find(x => x.id === a.user_id), pi = piani.find(x => x.id === a.piano_id); if (!p || !pi?.fonte) continue;
+      const l = pi.livelli.find(x => x.n === a.livello_n);
+      let d = null; try { d = await guadagni(p.id, mese, p, l, a); } catch (e) { d = { errore: e.message }; }
+      righe.push({ id: p.id, nome: p.nome, piano: pi.nome, regole: (l?.regole || []).map(r => ({ ...r, spiega: PX.spiega(r) })),
+        fissoLivello: l?.fissoNum ?? null, fissoMan: a.fisso_man != null ? Number(a.fisso_man) : null, variabileMan: a.variabile_man, ...d });
+    }
+    righe.sort((x, y) => x.nome.localeCompare(y.nome, 'it'));
+    const sedi = await sch.sedi(), { rows: acc } = await q('select * from sp_accordi where mese = $1', [mese]);
+    res.json({ mese, nomeMese: meseNome(mese), mesi: Array.from({ length: 12 }, (_, i) => meseAdd(meseOra(), -i)), righe,
+      accordi: sedi.map(x => { const r = acc.find(y => y.sede_id === x.id); return { id: x.id, nome: x.nome, importo: r ? Number(r.importo) : 0, nota: r?.nota || '' }; }),
+      totale: r2(righe.reduce((t, x) => t + (x.totale || 0), 0)), finAzienda: (await sch.imp('sp_fin_azienda')) || null });
+  }));
+  app.put('/api/sp/admin/accordi', needAd, wrap(async (req, res) => {
+    const mese = str(req.body.mese, 7), sede = str(req.body.sede, 60); if (!/^\d{4}-\d{2}$/.test(mese) || !sede) return bad(res, 400, 'Dati non validi.');
+    const imp = Number(String(req.body.importo ?? '').replace(/\s|€/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.'));
+    if (!isFinite(imp) || imp < 0) return bad(res, 400, 'Importo non valido.');
+    await q(`insert into sp_accordi (sede_id, mese, importo, nota, aggiornato) values ($1,$2,$3,$4,now()) on conflict (sede_id, mese) do update set importo = excluded.importo, nota = excluded.nota, aggiornato = now()`,
+      [sede, mese, r2(imp), str(req.body.nota, 300)]);
+    res.json({ ok: true });
+  }));
+  app.put('/api/sp/admin/mese/:uid', needAd, wrap(async (req, res) => {
+    const mese = str(req.body.mese, 7), uid = str(req.params.uid, 64); if (!/^\d{4}-\d{2}$/.test(mese)) return bad(res, 400, 'Mese non valido.');
+    const b = req.body, malus = !!b.malus, nota = str(b.malusNota, 500);
+    if (malus && !nota) return bad(res, 400, 'Scrivi il motivo del malus: lo legge la persona.');
+    const tp = b.targetPerc === '' || b.targetPerc == null ? null : Number(String(b.targetPerc).replace(',', '.'));
+    if (tp != null && !(tp >= 0 && tp <= 100)) return bad(res, 400, 'Target personale: una percentuale da 0 a 100.');
+    const man = {}; for (const [k, v] of Object.entries(b.manuali || {})) { const n = Number(String(v ?? '').replace(/\s|€/g, '').replace(',', '.')); if (/^r\d+$/.test(k) && isFinite(n) && n >= 0) man[k] = r2(n); }
+    const me = await io(req);
+    await q(`insert into sp_mese (user_id, mese, malus, malus_nota, target_perc, manuali, aggiornato, da) values ($1,$2,$3,$4,$5,$6,now(),$7)
+      on conflict (user_id, mese) do update set malus = excluded.malus, malus_nota = excluded.malus_nota, target_perc = excluded.target_perc, manuali = excluded.manuali, aggiornato = now(), da = excluded.da`,
+      [uid, mese, malus, malus ? nota : '', tp, JSON.stringify(man), me.nome]);
+    if (malus) avvisa([uid], { title: 'Malus del mese', body: `${meseNome(mese)}: ${nota}`.slice(0, 160), url: '/?sez=perf' });
+    res.json({ ok: true });
+  }));
+  app.put('/api/sp/admin/perf/:uid/compenso', needAd, wrap(async (req, res) => {
+    const f = req.body.fisso === '' || req.body.fisso == null ? null : Number(String(req.body.fisso).replace(/\s|€/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.'));
+    if (f != null && !(f >= 0)) return bad(res, 400, 'Fisso non valido.');
+    const v = req.body.variabile == null || String(req.body.variabile).trim() === '' ? null : String(req.body.variabile).replace(/\r/g, '').trim().slice(0, 3000);
+    const { rowCount } = await q('update sp_perf set fisso_man = $2, variabile_man = $3 where user_id = $1', [str(req.params.uid, 64), f, v]);
+    if (!rowCount) return bad(res, 400, 'La persona non è in un piano.');
+    res.json({ ok: true });
+  }));
+
   // piano di crescita ufficiale To Smile (dal documento): si carica nell'editor, poi lo salva l'amministratore
   app.get('/api/sp/admin/piani/modello', needAd, (req, res) => res.json(require('./data/piano-crescita-2025.json')));
   app.put('/api/sp/admin/piani', needAd, wrap(async (req, res) => {
@@ -1289,7 +1583,9 @@ module.exports = function sp(app, ctx) {
     const n = p.livelli.some(l => l.n === parseInt(livello)) ? parseInt(livello) : p.livelli[0]?.n || 1;
     const { rows: [prima] } = await q('select piano_id, livello_n from sp_perf where user_id = $1', [uid]);
     if (prima && prima.piano_id === pid && prima.livello_n === n) return { ok: true, ruolo: p.livelli.find(l => l.n === n)?.ruolo };
-    await q(`insert into sp_perf (user_id, piano_id, livello_n, dal) values ($1,$2,$3,current_date) on conflict (user_id) do update set piano_id = excluded.piano_id, livello_n = excluded.livello_n, dal = current_date, test_invio = null`, [uid, pid, n]);
+    await q(`insert into sp_perf (user_id, piano_id, livello_n, dal) values ($1,$2,$3,current_date) on conflict (user_id) do update set piano_id = excluded.piano_id, livello_n = excluded.livello_n, dal = current_date, test_invio = null,
+      fisso_man = case when sp_perf.piano_id = excluded.piano_id and sp_perf.livello_n = excluded.livello_n then sp_perf.fisso_man end,
+      variabile_man = case when sp_perf.piano_id = excluded.piano_id and sp_perf.livello_n = excluded.livello_n then sp_perf.variabile_man end`, [uid, pid, n]);
     await q(`update sp_passaggi set stato = 'superato' where user_id = $1 and stato = 'attesa'`, [uid]);
     return { ok: true, ruolo: p.livelli.find(l => l.n === n)?.ruolo };
   }
@@ -1314,7 +1610,7 @@ module.exports = function sp(app, ctx) {
     const x = rows[0];
     let ruolo = null;
     if (ok) {
-      await q('update sp_perf set livello_n = $2, dal = current_date, test_invio = null where user_id = $1', [x.user_id, x.a_n]);
+      await q('update sp_perf set livello_n = $2, dal = current_date, test_invio = null, fisso_man = null, variabile_man = null where user_id = $1', [x.user_id, x.a_n]);
       ruolo = (await struttura()).find(p => p.id === x.piano_id)?.livelli.find(l => l.n === x.a_n)?.ruolo || null;
       if (ruolo && crescita.hub.accessi) await crescita.hub.accessi.ruoloCambiato(x.user_id, ruolo).catch(e => console.warn('Piano di crescita, figura:', e.message));
     }

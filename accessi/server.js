@@ -1256,17 +1256,22 @@ app.get(['/hr/vendor/pdf.min.mjs', '/hr/vendor/pdf.worker.min.mjs'], (req, res) 
 const IPROFILE_PROMPT = `L'immagine può essere una foto o la pagina di un documento con testo intorno; se contiene più grafici usa il primo. Il grafico è un I-Profile: 10 barre verticali su scala da -100 a +100 con il valore numerico scritto sopra o sotto ogni barra, nell'ordine: Organizzazione, Automotivazione, Gestione Pressioni (a volte "Stress"), Autodisciplina, Determinazione, Attitudine alla vendita, HR Management, Proattività, Comprensione, Espansività. A destra c'è una tabella con: Resistenza al cambiamento, Finanze, Successo, Principi, Dati sull'attendibilità, Leadership Indice Naturale, Vendita assistita, Worker index. Il grafico può essere in inglese (Sense of Organisation, Self-Motivation, Stress, Self-Discipline, Assertiveness, Aptitude for sales, HR Management, Proactivity, Tolerance, Expansiveness; Resistance to Change, Financial Management, Success, Principles, Leadership Natural Index, Inside sales, Worker Index).
 Leggi i numeri esattamente come scritti. Usa null per un valore illeggibile.
 Rispondi solo con un oggetto JSON con queste chiavi numeriche: {"org":0,"auto":0,"gp":0,"ad":0,"det":0,"vend":0,"hr":0,"pro":0,"com":0,"esp":0,"rc":0,"fin":0,"suc":0,"pri":0,"lin":0,"va":0,"wi":0}`;
-app.post('/api/hr/leggi', needUser, wrap(async (req, res) => {
-  if (!await accessoHR(req)) return bad(res, 403, 'Non sei abilitato a HR.');
-  const m = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(String(req.body?.foto || ''));
-  if (!m) return bad(res, 400, 'Immagine non valida: usa JPG o PNG.');
+// lettura dei numeri di un grafico I-Profile da una foto (la foto non si conserva). La usa anche la Scheda personale (Performance).
+async function leggiIprofile(foto) {
+  const m = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(String(foto || ''));
+  if (!m) throw Object.assign(new Error('Immagine non valida: usa JPG o PNG.'), { status: 400 });
   let txt;
   try { txt = await require('../lib/consumo').chiedi('hr_iprofile', null, [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } }, { type: 'text', text: IPROFILE_PROMPT }] }], 600, 'Lettura I-Profile', { model: process.env.HR_AI_MODEL || process.env.ASO_AI_MODEL, timeout: 60000 }); }
-  catch (e) { return bad(res, e.status === 403 ? 400 : 502, e.status === 403 ? e.message : 'La lettura automatica non ha risposto. Inserisci i valori a mano.'); }
-  let o; try { o = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1)); } catch { return bad(res, 502, 'Non sono riuscito a leggere i numeri. Prova con una foto più nitida e dritta.'); }
+  catch (e) { throw Object.assign(new Error(e.status === 403 ? e.message : 'La lettura automatica non ha risposto. Inserisci i valori a mano.'), { status: e.status === 403 ? 400 : 502 }); }
+  let o; try { o = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1)); } catch { throw Object.assign(new Error('Non sono riuscito a leggere i numeri. Prova con una foto più nitida e dritta.'), { status: 502 }); }
   const valori = {};
   for (const k of ['org', 'auto', 'gp', 'ad', 'det', 'vend', 'hr', 'pro', 'com', 'esp', 'rc', 'fin', 'suc', 'pri', 'lin', 'va', 'wi']) { const x = Number(o[k]); if (o[k] !== null && o[k] !== '' && isFinite(x)) valori[k] = Math.max(-100, Math.min(100, Math.round(x))); }
-  res.json({ valori });
+  return valori;
+}
+store.hooks.leggiIprofile = leggiIprofile;
+app.post('/api/hr/leggi', needUser, wrap(async (req, res) => {
+  if (!await accessoHR(req)) return bad(res, 403, 'Non sei abilitato a HR.');
+  try { res.json({ valori: await leggiIprofile(req.body?.foto) }); } catch (e) { bad(res, e.status || 502, e.message); }
 }));
 // Riquadri "contenitore" (es. Controllo di gestione): pagina con le app che contiene, per chi ne ha almeno una
 app.get('/c/:key', (req, res, next) => {
