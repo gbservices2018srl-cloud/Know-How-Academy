@@ -859,9 +859,13 @@ document.addEventListener('click', async e => {
     } else if (act === 'enable') {
       const r = await api('PATCH', '/api/admin/users/' + u.id, {status: 'active'}); Object.assign(u, r.user); render(); toast('Utente riattivato');
     } else if (act === 'delete') {
-      if (!confirm(`Eliminare definitivamente ${fullName(u)}? Non potrà più entrare in nessuna app. L'operazione non si può annullare.`)) return;
-      await api('DELETE', '/api/admin/users/' + u.id);
-      S.users = S.users.filter(x => x.id !== u.id); render(); toast('Utente eliminato');
+      const d = await api('GET', `/api/admin/users/${u.id}/documenti`);
+      if (!d.n) {
+        if (!confirm(`Eliminare definitivamente ${fullName(u)}? Non ha documenti personali da inviare. Non potrà più entrare in nessuna app. L'operazione non si può annullare.`)) return;
+        await api('DELETE', '/api/admin/users/' + u.id, {senzaInvio: true});
+        S.users = S.users.filter(x => x.id !== u.id); render(); toast('Utente eliminato'); return;
+      }
+      openEliminaConDocumenti(u, d);
     } else if (act === 'verify') {
       const r = await api('POST', `/api/admin/users/${u.id}/verify-link`, {});
       if (r.link) linkResult(r.link, u.firstName, 'per confermare la sua email'); else toast(`Email di conferma rimandata a ${u.email}`);
@@ -892,7 +896,7 @@ function personFields(u = {}) {
   return `<div class="two"><label class="field">Nome<input id="d-fn" value="${esc(u.firstName)}" maxlength="80" required></label>
     <label class="field">Cognome<input id="d-ln" value="${esc(u.lastName)}" maxlength="80" required></label></div>
     <div class="two"><label class="field">Data di nascita<input id="d-bd" type="date" value="${esc(u.birthDate || '')}" min="1900-01-01" max="${new Date().toISOString().slice(0, 10)}"></label>
-    <label class="field">Email<input id="d-em" type="email" value="${esc(u.email)}" maxlength="160" ${u.owner ? 'disabled' : ''} required></label></div>
+    <label class="field">Email personale<input id="d-em" type="email" value="${esc(u.email)}" maxlength="160" ${u.owner ? 'disabled' : ''} required></label></div>
     <div class="two"><label class="field">Figura professionale<select id="d-fig"><option value="">Da scegliere</option>${(S.figure || []).filter(f => !f.ritirata || u.figura === f.id).map(f => `<option value="${esc(f.id)}" ${u.figura === f.id ? 'selected' : ''}>${esc(f.nome)}${f.ritirata ? ' (non più usata: cambiala)' : ''}</option>`).join('')}</select></label>
     <label class="field">Codice fiscale<input id="d-cf" value="${esc(u.cf || '')}" maxlength="16" style="text-transform:uppercase" autocomplete="off"></label></div>
     <div class="two"><label class="field">Provincia albo <small class="muted" style="font-weight:500">solo medici</small><input id="d-ap" value="${esc(u.alboProvincia || '')}" maxlength="2" style="text-transform:uppercase" autocomplete="off"></label>
@@ -985,6 +989,30 @@ function openPassword(u) {
     } else if (v === 'set') {
       await api('POST', `/api/admin/users/${u.id}/password`, {password: val('d-pw')});
       u.hasPassword = true; render(); dlg.close(); toast(`Password impostata. Comunicala a ${u.firstName}.`);
+    }
+  });
+}
+// Eliminazione di un profilo con documenti personali: chiede sempre se inviarli (zip unico via email)
+function openEliminaConDocumenti(u, d) {
+  const blocco = !d.mailAttive ? 'Le email non sono attive: per ora non si possono inviare.' : d.troppo ? `Sono troppo pesanti per un'email (${d.mb} MB).` : '';
+  open(`<h2>Eliminare ${esc(fullName(u))}?</h2>
+    <p style="margin:0">Nella sezione Documenti ci sono <b>${d.n} documenti personali</b> (buste paga, CU, contratti, documenti firmati, certificati · ${d.mb} MB).</p>
+    <p class="muted" style="margin:0">Vuoi inviarli alla persona? Riceverà un unico file zip con scritto: «In allegato tutti i documenti personali che erano contenuti nella tua app.»</p>
+    <label class="field">Conferma l'email a cui inviarli<input id="d-docmail" type="email" value="${esc(d.email || '')}" autocomplete="off"></label>
+    ${blocco ? `<p style="margin:0;color:#B3261E;font-weight:600">${esc(blocco)}</p>` : ''}
+    <p class="muted" style="margin:0">Il profilo si elimina solo dopo che l'email è partita. I documenti restano comunque salvati nel sistema. L'eliminazione non si può annullare.</p>
+    <div class="msg err" role="alert"></div>
+    <div class="row"><button class="btn" value="cancel" formnovalidate>Annulla</button><button class="btn" value="senza" formnovalidate>Elimina senza inviare</button>
+      <button class="btn primary" value="invia" ${blocco ? 'disabled' : ''}>Invia i documenti ed elimina</button></div>`, async v => {
+    if (v === 'invia') {
+      const email = val('d-docmail').trim();
+      if (!confirm(`Confermi l'invio di ${d.n} documenti a ${email} e poi l'eliminazione di ${fullName(u)}?`)) return;
+      await api('DELETE', '/api/admin/users/' + u.id, {inviaDocumenti: email});
+      dlg.close(); S.users = S.users.filter(x => x.id !== u.id); render(); toast(`Documenti inviati a ${email}. Utente eliminato.`);
+    } else if (v === 'senza') {
+      if (!confirm(`Eliminare ${fullName(u)} SENZA inviargli i documenti? L'operazione non si può annullare.`)) return;
+      await api('DELETE', '/api/admin/users/' + u.id, {senzaInvio: true});
+      dlg.close(); S.users = S.users.filter(x => x.id !== u.id); render(); toast('Utente eliminato (documenti non inviati)');
     }
   });
 }

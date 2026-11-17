@@ -958,10 +958,43 @@ app.post('/api/admin/users/:id/password', needAdmin, wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// Documenti personali (sezione Documenti della Scheda personale) prima di eliminare un profilo
+const docsDi = async id => (store.hooks.documentiPersonali ? await store.hooks.documentiPersonali(id) : []);
+const MAX_ZIP = 25 * 1024 * 1024; // le email accettano allegati fino a circa 40 MB (dopo la codifica): teniamo margine
+app.get('/api/admin/users/:id/documenti', needAdmin, wrap(async (req, res) => {
+  const u = await store.getUser(req.params.id);
+  if (!u) return bad(res, 404, 'Utente non trovato');
+  const files = await docsDi(u.id);
+  const byte = files.reduce((t, f) => t + f.buf.length, 0);
+  res.json({ n: files.filter(f => !/Riepilogo firme\.txt$/.test(f.nome)).length, mb: Math.round(byte / 1048576 * 10) / 10, troppo: byte > MAX_ZIP, email: u.email, mailAttive: mail.enabled() });
+}));
+
 app.delete('/api/admin/users/:id', needAdmin, wrap(async (req, res) => {
   const u = await store.getUser(req.params.id);
   if (!u) return bad(res, 404, 'Utente non trovato');
   if (u.owner || u.id === req.user.id) return bad(res, 400, 'Questo account non si può eliminare.');
+  const files = u.status === 'pending' ? [] : await docsDi(u.id);
+  if (files.length) {
+    const b = req.body || {};
+    if (b.inviaDocumenti) {
+      const to = String(b.inviaDocumenti).trim().toLowerCase();
+      if (!store.validEmail(to)) return bad(res, 400, "L'email per l'invio dei documenti non è valida.");
+      if (!mail.enabled()) return bad(res, 400, "Le email non sono attive: i documenti non si possono inviare. Il profilo NON è stato eliminato.");
+      const JSZip = require('jszip'), zip = new JSZip();
+      for (const f of files) zip.file(f.nome, f.buf);
+      const buf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+      if (buf.length > MAX_ZIP) return bad(res, 400, `I documenti sono troppo pesanti per un'email (${Math.round(buf.length / 1048576)} MB). Il profilo NON è stato eliminato.`);
+      const nomeZip = `Documenti ${u.first_name} ${u.last_name}`.replace(/[^\w\- àèéìòù]/gi, '').trim() + '.zip';
+      const ok = await mail.send({
+        to, subject: 'I tuoi documenti personali',
+        text: `Ciao ${u.first_name},\nin allegato tutti i documenti personali che erano contenuti nella tua app.`,
+        html: mail.layout(`Ciao ${u.first_name}`, ['In allegato tutti i documenti personali che erano contenuti nella tua app.']),
+        attachments: [{ filename: nomeZip, content: buf, contentType: 'application/zip' }],
+      });
+      if (!ok) return bad(res, 502, "L'email con i documenti non è partita. Il profilo NON è stato eliminato: riprova.");
+      console.log(`Documenti personali inviati a ${to} prima dell'eliminazione del profilo ${u.id} (${files.length} file)`);
+    } else if (!b.senzaInvio) return bad(res, 409, 'Prima scegli se inviare i documenti personali alla persona.');
+  }
   await store.deleteUser(u.id);
   revokeIn(u, SSO_KEYS);
   res.json({ ok: true });

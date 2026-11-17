@@ -546,7 +546,11 @@ async function peekPasswordLink(token) {
   return rows[0] || null;
 }
 
+// funzioni che le altre app registrano qui (es. la Scheda personale: documentiPersonali(userId) → [{ nome, buf }])
+const hooks = {};
+
 module.exports = {
+  hooks,
   accessiAutomatici, allineaSeguaci, fondiSeguaci, capo, appSpente, appSpenteAggiorna,
   utenteDaToken, pool, q, SCHEMA, APPS, APP_KEYS, events, migrate, ensureOwner,
   cleanEmail, validEmail, cleanName, cleanDate, cleanFigura, FIGURE, cleanCf, validCf, cleanProv, cleanAlbo, appsOf, publicUser, getUser, findByEmail, createUser, setPassword,

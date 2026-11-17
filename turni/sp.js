@@ -734,6 +734,39 @@ module.exports = function sp(app, ctx) {
     res.json({ ok: true, url: 'https://protocolli.appgestione.it/?v=test' });
   }));
 
+  /* ---------- tutti i documenti personali di una persona (per l'invio quando si elimina il profilo) ---------- */
+  // Buste paga, CU, contratti e altri documenti pubblicati (con la firma, se c'è) + certificati approvati.
+  // Non cancella nulla: legge soltanto.
+  store.hooks.documentiPersonali = async uid => {
+    await migrate();
+    const pulisci = s => String(s || '').replace(/[^\w\- .àèéìòù()]/gi, '').replace(/\s+/g, ' ').trim().slice(0, 90) || 'documento';
+    const files = [], usati = new Set();
+    const aggiungi = (cartella, nome, buf) => {
+      let n = `${cartella}/${nome}`, i = 2;
+      while (usati.has(n.toLowerCase())) { n = `${cartella}/${nome.replace(/(\.\w+)$/, ` (${i++})$1`)}`; }
+      usati.add(n.toLowerCase()); files.push({ nome: n, buf });
+    };
+    const { rows: docs } = await q(`select * from sp_docs where user_id = $1 and stato = 'pubblicato' order by periodo, pubblicato`, [uid]);
+    const firme = [];
+    for (const d of docs) {
+      const nome = pulisci(`${d.periodo ? d.periodo + ' ' : ''}${d.titolo || d.tipo}`);
+      aggiungi('Documenti', nome + '.pdf', decifra(d));
+      if (d.firma) {
+        aggiungi('Firme', nome + ' - firma.png', d.firma_iv ? decifra({ file: d.firma, iv: d.firma_iv, tag: d.firma_tag }) : d.firma);
+        firme.push(`${nome}: firmato il ${new Date(d.firmato).toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}${d.firma_impronta ? ` · impronta SHA-256 del documento ${d.firma_impronta}` : ''}`);
+      }
+    }
+    if (firme.length) aggiungi('Firme', 'Riepilogo firme.txt', Buffer.from('Firme con il dito fatte nella Scheda personale\r\n\r\n' + firme.join('\r\n') + '\r\n'));
+    const { rows: cert } = await q(`select id, tipo, dal, al, ora_da, ora_a, doc_nome, doc_dati, doc_iv, doc_tag from sp_richieste
+      where user_id = $1 and doc_approvato is not null and doc_dati is not null and stato <> 'annullata' order by dal`, [uid]);
+    for (const r of cert) {
+      const est = (String(r.doc_nome || '').match(/\.(\w{2,5})$/) || [, 'pdf'])[1].toLowerCase();
+      const titolo = (r.tipo === 'lutto' ? 'Certificato di morte' : r.tipo === 'maternita' ? 'Certificato di maternità' : 'Certificato') + ' ' + r.dal;
+      aggiungi('Certificati', pulisci(titolo) + '.' + est, r.doc_iv ? decifra({ file: r.doc_dati, iv: r.doc_iv, tag: r.doc_tag }) : r.doc_dati);
+    }
+    return files;
+  };
+
   /* ---------- documenti (utente: solo i suoi) ---------- */
   app.get('/api/sp/doc/:id/file', needSp, wrap(async (req, res) => {
     const { rows } = await q('select * from sp_docs where id = $1', [req.params.id]);

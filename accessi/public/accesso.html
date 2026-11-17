@@ -107,7 +107,7 @@ const views = {
         <label class="field" for="an">Numero di iscrizione<input id="an" maxlength="20" autocomplete="off" inputmode="numeric"></label>
       </div>
       <div id="pcBox" style="display:flex;flex-direction:column;gap:14px"></div>
-      <label class="field" for="email">Email<input id="email" type="email" autocomplete="email" inputmode="email" required maxlength="160"></label>
+      <label class="field" for="email">Email personale<input id="email" type="email" autocomplete="email" inputmode="email" required maxlength="160" placeholder="la tua email privata"><small class="muted" style="font-weight:500">Usa la tua email <b>personale</b>, non quella dello studio: ti serve anche per ricevere i tuoi documenti (buste paga, CU, contratti) se un giorno lasci l'azienda.</small></label>
       ${pwField('password', 'Password', 'new-password', 'Almeno 8 caratteri. Sarà la stessa per tutte le app.')}
       <label class="check"><input type="checkbox" id="privacy" required><span>Ho letto la <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a> e la <a href="/cookie" target="_blank" rel="noopener">Cookie Policy</a> e accetto i <a href="/termini" target="_blank" rel="noopener">Termini e condizioni d’uso</a>.</span></label>
       <div class="msg err" id="err" role="alert"></div>
