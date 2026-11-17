@@ -15,7 +15,7 @@
   --bg:#EFF5F5; --dot:#D3E2E2; --surface:#FFFFFF; --surface-2:#F5F9F9; --surface-3:#EAF1F1; --fg:#1F2A2B; --muted:#5E6B6C;
   --line:#DCE7E7; --accent:#2B8384; --accent-soft:#DCEFEF; --accent-fg:#FFFFFF;
   --brand-teal:#4CAAAA; --brand-purple:#8C6898; --brand-yellow:#E8E564; --purple-soft:#EFE7F2;
-  --danger:#B42318; --danger-soft:#FBE3E0; --ok:#1F7A4D; --ok-soft:#DDF1E6; --warn:#8A4A12; --warn-soft:#FBEBDD;
+  --danger:#B42318; --danger-soft:#FBE3E0; --ok:#1F7A4D; --ok-soft:#DDF1E6; --warn:#8A4A12; --warn-soft:#FBEBDD; --giallo-soft:#FFF4C2; --giallo:#8A6D00;
   --shadow:0 1px 2px rgba(20,48,48,.05),0 8px 28px rgba(20,48,48,.09);
   --f-display:"Fira Sans",system-ui,sans-serif; --f-body:"Fira Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
 }
@@ -23,7 +23,7 @@
   --bg:#101818; --dot:#1E2B2B; --surface:#172121; --surface-2:#1D2929; --surface-3:#223030; --fg:#E7F0F0; --muted:#9FB0B0;
   --line:#2A3939; --accent:#62C3C3; --accent-soft:#163536; --accent-fg:#062222;
   --brand-teal:#62C3C3; --brand-purple:#B597C2; --purple-soft:#2E2433;
-  --danger:#FF8A7A; --danger-soft:#3A1D1A; --ok:#6FD39C; --ok-soft:#173326; --warn:#F0B07A; --warn-soft:#3A2817;
+  --danger:#FF8A7A; --danger-soft:#3A1D1A; --ok:#6FD39C; --ok-soft:#173326; --warn:#F0B07A; --warn-soft:#3A2817; --giallo-soft:#3A3413; --giallo:#F2D56B;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35); color-scheme:dark}}
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%}
@@ -145,6 +145,13 @@ table.t{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:
 .t td.n,.t th.n{text-align:right}
 .t td.wrap{white-space:normal;min-width:160px}
 .t tr:hover td{background:var(--surface-2)}
+/* Richiami: riga colorata per esito (A verde, S giallo, R rosso) */
+.t tr.eA td{background:var(--ok-soft)} .t tr.eS td{background:var(--giallo-soft)} .t tr.eR td{background:var(--danger-soft)}
+.t tr.eA:hover td,.t tr.eS:hover td,.t tr.eR:hover td{filter:brightness(.97)}
+.es.S,.esiti button.on.S{background:var(--giallo-soft)!important;border-color:var(--giallo)!important;color:var(--giallo)!important}
+.edr{border:0;background:none;padding:0;font:inherit;color:inherit;cursor:pointer;text-align:left} .edr:hover b{text-decoration:underline}
+.edr .pen{color:var(--muted);font-weight:600;margin-left:6px;font-size:12px}
+.ed2{display:grid;grid-template-columns:1fr 1fr;gap:10px} @media (max-width:560px){.ed2{grid-template-columns:1fr}}
 .t th button{all:unset;cursor:pointer}
 .t th[aria-sort] button::after{content:" ▾"}.t th[aria-sort=ascending] button::after{content:" ▴"}
 .t td.low{color:var(--danger);font-weight:700}
@@ -383,7 +390,7 @@ function drawRich(full) {
   $('#r-out').innerHTML = `<div class="tot"><span><b>${rows.length.toLocaleString('it-IT')}</b> preventivi</span><span>Piani di cura <b>${fE(tot.pdc)}</b></span><span>Pagato <b>${fE(tot.pag)}</b></span>
       <span>A <b>${tot.A}</b> · S <b>${tot.S}</b> · R <b>${tot.R}</b></span></div>
     ${rows.length ? `<div class="card tw"><table class="t"><thead><tr>${th('paziente', 'Nome e cognome')}${th('data', 'Data preventivo')}${th('tipo_ov', 'Tipo opportunità')}${th('marketing', 'Marketing')}${th('pdc', '€ Piano di cura', 1)}${th('pagato', 'Importo pagato', 1)}${th('tipo_pdc', 'Tipo di piano di cura')}${th('eta', 'Età', 1)}${th('commerciale', 'Commerciale')}${th('medico', 'Medico')}${th('esito', 'Esito')}<th>Note</th>${sediDi('richiami').length > 1 ? th('sede_nome', 'Sede') : ''}</tr></thead>
-    <tbody>${vis.map(r => `<tr><td><b>${esc(r.paziente)}</b></td><td>${fD(r.data)}</td><td>${esc(r.tipo_ov)}</td><td>${esc(r.marketing)}</td><td class="n">${fE(r.pdc)}</td><td class="n">${fE(r.pagato)}</td>
+    <tbody>${vis.map(r => `<tr class="${r.esito ? 'e' + esc(r.esito) : ''}"><td><button class="edr" data-modr="${esc(r.id)}" title="Modifica tutti i campi"><b>${esc(r.paziente)}</b><span class="pen">✎ Modifica</span></button></td><td>${fD(r.data)}</td><td>${esc(r.tipo_ov)}</td><td>${esc(r.marketing)}</td><td class="n">${fE(r.pdc)}</td><td class="n">${fE(r.pagato)}</td>
       <td>${esc(r.tipo_pdc)}</td><td class="n">${r.eta ?? '—'}</td><td>${esc(r.commerciale)}</td><td>${esc(r.medico)}</td>
       <td><select class="es ${esc(r.esito)}" data-esito-r="${esc(r.id)}" aria-label="Esito">${r.esito ? '' : '<option value="">—</option>'}${Object.entries(ESITI).map(([k, t]) => `<option value="${k}" ${r.esito === k ? 'selected' : ''} title="${t}">${k}</option>`).join('')}</select></td>
       <td><button class="notab" data-nota="${esc(r.id)}" title="Scrivi o leggi le note">${r.note ? esc(r.note.slice(0, 40)) + (r.note.length > 40 ? '…' : '') : '<span class="muted">+ nota</span>'}</button></td>
@@ -399,7 +406,7 @@ document.addEventListener('change', async e => {
   if (t.id === 'r-anno') { R.anno = +t.value; R.f = {}; return vRich(); }
   if (t.dataset.esitoR) {
     const r = R.righe.find(x => x.id === t.dataset.esitoR); const prima = r.esito;
-    try { await api('PATCH', 'api/richiami/' + r.id, { esito: t.value }); r.esito = t.value; t.className = 'es ' + t.value; toast('Esito: ' + ESITI[t.value]); }
+    try { await api('PATCH', 'api/richiami/' + r.id, { esito: t.value }); r.esito = t.value; t.className = 'es ' + t.value; t.closest('tr').className = 'e' + t.value; toast('Esito: ' + ESITI[t.value]); }
     catch (x) { t.value = prima; toast(x.message); }
   }
 });
@@ -416,12 +423,49 @@ document.addEventListener('click', e => {
       <div class="df"><button class="btn" value="no" type="button" id="nota-x">Annulla</button><button class="btn primary" id="nota-ok" type="button">Salva nota</button></div></form>`;
     d.showModal(); d.dataset.id = r.id; return;
   }
+  const mr = e.target.closest('[data-modr]'); if (mr) return apriModRich(R.righe.find(x => x.id === mr.dataset.modr));
+  if (e.target.id === 'mr-x') return $('#dlg').close();
+  if (e.target.id === 'mr-ok') return salvaModRich();
   if (e.target.id === 'nota-x') return $('#dlg').close();
   if (e.target.id === 'nota-ok') {
     const d = $('#dlg'), r = R.righe.find(x => x.id === d.dataset.id), v = $('#nota-t').value;
     api('PATCH', 'api/richiami/' + r.id, { note: v }).then(() => { r.note = v.trim(); d.close(); drawRich(false); toast('Nota salvata.'); }).catch(x => toast(x.message));
   }
 });
+
+/* Modifica di una riga dei Richiami: tutti i campi. Commerciale e medico si scelgono dall'anagrafica della sede. */
+async function apriModRich(r) {
+  const d = $('#dlg'), L = S.st.liste, an = r.eta != null ? Number(S.st.oggi.slice(0, 4)) - r.eta : '';
+  const lista = (arr, att) => { const v = arr.filter(x => x.attivo !== false).map(x => x.valore); if (att && !v.includes(att)) v.unshift(att); return v.map(x => opt(x, x, x === att)).join(''); };
+  let P = { commerciali: [], medici: [] }; try { P = await personeDi(r.sede_id); } catch {}
+  const sedi = sediDi('richiami');
+  d.innerHTML = `<form method="dialog" id="mr-f"><div class="db"><h3 style="margin-bottom:10px">Modifica preventivo</h3>
+    <div class="field"><label for="mr-paz">Nome e cognome</label><input id="mr-paz" value="${esc(r.paziente)}" maxlength="120"></div>
+    <div class="ed2"><div class="field"><label for="mr-data">Data preventivo</label><input id="mr-data" type="date" value="${esc(r.data || '')}"></div>
+      <div class="field"><label for="mr-an">Anno di nascita</label><input id="mr-an" inputmode="numeric" maxlength="4" value="${an}"></div>
+      <div class="field"><label for="mr-tov">Tipo opportunità</label><select id="mr-tov">${lista(L.tipo_ov, r.tipo_ov)}</select></div>
+      <div class="field"><label for="mr-mk">Marketing</label><select id="mr-mk">${lista(L.marketing, r.marketing)}</select></div>
+      <div class="field"><label for="mr-pdc">€ Piano di cura</label><input id="mr-pdc" inputmode="decimal" value="${r.pdc ?? ''}"></div>
+      <div class="field"><label for="mr-pag">Importo pagato</label><input id="mr-pag" inputmode="decimal" value="${r.pagato ?? ''}"></div>
+      <div class="field"><label for="mr-tpdc">Tipo di piano di cura</label><select id="mr-tpdc">${lista(L.tipo_pdc, r.tipo_pdc)}</select></div>
+      <div class="field"><label for="mr-es">Esito</label><select id="mr-es">${Object.entries(ESITI).map(([k, t]) => opt(k, k + ' — ' + t, r.esito === k)).join('')}</select></div>
+      <div class="field"><label for="mr-com">Commerciale</label><select id="mr-com"><option value="">${esc(r.commerciale || '—')} (attuale)</option>${P.commerciali.map(p => opt(p.id, p.nome, false)).join('')}</select></div>
+      <div class="field"><label for="mr-med">Medico</label><select id="mr-med"><option value="">${esc(r.medico || '—')} (attuale)</option>${P.medici.map(p => opt(p.id, p.nome, false)).join('')}</select></div>
+      ${sedi.length > 1 ? `<div class="field"><label for="mr-sede">Sede</label><select id="mr-sede">${sedi.map(x => opt(x.id, x.nome, x.id === r.sede_id)).join('')}</select></div>` : ''}</div>
+    <div class="field"><label for="mr-note">Note</label><textarea id="mr-note" rows="4">${esc(r.note || '')}</textarea></div>
+    <p class="muted" style="margin:4px 0 0;font-size:12px">Ogni modifica resta registrata (chi, quando, prima e dopo).</p></div>
+    <div class="df"><button class="btn" type="button" id="mr-x">Annulla</button><button class="btn primary" type="button" id="mr-ok">Salva</button></div></form>`;
+  d.dataset.id = r.id; d.showModal();
+}
+async function salvaModRich() {
+  const d = $('#dlg'), r = R.righe.find(x => x.id === d.dataset.id), v = id => ($('#' + id) || {}).value;
+  const body = { paziente: v('mr-paz'), data: v('mr-data'), annoNascita: v('mr-an'), tipoOv: v('mr-tov'), marketing: v('mr-mk'), pdc: v('mr-pdc'), pagato: v('mr-pag'),
+    tipoPdc: v('mr-tpdc'), esito: v('mr-es'), note: v('mr-note'), commerciale: v('mr-com') || undefined, medici: v('mr-med') ? [v('mr-med')] : undefined, sede: v('mr-sede') };
+  const b = $('#mr-ok'); b.disabled = true;
+  try { await api('PATCH', 'api/richiami/' + r.id, body); d.close(); toast('Modifiche salvate.');
+    const anno = R.anno; R.righe = (await api('GET', 'api/richiami?anno=' + anno)).righe; drawRich(false); }
+  catch (x) { toast(x.message); } finally { b.disabled = false; }
+}
 
 /* ================= DASHBOARD DATI ================= */
 const D = { anno: null, data: null, periodo: null, studio: '', modo: 'tutti', sort: { studi: { k: 'perc', d: -1 }, vend: { k: 'perc', d: -1 }, med: { k: 'perc', d: -1 }, canali: { k: 'presentati', d: -1 }, tipi: { k: 'presentati', d: -1 } } };

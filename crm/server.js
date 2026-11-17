@@ -101,8 +101,8 @@ app.get('/api/stato', needUser, wrap(async (req, res) => {
 const COMMERCIALI = ['RAP', 'RUL'];
 const nomeDi = u => `${u.first_name || ''} ${u.last_name || ''}`.trim();
 // commerciali (RAP, RUL) e medici della sede, dall'anagrafica di Gestione accessi
-app.get('/api/persone', needUser, need('preventivi'), wrap(async (req, res) => {
-  const sede = sedeOk(req, 'preventivi', str(req.query.sede, 60)); if (!sede) return bad(res, 403, 'Sede non tua.');
+app.get('/api/persone', needUser, wrap(async (req, res) => {
+  const sid = str(req.query.sede, 60), sede = sedeOk(req, 'preventivi', sid) || sedeOk(req, 'richiami', sid); if (!sede) return bad(res, 403, 'Sede non tua.');
   const { rows } = await store.q(`select id, first_name, last_name, figura, sedi from users where status = 'active' and not owner and figura = any($1) order by last_name, first_name`,
     [[...COMMERCIALI, 'Medico']]);
   const inSede = u => Array.isArray(u.sedi) && u.sedi.includes(sede.id);
@@ -157,18 +157,58 @@ app.get('/api/richiami', needUser, need('richiami'), wrap(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.json({ righe: rows.map(r => ({ ...r, commerciale: al(r.commerciale), eta: r.anno_nascita ? annoOra - r.anno_nascita : null, anno_nascita: undefined })) });
 }));
+// Richiami: ogni campo della riga si può modificare. Ogni cambio finisce nello storico (chi, campo, prima, dopo).
 app.patch('/api/richiami/:id', needUser, need('richiami'), wrap(async (req, res) => {
-  const id = str(req.params.id, 60);
-  const { rows: [r] } = await db.q('select id, sede_id, esito, note from preventivi where id = $1', [id]);
+  const id = str(req.params.id, 60), b = req.body || {};
+  const { rows: [r] } = await db.q(`select id, sede_id, sede_nome, to_char(data, 'YYYY-MM-DD') as data, paziente, anno_nascita, tipo_ov, marketing, pdc::float, pagato::float,
+      tipo_pdc, esito, note, commerciale_id, commerciale, medici_ids, medico from preventivi where id = $1`, [id]);
   if (!r || !sedeOk(req, 'richiami', r.sede_id)) return bad(res, 404, 'Preventivo non trovato.');
   const set = {};
-  if (req.body.esito !== undefined) { const e = str(req.body.esito, 1).toUpperCase(); if (!ESITI.includes(e)) return bad(res, 400, 'Esito non valido.'); set.esito = e; }
-  if (req.body.note !== undefined) set.note = String(req.body.note ?? '').trim().slice(0, 4000);
-  const campi = Object.keys(set).filter(k => set[k] !== r[k]);
+  // accetta 3000,50 · 3.000,50 · 3000.50
+  const num = v => { let t = String(v ?? '').replace(/\s|€/g, ''); if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.'); else if (/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '');
+    const n = Number(t); return isFinite(n) && n >= 0 && t !== '' ? Math.round(n * 100) / 100 : null; };
+  const L = await liste();
+  // nelle liste vale anche il valore che la riga ha già (es. una voce poi disattivata o del vecchio foglio)
+  const daLista = (v, lista, attuale, msg) => { const x = str(v, 80).toUpperCase(); if (x === attuale || lista.some(y => y.valore === x && y.attivo !== false)) return x; throw Object.assign(new Error(msg), { status: 400 }); };
+  try {
+    if (b.esito !== undefined) { const e = str(b.esito, 1).toUpperCase(); if (!ESITI.includes(e)) return bad(res, 400, 'Esito non valido.'); set.esito = e; }
+    if (b.note !== undefined) set.note = String(b.note ?? '').trim().slice(0, 4000);
+    if (b.paziente !== undefined) { const v = str(b.paziente, 120).toUpperCase(); if (v.length < 3) return bad(res, 400, 'Scrivi cognome e nome del paziente.'); set.paziente = v; }
+    if (b.data !== undefined) { const v = str(b.data, 10); if (!isDate(v)) return bad(res, 400, 'Data non valida.'); set.data = v; }
+    if (b.annoNascita !== undefined) { const an = String(b.annoNascita ?? '').trim() === '' ? null : parseInt(b.annoNascita, 10);
+      if (an != null && !(an >= 1910 && an <= Number(oggi().slice(0, 4)))) return bad(res, 400, "Anno di nascita non valido (4 cifre, es. 1985)."); set.anno_nascita = an; }
+    if (b.tipoOv !== undefined) set.tipo_ov = daLista(b.tipoOv, L.tipo_ov, r.tipo_ov, 'Scegli il tipo di opportunità.');
+    if (b.marketing !== undefined) set.marketing = daLista(b.marketing, L.marketing, r.marketing, 'Scegli il canale marketing.');
+    if (b.tipoPdc !== undefined) set.tipo_pdc = daLista(b.tipoPdc, L.tipo_pdc, r.tipo_pdc, 'Scegli il tipo di piano di cura.');
+    if (b.pdc !== undefined) { const v = num(b.pdc); if (v == null) return bad(res, 400, 'Scrivi il € del piano di cura (anche 0).'); set.pdc = v; }
+    if (b.pagato !== undefined) { const v = num(b.pagato); if (v == null) return bad(res, 400, "Scrivi l'importo pagato (anche 0)."); set.pagato = v; }
+  } catch (e) { return bad(res, e.status || 400, e.message); }
+  if (b.sede !== undefined && str(b.sede, 60) !== r.sede_id) {
+    const sd = sedeOk(req, 'richiami', str(b.sede, 60)); if (!sd) return bad(res, 400, 'Sede non tua.');
+    set.sede_id = sd.id; set.sede_nome = sd.nome;
+  }
+  // commerciale e medico: una persona dell'anagrafica (RAP/RUL, Medico); '' = lascia quello che c'è
+  if (b.commerciale) {
+    const { rows: [u] } = await store.q(`select id, first_name, last_name, figura from users where id = $1`, [str(b.commerciale, 60)]);
+    if (!u || !COMMERCIALI.includes(u.figura)) return bad(res, 400, 'Scegli il commerciale.');
+    set.commerciale_id = u.id; set.commerciale = nomeDi(u).toUpperCase();
+  }
+  if (Array.isArray(b.medici) && b.medici.length) {
+    const ids = [...new Set(b.medici.map(x => str(x, 60)))].slice(0, 4);
+    const { rows: us } = await store.q(`select id, first_name, last_name, figura from users where id = any($1)`, [ids]);
+    const meds = ids.map(i => us.find(u => u.id === i && u.figura === 'Medico')).filter(Boolean);
+    if (!meds.length) return bad(res, 400, 'Scegli il medico.');
+    set.medici_ids = JSON.stringify(meds.map(m => m.id)); set.medico = meds.map(m => String(m.last_name || m.first_name).toUpperCase()).join(' / ');
+  }
+  const uguale = (k) => k === 'medici_ids' ? set[k] === JSON.stringify(r[k] || []) : set[k] === r[k];
+  const campi = Object.keys(set).filter(k => !uguale(k));
   if (!campi.length) return res.json({ ok: true });
-  for (const k of campi) await db.q('insert into storico (preventivo_id, chi, campo, prima, dopo) values ($1,$2,$3,$4,$5)', [id, req.me.nome, k, r[k], set[k]]);
-  await db.q(`update preventivi set ${campi.map((k, i) => `${k} = $${i + 2}`).join(', ')}, aggiornato_da = $${campi.length + 2}, aggiornato_il = now() where id = $1`,
-    [id, ...campi.map(k => set[k]), req.me.id]);
+  if (campi.includes('data')) { set.anno = Number(set.data.slice(0, 4)); set.mese = Number(set.data.slice(5, 7)); }
+  const tutti = [...campi, ...(campi.includes('data') ? ['anno', 'mese'] : [])];
+  for (const k of campi) if (!['sede_id', 'commerciale_id', 'medici_ids'].includes(k))
+    await db.q('insert into storico (preventivo_id, chi, campo, prima, dopo) values ($1,$2,$3,$4,$5)', [id, req.me.nome, k, r[k] == null ? null : String(r[k]), set[k] == null ? null : String(set[k])]);
+  await db.q(`update preventivi set ${tutti.map((k, i) => `${k} = $${i + 2}`).join(', ')}, aggiornato_da = $${tutti.length + 2}, aggiornato_il = now() where id = $1`,
+    [id, ...tutti.map(k => set[k]), req.me.id]);
   res.json({ ok: true });
 }));
 
