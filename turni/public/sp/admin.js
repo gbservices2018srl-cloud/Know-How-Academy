@@ -335,17 +335,21 @@ async function aBranche(m){
   };
 }
 
-/* ---------- info utili (orari, policy, regolamento) ---------- */
+/* ---------- info utili (orari, linee aziendali, regolamento, contatti utili) ---------- */
 async function aInfo(m){
   await caricaInfo();
-  const S2 = INFO, reg = S2.docs.find(d => d.tipo === 'regolamento'), pol = S2.docs.filter(d => d.tipo === 'policy');
+  const S2 = INFO, reg = S2.docs.find(d => d.tipo === 'regolamento');
   m.innerHTML = `<h1>Info utili</h1><p class="sub">Quello che il personale trova nella sezione Info utili.</p>
     <div class="card"><h2>Orari delle sedi</h2><p class="muted small" style="margin-top:-4px">Ogni persona vede solo gli orari delle sedi in cui lavora.</p>
       <div class="chips" id="sediOr">${S2.sedi.map((s, i) => `<button class="chip" data-s="${s.id}" aria-pressed="${i === 0}">${esc(s.nome)}</button>`).join('')}</div>
       <div id="orEd" style="margin-top:14px"></div></div>
-    <div class="card"><div class="row"><h2 class="grow" style="margin:0">Policy aziendali</h2><button class="btn small primary" id="nuovaPol">+ Carica policy</button></div>
-      <div class="lista" style="margin-top:8px">${pol.length ? pol.map(d => `<div class="li"><span class="grow"><span class="t">${esc(d.titolo)}</span><span class="s">Versione ${d.versione} · ${fmtD(d.caricato)}</span></span>
-        <button class="btn small" data-apri="${d.id}">Apri</button><button class="btn small" data-sost="${d.id}">Sostituisci</button><button class="btn small danger" data-togli="${d.id}">Togli</button></div>`).join('') : '<p class="muted">Nessuna policy caricata.</p>'}</div></div>
+    <div class="card"><h2>Linee aziendali (policy, pilastri valoriali e clinici)</h2><p class="muted small" style="margin-top:-4px">Il personale li legge in Info utili, senza poterli scaricare, stampare o modificare.</p>
+      ${LINEE.map(([t, nome]) => { const ds = S2.docs.filter(d => d.tipo === t);
+      return `<div class="row" style="margin-top:14px"><h3 class="grow" style="margin:0">${nome}</h3><button class="btn small primary" data-carica="${t}">+ Carica</button></div>
+      <div class="lista" style="margin-top:6px">${ds.length ? ds.map(d => `<div class="li"><span class="grow"><span class="t">${esc(d.titolo)}</span><span class="s">Versione ${d.versione} · ${fmtD(d.caricato)}</span></span>
+        <button class="btn small" data-apri="${d.id}">Apri</button><button class="btn small" data-sost="${d.id}" data-tipo="${t}">Sostituisci</button><button class="btn small danger" data-togli="${d.id}">Togli</button></div>`).join('') : '<p class="muted small" style="margin:0">Nessun documento.</p>'}</div>`; }).join('')}</div>
+    <div class="card"><div class="row"><h2 class="grow" style="margin:0">Contatti utili</h2><a class="btn small" href="https://appgestione.it/admin" target="_blank" rel="noopener">Gestisci in Gestione accessi → Sedi</a></div>
+      <p class="muted small" style="margin:6px 0 0">${(S2.contatti || []).length ? `${S2.contatti.length} contatti pubblicati: ${S2.contatti.map(c => esc(c.riferimento)).join(', ')}.` : 'Nessun contatto ancora.'}</p></div>
     <div class="card"><div class="row"><h2 class="grow" style="margin:0">Regolamento aziendale</h2><button class="btn small primary" id="nuovoReg">${reg ? 'Carica nuova versione' : '+ Carica regolamento'}</button></div>
       ${reg ? `<div class="li" style="margin-top:8px"><span class="grow"><span class="t">${esc(reg.titolo)}</span><span class="s">Versione ${reg.versione} · ${fmtD(reg.caricato)} · letto e accettato da ${S2.regLetti || 0} su ${S2.persone}</span></span>
         <button class="btn small" data-apri="${reg.id}">Apri</button><button class="btn small" data-letture="${reg.id}">Chi ha letto</button></div>
@@ -361,7 +365,6 @@ async function aInfo(m){
   } else if (S2.sedi[0]) editorOrari(S2.sedi[0]);
   let car = null;
   const scegli = (tipo, sost) => { car = {tipo, sost}; $('#file').value = ''; $('#file').click(); };
-  $('#nuovaPol').onclick = () => scegli('policy');
   $('#nuovoReg').onclick = () => scegli('regolamento');
   $('#file').onchange = async () => {
     const f = $('#file').files[0]; if (!f || !car) return;
@@ -372,10 +375,11 @@ async function aInfo(m){
     try { await api('POST', '/api/scheda/doc', undefined, fd); toast('Documento caricato.'); aInfo(m); } catch (e) { toast(e.message); }
   };
   m.onclick = async e => {
+    const cc = e.target.closest('[data-carica]'); if (cc) return scegli(cc.dataset.carica);
     const a = e.target.closest('[data-apri]'), s = e.target.closest('[data-sost]'), t = e.target.closest('[data-togli]'), l = e.target.closest('[data-letture]');
     if (a) apriDocInfo(S2.docs.find(d => d.id === a.dataset.apri));
-    if (s) scegli('policy', s.dataset.sost);
-    if (t && confirm('Togliere questa policy? Non la vedrà più nessuno, ma resta archiviata.')) { await api('DELETE', `/api/scheda/doc/${t.dataset.togli}`); toast('Policy tolta.'); aInfo(m); }
+    if (s) scegli(s.dataset.tipo, s.dataset.sost);
+    if (t && confirm('Togliere questo documento? Non lo vedrà più nessuno, ma resta archiviato.')) { await api('DELETE', `/api/scheda/doc/${t.dataset.togli}`); toast('Documento tolto.'); aInfo(m); }
     if (l) { const r = await api('GET', `/api/scheda/doc/${l.dataset.letture}/letture`);
       $('#letture').innerHTML = `<div class="tw" style="margin-top:10px"><table class="t"><thead><tr><th>Persona</th><th>Ruolo</th><th>Letto e accettato</th></tr></thead><tbody>${r.persone.map(p => `<tr><td>${esc(p.nome)}</td><td>${esc(p.figura)}</td><td>${p.letto ? `<span class="tag ok">${fmtD(p.letto)}</span>` : '<span class="tag warn">Non ancora</span>'}</td></tr>`).join('')}</tbody></table></div>`; }
   };

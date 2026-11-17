@@ -573,7 +573,50 @@ async function caricaAi(mese) {
   });
   $('#aiMese').onchange = e => caricaAi(e.target.value);
 }
-async function caricaSedi() { try { SEDI = (await api('GET', '/api/admin/sedi')).sedi; } catch (e) { toast(e.message); SEDI = []; } renderSedi(); }
+let CONTATTI = null;
+async function caricaSedi() {
+  try { SEDI = (await api('GET', '/api/admin/sedi')).sedi; } catch (e) { toast(e.message); SEDI = []; }
+  try { CONTATTI = (await api('GET', '/api/admin/contatti')).contatti; } catch { CONTATTI = []; }
+  renderSedi();
+}
+// Contatti utili: riferimento, email, telefono e le sedi che li vedono (Scheda personale → Info utili)
+function contattiHtml() {
+  const nomeS = id => (SEDI || []).find(x => x.id === id)?.sigla || '';
+  const att = (SEDI || []).filter(x => x.attiva);
+  return `<div class="card" style="margin-top:14px"><div class="tools" style="margin:0 0 6px"><div style="flex:1 1 260px"><b>Contatti utili</b><p class="hint" style="margin:2px 0 0">Le persone li trovano in Info utili (Scheda personale), solo per le sedi spuntate.</p></div>
+      <button class="btn primary" data-contatto-new>+ Nuovo contatto</button></div>
+    ${(CONTATTI || []).length ? CONTATTI.map(c => `<div class="sede"><div style="min-width:0;grid-column:1/3"><b>${esc(c.riferimento)}</b>
+        <div class="meta">${[c.email, c.telefono].filter(Boolean).map(t => `<span>${esc(t)}</span>`).join('')}</div>
+        <div class="meta">${c.sedi.length >= att.length && att.length > 1 ? '<span>Tutte le sedi</span>' : c.sedi.map(nomeS).filter(Boolean).map(t => `<span>${esc(t)}</span>`).join('')}</div></div>
+      <div class="actions"><button class="btn small" data-contatto-edit="${c.id}">Modifica</button><button class="btn small" data-contatto-togli="${c.id}">Togli</button></div></div>`).join('')
+      : '<p class="muted" style="margin:6px 0 0">Nessun contatto ancora.</p>'}</div>`;
+}
+function apriContatto(c) {
+  const v = c || { riferimento: '', email: '', telefono: '', sedi: [] };
+  const att = (SEDI || []).filter(x => x.attiva);
+  open(`<h2>${c ? 'Modifica contatto' : 'Nuovo contatto utile'}</h2>
+    <label class="field">Riferimento<input id="c-rif" value="${esc(v.riferimento)}" maxlength="120" placeholder="es. Ufficio paghe – Maria Rossi" required></label>
+    <div class="two"><label class="field">Email<input id="c-em" type="email" value="${esc(v.email)}" maxlength="160"></label>
+    <label class="field">Telefono<input id="c-tel" type="tel" value="${esc(v.telefono)}" maxlength="40" placeholder="es. 070 123456"></label></div>
+    <div class="field"><span>Chi lo vede <button type="button" class="btn small" data-c-tutte style="margin-left:6px">Tutte</button></span>
+      <div class="sedibox" style="flex-direction:row;flex-wrap:wrap">${att.map(x => `<button type="button" class="schip ${v.sedi.includes(x.id) ? 'on' : ''}" data-c-sede="${x.id}">${esc(x.nome)}</button>`).join('')}</div></div>
+    ${footer(c ? 'Salva' : 'Aggiungi')}`, async () => {
+    const sedi = [...dlgf.querySelectorAll('[data-c-sede].on')].map(b => b.dataset.cSede);
+    const body = { riferimento: val('c-rif'), email: val('c-em'), telefono: val('c-tel'), sedi };
+    const r = await api(c ? 'PUT' : 'POST', c ? '/api/admin/contatti/' + c.id : '/api/admin/contatti', body);
+    CONTATTI = r.contatti; renderSedi(); dlg.close(); toast(c ? 'Contatto aggiornato' : 'Contatto aggiunto');
+  });
+}
+document.addEventListener('click', async e => {
+  const sc = e.target.closest('[data-c-sede]'); if (sc) { sc.classList.toggle('on'); return; }
+  if (e.target.closest('[data-c-tutte]')) { const bs = [...dlgf.querySelectorAll('[data-c-sede]')], tutte = bs.every(b => b.classList.contains('on')); bs.forEach(b => b.classList.toggle('on', !tutte)); return; }
+  if (e.target.closest('[data-contatto-new]')) return apriContatto(null);
+  const ed = e.target.closest('[data-contatto-edit]'); if (ed) return apriContatto(CONTATTI.find(c => c.id === ed.dataset.contattoEdit));
+  const tg = e.target.closest('[data-contatto-togli]');
+  if (tg) { const c = CONTATTI.find(x => x.id === tg.dataset.contattoTogli);
+    if (!confirm(`Togliere «${c.riferimento}» dai contatti utili? Non lo vedrà più nessuno.`)) return;
+    try { CONTATTI = (await api('DELETE', '/api/admin/contatti/' + c.id)).contatti; renderSedi(); toast('Contatto tolto'); } catch (err) { toast(err.message); } }
+});
 function renderSedi() {
   const box = $('#sediBox');
   const righe = (SEDI || []).map(x => `<div class="sede ${x.attiva ? '' : 'off'}"><span class="sigla">${esc(x.sigla)}</span>
@@ -583,7 +626,8 @@ function renderSedi() {
     <div class="actions">${(() => { const st = SETUP?.sedi.find(z => z.id === x.id); return x.attiva && st ? `<button class="btn small ${st.mancano ? 'primary' : ''}" data-setup-sede="${x.id}">${st.mancano ? `Da completare: ${st.mancano}` : '✓ Completa'}</button>` : ''; })()}<button class="btn small" data-sede-edit="${x.id}">Modifica</button><button class="btn small" data-sede-stato="${x.id}">${x.attiva ? 'Disattiva' : 'Riattiva'}</button></div></div>`).join('');
   box.innerHTML = `<div class="tools"><p class="hint" style="flex:1 1 300px">Le sedi del gruppo valgono per tutte le app: si copiano da sole in Turni (con i riuniti), Manutenzione attrezzature (riuniti e aspiratori con il loro nome), Calendario (luoghi degli eventi), Ticket (studi, con la società) e Nuovalab (studi, serve l'email della sede).</p>
       <button class="btn" data-sede-sync>Aggiorna le app</button><button class="btn primary" data-sede-new>+ Nuova sede</button></div>
-    ${SEDI && !SEDI.length ? `<div class="card empty">Nessuna sede ancora. <button class="btn small primary" data-sede-import style="margin-left:8px">Importa le sedi già presenti in Nuovalab e Ticket</button></div>` : `<div class="card" style="padding:0">${righe || '<div class="empty">Caricamento…</div>'}</div>`}`;
+    ${SEDI && !SEDI.length ? `<div class="card empty">Nessuna sede ancora. <button class="btn small primary" data-sede-import style="margin-left:8px">Importa le sedi già presenti in Nuovalab e Ticket</button></div>` : `<div class="card" style="padding:0">${righe || '<div class="empty">Caricamento…</div>'}</div>`}
+    ${SEDI && SEDI.length ? contattiHtml() : ''}`;
 }
 // riuniti e aspiratori della sede: quanti sono e come si chiamano (li legge Manutenzione attrezzature)
 const ICO_RIU = '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M13.5 17.5l3.6-.8 4.6 17.8-4.4 1z"/><path d="M19 36.5h22.5l11 8.5"/><path d="M30 40.5v11M21 54h18"/><path d="M38 6.5h15.5v7"/></svg>';

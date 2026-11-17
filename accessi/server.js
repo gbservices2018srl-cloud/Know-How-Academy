@@ -817,6 +817,38 @@ async function salvaSede(id, d) {
 }
 app.get('/api/admin/sedi', needAdmin, wrap(async (req, res) => res.json({ sedi: await store.listSedi() })));
 
+/* ---------- contatti utili (si vedono in Scheda personale → Info utili, per sede) ---------- */
+const contattoBody = async b => {
+  const riferimento = String(b.riferimento || '').trim().slice(0, 120);
+  const email = String(b.email || '').trim().toLowerCase().slice(0, 160), telefono = String(b.telefono || '').trim().slice(0, 40);
+  if (!riferimento) throw Object.assign(new Error('Scrivi il riferimento (es. Ufficio paghe – Maria).'), { status: 400 });
+  if (!email && !telefono) throw Object.assign(new Error('Metti almeno un\'email o un numero di telefono.'), { status: 400 });
+  if (email && !store.validEmail(email)) throw Object.assign(new Error('Email non valida.'), { status: 400 });
+  if (telefono && !/^[+\d][\d\s./-]{4,}$/.test(telefono)) throw Object.assign(new Error('Numero di telefono non valido.'), { status: 400 });
+  const ids = new Set((await store.listSedi()).map(s => s.id));
+  const sedi = [...new Set([].concat(b.sedi || []).map(String))].filter(id => ids.has(id));
+  if (!sedi.length) throw Object.assign(new Error('Spunta almeno una sede che deve vedere il contatto.'), { status: 400 });
+  return { riferimento, email, telefono, sedi };
+};
+const tuttiContatti = () => store.contattiUtili(null);
+app.get('/api/admin/contatti', needAdmin, wrap(async (req, res) => res.json({ contatti: await tuttiContatti() })));
+app.post('/api/admin/contatti', needAdmin, wrap(async (req, res) => {
+  const c = await contattoBody(req.body || {});
+  await store.q(`insert into contatti_utili (id, riferimento, email, telefono, sedi, sort) values ($1,$2,$3,$4,$5,(select coalesce(max(sort),0)+1 from contatti_utili))`,
+    [require('crypto').randomUUID(), c.riferimento, c.email, c.telefono, JSON.stringify(c.sedi)]);
+  res.json({ contatti: await tuttiContatti() });
+}));
+app.put('/api/admin/contatti/:id', needAdmin, wrap(async (req, res) => {
+  const c = await contattoBody(req.body || {});
+  await store.q('update contatti_utili set riferimento = $2, email = $3, telefono = $4, sedi = $5 where id = $1', [req.params.id, c.riferimento, c.email, c.telefono, JSON.stringify(c.sedi)]);
+  res.json({ contatti: await tuttiContatti() });
+}));
+// «Togli»: non si vede più ma resta archiviato
+app.delete('/api/admin/contatti/:id', needAdmin, wrap(async (req, res) => {
+  await store.q('update contatti_utili set attivo = false where id = $1', [req.params.id]);
+  res.json({ contatti: await tuttiContatti() });
+}));
+
 /* ---------- procedura guidata: cosa manca per ogni sede, e persone senza sede ---------- */
 // orari (Scheda personale → Info utili), sede in Gestione finanziaria, email (serve a Nuovalab), riuniti, persone che ci lavorano
 async function statoSedi() {

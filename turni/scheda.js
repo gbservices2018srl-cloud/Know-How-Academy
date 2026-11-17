@@ -84,6 +84,7 @@ module.exports = function scheda(app, { db, needUser, needAdmin, wrap, bad, uplo
       medici: meds.filter(m => m.sedi.some(s => admin || mieSedi.includes(s))).map(m => ({ id: m.id, nome: m.nome, sedi: m.sedi,
         branche: Object.fromEntries(br.filter(b => b.medico_id === m.id).map(b => [b.sede_id, b.branche])) })),
       docs: docs.filter(visDoc).map(d => docShape(d, lm[d.id])),
+      contatti: (await store.contattiUtili(admin ? null : mieSedi).catch(() => [])).map(c => ({ id: c.id, riferimento: c.riferimento, email: c.email, telefono: c.telefono, sedi: c.sedi })),
       attiva: !!(await imp('attiva')),
     };
     if (admin) {
@@ -127,7 +128,8 @@ module.exports = function scheda(app, { db, needUser, needAdmin, wrap, bad, uplo
   }));
   // documenti: policy (anche più di una) e regolamento (una versione attiva per volta)
   app.post('/api/scheda/doc', needAdmin, upload.single('file'), wrap(async (req, res) => {
-    const f = req.file, tipo = req.body.tipo === 'regolamento' ? 'regolamento' : 'policy';
+    // Linee aziendali: policy, pilastri valoriali, pilastri clinici (più documenti per sezione)
+    const f = req.file, tipo = ['regolamento', 'policy', 'valori', 'clinici'].includes(req.body.tipo) ? req.body.tipo : 'policy';
     if (!f) return bad(res, 400, 'Scegli un file PDF o Word.');
     const nome = f.originalname || 'documento';
     const pdf = /pdf$/i.test(f.mimetype) || /\.pdf$/i.test(nome), docx = /\.docx$/i.test(nome);
@@ -145,7 +147,7 @@ module.exports = function scheda(app, { db, needUser, needAdmin, wrap, bad, uplo
       versione = (rows[0].v || 0) + 1;
       await db.q(`update sch_doc set attivo = false where tipo = 'regolamento' and attivo`);
     } else if (req.body.sostituisce) {
-      const { rows } = await db.q(`select versione, titolo, mansioni from sch_doc where id = $1 and tipo = 'policy'`, [req.body.sostituisce]);
+      const { rows } = await db.q(`select versione, titolo, mansioni from sch_doc where id = $1 and tipo = $2`, [req.body.sostituisce, tipo]);
       if (rows[0]) { versione = rows[0].versione + 1; await db.q('update sch_doc set attivo = false where id = $1', [req.body.sostituisce]); }
     }
     await db.q(`insert into sch_doc (id, tipo, titolo, versione, mansioni, file, file_nome, file_mime, testo, caricato_da) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,

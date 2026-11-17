@@ -300,6 +300,8 @@ window.addEventListener('focus', () => document.body.classList.remove('nascosto'
 
 /* ===== info utili (uguale per tutti, l'amministratore la gestisce) ===== */
 let INFO = null;
+// Linee aziendali: le tre sezioni (l'amministratore carica, le persone leggono soltanto)
+const LINEE = [['policy', 'Policy'], ['valori', 'Pilastri valoriali'], ['clinici', 'Pilastri clinici']];
 async function caricaInfo(){ INFO = await api('GET', '/api/scheda/state'); return INFO; }
 function orariHtml(o){
   return `<table class="orari">${INFO.giorni.map((g, i) => { const x = o[i] || {}; return `<tr><td>${g}</td><td>${x.aperto ? `${esc(x.da)} – ${esc(x.a)}` : '<span class="chiuso">Chiuso</span>'}</td></tr>`; }).join('')}</table>`;
@@ -309,21 +311,23 @@ function apriDocInfo(d, dopo){
   apriViewer({ titolo: d.titolo, versione: d.versione, pdfUrl: d.pdf ? `/api/scheda/doc/${d.id}/file` : null, testo: d.testo, protetto: true,
     piede: accetta ? `<span class="grow muted small">Leggi tutto il regolamento prima di accettare.</span><button class="btn primary" id="accetto">Ho letto e accetto</button>` : '',
     onPiede: () => { if (accetta) $('#accetto').onclick = async () => { try { await api('POST', `/api/scheda/doc/${d.id}/letto`, {}); chiudiViewer(); toast('Grazie, registrato.'); dopo && dopo(); } catch (e) { toast(e.message); } }; } });
-  if (!d.pdf && d.tipo === 'policy' && !INFO.me.admin && !d.letto) api('POST', `/api/scheda/doc/${d.id}/letto`, {}).catch(() => {});
+  if (!d.pdf && LINEE.some(([t]) => t === d.tipo) && !INFO.me.admin && !d.letto) api('POST', `/api/scheda/doc/${d.id}/letto`, {}).catch(() => {});
 }
 async function vistaInfo(m){
   await caricaInfo();
-  const me = INFO.me, reg = INFO.docs.find(d => d.tipo === 'regolamento'), pol = INFO.docs.filter(d => d.tipo === 'policy');
+  const me = INFO.me, reg = INFO.docs.find(d => d.tipo === 'regolamento');
   const mieBr = me.medico ? INFO.medici.find(x => x.id === me.id) : null;
   m.innerHTML = `<h1>Info utili</h1><p class="sub">Orari, medici e documenti delle sedi in cui lavori.</p>
     ${reg && !reg.letto ? `<div class="banner warn">C'è un regolamento aziendale da leggere e accettare.</div>` : ''}
+    ${(INFO.contatti || []).length ? `<div class="card"><h2>Contatti utili</h2>${INFO.contatti.map(c => `<div class="med"><b>${esc(c.riferimento)}</b><span class="small">${[c.telefono ? `<a href="tel:${esc(c.telefono.replace(/[^\d+]/g, ''))}">${esc(c.telefono)}</a>` : '', c.email ? `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : ''].filter(Boolean).join(' · ')}</span></div>`).join('')}</div>` : ''}
     ${mieBr ? `<div class="card"><h2>Le tue branche</h2>${INFO.sedi.map(s => { const b = mieBr.branche[s.id] || []; return `<h3 style="margin-top:10px">${esc(s.nome)}</h3><div class="chips">${b.length ? b.map(x => `<span class="tag ok">${esc(x)}</span>`).join('') : '<span class="muted small">Nessuna branca ancora indicata.</span>'}</div>`; }).join('')}<p class="muted xs" style="margin:12px 0 0">Le decide l'amministrazione: per modifiche chiedi a lei.</p></div>` : ''}
     <div class="card"><h2>Orari delle tue sedi</h2>${INFO.sedi.length ? INFO.sedi.map(s => `<h3 style="margin-top:14px">${esc(s.nome)}</h3>${s.indirizzo ? `<p class="muted small" style="margin:-4px 0 8px">${esc(s.indirizzo)}</p>` : ''}${orariHtml(s.orari)}`).join('') : '<p class="muted">Nessuna sede assegnata. Chiedi all\'amministrazione.</p>'}</div>
     <div class="card"><h2>Branche dei medici</h2>${INFO.sedi.map(s => { const ms = INFO.medici.filter(x => x.sedi.includes(s.id));
       return `<h3 style="margin-top:12px">${esc(s.nome)}</h3>${ms.length ? `<div>${ms.map(x => { const b = x.branche[s.id] || []; return `<div class="med"><b>${esc(x.nome)}</b><span class="muted small">${b.length ? esc(b.join(' · ')) : 'Branche non ancora indicate'}</span></div>`; }).join('')}</div>` : '<p class="muted small">Nessun medico indicato.</p>'}`; }).join('')}</div>
-    <div class="card"><h2>Policy aziendali</h2>${pol.length ? `<div class="lista">${pol.map(d => `<button class="item" style="margin-bottom:8px" data-doc="${d.id}"><span class="grow"><span class="t">${esc(d.titolo)}</span><span class="s">Versione ${d.versione} · ${fmtD(d.caricato)}</span></span><span class="muted">›</span></button>`).join('')}</div>` : '<p class="muted">Nessuna policy pubblicata.</p>'}</div>
+    <div class="card"><h2>Linee aziendali</h2><p class="muted small" style="margin-top:-4px">Policy, pilastri valoriali e clinici.</p>${LINEE.map(([t, nome]) => { const ds = INFO.docs.filter(d => d.tipo === t);
+      return `<h3 style="margin-top:14px">${nome}</h3>${ds.length ? `<div class="lista">${ds.map(d => `<button class="item" style="margin-bottom:8px" data-doc="${d.id}"><span class="grow"><span class="t">${esc(d.titolo)}</span><span class="s">Versione ${d.versione} · ${fmtD(d.caricato)}</span></span><span class="muted">›</span></button>`).join('')}</div>` : '<p class="muted small">Nessun documento.</p>'}`; }).join('')}</div>
     <div class="card"><h2>Regolamento aziendale</h2>${reg ? `<button class="item" data-doc="${reg.id}"><span class="grow"><span class="t">${esc(reg.titolo)}</span><span class="s">Versione ${reg.versione} · ${fmtD(reg.caricato)}</span></span>${reg.letto ? `<span class="tag ok">Letto e accettato</span>` : '<span class="tag warn">Da leggere</span>'}</button>` : '<p class="muted">Il regolamento non è ancora stato pubblicato.</p>'}</div>
-    <p class="muted xs">Policy e regolamento si leggono solo qui: non si scaricano e non si copiano.</p>`;
+    <p class="muted xs">Linee aziendali e regolamento si leggono solo qui: non si scaricano, non si stampano e non si modificano.</p>`;
   m.onclick = e => { const b = e.target.closest('[data-doc]'); if (b) apriDocInfo(INFO.docs.find(d => d.id === b.dataset.doc), () => vistaInfo(m)); };
 }
 
