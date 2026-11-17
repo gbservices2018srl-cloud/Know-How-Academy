@@ -294,6 +294,7 @@ dialog.dlg::backdrop{background:rgba(10,30,30,.45);backdrop-filter:blur(2px)}
 @media (max-width:640px){.reg thead{display:none}.reg tr{display:block;padding:10px 4px;border-bottom:1px solid var(--line)}.reg td{display:block;border:0;padding:2px 10px}}
 @media print{.top,.link,.head .btn,.card.pad:has(select),.reg td:last-child button{display:none!important}body{background:#fff}.card{box-shadow:none}}
 @media (max-width:640px){.brand .logo{height:32px}.brand h1{font-size:14px}.hello{font-size:24px}h2.view{font-size:22px}}
+.mieapp{display:inline-flex;align-items:center;gap:4px;flex:none;padding:7px 12px;border:1px solid #DADAD3;border-radius:999px;background:#fff;color:#2B3033;font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap;min-height:36px}.mieapp:hover{border-color:#2A7C7D;color:#2A7C7D}.mieapp .c{display:none}@media (max-width:480px){.mieapp{padding:6px 10px}.mieapp .t{display:none}.mieapp .c{display:inline}}
 </style>
 <!-- dopo una modifica la pagina resta dov'era (comune a tutte le app To Smile) -->
 <script src="https://appgestione.it/static/resta-qui.js?v=6" defer></script>
@@ -302,6 +303,7 @@ dialog.dlg::backdrop{background:rgba(10,30,30,.45);backdrop-filter:blur(2px)}
 <header class="top">
   <a class="brand" href="./" aria-label="Gestione ASO, inizio"><img class="logo" src="logo.png" alt="To Smile" width="543" height="162"><span class="sep"></span><h1>Gestione ASO</h1></a>
   <nav class="tabs" id="tabs" aria-label="Sezioni"></nav>
+  <a class="mieapp" href="/" title="Torna alle tue app">← <span class="t">Le mie app</span><span class="c">App</span></a>
   <a class="who" id="who" href="/" title="Torna alle app"></a>
 </header>
 <main id="main"><div class="empty">Caricamento…</div></main>

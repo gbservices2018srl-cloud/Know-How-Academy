@@ -345,6 +345,7 @@ dialog::backdrop{background:rgba(10,30,30,.45);backdrop-filter:blur(2px)}
 .att-gruppi button{border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:99px;padding:5px 11px;font:600 13px var(--f-body,inherit);cursor:pointer;min-height:32px}
 .att-gruppi button small{color:var(--muted);font-weight:600;margin-left:2px}
 .att-gruppi button.on{background:var(--teal);border-color:var(--teal);color:#fff}.att-gruppi button.on small{color:#fff}
+.mieapp{display:inline-flex;align-items:center;gap:4px;flex:none;padding:7px 12px;border:1px solid #DADAD3;border-radius:999px;background:#fff;color:#2B3033;font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap;min-height:36px}.mieapp:hover{border-color:#2A7C7D;color:#2A7C7D}.mieapp .c{display:none}@media (max-width:480px){.mieapp{padding:6px 10px}.mieapp .t{display:none}.mieapp .c{display:inline}}
 </style>
 <!-- dopo una modifica la pagina resta dov'era (comune a tutte le app To Smile) -->
 <script src="https://appgestione.it/static/resta-qui.js?v=6" defer></script>
@@ -358,6 +359,7 @@ dialog::backdrop{background:rgba(10,30,30,.45);backdrop-filter:blur(2px)}
     <h1>Eventi aziendali</h1>
   </div>
   <nav class="tabs" id="tabs" aria-label="Sezioni"></nav>
+  <a class="mieapp" href="https://appgestione.it/" title="Torna alle tue app">← <span class="t">Le mie app</span><span class="c">App</span></a>
   <div class="spacer"></div>
   <button class="who" id="who" aria-haspopup="menu" aria-expanded="false"></button>
 </header>

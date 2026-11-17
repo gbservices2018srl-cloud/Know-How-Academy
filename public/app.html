@@ -325,6 +325,7 @@ body.protetto input,body.protetto textarea{-webkit-user-select:text;user-select:
 .filigrana{position:fixed;inset:0;pointer-events:none;z-index:9999;background-repeat:repeat}
 .stampa-no{display:none}
 @media print{body.protetto>*{display:none!important}body.protetto>.stampa-no{display:block!important;font:16px sans-serif;padding:40px}}
+.mieapp{display:inline-flex;align-items:center;gap:4px;flex:none;padding:7px 12px;border:1px solid #DADAD3;border-radius:999px;background:#fff;color:#2B3033;font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap;min-height:36px}.mieapp:hover{border-color:#2A7C7D;color:#2A7C7D}.mieapp .c{display:none}@media (max-width:480px){.mieapp{padding:6px 10px}.mieapp .t{display:none}.mieapp .c{display:inline}}
 </style>
 <!-- dopo una modifica la pagina resta dov'era (comune a tutte le app To Smile) -->
 <script src="https://appgestione.it/static/resta-qui.js?v=6" defer></script>
@@ -338,6 +339,7 @@ body.protetto input,body.protetto textarea{-webkit-user-select:text;user-select:
       <h1>Mappa dei protocolli</h1>
     </div>
     <nav class="tabs" id="tabs" aria-label="Flussi"></nav>
+    <a class="mieapp" href="https://appgestione.it/" title="Torna alle tue app">← <span class="t">Le mie app</span><span class="c">App</span></a>
     <div class="actions" id="actions"></div>
   </header>
   <main id="stage">
