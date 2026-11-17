@@ -70,6 +70,8 @@ async function migrate() {
     create table if not exists impostazioni (k text primary key, v jsonb not null);
     -- nome del commerciale scritto a mano nel vecchio foglio (es. "LUCA") → persona di Gestione accessi
     create table if not exists alias_commerciali (nome text primary key, user_id text not null, user_nome text not null default '');
+    -- sedi di commerciali e medici nel CRM (Liste). sedi null = come in Gestione accessi.
+    create table if not exists persone_sedi (user_id text primary key, sedi jsonb, aggiornato_da text not null default '', aggiornato_il timestamptz not null default now());
     create table if not exists storico (
       id bigserial primary key,
       preventivo_id text not null,

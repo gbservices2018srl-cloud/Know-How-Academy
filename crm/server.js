@@ -101,11 +101,17 @@ app.get('/api/stato', needUser, wrap(async (req, res) => {
 const COMMERCIALI = ['RAP', 'RUL'];
 const nomeDi = u => `${u.first_name || ''} ${u.last_name || ''}`.trim();
 // commerciali (RAP, RUL) e medici della sede, dall'anagrafica di Gestione accessi
+// sedi scelte nel CRM (Liste → Commerciali e medici per sede): se non scelte valgono quelle di Gestione accessi
+async function sediCrm() {
+  const { rows } = await db.q('select user_id, sedi from persone_sedi where sedi is not null');
+  return new Map(rows.map(r => [r.user_id, r.sedi]));
+}
 app.get('/api/persone', needUser, wrap(async (req, res) => {
   const sid = str(req.query.sede, 60), sede = sedeOk(req, 'preventivi', sid) || sedeOk(req, 'richiami', sid); if (!sede) return bad(res, 403, 'Sede non tua.');
   const { rows } = await store.q(`select id, first_name, last_name, figura, sedi from users where status = 'active' and not owner and figura = any($1) order by last_name, first_name`,
     [[...COMMERCIALI, 'Medico']]);
-  const inSede = u => Array.isArray(u.sedi) && u.sedi.includes(sede.id);
+  const sc = await sediCrm();
+  const inSede = u => { const ss = sc.get(u.id) || u.sedi; return Array.isArray(ss) && ss.includes(sede.id); };
   const forma = u => ({ id: u.id, nome: nomeDi(u), figura: u.figura });
   const comm = rows.filter(u => COMMERCIALI.includes(u.figura));
   const med = rows.filter(u => u.figura === 'Medico');
@@ -315,7 +321,25 @@ app.get('/api/liste', needUser, need('liste'), wrap(async (req, res) => {
   const { rows: pers } = await store.q(`select id, first_name, last_name, figura from users where status = 'active' and not owner and coalesce(figura, '') <> 'Medico' order by (figura in ('RAP', 'RUL')) desc, last_name, first_name`);
   res.json({ liste: await liste(), usi, importazioni: imps, commGrezzi: grezzi, alias: Object.fromEntries(alias.map(a => [a.nome, a.user_id])),
     persone: pers.map(u => ({ id: u.id, nome: nomeDi(u), figura: u.figura || '' })), totali: Object.fromEntries(tot.map(r => [r.origine, r.n])),
+    personeSedi: await personeSedi(), sediTutte: sediDi(req, 'liste').map(x => ({ id: x.id, nome: x.nome })),
     finAzienda: await imp('fin_azienda'), finAuto: await aziendaFin().catch(() => null), aziende, finErr });
+}));
+// commerciali (RAP, RUL) e medici, con le sedi in cui compaiono nel CRM
+async function personeSedi() {
+  const { rows } = await store.q(`select id, first_name, last_name, figura, sedi from users where status = 'active' and not owner and figura = any($1) order by figura = 'Medico', last_name, first_name`, [[...COMMERCIALI, 'Medico']]);
+  const sc = await sediCrm();
+  return rows.map(u => ({ id: u.id, nome: nomeDi(u), figura: u.figura, sedi: sc.get(u.id) || (Array.isArray(u.sedi) ? u.sedi : []), crm: sc.has(u.id), accessi: Array.isArray(u.sedi) ? u.sedi : [] }));
+}
+app.put('/api/liste/persona-sedi', needUser, need('liste'), wrap(async (req, res) => {
+  const uid = str(req.body.userId, 60);
+  const { rows: [u] } = await store.q(`select id, figura from users where id = $1 and status = 'active'`, [uid]);
+  if (!u || ![...COMMERCIALI, 'Medico'].includes(u.figura)) return bad(res, 400, 'Persona non trovata.');
+  const ok = new Set(sediDi(req, 'liste').map(x => x.id));
+  // ripristina = torna alle sedi di Gestione accessi
+  const sedi = req.body.ripristina ? null : [...new Set([].concat(req.body.sedi || []).map(String))].filter(x => ok.has(x));
+  await db.q(`insert into persone_sedi (user_id, sedi, aggiornato_da, aggiornato_il) values ($1,$2,$3,now())
+    on conflict (user_id) do update set sedi = excluded.sedi, aggiornato_da = excluded.aggiornato_da, aggiornato_il = now()`, [uid, sedi == null ? null : JSON.stringify(sedi), req.me.nome]);
+  res.json({ ok: true, personeSedi: await personeSedi() });
 }));
 app.post('/api/liste/voce', needUser, need('liste'), wrap(async (req, res) => {
   const tipo = str(req.body.tipo, 20); if (!['tipo_ov', 'marketing', 'tipo_pdc'].includes(tipo)) return bad(res, 400, 'Elenco non valido.');

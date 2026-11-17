@@ -203,6 +203,9 @@ svg.ch .lab{fill:var(--fg)}
 .lrow input[data-canale]{order:5;flex:1 1 100%!important}
 .lrow .nm.off{color:var(--muted);text-decoration:line-through}
 .lrow input{border:1px solid var(--line);background:var(--surface-2);border-radius:9px;padding:6px 9px;min-height:36px}
+.psc{border:1.5px solid var(--line);background:var(--surface-2);border-radius:999px;padding:5px 11px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;color:var(--muted)}
+.psc.on{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+.prow{display:flex;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}.prow .nm{flex:1 1 180px;font-weight:700}
 .lists{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:12px}
 .lists .card{max-height:34rem;overflow:auto}
 .ok-box{background:var(--ok-soft);color:var(--ok);border-radius:10px;padding:10px 12px;font-weight:600}
@@ -718,7 +721,20 @@ function drawListe() {
     ${t === 'tipo_pdc' ? '<p class="muted" style="margin-top:0;font-size:13px">Le voci del menu «Tipo di piano di cura» nel modulo. Quelle nascoste (es. scritte a mano nel vecchio foglio) restano solo per i filtri.</p>' : ''}
     <form class="bar" data-add="${t}"><input name="v" placeholder="Nuova voce" style="flex:1;border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:40px"><button class="btn sm primary">Aggiungi</button></form>
     ${lista(t) || '<p class="muted">Nessuna voce.</p>'}
-    ${(n => n ? `<button class="btn sm" type="button" data-nasc="${t}" style="margin-top:10px;border:0;background:none;color:var(--muted);text-decoration:underline">${LI.nascoste === t ? 'Chiudi le voci nascoste' : 'Voci nascoste: ' + n}</button>` : '')(d.liste[t].filter(x => !x.attivo).length)}</div>`).join('')}</div>`;
+    ${(n => n ? `<button class="btn sm" type="button" data-nasc="${t}" style="margin-top:10px;border:0;background:none;color:var(--muted);text-decoration:underline">${LI.nascoste === t ? 'Chiudi le voci nascoste' : 'Voci nascoste: ' + n}</button>` : '')(d.liste[t].filter(x => !x.attivo).length)}</div>`).join('')}</div>
+  ${personeSediHtml()}`;
+}
+// Commerciali e medici per sede: in quali sedi compaiono nel modulo e nei Richiami. Vale solo nel CRM.
+function personeSediHtml() {
+  const d = LI.d, P = d.personeSedi || [], S2 = d.sediTutte || [];
+  const riga = u => `<div class="prow"><span class="nm">${esc(u.nome)} <span class="muted" style="font-weight:500">· ${esc(u.figura)}</span></span>
+    <span style="display:flex;gap:6px;flex-wrap:wrap">${S2.map(x => `<button type="button" class="psc ${u.sedi.includes(x.id) ? 'on' : ''}" data-psede="${esc(u.id)}|${esc(x.id)}">${esc(x.nome)}</button>`).join('')}</span>
+    ${u.crm ? `<button class="btn sm" type="button" data-prip="${esc(u.id)}" title="Torna alle sedi scritte in Gestione accessi" style="border:0;background:none;color:var(--muted);text-decoration:underline">Come in Gestione accessi</button>` : ''}</div>`;
+  const gr = (t, arr) => arr.length ? `<h4 style="margin:14px 0 2px">${t}</h4>${arr.map(riga).join('')}` : '';
+  return `<div class="card sez" style="margin-top:12px"><h3>Commerciali e medici per sede</h3>
+    <p class="muted" style="margin-top:0;font-size:13px">Tocca una sede per aggiungere o togliere la persona: compare subito nel modulo di inserimento e nella modifica dei Richiami di quella sede. Vale solo nel CRM, non cambia Gestione accessi.</p>
+    ${gr('Commerciali', P.filter(u => u.figura !== 'Medico'))}${gr('Medici', P.filter(u => u.figura === 'Medico'))}
+    ${P.length ? '' : '<p class="muted">Nessun commerciale o medico attivo in Gestione accessi.</p>'}</div>`;
 }
 document.addEventListener('submit', async e => {
   const f = e.target.closest('[data-add]'); if (!f) return; e.preventDefault();
@@ -742,6 +758,15 @@ document.addEventListener('change', async e => {
   if (t.id === 'fin-az') { try { await api('PUT', 'api/liste/azienda', { azienda: t.value }); toast('Azienda salvata.'); } catch (y) { toast(y.message); } }
 });
 document.addEventListener('click', async e => {
+  const ps = e.target.closest('[data-psede]'), pr = e.target.closest('[data-prip]');
+  if (ps || pr) {
+    const [uid, sid] = (ps ? ps.dataset.psede : pr.dataset.prip).split('|'), u = LI.d.personeSedi.find(x => x.id === uid);
+    const body = pr ? { userId: uid, ripristina: true } : { userId: uid, sedi: u.sedi.includes(sid) ? u.sedi.filter(x => x !== sid) : [...u.sedi, sid] };
+    if (ps && !body.sedi.length && !confirm(`${u.nome} non comparirà in nessuna sede del CRM. Va bene?`)) return;
+    try { LI.d.personeSedi = (await api('PUT', 'api/liste/persona-sedi', body)).personeSedi; Object.keys(persone).forEach(k => delete persone[k]); drawListe();
+      toast(pr ? 'Sedi come in Gestione accessi.' : 'Sedi aggiornate.'); } catch (y) { toast(y.message); }
+    return;
+  }
   const nb = e.target.closest('[data-nasc]'); if (nb) { LI.nascoste = LI.nascoste === nb.dataset.nasc ? null : nb.dataset.nasc; return drawListe(); }
   const r = e.target.closest('[data-ren]'), a = e.target.closest('[data-att]');
   if (r || a) {
