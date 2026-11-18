@@ -711,7 +711,7 @@ module.exports = function sp(app, ctx) {
   async function fattSedi(sediIds, mesi) {
     const out = { mesi: {}, sedi: [], errore: null };
     if (!(sediIds || []).length) { out.errore = 'Nella tua anagrafica non c’è una sede.'; return out; }
-    let c; try { c = await consuntivo(mesi[mesi.length - 1]); } catch (e) { out.errore = e.message; return out; }
+    let c; try { c = await consuntivo(mesi[mesi.length - 1]); } catch (e) { out.errore = /fetch failed|ECONN|timeout/i.test(e.message) ? 'Gestione finanziaria non risponde in questo momento: riprova tra poco.' : e.message; return out; }
     if (!c) { out.errore = 'Gestione finanziaria non è ancora collegata (Performance → Guadagni).'; return out; }
     const nomi = new Map((await sch.sedi()).map(x => [x.id, x.nome]));
     for (const id of sediIds) {
@@ -743,7 +743,9 @@ module.exports = function sp(app, ctx) {
   const spiegaRegola = r => require('./lib/pianoExcel').spiega(r);
   // calcolo di un mese per una persona (senza scrivere nulla tranne l'archivio)
   async function guadagni(uid, mese, persona, livello, perfRow) {
-    const regole = (livello?.regole || []);
+    // accordi presi con la persona: quelli del piano di crescita, oppure quelli cambiati dall'amministratore (valgono anche nel calcolo)
+    const accVar = perfRow?.variabile_man != null && String(perfRow.variabile_man).trim() !== '';
+    const regole = accVar ? require('./lib/pianoExcel').regoleDa(perfRow.variabile_man) : (livello?.regole || []);
     const { rows: [mm] } = await q('select * from sp_mese where user_id = $1 and mese = $2', [uid, mese]);
     const trim = mesiTrim(mese).filter(m => m <= mese), fineTrim = mesiTrim(mese)[2] === mese;
     const { rows: mt } = await q('select * from sp_mese where user_id = $1 and mese = any($2)', [uid, trim]);
@@ -787,21 +789,22 @@ module.exports = function sp(app, ctx) {
     const trimestre = vociT.length ? { voci: vociT, lordo: lordoT, annullati, importo: fineTrim ? r2(Math.max(0, lordoT - annullati)) : 0, maturato: r2(Math.max(0, lordoT - annullati)), fineTrim,
       mesi: trim, fine: meseNome(mesiTrim(mese)[2]) } : null;
     let fisso = perfRow?.fisso_man != null ? Number(perfRow.fisso_man) : livello?.fissoNum ?? null, fissoNota = '';
+    const fissoAccordo = fisso;
     // es. RAP Step 3: il fisso spetta solo se il target personale del mese NON è raggiunto
     if (condFisso && fisso != null) {
       const pf = pers(mese).fatt, pt = tPers(mese);
       if (pt && pf >= pt) { fissoNota = `Target personale raggiunto: il fisso di ${fisso.toLocaleString('it-IT', { useGrouping: 'always' })} € di questo step non spetta.`; fisso = 0; }
       else fissoNota = 'Il fisso spetta perché il target personale del mese non è raggiunto.';
     }
-    const { rows: acc } = await q('select coalesce(sum(importo), 0)::float t, string_agg(nullif(nota, \'\'), \' · \') n from sp_accordi where mese = $1 and sede_id = any($2)', [mese, sedi]);
     const u = ul(mese), bonusMeseNetto = malus ? 0 : bm.totale;
     const dati = {
       mese, nomeMese: meseNome(mese), ruolo: livello?.ruolo || '', aggiornato: new Date().toISOString(),
       sede: { nomi: F.sedi.map(x => x.nome), area: F.sedi.length > 1,
         dettaglio: F.sedi.length > 1 ? F.sedi.map(x => { const v = x.mesi[mese] || { fatt: 0, target: 0 }; return { nome: x.nome, trovata: x.trovata, fatturato: r2(v.fatt), target: r2(v.target), pct: v.target ? Math.round(v.fatt / v.target * 100) : null }; }) : [],
         fatturato: r2(u.fatt), target: r2(u.target), pct: u.target ? Math.round(u.fatt / u.target * 100) : null,
-        accordi: r2(acc[0]?.t || 0), accordiNota: acc[0]?.n || '', netto: r2(u.fatt - (acc[0]?.t || 0)), dati: u.dati, errore: F.errore },
+        dati: u.dati, errore: F.errore },
       personale: usaPers ? { ...pers(mese), target: tPers(mese), targetPerc: tPerc(mese), pct: tPers(mese) ? Math.round(pers(mese).fatt / tPers(mese) * 100) : null, errore: errPers } : null,
+      accordi: { fisso: fissoAccordo, condizione: condFisso ? 'solo se non raggiungi il target personale' : '', fissoTesto: perfRow?.fisso_man != null ? '' : livello?.fisso || '', variabile: accVar ? perfRow.variabile_man : livello?.variabile || '', modificati: perfRow?.fisso_man != null || accVar },
       fisso, fissoNota, bonus: bm.voci, bonusTotale: bm.totale, malus, malusNota: mm?.malus_nota || '', bonusPagato: bonusMeseNetto,
       trimestre, note: regole.filter(r => r.tipo === 'nota').map(r => r.testo),
       totale: r2((fisso || 0) + bonusMeseNetto + (trimestre?.importo || 0)),
@@ -1553,7 +1556,7 @@ module.exports = function sp(app, ctx) {
   }));
   app.put('/api/sp/admin/regole', needAd, wrap(async (req, res) => { await sch.setImp('sp_regole', String(req.body.regole || '').replace(/\r/g, '').slice(0, 12000)); res.json({ ok: true }); }));
 
-  /* ---------- guadagni (amministratore): tabella del mese, accordi per sede, malus, target personale, voci a mano, compenso ---------- */
+  /* ---------- guadagni (amministratore): tabella del mese, accordi presi per persona, malus, target personale, voci a mano, compenso ---------- */
   app.get('/api/sp/admin/guadagni', needAd, wrap(async (req, res) => {
     const mese = /^\d{4}-\d{2}$/.test(req.query.mese || '') ? req.query.mese : meseOra();
     const pp = await persone(), piani = await struttura(), { rows: as } = await q('select * from sp_perf');
@@ -1563,12 +1566,10 @@ module.exports = function sp(app, ctx) {
       const l = pi.livelli.find(x => x.n === a.livello_n);
       let d = null; try { d = await guadagni(p.id, mese, p, l, a); } catch (e) { d = { errore: e.message }; }
       righe.push({ id: p.id, nome: p.nome, piano: pi.nome, regole: (l?.regole || []).map(r => ({ ...r, spiega: PX.spiega(r) })),
-        fissoLivello: l?.fissoNum ?? null, fissoMan: a.fisso_man != null ? Number(a.fisso_man) : null, variabileMan: a.variabile_man, ...d });
+        fissoLivello: l?.fissoNum ?? null, fissoTestoLivello: l?.fisso || '', variabileLivello: l?.variabile || '', fissoMan: a.fisso_man != null ? Number(a.fisso_man) : null, variabileMan: a.variabile_man, ...d });
     }
     righe.sort((x, y) => x.nome.localeCompare(y.nome, 'it'));
-    const sedi = await sch.sedi(), { rows: acc } = await q('select * from sp_accordi where mese = $1', [mese]);
     res.json({ mese, nomeMese: meseNome(mese), mesi: Array.from({ length: 12 }, (_, i) => meseAdd(meseOra(), -i)), righe,
-      accordi: sedi.map(x => { const r = acc.find(y => y.sede_id === x.id); return { id: x.id, nome: x.nome, importo: r ? Number(r.importo) : 0, nota: r?.nota || '' }; }),
       totale: r2(righe.reduce((t, x) => t + (x.totale || 0), 0)), finAzienda: (await sch.imp('sp_fin_azienda')) || null });
   }));
   app.put('/api/sp/admin/accordi', needAd, wrap(async (req, res) => {

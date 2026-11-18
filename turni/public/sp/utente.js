@@ -354,8 +354,7 @@ function vistaGuadagni(mesi){
         <div class="xs muted" style="margin-top:4px">${s.area ? 'Target di area' : 'Target'} ${eurU(s.target)}${s.pct != null ? ' · ' + s.pct + '%' : ''}</div>
         ${(s.dettaglio || []).length ? `<div style="margin-top:10px">${s.dettaglio.map(d => `<div style="padding:6px 0;border-bottom:1px solid var(--line)"><div class="row small" style="justify-content:space-between"><b>${esc(d.nome)}</b><span>${d.trovata ? eurU(d.fatturato) : '<span class="muted xs">non in Gestione finanziaria</span>'}</span></div>
           ${d.trovata ? `${bar(d.pct)}<div class="xs muted" style="margin-top:3px">Target ${eurU(d.target)}${d.pct != null ? ' · ' + d.pct + '%' : ''}</div>` : ''}</div>`).join('')}</div>` : ''}
-        <div class="kv" style="margin-top:8px"><span>Accordi presi${s.accordiNota ? `<span class="why xs muted" style="display:block">${esc(s.accordiNota)}</span>` : ''}</span><b>− ${eurU(s.accordi)}</b></div>
-        <div class="kv"><span>Netto</span><b>${eurU(s.netto)}</b></div></div>
+</div>
       ${P ? `<div><span class="xs muted" style="font-weight:800;text-transform:uppercase">Il tuo fatturato personale</span>
         <div style="font:800 24px var(--f-display);margin-top:2px">${eurU(P.fatt)}</div>${bar(P.pct)}
         <div class="xs muted" style="margin-top:4px">Target personale ${eurU(P.target)} (${String(P.targetPerc).replace('.', ',')}% del target ${s.area ? 'di area' : 'della sede'})${P.pct != null ? ' · ' + P.pct + '%' : ''}</div>
@@ -363,6 +362,9 @@ function vistaGuadagni(mesi){
         <div class="kv"><span>Concretizzazione</span><b>${String(P.conc).replace('.', ',')}%</b></div><div class="kv"><span>TMV</span><b>${eurU(P.tmv)}</b></div>
         ${P.errore ? `<p class="xs muted">${esc(P.errore)}</p>` : ''}</div>` : ''}</div></div>
     <div class="card"><h3>Il tuo mese</h3>
+      ${g.accordi ? `<div style="padding:10px 12px;border-radius:10px;background:var(--sunken);margin-bottom:6px"><span class="xs muted" style="font-weight:800;text-transform:uppercase">I tuoi accordi</span>
+        <div class="small" style="margin-top:4px"><b>Fisso:</b> ${g.accordi.fisso != null ? eurU(g.accordi.fisso) : esc(g.accordi.fissoTesto || '—')}${g.accordi.condizione ? ` <span class="muted">(${esc(g.accordi.condizione)})</span>` : ''}</div>
+        ${g.accordi.variabile ? `<div class="small" style="margin-top:4px"><b>Variabile:</b><ul style="margin:2px 0 0;padding-left:18px">${g.accordi.variabile.split('\n').filter(Boolean).map(x => `<li>${esc(x.replace(/^[●•\s]+/, ''))}</li>`).join('')}</ul></div>` : ''}</div>` : ''}
       <div class="gv"><span>Fisso${g.fissoNota ? `<span class="why">${esc(g.fissoNota)}</span>` : ''}</span><span class="r">${eurU(g.fisso)}</span></div>
       ${g.malus ? `<div class="banner bad" style="margin:10px 0"><b>Malus del mese</b><br>${esc(g.malusNota)}<br><span class="xs">I bonus del mese (${eurU(g.bonusTotale)}) sono annullati e si tolgono dal bonus del trimestre.</span></div>` : ''}
       ${(g.bonus || []).length ? `<p class="xs muted" style="margin:12px 0 0;font-weight:800;text-transform:uppercase">Bonus del mese</p>${g.bonus.map(voce).join('')}` : ''}

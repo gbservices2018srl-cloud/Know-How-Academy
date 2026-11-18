@@ -656,7 +656,7 @@ function pianiExcel(h, r, dopo, testata){
   draw();
 }
 
-// Guadagni del mese (amministratore): accordi per sede, e per ogni persona malus con motivo, target personale, voci a mano, fisso/variabile
+// Guadagni del mese (amministratore): per ogni persona accordi presi (dal piano, modificabili), malus con motivo, target personale, voci a mano
 let GMESE = null, GAPERTO = null;
 async function guadagniAdmin(h){
   let d, az = null;
@@ -672,7 +672,7 @@ async function guadagniAdmin(h){
       <td class="small">${s.errore ? `<span class="muted xs">${esc(s.errore)}</span>` : `${s.area ? '<b>Area</b> · ' : ''}${esc((s.nomi || []).join(', '))}<br>${eu(s.fatturato)}${s.pct != null ? ` · <b>${s.pct}%</b>` : ''}
         ${(s.dettaglio || []).map(d => `<br><span class="xs muted">${esc(d.nome)}: ${d.trovata ? eu(d.fatturato) + (d.pct != null ? ' · ' + d.pct + '%' : '') : 'non trovata'}</span>`).join('')}`}</td>
       <td class="small">${x.personale ? `${eu(x.personale.fatt)} · <b>${x.personale.pct ?? '—'}%</b><br><span class="xs muted">target ${String(x.personale.targetPerc).replace('.', ',')}%</span>` : '—'}</td>
-      <td style="text-align:right">${eu(x.fisso)}${x.fissoMan != null ? '<br><span class="xs muted">a mano</span>' : ''}</td><td style="text-align:right">${eu(x.bonusPagato)}</td>
+      <td style="text-align:right">${eu(x.fisso)}${x.fissoMan != null || x.variabileMan ? '<br><span class="xs muted">accordi modificati</span>' : ''}</td><td style="text-align:right">${eu(x.bonusPagato)}</td>
       <td style="text-align:right">${x.trimestre ? (x.trimestre.fineTrim ? eu(x.trimestre.importo) : `<span class="xs muted">maturato ${eu(x.trimestre.maturato)}</span>`) : '—'}</td>
       <td>${x.malus ? `<span class="tag no" title="${esc(x.malusNota)}">Malus</span>` : '—'}</td><td style="text-align:right;font-weight:800">${eu(x.totale)}</td>
       <td><button class="btn small" data-gap="${esc(x.id)}">${ap ? 'Chiudi' : 'Modifica'}</button></td></tr>
@@ -682,8 +682,10 @@ async function guadagniAdmin(h){
         <label class="row" style="gap:8px"><input type="checkbox" id="gMal" ${x.malus ? 'checked' : ''}><b class="small">Malus questo mese</b> <span class="xs muted">(annulla i bonus del mese e la stessa cifra si toglie dal trimestre)</span></label>
         <label class="f">Motivo del malus <span class="xs muted">· lo legge la persona</span><textarea id="gMalN" rows="2">${esc(x.malusNota || '')}</textarea></label>
         ${x.personale ? `<label class="f" style="max-width:260px">Target personale (% del target della sede)<input type="text" inputmode="decimal" id="gTp" value="${x.personale.targetPerc}" placeholder="35"></label>` : ''}
-        <div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end"><label class="f" style="max-width:200px">Fisso (vuoto = del livello: ${eu(x.fissoLivello)})<input type="text" inputmode="decimal" id="gFi" value="${x.fissoMan ?? ''}"></label>
-          <label class="f grow">Variabile scritta per la persona (vuoto = del livello)<textarea id="gVa" rows="2">${esc(x.variabileMan || '')}</textarea></label></div>
+        <div style="border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--surface)"><b class="small">Accordi presi con ${esc(x.nome)}</b> <span class="xs muted">· arrivano dal piano di crescita (${esc(x.ruolo || '')}); se li cambi qui valgono per questa persona, anche nel calcolo dei bonus</span>
+          <div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-start;margin-top:8px"><label class="f" style="max-width:200px">Fisso (€ al mese)<input type="text" inputmode="decimal" id="gFi" value="${x.fissoMan ?? x.fissoLivello ?? ''}" data-orig="${x.fissoLivello ?? ''}"></label>
+            <label class="f grow">Variabile <span class="xs muted">· una voce per riga</span><textarea id="gVa" rows="4" data-orig="${esc(x.variabileLivello || '')}">${esc(x.variabileMan ?? x.variabileLivello ?? '')}</textarea></label></div>
+          <div class="row" style="gap:8px"><span class="xs muted grow">${x.fissoMan != null || x.variabileMan ? '<b>Modificati</b> rispetto al piano.' : 'Uguali al piano.'}</span>${x.fissoMan != null || x.variabileMan ? '<button class="btn small" id="gRip" type="button">Rimetti quelli del piano</button>' : ''}</div></div>
         <div class="row"><span class="grow"></span><button class="btn primary" data-gsalva="${esc(x.id)}">Salva</button></div></div></td></tr>` : ''}`;
   };
   h.innerHTML = `<div class="card"><div class="row" style="flex-wrap:wrap;gap:8px;justify-content:space-between"><div><h2 style="margin:0">Guadagni · ${esc(d.nomeMese)}</h2><p class="muted small" style="margin:4px 0 0">Fatturato lordo delle sedi da Gestione finanziaria (target = Budget), fatturato personale dal CRM (€ piano di cura dei preventivi A). Regole dal piano di ogni persona.</p></div>
@@ -691,18 +693,13 @@ async function guadagniAdmin(h){
       <select id="gMese" aria-label="Mese">${d.mesi.map(x => `<option value="${x}" ${x === d.mese ? 'selected' : ''}>${nm(x)}</option>`).join('')}</select></div></div>
     <div class="tw" style="margin-top:12px"><table class="t"><thead><tr><th>Persona</th><th>Sede</th><th>Personale</th><th style="text-align:right">Fisso</th><th style="text-align:right">Bonus mese</th><th style="text-align:right">Trimestre</th><th>Malus</th><th style="text-align:right">Totale</th><th></th></tr></thead>
       <tbody>${d.righe.map(riga).join('') || '<tr><td colspan="9" class="muted">Nessuna persona in un piano da Excel.</td></tr>'}</tbody>
-      <tfoot><tr><td colspan="7"><b>Totale</b></td><td style="text-align:right;font-weight:800">${eu(d.totale)}</td><td></td></tr></tfoot></table></div></div>
-    <div class="card"><h3>Accordi presi · ${esc(d.nomeMese)}</h3><p class="muted small" style="margin:-4px 0 8px">Cifra del mese tolta dal fatturato della sede: le persone vedono il netto. I bonus si calcolano sul lordo.</p>
-      ${d.accordi.map(a => `<div class="row" style="gap:8px;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--line)"><b class="small" style="width:140px">${esc(a.nome)}</b>
-        <input type="text" inputmode="decimal" data-acc="${esc(a.id)}" value="${a.importo || ''}" placeholder="€ 0" style="width:130px"><input type="text" data-accn="${esc(a.id)}" value="${esc(a.nota)}" placeholder="Nota (facoltativa)" class="grow"></div>`).join('')}</div>`;
+      <tfoot><tr><td colspan="7"><b>Totale</b></td><td style="text-align:right;font-weight:800">${eu(d.totale)}</td><td></td></tr></tfoot></table></div></div>`;
   h.onchange = async e => {
     if (e.target.id === 'gMese') { GMESE = e.target.value; GAPERTO = null; return guadagniAdmin(h); }
     if (e.target.id === 'gAz') { try { await api('PUT', '/api/sp/admin/finanza/azienda', {azienda: e.target.value}); toast('Azienda salvata.'); guadagniAdmin(h); } catch (er) { toast(er.message); } return; }
-    const a = e.target.closest('[data-acc],[data-accn]');
-    if (a) { const id = a.dataset.acc || a.dataset.accn;
-      try { await api('PUT', '/api/sp/admin/accordi', {mese: GMESE, sede: id, importo: h.querySelector(`[data-acc="${id}"]`).value || '0', nota: h.querySelector(`[data-accn="${id}"]`).value}); toast('Accordi salvati.'); } catch (er) { toast(er.message); } }
   };
   h.onclick = async e => {
+    if (e.target.id === 'gRip') { $('#gFi').value = $('#gFi').dataset.orig; $('#gVa').value = $('#gVa').dataset.orig; toast('Rimessi quelli del piano: premi Salva.'); return; }
     const g = e.target.closest('[data-gap]'); if (g) { GAPERTO = GAPERTO === g.dataset.gap ? null : g.dataset.gap; return guadagniAdmin(h); }
     const sv = e.target.closest('[data-gsalva]');
     if (sv) {
@@ -710,7 +707,8 @@ async function guadagniAdmin(h){
       sv.disabled = true;
       try {
         await api('PUT', `/api/sp/admin/mese/${uid}`, {mese: GMESE, malus: $('#gMal').checked, malusNota: $('#gMalN').value, targetPerc: $('#gTp')?.value ?? '', manuali: man});
-        await api('PUT', `/api/sp/admin/perf/${uid}/compenso`, {fisso: $('#gFi').value, variabile: $('#gVa').value});
+        const fi = $('#gFi'), va = $('#gVa'), norm = v => String(v || '').replace(/\r/g, '').trim(), fN = v => String(v).replace(/\s|€/g, '').replace(',', '.');
+        await api('PUT', `/api/sp/admin/perf/${uid}/compenso`, {fisso: fN(fi.value) === fN(fi.dataset.orig) ? '' : fi.value, variabile: norm(va.value) === norm(va.dataset.orig) ? '' : va.value});
         toast('Salvato.'); GAPERTO = null; guadagniAdmin(h);
       } catch (er) { toast(er.message); sv.disabled = false; }
     }
