@@ -84,8 +84,8 @@ module.exports = function scheda(app, { db, needUser, needAdmin, wrap, bad, uplo
       medici: meds.filter(m => m.sedi.some(s => admin || mieSedi.includes(s))).map(m => ({ id: m.id, nome: m.nome, sedi: m.sedi,
         branche: Object.fromEntries(br.filter(b => b.medico_id === m.id).map(b => [b.sede_id, b.branche])) })),
       docs: docs.filter(visDoc).map(d => docShape(d, lm[d.id])),
-      convenzioni: (await store.convenzioni(admin ? null : mieSedi, me.contratto).catch(() => [])).map(c => ({ id: c.id, titolo: c.titolo, descrizione: c.descrizione, link: c.link, sedi: c.sedi, per: c.per })),
-      contatti: (await store.contattiUtili(admin ? null : mieSedi).catch(() => [])).map(c => ({ id: c.id, riferimento: c.riferimento, email: c.email, telefono: c.telefono, sedi: c.sedi })),
+      convenzioni: (await store.convenzioni(admin ? null : mieSedi, me.contratto).catch(() => [])).map(c => ({ id: c.id, titolo: c.titolo, descrizione: c.descrizione, link: c.link, sedi: c.sedi, per: c.per, qr: c.qr || '' })),
+      contatti: (await store.contattiUtili(admin ? null : mieSedi).catch(() => [])).map(c => ({ id: c.id, riferimento: c.riferimento, ruolo: c.ruolo || '', email: c.email, telefono: c.telefono, sedi: c.sedi })),
       attiva: !!(await imp('attiva')),
     };
     if (admin) {

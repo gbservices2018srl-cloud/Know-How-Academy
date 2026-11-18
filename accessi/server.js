@@ -24,7 +24,7 @@ app.use((req, res, next) => {
   next();
 });
 const jsonPiccolo = express.json({ limit: '100kb' }), jsonFoto = express.json({ limit: '12mb' });
-app.use((req, res, next) => (req.path === '/api/hr/leggi' || req.path.startsWith('/api/prezzi/') ? jsonFoto : jsonPiccolo)(req, res, next)); // foto del grafico I-Profile, listini con molte voci // la foto del grafico I-Profile è più grande
+app.use((req, res, next) => (req.path === '/api/hr/leggi' || req.path.startsWith('/api/prezzi/') || req.path.startsWith('/api/admin/convenzioni') ? jsonFoto : jsonPiccolo)(req, res, next)); // foto del grafico I-Profile, listini con molte voci // la foto del grafico I-Profile è più grande
 
 const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const bad = (res, code, msg) => res.status(code).json({ error: msg });
@@ -819,7 +819,7 @@ app.get('/api/admin/sedi', needAdmin, wrap(async (req, res) => res.json({ sedi: 
 
 /* ---------- contatti utili (si vedono in Scheda personale → Info utili, per sede) ---------- */
 const contattoBody = async b => {
-  const riferimento = String(b.riferimento || '').trim().slice(0, 120);
+  const riferimento = String(b.riferimento || '').trim().slice(0, 120), ruolo = String(b.ruolo || '').trim().slice(0, 80);
   const email = String(b.email || '').trim().toLowerCase().slice(0, 160), telefono = String(b.telefono || '').trim().slice(0, 40);
   if (!riferimento) throw Object.assign(new Error('Scrivi il riferimento (es. Ufficio paghe – Maria).'), { status: 400 });
   if (!email && !telefono) throw Object.assign(new Error('Metti almeno un\'email o un numero di telefono.'), { status: 400 });
@@ -828,19 +828,19 @@ const contattoBody = async b => {
   const ids = new Set((await store.listSedi()).map(s => s.id));
   const sedi = [...new Set([].concat(b.sedi || []).map(String))].filter(id => ids.has(id));
   if (!sedi.length) throw Object.assign(new Error('Spunta almeno una sede che deve vedere il contatto.'), { status: 400 });
-  return { riferimento, email, telefono, sedi };
+  return { riferimento, ruolo, email, telefono, sedi };
 };
 const tuttiContatti = () => store.contattiUtili(null);
 app.get('/api/admin/contatti', needAdmin, wrap(async (req, res) => res.json({ contatti: await tuttiContatti() })));
 app.post('/api/admin/contatti', needAdmin, wrap(async (req, res) => {
   const c = await contattoBody(req.body || {});
-  await store.q(`insert into contatti_utili (id, riferimento, email, telefono, sedi, sort) values ($1,$2,$3,$4,$5,(select coalesce(max(sort),0)+1 from contatti_utili))`,
-    [require('crypto').randomUUID(), c.riferimento, c.email, c.telefono, JSON.stringify(c.sedi)]);
+  await store.q(`insert into contatti_utili (id, riferimento, email, telefono, sedi, ruolo, sort) values ($1,$2,$3,$4,$5,$6,(select coalesce(max(sort),0)+1 from contatti_utili))`,
+    [require('crypto').randomUUID(), c.riferimento, c.email, c.telefono, JSON.stringify(c.sedi), c.ruolo]);
   res.json({ contatti: await tuttiContatti() });
 }));
 app.put('/api/admin/contatti/:id', needAdmin, wrap(async (req, res) => {
   const c = await contattoBody(req.body || {});
-  await store.q('update contatti_utili set riferimento = $2, email = $3, telefono = $4, sedi = $5 where id = $1', [req.params.id, c.riferimento, c.email, c.telefono, JSON.stringify(c.sedi)]);
+  await store.q('update contatti_utili set riferimento = $2, email = $3, telefono = $4, sedi = $5, ruolo = $6 where id = $1', [req.params.id, c.riferimento, c.email, c.telefono, JSON.stringify(c.sedi), c.ruolo]);
   res.json({ contatti: await tuttiContatti() });
 }));
 // «Togli»: non si vede più ma resta archiviato
@@ -861,19 +861,25 @@ const convBody = async b => {
   const per = ['dip', 'piva'].filter(t => [].concat(b.per || []).includes(t));
   if (!sedi.length) throw Object.assign(new Error('Spunta almeno una sede.'), { status: 400 });
   if (!per.length) throw Object.assign(new Error('Scegli per chi vale: CCNL, partita IVA o entrambi.'), { status: 400 });
-  return { titolo, descrizione, link, sedi, per };
+  // QR code (immagine): data URL PNG/JPG, già rimpicciolito nel browser. '' = toglilo, undefined = lascia quello che c'è
+  let qr;
+  if (b.qr !== undefined) {
+    qr = String(b.qr || '');
+    if (qr && (!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(qr) || qr.length > 600000)) throw Object.assign(new Error('QR code non valido o troppo grande: usa un\'immagine PNG o JPG.'), { status: 400 });
+  }
+  return { titolo, descrizione, link, sedi, per, qr };
 };
 const tutteConv = () => store.convenzioni(null);
 app.get('/api/admin/convenzioni', needAdmin, wrap(async (req, res) => res.json({ convenzioni: await tutteConv() })));
 app.post('/api/admin/convenzioni', needAdmin, wrap(async (req, res) => {
   const c = await convBody(req.body || {});
-  await store.q(`insert into convenzioni (id, titolo, descrizione, link, sedi, per, sort) values ($1,$2,$3,$4,$5,$6,(select coalesce(max(sort),0)+1 from convenzioni))`,
-    [require('crypto').randomUUID(), c.titolo, c.descrizione, c.link, JSON.stringify(c.sedi), JSON.stringify(c.per)]);
+  await store.q(`insert into convenzioni (id, titolo, descrizione, link, sedi, per, qr, sort) values ($1,$2,$3,$4,$5,$6,$7,(select coalesce(max(sort),0)+1 from convenzioni))`,
+    [require('crypto').randomUUID(), c.titolo, c.descrizione, c.link, JSON.stringify(c.sedi), JSON.stringify(c.per), c.qr || '']);
   res.json({ convenzioni: await tutteConv() });
 }));
 app.put('/api/admin/convenzioni/:id', needAdmin, wrap(async (req, res) => {
   const c = await convBody(req.body || {});
-  await store.q('update convenzioni set titolo = $2, descrizione = $3, link = $4, sedi = $5, per = $6 where id = $1', [req.params.id, c.titolo, c.descrizione, c.link, JSON.stringify(c.sedi), JSON.stringify(c.per)]);
+  await store.q('update convenzioni set titolo = $2, descrizione = $3, link = $4, sedi = $5, per = $6, qr = coalesce($7, qr) where id = $1', [req.params.id, c.titolo, c.descrizione, c.link, JSON.stringify(c.sedi), JSON.stringify(c.per), c.qr === undefined ? null : c.qr]);
   res.json({ convenzioni: await tutteConv() });
 }));
 // «Togli»: non si vede più ma resta archiviata

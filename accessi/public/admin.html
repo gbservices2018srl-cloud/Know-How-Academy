@@ -586,13 +586,23 @@ function contattiHtml() {
   const att = (SEDI || []).filter(x => x.attiva);
   return `<div class="card" style="margin-top:14px"><div class="tools" style="margin:0 0 6px"><div style="flex:1 1 260px"><b>Contatti utili</b><p class="hint" style="margin:2px 0 0">Le persone li trovano in Info utili (Scheda personale), solo per le sedi spuntate.</p></div>
       <button class="btn primary" data-contatto-new>+ Nuovo contatto</button></div>
-    ${(CONTATTI || []).length ? CONTATTI.map(c => `<div class="sede"><div style="min-width:0;grid-column:1/3"><b>${esc(c.riferimento)}</b>
+    ${(CONTATTI || []).length ? CONTATTI.map(c => `<div class="sede"><div style="min-width:0;grid-column:1/3"><b>${esc(c.riferimento)}</b>${c.ruolo ? ` <span class="muted">· ${esc(c.ruolo)}</span>` : ''}
         <div class="meta">${[c.email, c.telefono].filter(Boolean).map(t => `<span>${esc(t)}</span>`).join('')}</div>
         <div class="meta">${c.sedi.length >= att.length && att.length > 1 ? '<span>Tutte le sedi</span>' : c.sedi.map(nomeS).filter(Boolean).map(t => `<span>${esc(t)}</span>`).join('')}</div></div>
       <div class="actions"><button class="btn small" data-contatto-edit="${c.id}">Modifica</button><button class="btn small" data-contatto-togli="${c.id}">Togli</button></div></div>`).join('')
       : '<p class="muted" style="margin:6px 0 0">Nessun contatto ancora.</p>'}</div>`;
 }
 // Convenzioni: nome, descrizione, link; per quali sedi e per chi (CCNL / partita IVA). Le vedono in Info utili.
+// QR: l'immagine si rimpicciolisce (max 600 px) prima di salvarla
+document.addEventListener('change', async e => {
+  if (e.target.id !== 'v-qrf' || !e.target.files[0]) return;
+  try {
+    const img = await createImageBitmap(e.target.files[0]), sc = Math.min(1, 600 / Math.max(img.width, img.height)), cv = document.createElement('canvas');
+    cv.width = Math.round(img.width * sc); cv.height = Math.round(img.height * sc); const cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height); cx.drawImage(img, 0, 0, cv.width, cv.height);
+    const qi = dlgf.querySelector('#v-qrimg'); qi.src = cv.toDataURL('image/png'); if (qi.src.length > 590000) qi.src = cv.toDataURL('image/jpeg', .9);
+    qi.style.display = ''; qi.dataset.cambiato = '1'; dlgf.querySelector('#v-qrx').style.display = '';
+  } catch { toast("Non riesco a leggere l'immagine del QR."); }
+});
 const PER = { dip: 'CCNL', piva: 'Partita IVA' };
 function convHtml() {
   const nomeS = id => (SEDI || []).find(x => x.id === id)?.sigla || '';
@@ -612,11 +622,16 @@ function apriConv(c) {
     <label class="field">Nome<input id="v-tit" value="${esc(v.titolo)}" maxlength="120" placeholder="es. Palestra FitLife – sconto 20%" required></label>
     <label class="field">Descrizione <small class="muted" style="font-weight:500">come si usa, sconto, contatti</small><textarea id="v-desc" rows="3" maxlength="1000">${esc(v.descrizione)}</textarea></label>
     <label class="field">Link <small class="muted" style="font-weight:500">facoltativo</small><input id="v-link" value="${esc(v.link)}" maxlength="300" placeholder="es. www.sito.it"></label>
+    <div class="field"><span>QR code <small class="muted" style="font-weight:500">facoltativo · foto o immagine del QR</small></span>
+      <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-start"><img id="v-qrimg" alt="QR code" src="${esc(v.qr || '')}" style="width:96px;height:96px;object-fit:contain;border:1px solid #DADAD3;border-radius:8px;background:#fff;${v.qr ? '' : 'display:none'}">
+        <label class="btn small" style="cursor:pointer">${v.qr ? 'Cambia QR' : 'Carica QR'}<input type="file" id="v-qrf" accept="image/*" hidden></label>
+        <button type="button" class="btn small" id="v-qrx" style="${v.qr ? '' : 'display:none'}">Togli QR</button></div></div>
     <div class="field"><span>Per chi</span><div class="sedibox" style="flex-direction:row;flex-wrap:wrap">${Object.entries(PER).map(([k, n]) => `<button type="button" class="schip ${v.per.includes(k) ? 'on' : ''}" data-v-per="${k}">${n}</button>`).join('')}</div></div>
     <div class="field"><span>In quali sedi <button type="button" class="btn small" data-c-tutte style="margin-left:6px">Tutte</button></span>
       <div class="sedibox" style="flex-direction:row;flex-wrap:wrap">${att.map(x => `<button type="button" class="schip ${v.sedi.includes(x.id) ? 'on' : ''}" data-c-sede="${x.id}">${esc(x.nome)}</button>`).join('')}</div></div>
     ${footer(c ? 'Salva' : 'Aggiungi')}`, async () => {
-    const body = { titolo: val('v-tit'), descrizione: dlgf.querySelector('#v-desc').value, link: val('v-link'),
+    const qi = dlgf.querySelector('#v-qrimg');
+    const body = { qr: qi.dataset.cambiato ? (qi.style.display === 'none' ? '' : qi.src) : undefined, titolo: val('v-tit'), descrizione: dlgf.querySelector('#v-desc').value, link: val('v-link'),
       sedi: [...dlgf.querySelectorAll('[data-c-sede].on')].map(b => b.dataset.cSede), per: [...dlgf.querySelectorAll('[data-v-per].on')].map(b => b.dataset.vPer) };
     const r = await api(c ? 'PUT' : 'POST', c ? '/api/admin/convenzioni/' + c.id : '/api/admin/convenzioni', body);
     CONV = r.convenzioni; renderSedi(); dlg.close(); toast(c ? 'Convenzione aggiornata' : 'Convenzione aggiunta');
@@ -624,6 +639,7 @@ function apriConv(c) {
 }
 document.addEventListener('click', async e => {
   const vp = e.target.closest('[data-v-per]'); if (vp) { vp.classList.toggle('on'); return; }
+  if (e.target.id === 'v-qrx') { const qi = dlgf.querySelector('#v-qrimg'); qi.removeAttribute('src'); qi.style.display = 'none'; qi.dataset.cambiato = '1'; e.target.style.display = 'none'; return; }
   if (e.target.closest('[data-conv-new]')) return apriConv(null);
   const ed = e.target.closest('[data-conv-edit]'); if (ed) return apriConv(CONV.find(c => c.id === ed.dataset.convEdit));
   const tg = e.target.closest('[data-conv-togli]');
@@ -632,17 +648,18 @@ document.addEventListener('click', async e => {
     try { CONV = (await api('DELETE', '/api/admin/convenzioni/' + c.id)).convenzioni; renderSedi(); toast('Convenzione tolta'); } catch (err) { toast(err.message); } }
 });
 function apriContatto(c) {
-  const v = c || { riferimento: '', email: '', telefono: '', sedi: [] };
+  const v = c || { riferimento: '', ruolo: '', email: '', telefono: '', sedi: [] };
   const att = (SEDI || []).filter(x => x.attiva);
   open(`<h2>${c ? 'Modifica contatto' : 'Nuovo contatto utile'}</h2>
-    <label class="field">Riferimento<input id="c-rif" value="${esc(v.riferimento)}" maxlength="120" placeholder="es. Ufficio paghe – Maria Rossi" required></label>
+    <label class="field">Riferimento<input id="c-rif" value="${esc(v.riferimento)}" maxlength="120" placeholder="es. Maria Rossi" required></label>
+    <label class="field">Ruolo <small class="muted" style="font-weight:500">facoltativo</small><input id="c-ruolo" value="${esc(v.ruolo || '')}" maxlength="80" placeholder="es. Responsabile paghe, Direttore sanitario"></label>
     <div class="two"><label class="field">Email<input id="c-em" type="email" value="${esc(v.email)}" maxlength="160"></label>
     <label class="field">Telefono<input id="c-tel" type="tel" value="${esc(v.telefono)}" maxlength="40" placeholder="es. 070 123456"></label></div>
     <div class="field"><span>Chi lo vede <button type="button" class="btn small" data-c-tutte style="margin-left:6px">Tutte</button></span>
       <div class="sedibox" style="flex-direction:row;flex-wrap:wrap">${att.map(x => `<button type="button" class="schip ${v.sedi.includes(x.id) ? 'on' : ''}" data-c-sede="${x.id}">${esc(x.nome)}</button>`).join('')}</div></div>
     ${footer(c ? 'Salva' : 'Aggiungi')}`, async () => {
     const sedi = [...dlgf.querySelectorAll('[data-c-sede].on')].map(b => b.dataset.cSede);
-    const body = { riferimento: val('c-rif'), email: val('c-em'), telefono: val('c-tel'), sedi };
+    const body = { riferimento: val('c-rif'), ruolo: val('c-ruolo'), email: val('c-em'), telefono: val('c-tel'), sedi };
     const r = await api(c ? 'PUT' : 'POST', c ? '/api/admin/contatti/' + c.id : '/api/admin/contatti', body);
     CONTATTI = r.contatti; renderSedi(); dlg.close(); toast(c ? 'Contatto aggiornato' : 'Contatto aggiunto');
   });
