@@ -530,7 +530,7 @@ function gestionePiani(h, r, ricarica){
     const sotto = p.contratto ? `<span class="tag info">${CONTR[p.contratto]}</span>` : '';
     if (tab === 'vedi') {
       const H = p.intestazioni?.length === 7 ? p.intestazioni : H7;
-      h.innerHTML = testata(esc(p.nome || 'Senza nome'), sotto) + chips + p.livelli.map(l => `<div class="card"><div class="pch"><div><span class="pcl">${esc(H[0])}</span><b>${esc(l.ruolo)}</b></div><div><span class="pcl">${esc(H[1])}</span><b>${esc(l.fisso || '—')}</b></div>
+      h.innerHTML = testata(esc(p.nome || 'Senza nome'), sotto) + chips + p.livelli.map(l => `<div class="card"><div class="pch"><div><span class="pcl">${esc(H[0])}</span><b>${esc(l.ruolo)}</b></div><div><span class="pcl">${esc(H[1])}</span><b>${esc(l.fisso || '—')}</b>${l.fissoCond === 'senza_target_pers' ? '<br><span class="xs muted">solo se non raggiunge il target personale</span>' : ''}</div>
           <div style="grid-column:1/-1"><span class="pcl">${esc(H[2])}</span>${(l.regole || []).length ? l.regole.map(g => `<div class="small" style="display:flex;gap:8px;align-items:baseline;margin:3px 0">${tipoTag(g)}<span>${esc(g.testo)}</span></div>`).join('') : '<span class="small">—</span>'}</div></div>
         ${l.obiettivi.map(o => `<div class="pcr ${o.test ? 'test' : ''}"><span class="pcl">${esc(H[3])}</span><b class="pco">${esc(o.testo)}</b>
           ${o.sotto ? `<div class="pcb"><span class="pcl">${esc(H[4])}</span><div class="pct">${esc(o.sotto)}</div></div>` : ''}${o.soft ? `<div class="pcb"><span class="pcl">${esc(H[5])}</span><div class="pct">${esc(o.soft)}</div></div>` : ''}${o.scuola ? `<div class="pcb"><span class="pcl">${esc(H[6])}</span><div class="pct">${esc(o.scuola)}</div></div>` : ''}</div>`).join('') || '<p class="muted small">Nessun obiettivo.</p>'}</div>`).join('')
@@ -561,6 +561,7 @@ function gestionePiani(h, r, ricarica){
               <button class="btn small" data-pesu="${i}" title="Sposta su" ${i ? '' : 'disabled'}>↑</button><button class="btn small danger" data-pevl="${i}" title="Togli il livello">×</button></div>
             <div ${ap ? '' : 'hidden'} style="margin-top:10px;display:grid;gap:8px">
               <label class="f">Fisso<input type="text" class="fisso" value="${esc(l.fisso)}" placeholder="es. 1530"></label>
+              <label class="row small" style="gap:8px"><input type="checkbox" class="fcond" ${l.fissoCond === 'senza_target_pers' ? 'checked' : ''}> Il fisso spetta solo se non raggiunge il target personale</label>
               <label class="f">Variabile <span class="muted xs">· una voce per riga, es. «0,3% sul fatturato mensile a target»</span>${ta('variabile', l.variabile, 'es. 0,25% SUL FATTURATO MENSILE A TARGET', 4)}</label>
               <b class="small">Obiettivi (hard skill)</b>
               ${(l.obiettivi || []).map((o, j) => `<div data-peo="${j}" style="border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--surface);display:grid;gap:6px">
@@ -573,7 +574,7 @@ function gestionePiani(h, r, ricarica){
       const leggi = () => {
         P.nome = h.querySelector('#peNome').value; P.contratto = h.querySelector('#peContr').value;
         h.querySelectorAll('[data-pel]').forEach(el => { const l = P.livelli[+el.dataset.pel], v = c => el.querySelector('.' + c).value;
-          l.ruolo = v('ruolo'); l.fisso = v('fisso'); l.variabile = v('variabile');
+          l.ruolo = v('ruolo'); l.fisso = v('fisso'); l.variabile = v('variabile'); l.fissoCond = el.querySelector('.fcond').checked ? 'senza_target_pers' : '';
           el.querySelectorAll('[data-peo]').forEach(oe => { const o = l.obiettivi[+oe.dataset.peo], w = c => oe.querySelector('.' + c).value; o.testo = w('testo'); o.sotto = w('sotto'); o.soft = w('soft'); o.scuola = w('scuola'); }); });
       };
       draw();

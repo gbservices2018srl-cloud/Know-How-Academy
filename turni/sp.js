@@ -119,6 +119,8 @@ module.exports = function sp(app, ctx) {
       alter table sp_piani add column if not exists note text not null default '';
       alter table sp_livelli add column if not exists regole jsonb not null default '[]';
       alter table sp_livelli add column if not exists fisso_num numeric;
+      -- condizione del fisso: 'senza_target_pers' = il fisso spetta solo se il target personale NON è raggiunto (null = mai impostata)
+      alter table sp_livelli add column if not exists fisso_cond text;
       alter table sp_obiettivi add column if not exists sotto text not null default '';
       alter table sp_obiettivi add column if not exists soft text not null default '';
       alter table sp_obiettivi add column if not exists scuola text not null default '';
@@ -241,7 +243,8 @@ module.exports = function sp(app, ctx) {
   const TIPI = { ferie: 'Ferie', permesso: 'ROL', malattia: 'Malattia', altro: 'Altra assenza', smart: 'Smart working', lutto: 'Lutto',
     parentale: 'Congedo parentale', maternita: 'Maternità', pnr: 'Permesso non retribuito' };
   // congedo parentale: preavviso minimo e al massimo metà delle ore giornaliere del contratto
-  const PREAVVISO_PARENTALE = 5;
+  // preavviso: 5 giorni per il congedo a giornate, 2 giorni per quello a ore (art. 32, c. 3, D.Lgs. 151/2001)
+  const PREAVVISO_PARENTALE = 5, PREAVVISO_PARENTALE_ORE = 2;
   const LEGGE_PREAVVISO = 'art. 32, comma 3, D.Lgs. 26 marzo 2001 n. 151 (Testo unico maternità e paternità)';
   const richShape = (r, nomi) => ({ id: r.id, user: r.user_id, nome: nomi?.get(r.user_id) || '', tipo: r.tipo, tipoTxt: TIPI[r.tipo], dal: r.dal, al: r.al, oraDa: r.ora_da, oraA: r.ora_a,
     quanti: r.quanti != null ? Number(r.quanti) : null, sost: r.sost_id, sostNome: nomi?.get(r.sost_id) || '', sostOk: r.sost_ok, stato: r.stato, nota: r.nota, prot: r.prot,
@@ -520,7 +523,8 @@ module.exports = function sp(app, ctx) {
       const maxOre = oreGiorno(per) / 2;
       if (!maxOre) return bad(res, 400, 'Nel tuo contratto non ci sono ancora le ore settimanali: chiedi all\'amministrazione.');
       if (quanti > maxOre + 0.001) return bad(res, 400, `Il congedo parentale si può chiedere al massimo per metà delle tue ore giornaliere: ${String(r2(maxOre)).replace('.', ',')} ore al giorno.`);
-      if (fuoriAdmin && dal < addG(oggi(), PREAVVISO_PARENTALE)) return bad(res, 400, `Preavviso non rispettato: il congedo parentale va chiesto almeno ${PREAVVISO_PARENTALE} giorni prima dell'inizio (${LEGGE_PREAVVISO}). Il primo giorno possibile è il ${fmtG(addG(oggi(), PREAVVISO_PARENTALE))}.`);
+      // qui il congedo è sempre a ore: preavviso di legge 2 giorni
+      if (fuoriAdmin && dal < addG(oggi(), PREAVVISO_PARENTALE_ORE)) return bad(res, 400, `Preavviso non rispettato: il congedo parentale a ore va chiesto almeno ${PREAVVISO_PARENTALE_ORE} giorni prima dell'inizio (${LEGGE_PREAVVISO}). Il primo giorno possibile è il ${fmtG(addG(oggi(), PREAVVISO_PARENTALE_ORE))}.`);
     } else if (tipo === 'pnr') {
       // giorni interi, oppure a ore in un giorno solo
       if (b.oraDa || b.oraA) {
@@ -642,7 +646,7 @@ module.exports = function sp(app, ctx) {
     ]);
     return piani.map(p => ({ id: p.id, nome: p.nome, contratto: p.contratto || '', fonte: p.fonte || '', intestazioni: Array.isArray(p.intestazioni) ? p.intestazioni : [], note: p.note || '',
       livelli: liv.filter(l => l.piano_id === p.id).map(l => ({ id: l.id, n: l.n, ruolo: l.ruolo, bonus: l.bonus,
-      fisso: l.fisso || '', fissoNum: l.fisso_num != null ? Number(l.fisso_num) : null, variabile: l.variabile || '', area: l.area || '', skill: Array.isArray(l.skill) ? l.skill : [],
+      fisso: l.fisso || '', fissoNum: l.fisso_num != null ? Number(l.fisso_num) : null, fissoCond: l.fisso_cond || '', variabile: l.variabile || '', area: l.area || '', skill: Array.isArray(l.skill) ? l.skill : [],
       incPerc: l.inc_perc != null ? Number(l.inc_perc) : null, incSoglia: l.inc_soglia || 'target', regole: Array.isArray(l.regole) ? l.regole : [],
       obiettivi: ob.filter(o => o.livello_id === l.id).map(o => ({ id: o.id, testo: o.testo, misura: o.misura, sotto: o.sotto || '', soft: o.soft || '', scuola: o.scuola || '',
         rFisso: o.r_fisso || '', rVariabile: o.r_variabile || '', test: !!o.test })) })) }));
@@ -683,6 +687,12 @@ module.exports = function sp(app, ctx) {
     return { regola, sede: nomeSede, mese, calcolabile: true, fatturato: s.fatturato, target: s.target, pct: s.target ? Math.round(s.fatturato / s.target * 100) : null, aTarget,
       valore: Math.round(valore * 100) / 100, testo: { fatturato: eur(s.fatturato), target: s.target ? eur(s.target) : '—', valore: eur(valore) } };
   }
+
+  // piani già caricati da Excel: la condizione del fisso si legge dalle note (una volta sola: poi vale quella salvata)
+  setTimeout(async () => { try { await migrate();
+    const { rows } = await q(`select l.id, l.ruolo, p.note from sp_livelli l join sp_piani p on p.id = l.piano_id where l.fisso_cond is null and p.note <> ''`);
+    for (const r of rows) await q('update sp_livelli set fisso_cond = $2 where id = $1', [r.id, require('./lib/pianoExcel').condFissoDaNote(r.note, r.ruolo)]);
+  } catch (e) { console.warn('Condizione del fisso:', e.message); } }, 5000);
 
   /* ---------- guadagni: fisso + bonus del mese e del trimestre, malus, fatturato personale (CRM) ---------- */
   // Regole del livello (dal piano Excel): { tipo: 'perc'|'manuale'|'nota', perc, base: 'ul'|'pers', periodo: 'mese'|'trim', cond: { ul, pers, conc, tmv } }
@@ -739,7 +749,8 @@ module.exports = function sp(app, ctx) {
     const { rows: mt } = await q('select * from sp_mese where user_id = $1 and mese = any($2)', [uid, trim]);
     const sedi = persona?.sedi || [];
     const F = await fattSedi(sedi, mesiTrim(mese));
-    const usaPers = regole.some(r => r.tipo === 'perc' && (r.base === 'pers' || r.cond?.pers || r.cond?.conc || r.cond?.tmv));
+    const condFisso = livello?.fissoCond === 'senza_target_pers' && perfRow?.fisso_man == null;
+    const usaPers = condFisso || regole.some(r => r.tipo === 'perc' && (r.base === 'pers' || r.cond?.pers || r.cond?.conc || r.cond?.tmv));
     let P = null, errPers = null;
     if (usaPers) { try { P = await crmPersonale(uid, trim); } catch (e) { errPers = 'CRM Commerciale non raggiungibile: ' + e.message; } }
     const tPerc = m => { const x = mt.find(y => y.mese === m); return x?.target_perc != null ? Number(x.target_perc) : TARGET_PERS; };
@@ -775,7 +786,13 @@ module.exports = function sp(app, ctx) {
     const annullati = r2(trim.reduce((t, m) => { const b = bonusMese(m); return t + (b.malus ? b.totale : 0); }, 0));
     const trimestre = vociT.length ? { voci: vociT, lordo: lordoT, annullati, importo: fineTrim ? r2(Math.max(0, lordoT - annullati)) : 0, maturato: r2(Math.max(0, lordoT - annullati)), fineTrim,
       mesi: trim, fine: meseNome(mesiTrim(mese)[2]) } : null;
-    const fisso = perfRow?.fisso_man != null ? Number(perfRow.fisso_man) : livello?.fissoNum ?? null;
+    let fisso = perfRow?.fisso_man != null ? Number(perfRow.fisso_man) : livello?.fissoNum ?? null, fissoNota = '';
+    // es. RAP Step 3: il fisso spetta solo se il target personale del mese NON è raggiunto
+    if (condFisso && fisso != null) {
+      const pf = pers(mese).fatt, pt = tPers(mese);
+      if (pt && pf >= pt) { fissoNota = `Target personale raggiunto: il fisso di ${fisso.toLocaleString('it-IT', { useGrouping: 'always' })} € di questo step non spetta.`; fisso = 0; }
+      else fissoNota = 'Il fisso spetta perché il target personale del mese non è raggiunto.';
+    }
     const { rows: acc } = await q('select coalesce(sum(importo), 0)::float t, string_agg(nullif(nota, \'\'), \' · \') n from sp_accordi where mese = $1 and sede_id = any($2)', [mese, sedi]);
     const u = ul(mese), bonusMeseNetto = malus ? 0 : bm.totale;
     const dati = {
@@ -785,7 +802,7 @@ module.exports = function sp(app, ctx) {
         fatturato: r2(u.fatt), target: r2(u.target), pct: u.target ? Math.round(u.fatt / u.target * 100) : null,
         accordi: r2(acc[0]?.t || 0), accordiNota: acc[0]?.n || '', netto: r2(u.fatt - (acc[0]?.t || 0)), dati: u.dati, errore: F.errore },
       personale: usaPers ? { ...pers(mese), target: tPers(mese), targetPerc: tPerc(mese), pct: tPers(mese) ? Math.round(pers(mese).fatt / tPers(mese) * 100) : null, errore: errPers } : null,
-      fisso, bonus: bm.voci, bonusTotale: bm.totale, malus, malusNota: mm?.malus_nota || '', bonusPagato: bonusMeseNetto,
+      fisso, fissoNota, bonus: bm.voci, bonusTotale: bm.totale, malus, malusNota: mm?.malus_nota || '', bonusPagato: bonusMeseNetto,
       trimestre, note: regole.filter(r => r.tipo === 'nota').map(r => r.testo),
       totale: r2((fisso || 0) + bonusMeseNetto + (trimestre?.importo || 0)),
     };
@@ -840,7 +857,7 @@ module.exports = function sp(app, ctx) {
     const nomiSedi = new Map((await sch.sedi()).map(x => [x.id, x.nome]));
     // la tua situazione: contratto, sede, ore, fisso e variabile (quelli del livello, o quelli scritti dall'amministratore)
     const situazione = { contratto: per?.tipo === 'piva' ? 'Partita IVA' : per?.tipo === 'dip' ? 'CCNL' : '', sedi: (per?.sedi || []).map(x => nomiSedi.get(x)).filter(Boolean), ore: per?.ore ?? null,
-      fisso: rows[0].fisso_man != null ? Number(rows[0].fisso_man) : cur?.fissoNum ?? null, fissoTesto: rows[0].fisso_man != null ? '' : cur?.fisso || '', fissoMan: rows[0].fisso_man != null,
+      fisso: rows[0].fisso_man != null ? Number(rows[0].fisso_man) : cur?.fissoNum ?? null, fissoTesto: rows[0].fisso_man != null ? '' : (cur?.fisso || '') + (cur?.fissoCond === 'senza_target_pers' ? ' · solo se non raggiungi il target personale' : ''), fissoMan: rows[0].fisso_man != null,
       variabile: rows[0].variabile_man != null ? rows[0].variabile_man : cur?.variabile || '', variabileMan: rows[0].variabile_man != null };
     const { rows: [ip] } = await q('select valori, il from sp_iprofile where user_id = $1', [uid]);
     return { iprofile: ip ? { valori: ip.valori, il: ip.il } : null, piano: piano.nome, pianoId: piano.id, daExcel, intestazioni: piano.intestazioni, righe, situazione, livello: rows[0].livello_n, ruolo: cur?.ruolo || '', attuale: comp(cur), regole: (await sch.imp('sp_regole')) || '',
@@ -1471,8 +1488,8 @@ module.exports = function sp(app, ctx) {
         let n = 1;
         for (const l of p.livelli) {
           const lid = db.newId();
-          await tq(`insert into sp_livelli (id, piano_id, n, ruolo, fisso, fisso_num, variabile, regole) values ($1,$2,$3,$4,$5,$6,$7,$8)`,
-            [lid, pid, n++, l.ruolo.slice(0, 80), l.fisso.slice(0, 160), l.fissoNum, l.variabile.slice(0, 4000), JSON.stringify(l.regole)]);
+          await tq(`insert into sp_livelli (id, piano_id, n, ruolo, fisso, fisso_num, variabile, regole, fisso_cond) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+            [lid, pid, n++, l.ruolo.slice(0, 80), l.fisso.slice(0, 160), l.fissoNum, l.variabile.slice(0, 4000), JSON.stringify(l.regole), l.fissoCond || '']);
           let oi = 0;
           for (const o of l.obiettivi) await tq(`insert into sp_obiettivi (id, livello_id, testo, ordine, sotto, soft, scuola, r_fisso, r_variabile, test) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
             [db.newId(), lid, (o.testo || '—').slice(0, 400), oi++, o.sotto.slice(0, 8000), o.soft.slice(0, 2000), o.scuola.slice(0, 2000), o.fisso.slice(0, 200), o.variabile.slice(0, 4000), o.test]);
@@ -1508,10 +1525,10 @@ module.exports = function sp(app, ctx) {
       for (const l of liv) {
         const lid = /^[\w-]{6,64}$/.test(l.id || '') ? l.id : db.newId(); vivi.l.push(lid);
         const variabile = t(l.variabile, 4000), fisso = str(l.fisso, 160);
-        await tq(`insert into sp_livelli (id, piano_id, n, ruolo, fisso, fisso_num, variabile, regole) values ($1,$2,$3,$4,$5,$6,$7,$8)
+        await tq(`insert into sp_livelli (id, piano_id, n, ruolo, fisso, fisso_num, variabile, regole, fisso_cond) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
           on conflict (id) do update set piano_id = excluded.piano_id, n = excluded.n, ruolo = excluded.ruolo, fisso = excluded.fisso, fisso_num = excluded.fisso_num,
-          variabile = excluded.variabile, regole = excluded.regole, archiviato = false`,
-          [lid, pid, n++, str(l.ruolo, 80), fisso, PX.numero(fisso), variabile, JSON.stringify(PX.regoleDa(variabile))]);
+          variabile = excluded.variabile, regole = excluded.regole, fisso_cond = excluded.fisso_cond, archiviato = false`,
+          [lid, pid, n++, str(l.ruolo, 80), fisso, PX.numero(fisso), variabile, JSON.stringify(PX.regoleDa(variabile)), l.fissoCond === 'senza_target_pers' ? 'senza_target_pers' : '']);
         let oi = 0;
         for (const o of (Array.isArray(l.obiettivi) ? l.obiettivi : []).slice(0, 40)) {
           const testo = str(o.testo, 400); if (!testo) continue;

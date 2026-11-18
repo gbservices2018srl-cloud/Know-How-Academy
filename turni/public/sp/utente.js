@@ -131,14 +131,14 @@ async function vistaAssenze(m){
   let tipo = 'ferie';
   const sostDa = ME.sostituzioni.filter(r => r.stato === 'attesa_sost' && r.sost === me.id);
   const daComp = ME.richieste.filter(r => r.docStato === 'attesa');
-  const PREAVV_PAR = 5;
+  const PREAVV_PAR = 2;   // congedo a ore: 2 giorni di preavviso (art. 32, c. 3, D.Lgs. 151/2001)
   const primoParentale = (() => { const d = new Date(ME.oggi + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + PREAVV_PAR); return d.toISOString().slice(0, 10); })();
   const maxParentale = me.ore ? Math.round(me.ore / 5 / 2 * 100) / 100 : 0;
   // congedo parentale: avviso subito se mancano i giorni di preavviso o se le ore superano la metà della giornata
   const controllaParentale = () => {
     const box = $('#parAvv'); if (!box) return true;
     const dal = $('#dal').value, da = $('#oraDa').value, a = $('#oraA').value; let msg = '';
-    if (dal && dal < primoParentale) msg = `<b>Preavviso non rispettato.</b> Il congedo parentale va chiesto almeno ${PREAVV_PAR} giorni prima dell'inizio, come prevede l'art. 32, comma 3, del D.Lgs. 26 marzo 2001 n. 151 (Testo unico maternità e paternità). Il primo giorno possibile è il ${fmtG(primoParentale)}.`;
+    if (dal && dal < primoParentale) msg = `<b>Preavviso non rispettato.</b> Il congedo parentale a ore va chiesto almeno ${PREAVV_PAR} giorni prima dell'inizio, come prevede l'art. 32, comma 3, del D.Lgs. 26 marzo 2001 n. 151 (Testo unico maternità e paternità). Il primo giorno possibile è il ${fmtG(primoParentale)}.`;
     else if (!maxParentale) msg = 'Nel tuo contratto non ci sono ancora le ore settimanali: chiedi all\'amministrazione prima di fare la richiesta.';
     else if (da && a) { const h = (+a.slice(0, 2) * 60 + +a.slice(3) - (+da.slice(0, 2) * 60 + +da.slice(3))) / 60; if (h > maxParentale + 0.001) msg = `<b>Troppe ore.</b> Il congedo parentale a ore si può chiedere al massimo per metà delle tue ore giornaliere: ${nume(maxParentale)} ore al giorno (art. 32, comma 1-ter, D.Lgs. 151/2001).`; }
     box.innerHTML = msg ? `<div class="banner bad" style="margin-top:10px;font-weight:500">${msg}</div>` : '';
@@ -363,7 +363,7 @@ function vistaGuadagni(mesi){
         <div class="kv"><span>Concretizzazione</span><b>${String(P.conc).replace('.', ',')}%</b></div><div class="kv"><span>TMV</span><b>${eurU(P.tmv)}</b></div>
         ${P.errore ? `<p class="xs muted">${esc(P.errore)}</p>` : ''}</div>` : ''}</div></div>
     <div class="card"><h3>Il tuo mese</h3>
-      <div class="gv"><span>Fisso</span><span class="r">${eurU(g.fisso)}</span></div>
+      <div class="gv"><span>Fisso${g.fissoNota ? `<span class="why">${esc(g.fissoNota)}</span>` : ''}</span><span class="r">${eurU(g.fisso)}</span></div>
       ${g.malus ? `<div class="banner bad" style="margin:10px 0"><b>Malus del mese</b><br>${esc(g.malusNota)}<br><span class="xs">I bonus del mese (${eurU(g.bonusTotale)}) sono annullati e si tolgono dal bonus del trimestre.</span></div>` : ''}
       ${(g.bonus || []).length ? `<p class="xs muted" style="margin:12px 0 0;font-weight:800;text-transform:uppercase">Bonus del mese</p>${g.bonus.map(voce).join('')}` : ''}
       ${tr ? `<p class="xs muted" style="margin:12px 0 0;font-weight:800;text-transform:uppercase">Bonus del trimestre · si paga a ${esc(tr.fine)}</p>${tr.voci.map(voce).join('')}

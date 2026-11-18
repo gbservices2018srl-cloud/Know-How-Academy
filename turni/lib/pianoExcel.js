@@ -80,12 +80,16 @@ async function leggi(buf, nomeFile) {
   if (!livelli.length) throw Object.assign(new Error(`«${nomeFile}»: nessun ruolo trovato sotto l'intestazione.`), { status: 400 });
   const ff = nomi.find(n => /fonti|criteri/i.test(n));
   const note = ff ? fogli[ff].map(r => [cella(r[0]), cella(r[1])].filter(Boolean).join(': ')).filter(Boolean).join('\n') : '';
+  // fisso con condizione scritta nelle note (es. «RAP — Step 3: 1.500 euro solo se non si raggiunge il target personale»)
+  const condFisso = ruolo => note.split('\n').some(r => { const i = r.indexOf(':'); return i > 0 && normRuolo(r.slice(0, i)) === normRuolo(ruolo) && /solo se non si raggiunge il target personale/i.test(r.slice(i)); }) ? 'senza_target_pers' : '';
   return {
     file: nomeFile, titolo: titoli.join(' · '), contratto, intestazioni: intest, note,
     nome: contratto === 'piva' ? 'Partita IVA' : contratto === 'dip' ? 'CCNL' : (titoli[1] || titoli[0] || nomeFile).slice(0, 80),
     livelli: livelli.map(l => ({ ruolo: l.ruolo.replace(/\s+/g, ' ').trim(), fisso: l.fisso, fissoNum: numero(l.fisso), variabile: l.variabile,
-      regole: regoleDa(l.variabile), obiettivi: l.obiettivi })),
+      regole: regoleDa(l.variabile), fissoCond: condFisso(l.ruolo), obiettivi: l.obiettivi })),
   };
 }
 
-module.exports = { leggi, regoleDa, spiega, normRuolo, numero };
+// per i piani già caricati: la condizione del fisso letta dalle note del piano
+function condFissoDaNote(note, ruolo) { return String(note || '').split('\n').some(r => { const i = r.indexOf(':'); return i > 0 && normRuolo(r.slice(0, i)) === normRuolo(ruolo) && /solo se non si raggiunge il target personale/i.test(r.slice(i)); }) ? 'senza_target_pers' : ''; }
+module.exports = { leggi, regoleDa, spiega, normRuolo, numero, condFissoDaNote };

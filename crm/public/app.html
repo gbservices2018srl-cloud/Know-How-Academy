@@ -312,7 +312,7 @@ async function vPrev() {
     </div>
     <div class="field"><span class="lbl">Esito <span class="req">*</span></span>
       <div class="esiti" id="f-esito">${Object.entries(ESITI).map(([k, t]) => `<button type="button" data-esito="${k}" class="${k} ${F.esito === k ? 'on' : ''}">${k} — ${t}</button>`).join('')}</div></div>
-    <div class="field"><label for="f-amb">Paziente che lo ha mandato (ambassador) <span class="muted" style="font-weight:500">facoltativo</span></label><input id="f-amb" name="ambassador" autocomplete="off" placeholder="Cognome Nome di chi lo ha consigliato" value="${esc(F.ambassador)}"></div>
+    <div class="field"><label for="f-amb">Paziente che lo ha mandato (ambassador) ${/REFERRAL/i.test(F.marketing || '') ? '<span class="req">*</span>' : '<span class="muted" style="font-weight:500">facoltativo · obbligatorio con REFERRAL</span>'}</label><input id="f-amb" name="ambassador" autocomplete="off" placeholder="Cognome Nome di chi lo ha consigliato" value="${esc(F.ambassador)}"></div>
     <div class="field"><label for="f-pag">Importo pagato <span class="req">*</span></label><input id="f-pag" name="pagato" inputmode="decimal" placeholder="0" value="${esc(F.pagato)}"></div>
   </div>
   <div class="card sez"><h3>Note</h3>

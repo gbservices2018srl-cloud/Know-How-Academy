@@ -137,6 +137,8 @@ app.post('/api/preventivi', needUser, need('preventivi'), wrap(async (req, res) 
   if (!tipoPdc) return bad(res, 400, "Scegli il tipo di piano di cura dall'elenco.");
   const esito = str(b.esito, 1).toUpperCase(); if (!ESITI.includes(esito)) return bad(res, 400, "Scegli l'esito.");
   const ambassador = str(b.ambassador, 120).toUpperCase();
+  // canale REFERRAL: serve il nome del paziente che lo ha mandato
+  if (/REFERRAL/i.test(mk) && ambassador.length < 3) return bad(res, 400, 'Canale REFERRAL: scrivi il paziente che lo ha mandato (ambassador).');
   const note = String(b.note ?? '').trim().slice(0, 4000); if (note.length < 50) return bad(res, 400, `Note troppo brevi: minimo 50 caratteri (${note.length} scritti).`);
   const ids = [str(b.commerciale, 60), ...(Array.isArray(b.medici) ? b.medici : []).map(x => str(x, 60))].filter(Boolean);
   const { rows: us } = await store.q(`select id, first_name, last_name, figura from users where id = any($1) and status = 'active'`, [ids]);
@@ -208,6 +210,9 @@ app.patch('/api/richiami/:id', needUser, need('richiami'), wrap(async (req, res)
     if (!meds.length) return bad(res, 400, 'Scegli il medico.');
     set.medici_ids = JSON.stringify(meds.map(m => m.id)); set.medico = meds.map(m => String(m.last_name || m.first_name).toUpperCase()).join(' / ');
   }
+  // canale REFERRAL: l'ambassador non può restare vuoto
+  { const mkF = set.marketing ?? r.marketing, amF = set.ambassador ?? r.ambassador ?? '';
+    if (/REFERRAL/i.test(mkF || '') && String(amF).trim().length < 3) return bad(res, 400, 'Canale REFERRAL: scrivi il paziente che lo ha mandato (ambassador).'); }
   const uguale = (k) => k === 'medici_ids' ? set[k] === JSON.stringify(r[k] || []) : set[k] === r[k];
   const campi = Object.keys(set).filter(k => !uguale(k));
   if (!campi.length) return res.json({ ok: true });
