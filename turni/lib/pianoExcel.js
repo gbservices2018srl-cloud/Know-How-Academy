@@ -88,4 +88,4 @@ async function leggi(buf, nomeFile) {
   };
 }
 
-module.exports = { leggi, regoleDa, spiega, normRuolo };
+module.exports = { leggi, regoleDa, spiega, normRuolo, numero };

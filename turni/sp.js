@@ -1419,40 +1419,55 @@ module.exports = function sp(app, ctx) {
     if (doppi.length) throw Object.assign(new Error('Hai scelto due file per lo stesso contratto: carica un file CCNL e uno Partita IVA.'), { status: 400 });
     return piani;
   }
-  // chi va dove: piano per contratto (CCNL / P.IVA), ruolo uguale a quello di adesso, altrimenti il primo ruolo della sua figura
-  async function mappaPersone(piani) {
+  // modi di caricamento per ogni file: { file: 'nuovo' | <id del piano da sostituire> }
+  // Chi va dove: per un piano che ne sostituisce un altro, le persone di quel piano (stesso ruolo, se c'è);
+  // per un piano nuovo, le persone del suo contratto che oggi non hanno un piano (primo ruolo della loro figura).
+  async function mappaPersone(piani, modi = {}) {
     const pp = (await persone()).filter(p => !p.medico && !p.owner), vecchi = await struttura(), { rows: as } = await q('select * from sp_perf');
-    return pp.map(p => {
+    const out = [];
+    for (const p of pp) {
       const a = as.find(x => x.user_id === p.id), vp = a && vecchi.find(x => x.id === a.piano_id), vl = vp?.livelli.find(x => x.n === a.livello_n);
-      const np = piani.find(x => x.contratto && x.contratto === p.tipo);
+      // in quale piano del file può andare
+      let np = piani.find(x => vp && modi[x.file] === vp.id);
+      if (!np && !vp) np = piani.find(x => (modi[x.file] || 'nuovo') === 'nuovo' && x.contratto && x.contratto === p.tipo);
+      if (!np) continue;
+      const N = l => PX.normRuolo(l.ruolo);
       let li = -1;
-      if (np) {
-        const N = l => PX.normRuolo(l.ruolo);
-        if (vl) li = np.livelli.findIndex(l => N(l) === PX.normRuolo(vl.ruolo));
-        if (li < 0 && vl) li = np.livelli.findIndex(l => N(l).startsWith(PX.normRuolo(vl.ruolo) + ' '));
-        if (li < 0 && p.figura) li = np.livelli.findIndex(l => N(l) === PX.normRuolo(p.figura) || N(l).startsWith(PX.normRuolo(p.figura) + ' '));
-      }
-      return { id: p.id, nome: p.nome, contratto: p.tipo || '', figura: p.figura || '', da: vl ? `${vp.nome} · ${vl.ruolo}` : '', piano: np && li >= 0 ? np.contratto : null, livello: li >= 0 ? li + 1 : null, a: np && li >= 0 ? `${np.nome} · ${np.livelli[li].ruolo}` : '' };
-    }).sort((x, y) => x.nome.localeCompare(y.nome, 'it'));
+      if (vl) li = np.livelli.findIndex(l => N(l) === PX.normRuolo(vl.ruolo));
+      if (li < 0 && vl) li = np.livelli.findIndex(l => N(l).startsWith(PX.normRuolo(vl.ruolo) + ' '));
+      if (li < 0 && p.figura) li = np.livelli.findIndex(l => N(l) === PX.normRuolo(p.figura) || N(l).startsWith(PX.normRuolo(p.figura) + ' '));
+      out.push({ id: p.id, nome: p.nome, contratto: p.tipo || '', figura: p.figura || '', da: vl ? `${vp.nome} · ${vl.ruolo}` : '', file: np.file, livello: li >= 0 ? li + 1 : null,
+        a: li >= 0 ? `${np.nome} · ${np.livelli[li].ruolo}` : '' });
+    }
+    return out.sort((x, y) => x.nome.localeCompare(y.nome, 'it'));
   }
   app.post('/api/sp/admin/piani/excel/anteprima', needAd, upload.array('file', 4), wrap(async (req, res) => {
-    const piani = await leggiPianiExcel(req.files);
-    res.json({ piani: piani.map(p => ({ ...p, livelli: p.livelli.map(l => ({ ...l, regole: l.regole.map(r => ({ ...r, spiega: PX.spiega(r) })) })) })), persone: await mappaPersone(piani) });
+    const piani = await leggiPianiExcel(req.files), esistenti = await struttura();
+    // proposta: se c'è già un piano dello stesso contratto (o con lo stesso nome) lo sostituisce, altrimenti si aggiunge
+    let modi = {}; try { modi = JSON.parse(req.body.modi || 'null') || {}; } catch {}
+    for (const p of piani) if (!modi[p.file]) { const e = esistenti.find(x => (p.contratto && x.contratto === p.contratto) || x.nome.trim().toLowerCase() === p.nome.toLowerCase()); modi[p.file] = e ? e.id : 'nuovo'; }
+    res.json({ piani: piani.map(p => ({ ...p, livelli: p.livelli.map(l => ({ ...l, regole: l.regole.map(r => ({ ...r, spiega: PX.spiega(r) })) })) })), modi,
+      esistenti: esistenti.map(x => ({ id: x.id, nome: x.nome || 'Senza nome', contratto: x.contratto })), persone: await mappaPersone(piani, modi) });
   }));
   // conferma: i piani di adesso si archiviano (le prove già inviate restano), si creano quelli del file e si assegnano le persone
+  // conferma: ogni file si aggiunge come piano nuovo oppure sostituisce un piano (stesso piano, livelli e obiettivi nuovi;
+  // quelli di prima si archiviano, le prove già inviate restano). Poi si assegnano le persone scelte nell'anteprima.
   app.post('/api/sp/admin/piani/excel/conferma', needAd, upload.array('file', 4), wrap(async (req, res) => {
-    const piani = await leggiPianiExcel(req.files), mappa = await mappaPersone(piani);
-    const scelte = (() => { try { return JSON.parse(req.body.scelte || '{}'); } catch { return {}; } })();
+    const piani = await leggiPianiExcel(req.files), esistenti = await struttura();
+    const J = k => { try { return JSON.parse(req.body[k] || '{}') || {}; } catch { return {}; } };
+    const modi = J('modi'), scelte = J('scelte');
     const ids = {};
     await db.tx(async tq => {
-      await tq('update sp_piani set archiviato = true where not archiviato');
-      await tq('update sp_livelli set archiviato = true where not archiviato');
-      await tq('update sp_obiettivi set archiviato = true where not archiviato');
-      let pi = 0;
+      let ord = esistenti.length;
       for (const p of piani) {
-        const pid = db.newId(); ids[p.contratto || pid] = pid;
-        await tq('insert into sp_piani (id, nome, ordine, contratto, fonte, intestazioni, note) values ($1,$2,$3,$4,$5,$6,$7)',
-          [pid, p.nome, pi++, p.contratto, p.file.slice(0, 200), JSON.stringify(p.intestazioni), p.note.slice(0, 20000)]);
+        const sost = esistenti.find(x => x.id === modi[p.file]);
+        const pid = sost ? sost.id : db.newId(); ids[p.file] = pid;
+        if (sost) {
+          await tq('update sp_piani set nome = $2, contratto = $3, fonte = $4, intestazioni = $5, note = $6, archiviato = false where id = $1', [pid, p.nome, p.contratto, p.file.slice(0, 200), JSON.stringify(p.intestazioni), p.note.slice(0, 20000)]);
+          await tq('update sp_obiettivi set archiviato = true where livello_id in (select id from sp_livelli where piano_id = $1)', [pid]);
+          await tq('update sp_livelli set archiviato = true where piano_id = $1', [pid]);
+        } else await tq('insert into sp_piani (id, nome, ordine, contratto, fonte, intestazioni, note) values ($1,$2,$3,$4,$5,$6,$7)',
+          [pid, p.nome, ord++, p.contratto, p.file.slice(0, 200), JSON.stringify(p.intestazioni), p.note.slice(0, 20000)]);
         let n = 1;
         for (const l of p.livelli) {
           const lid = db.newId();
@@ -1463,31 +1478,63 @@ module.exports = function sp(app, ctx) {
             [db.newId(), lid, (o.testo || '—').slice(0, 400), oi++, o.sotto.slice(0, 8000), o.soft.slice(0, 2000), o.scuola.slice(0, 2000), o.fisso.slice(0, 200), o.variabile.slice(0, 4000), o.test]);
         }
       }
-      for (const m of mappa) {
-        const sc = scelte[m.id];   // l'amministratore può cambiare la proposta nell'anteprima: { piano: 'dip'|'piva'|'', livello }
-        const pc = sc ? sc.piano : m.piano, lv = sc ? parseInt(sc.livello) : m.livello;
-        if (!pc || !ids[pc] || !(lv >= 1)) continue;
+      // assegnazioni scelte nell'anteprima: { persona: { file, livello } } (file vuoto = lascia com'è)
+      for (const [uid, sc] of Object.entries(scelte)) {
+        const pid = ids[sc?.file], lv = parseInt(sc?.livello);
+        if (!pid || !(lv >= 1)) continue;
         await tq(`insert into sp_perf (user_id, piano_id, livello_n, dal) values ($1,$2,$3,current_date)
-          on conflict (user_id) do update set piano_id = excluded.piano_id, livello_n = excluded.livello_n, dal = current_date, test_invio = null, fisso_man = null, variabile_man = null`, [m.id, ids[pc], lv]);
+          on conflict (user_id) do update set piano_id = excluded.piano_id, livello_n = excluded.livello_n, dal = current_date, test_invio = null, fisso_man = null, variabile_man = null`, [str(uid, 64), pid, lv]);
       }
     });
     res.json({ ok: true, piani: piani.length });
   }));
 
-  /* ---------- I-Profile (amministratore): lettura dalla foto come nell'app I-Profile, poi si salvano solo i numeri ---------- */
-  const CHIAVI_IP = ['org', 'auto', 'gp', 'ad', 'det', 'vend', 'hr', 'pro', 'com', 'esp', 'rc', 'fin', 'suc', 'pri', 'lin', 'va', 'wi'];
-  app.post('/api/sp/admin/iprofile/leggi', needAd, upload.single('foto'), wrap(async (req, res) => {
-    const f = req.file; if (!f || !/^image\/(jpeg|png|webp)$/.test(f.mimetype)) return bad(res, 400, 'Scegli una foto o uno screenshot del grafico (JPG o PNG).');
-    if (!store.hooks.leggiIprofile) return bad(res, 503, 'Lettura automatica non disponibile: inserisci i valori a mano.');
-    try { res.json({ valori: await store.hooks.leggiIprofile(`data:${f.mimetype};base64,${f.buffer.toString('base64')}`) }); } catch (e) { bad(res, e.status || 502, e.message); }
+  // un solo piano: crea / salva (livelli e obiettivi con sotto-obiettivi, soft skill, scuola). Gli altri piani non si toccano.
+  app.put('/api/sp/admin/piano/:id', needAd, wrap(async (req, res) => {
+    const p = req.body || {}, nome = str(p.nome, 80); if (!nome) return bad(res, 400, 'Scrivi il nome del piano.');
+    const liv = (Array.isArray(p.livelli) ? p.livelli : []).filter(l => str(l.ruolo, 80)).slice(0, 20);
+    if (!liv.length) return bad(res, 400, 'Serve almeno un livello con il nome del ruolo.');
+    const esiste = (await q('select id from sp_piani where id = $1', [str(req.params.id, 64)])).rows[0];
+    const pid = esiste ? esiste.id : db.newId();
+    const t = (v, max) => String(v ?? '').replace(/\r/g, '').replace(/[ \t]+\n/g, '\n').trim().slice(0, max);
+    await db.tx(async tq => {
+      if (esiste) await tq('update sp_piani set nome = $2, contratto = $3, archiviato = false where id = $1', [pid, nome, ['dip', 'piva'].includes(p.contratto) ? p.contratto : '']);
+      else await tq(`insert into sp_piani (id, nome, ordine, contratto, intestazioni) values ($1,$2,(select coalesce(max(ordine),0)+1 from sp_piani),$3,$4)`,
+        [pid, nome, ['dip', 'piva'].includes(p.contratto) ? p.contratto : '', JSON.stringify(['RUOLO', 'FISSO EURO', 'VARIABILE', 'OBIETTIVI (HARD SKILL)', 'SOTTO OBIETTIVI', 'SOFT SKILL', 'SCUOLA DI FORMAZIONE'])]);
+      // fonte segna i piani «nuovi» (percorso sul livello attuale, guadagni): anche quelli creati qui
+      await tq(`update sp_piani set fonte = coalesce(nullif(fonte, ''), 'Creato nell''app') where id = $1`, [pid]);
+      const vivi = { l: [], o: [] };
+      let n = 1;
+      for (const l of liv) {
+        const lid = /^[\w-]{6,64}$/.test(l.id || '') ? l.id : db.newId(); vivi.l.push(lid);
+        const variabile = t(l.variabile, 4000), fisso = str(l.fisso, 160);
+        await tq(`insert into sp_livelli (id, piano_id, n, ruolo, fisso, fisso_num, variabile, regole) values ($1,$2,$3,$4,$5,$6,$7,$8)
+          on conflict (id) do update set piano_id = excluded.piano_id, n = excluded.n, ruolo = excluded.ruolo, fisso = excluded.fisso, fisso_num = excluded.fisso_num,
+          variabile = excluded.variabile, regole = excluded.regole, archiviato = false`,
+          [lid, pid, n++, str(l.ruolo, 80), fisso, PX.numero(fisso), variabile, JSON.stringify(PX.regoleDa(variabile))]);
+        let oi = 0;
+        for (const o of (Array.isArray(l.obiettivi) ? l.obiettivi : []).slice(0, 40)) {
+          const testo = str(o.testo, 400); if (!testo) continue;
+          const oid = /^[\w-]{6,64}$/.test(o.id || '') ? o.id : db.newId(); vivi.o.push(oid);
+          await tq(`insert into sp_obiettivi (id, livello_id, testo, misura, ordine, sotto, soft, scuola, test) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+            on conflict (id) do update set livello_id = excluded.livello_id, testo = excluded.testo, misura = excluded.misura, ordine = excluded.ordine,
+            sotto = excluded.sotto, soft = excluded.soft, scuola = excluded.scuola, test = excluded.test, archiviato = false`,
+            [oid, lid, testo, str(o.misura, 200), oi++, t(o.sotto, 8000), t(o.soft, 2000), t(o.scuola, 2000), /^superamento del test/i.test(testo)]);
+        }
+      }
+      // livelli e obiettivi tolti da questo piano: archiviati (le prove già inviate restano)
+      await tq('update sp_obiettivi set archiviato = true where livello_id in (select id from sp_livelli where piano_id = $1) and not (id = any($2))', [pid, vivi.o]);
+      await tq('update sp_livelli set archiviato = true where piano_id = $1 and not (id = any($2))', [pid, vivi.l]);
+    });
+    res.json({ ok: true, id: pid });
   }));
-  app.put('/api/sp/admin/iprofile/:uid', needAd, wrap(async (req, res) => {
-    const v = {}; for (const k of CHIAVI_IP) { const x = req.body.valori?.[k]; if (x !== '' && x != null && isFinite(Number(x))) v[k] = Math.max(-100, Math.min(100, Math.round(Number(x)))); }
-    if (CHIAVI_IP.slice(0, 10).some(k => v[k] == null)) return bad(res, 400, 'Servono tutti i 10 tratti del grafico.');
-    const me = await io(req);
-    await q(`insert into sp_iprofile (user_id, valori, il, da) values ($1,$2,now(),$3) on conflict (user_id) do update set valori = excluded.valori, il = now(), da = excluded.da`, [str(req.params.uid, 64), JSON.stringify(v), me.nome]);
+  // togli un piano: si archivia; le persone assegnate restano senza piano (l'anteprima lo dice prima)
+  app.delete('/api/sp/admin/piano/:id', needAd, wrap(async (req, res) => {
+    const id = str(req.params.id, 64);
+    await q('update sp_piani set archiviato = true where id = $1', [id]);
     res.json({ ok: true });
   }));
+  app.put('/api/sp/admin/regole', needAd, wrap(async (req, res) => { await sch.setImp('sp_regole', String(req.body.regole || '').replace(/\r/g, '').slice(0, 12000)); res.json({ ok: true }); }));
 
   /* ---------- guadagni (amministratore): tabella del mese, accordi per sede, malus, target personale, voci a mano, compenso ---------- */
   app.get('/api/sp/admin/guadagni', needAd, wrap(async (req, res) => {

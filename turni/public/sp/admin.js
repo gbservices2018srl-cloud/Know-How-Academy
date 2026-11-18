@@ -438,7 +438,7 @@ async function aPerf(m){
       ${senza.length ? `<details class="card" ${nelPiano.length ? '' : 'open'}><summary><b>Senza piano (${senza.length})</b></summary><div class="chips" style="margin-top:8px">${senza.map(p => `<button class="chip" data-psel="${p.id}" aria-pressed="${PSEL === p.id}">${esc(p.nome)}</button>`).join('')}</div></details>` : ''}
       ${dettaglio}`;
   }
-  if (PTAB === 'piani') corpo = `<div id="pianiXl"></div><div id="pianiEd"></div>`;
+  if (PTAB === 'piani') corpo = `<div id="pianiG"></div>`;
   if (PTAB === 'guadagni') corpo = `<div id="guadA"><div class="card"><p class="muted" style="margin:0">Calcolo dei guadagni…</p></div></div>`;
   if (PTAB === 'incentivi') {
     let inc = null, err = '', az = null;
@@ -458,7 +458,7 @@ async function aPerf(m){
   }
   m.innerHTML = `<h1>Performance</h1><p class="sub">Piano di crescita, obiettivi con le prove delle persone, test di passaggio e incentivi calcolati dal fatturato.</p>
     <div class="chips" style="margin-bottom:14px">${tabs.map(([k, t]) => `<button class="chip" data-pt="${k}" aria-pressed="${PTAB === k}">${t}${k === 'persone' && (r.dati.length + r.passaggi.length) ? ` (${r.dati.length + r.passaggi.length})` : ''}</button>`).join('')}</div>${corpo}`;
-  if (PTAB === 'piani') { pianiExcel($('#pianiXl'), () => aPerf(m), r.piani); editorPiani($('#pianiEd'), r.piani, () => aPerf(m), r.regole); }
+  if (PTAB === 'piani') gestionePiani($('#pianiG'), r, () => aPerf(m));
   if (PTAB === 'guadagni') { guadagniAdmin($('#guadA')); m.onclick = async e => { const t = e.target.closest('[data-pt]'); if (t) { PTAB = t.dataset.pt; return aPerf(m); } }; m.onchange = null; return; }
   // I-Profile: foto → lettura dei numeri (come l'app I-Profile) → controllo → salva
   const ipForm = (v = {}) => { const f = $('#ipForm'); if (!f) return;
@@ -499,38 +499,157 @@ async function aPerf(m){
     } catch (er) { toast(er.message); }
   };
 }
-// Piani da Excel: anteprima (livelli, obiettivi, regole dei bonus, chi va dove) e sostituzione dei piani attuali
-function pianiExcel(h, dopo, piani){
+/* ---------- Piano di crescita (amministratore): elenco dei piani; per ognuno Vedi · Modifica · Persone.
+   Si crea da zero nell'app oppure da Excel (aggiungere come piano nuovo o sostituire un piano che c'è già). ---------- */
+let PG = { vista: 'elenco', id: null, tab: 'vedi' };
+const CONTR = { dip: 'CCNL', piva: 'Partita IVA' };
+const H7 = ['RUOLO', 'FISSO EURO', 'VARIABILE', 'OBIETTIVI (HARD SKILL)', 'SOTTO OBIETTIVI', 'SOFT SKILL', 'SCUOLA DI FORMAZIONE'];
+function gestionePiani(h, r, ricarica){
+  const piani = r.piani, inPiano = id => r.persone.filter(x => x.piano === id);
+  const tipoTag = g => g.tipo === 'perc' ? '<span class="tag ok">automatico</span>' : g.tipo === 'manuale' ? '<span class="tag warn">a mano</span>' : '<span class="tag">nota</span>';
+  const testata = (titolo, sotto = '') => `<div class="row" style="gap:10px;margin-bottom:12px;flex-wrap:wrap"><button class="btn small" data-pg="elenco">← Tutti i piani</button><h2 style="margin:0" class="grow">${titolo}</h2>${sotto}</div>`;
+  if (PG.vista === 'elenco') {
+    h.innerHTML = `<div class="card"><div class="row" style="flex-wrap:wrap;gap:8px;justify-content:space-between"><div><h2 style="margin:0">I piani di crescita</h2><p class="muted small" style="margin:4px 0 0">Tocca un piano per vederlo, modificarlo e assegnarlo alle persone.</p></div>
+        <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn" data-pg="excel">Carica da Excel</button><button class="btn primary" data-pg="nuovo">+ Crea un piano da zero</button></div></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;margin-top:14px">
+        ${piani.map(p => { const n = inPiano(p.id).length; return `<button class="card" data-pgapri="${p.id}" style="text-align:left;cursor:pointer;margin:0;box-shadow:none;border:1px solid var(--line)">
+          <b style="font-size:16px">${esc(p.nome || 'Senza nome')}</b>${p.contratto ? ` <span class="tag info">${CONTR[p.contratto]}</span>` : ''}
+          <span class="small muted" style="display:block;margin-top:6px">${p.livelli.length} livelli · ${p.livelli.reduce((t, l) => t + l.obiettivi.length, 0)} obiettivi</span>
+          <span class="small" style="display:block;margin-top:2px"><b>${n}</b> ${n === 1 ? 'persona' : 'persone'}</span>
+          <span class="xs muted" style="display:block;margin-top:6px">${p.fonte ? (/\.xlsx$/i.test(p.fonte) ? 'Da Excel: ' + esc(p.fonte) : esc(p.fonte)) : 'Piano di prima'}</span></button>`; }).join('') || '<p class="muted">Nessun piano. Caricalo da Excel o crealo da zero.</p>'}</div></div>
+      <details class="card"><summary><b>Regole del piano di crescita</b> <span class="muted small">· le vede ogni persona nella sua Performance</span></summary>
+        <textarea id="pgReg" rows="10" style="width:100%;margin-top:8px" placeholder="Regole valide per tutti i piani (passaggi, retrocessioni, incentivi…)">${esc(r.regole || '')}</textarea>
+        <div class="row"><span class="grow"></span><button class="btn primary small" id="pgRegS">Salva le regole</button></div></details>`;
+  } else if (PG.vista === 'excel') { return pianiExcel(h, r, ricarica, testata); }
+  else {
+    const p = PG.vista === 'nuovo' ? { id: 'nuovo', nome: '', contratto: '', livelli: [] } : piani.find(x => x.id === PG.id);
+    if (!p) { PG = { vista: 'elenco' }; return gestionePiani(h, r, ricarica); }
+    const tabs = PG.vista === 'nuovo' ? [] : [['vedi', 'Vedi'], ['modifica', 'Modifica'], ['persone', `Persone (${inPiano(p.id).length})`]];
+    const tab = PG.vista === 'nuovo' ? 'modifica' : PG.tab;
+    const chips = tabs.length ? `<div class="chips" style="margin-bottom:12px">${tabs.map(([k, t]) => `<button class="chip" data-pgtab="${k}" aria-pressed="${tab === k}">${t}</button>`).join('')}</div>` : '';
+    const sotto = p.contratto ? `<span class="tag info">${CONTR[p.contratto]}</span>` : '';
+    if (tab === 'vedi') {
+      const H = p.intestazioni?.length === 7 ? p.intestazioni : H7;
+      h.innerHTML = testata(esc(p.nome || 'Senza nome'), sotto) + chips + p.livelli.map(l => `<div class="card"><div class="pch"><div><span class="pcl">${esc(H[0])}</span><b>${esc(l.ruolo)}</b></div><div><span class="pcl">${esc(H[1])}</span><b>${esc(l.fisso || '—')}</b></div>
+          <div style="grid-column:1/-1"><span class="pcl">${esc(H[2])}</span>${(l.regole || []).length ? l.regole.map(g => `<div class="small" style="display:flex;gap:8px;align-items:baseline;margin:3px 0">${tipoTag(g)}<span>${esc(g.testo)}</span></div>`).join('') : '<span class="small">—</span>'}</div></div>
+        ${l.obiettivi.map(o => `<div class="pcr ${o.test ? 'test' : ''}"><span class="pcl">${esc(H[3])}</span><b class="pco">${esc(o.testo)}</b>
+          ${o.sotto ? `<div class="pcb"><span class="pcl">${esc(H[4])}</span><div class="pct">${esc(o.sotto)}</div></div>` : ''}${o.soft ? `<div class="pcb"><span class="pcl">${esc(H[5])}</span><div class="pct">${esc(o.soft)}</div></div>` : ''}${o.scuola ? `<div class="pcb"><span class="pcl">${esc(H[6])}</span><div class="pct">${esc(o.scuola)}</div></div>` : ''}</div>`).join('') || '<p class="muted small">Nessun obiettivo.</p>'}</div>`).join('')
+        + (p.note ? `<details class="card"><summary><b>Fonti e criteri del file</b></summary><div class="small" style="white-space:pre-line;margin-top:8px">${esc(p.note)}</div></details>` : '');
+    } else if (tab === 'persone') {
+      const dentro = inPiano(p.id), fuori = r.persone.filter(x => x.piano !== p.id);
+      const opt = sel => p.livelli.map(l => `<option value="${l.n}" ${sel === l.n ? 'selected' : ''}>${esc(l.ruolo)}</option>`).join('');
+      h.innerHTML = testata(esc(p.nome || 'Senza nome'), sotto) + chips + `<div class="card"><h3 style="margin:0 0 8px">Persone in questo piano</h3>
+        ${dentro.map(x => `<div class="row" style="gap:8px;padding:8px 0;border-bottom:1px solid var(--line);flex-wrap:wrap"><span class="grow"><b>${esc(x.nome)}</b> <span class="xs muted">${esc(x.figura || '')}</span></span>
+          <select data-pgliv="${x.id}" aria-label="Livello">${opt(x.livello)}</select><button class="btn small" data-pgvia="${x.id}">Togli dal piano</button></div>`).join('') || '<p class="muted small">Nessuno.</p>'}</div>
+        <div class="card"><h3 style="margin:0 0 8px">Aggiungi una persona</h3><div class="row" style="gap:8px;flex-wrap:wrap">
+          <select id="pgChi" class="grow"><option value="">Scegli la persona…</option>${fuori.map(x => `<option value="${x.id}">${esc(x.nome)}${x.piano ? ' · ora in ' + esc(piani.find(y => y.id === x.piano)?.nome || '') : ''}</option>`).join('')}</select>
+          <select id="pgLiv" aria-label="Livello">${opt(1)}</select><button class="btn primary" id="pgAgg">Assegna</button></div>
+          <p class="xs muted" style="margin:8px 0 0">Se la persona è in un altro piano, passa a questo.</p></div>`;
+    } else {
+      // modifica (o nuovo): livelli → obiettivi con sotto-obiettivi, soft skill, scuola di formazione
+      const P = JSON.parse(JSON.stringify(p)); if (!P.livelli.length) P.livelli.push({ ruolo: '', fisso: '', variabile: '', obiettivi: [{ testo: '' }] });
+      let aperto = PG.vista === 'nuovo' ? 0 : null;
+      const ta = (cls, v, ph, rows = 3) => `<textarea class="${cls}" rows="${rows}" placeholder="${ph}" style="width:100%;resize:vertical">${esc(v || '')}</textarea>`;
+      const draw = () => {
+        h.innerHTML = testata(PG.vista === 'nuovo' ? 'Nuovo piano' : esc(p.nome || 'Senza nome'), sotto) + chips + `<div class="card">
+          <div class="row" style="gap:10px;flex-wrap:wrap"><label class="f grow">Nome del piano<input type="text" id="peNome" value="${esc(P.nome)}" placeholder="es. CCNL"></label>
+            <label class="f">Contratto<select id="peContr"><option value="">—</option><option value="dip" ${P.contratto === 'dip' ? 'selected' : ''}>CCNL</option><option value="piva" ${P.contratto === 'piva' ? 'selected' : ''}>Partita IVA</option></select></label></div>
+          <p class="muted small">Ogni livello è un ruolo, dal primo (ingresso) all'ultimo. Gli obiettivi di un livello sono quelli da raggiungere per superarlo. Il variabile: una voce per riga; le % sul fatturato si calcolano da sole.</p>
+          ${P.livelli.map((l, i) => { const ap = aperto === i; return `<div class="card" style="background:var(--sunken);box-shadow:none" data-pel="${i}">
+            <div class="row" style="gap:6px"><button class="btn small" data-peapri="${i}" style="min-width:34px">${ap ? '▾' : '▸'}</button><b class="small">Livello ${i + 1}</b><input type="text" class="ruolo grow" value="${esc(l.ruolo)}" placeholder="Ruolo (es. REC SENIOR)">
+              ${ap ? '' : `<span class="muted xs">${(l.obiettivi || []).filter(o => o.testo).length} obiettivi</span>`}
+              <button class="btn small" data-pesu="${i}" title="Sposta su" ${i ? '' : 'disabled'}>↑</button><button class="btn small danger" data-pevl="${i}" title="Togli il livello">×</button></div>
+            <div ${ap ? '' : 'hidden'} style="margin-top:10px;display:grid;gap:8px">
+              <label class="f">Fisso<input type="text" class="fisso" value="${esc(l.fisso)}" placeholder="es. 1530"></label>
+              <label class="f">Variabile <span class="muted xs">· una voce per riga, es. «0,3% sul fatturato mensile a target»</span>${ta('variabile', l.variabile, 'es. 0,25% SUL FATTURATO MENSILE A TARGET', 4)}</label>
+              <b class="small">Obiettivi (hard skill)</b>
+              ${(l.obiettivi || []).map((o, j) => `<div data-peo="${j}" style="border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--surface);display:grid;gap:6px">
+                <div class="row" style="gap:6px"><input type="text" class="testo grow" value="${esc(o.testo)}" placeholder="Obiettivo"><button class="btn small danger" data-pevo="${i}|${j}">×</button></div>
+                ${ta('sotto', o.sotto, 'Sotto obiettivi (uno per riga)', 3)}<div class="row" style="gap:6px;flex-wrap:wrap">${ta('soft', o.soft, 'Soft skill', 2)}${ta('scuola', o.scuola, 'Scuola di formazione', 2)}</div></div>`).join('')}
+              <button class="btn small" data-pepo="${i}" style="justify-self:start">+ Obiettivo</button></div></div>`; }).join('')}
+          <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn small" id="pePiuL">+ Livello</button><span class="grow"></span>
+            ${PG.vista === 'nuovo' ? '' : '<button class="btn danger" id="peVia">Togli il piano</button>'}<button class="btn primary" id="peSalva">${PG.vista === 'nuovo' ? 'Crea il piano' : 'Salva le modifiche'}</button></div></div>`;
+      };
+      const leggi = () => {
+        P.nome = h.querySelector('#peNome').value; P.contratto = h.querySelector('#peContr').value;
+        h.querySelectorAll('[data-pel]').forEach(el => { const l = P.livelli[+el.dataset.pel], v = c => el.querySelector('.' + c).value;
+          l.ruolo = v('ruolo'); l.fisso = v('fisso'); l.variabile = v('variabile');
+          el.querySelectorAll('[data-peo]').forEach(oe => { const o = l.obiettivi[+oe.dataset.peo], w = c => oe.querySelector('.' + c).value; o.testo = w('testo'); o.sotto = w('sotto'); o.soft = w('soft'); o.scuola = w('scuola'); }); });
+      };
+      draw();
+      h.onclick = async e => {
+        const t = e.target;
+        if (t.closest('[data-pg]')) { PG = { vista: t.closest('[data-pg]').dataset.pg }; return gestionePiani(h, r, ricarica); }
+        const tb = t.closest('[data-pgtab]'); if (tb) { PG.tab = tb.dataset.pgtab; return gestionePiani(h, r, ricarica); }
+        const a = t.closest('[data-peapri]'); if (a) { leggi(); aperto = aperto === +a.dataset.peapri ? null : +a.dataset.peapri; return draw(); }
+        if (t.id === 'pePiuL') { leggi(); P.livelli.push({ ruolo: '', fisso: '', variabile: '', obiettivi: [{ testo: '' }] }); aperto = P.livelli.length - 1; return draw(); }
+        const su = t.closest('[data-pesu]'); if (su) { leggi(); const i = +su.dataset.pesu; [P.livelli[i - 1], P.livelli[i]] = [P.livelli[i], P.livelli[i - 1]]; aperto = null; return draw(); }
+        const vl = t.closest('[data-pevl]'); if (vl) { leggi(); if (!confirm('Togliere questo livello? Le prove già inviate restano archiviate.')) return; P.livelli.splice(+vl.dataset.pevl, 1); aperto = null; return draw(); }
+        const po = t.closest('[data-pepo]'); if (po) { leggi(); P.livelli[+po.dataset.pepo].obiettivi.push({ testo: '' }); return draw(); }
+        const vo = t.closest('[data-pevo]'); if (vo) { leggi(); const [i, j] = vo.dataset.pevo.split('|').map(Number); P.livelli[i].obiettivi.splice(j, 1); return draw(); }
+        if (t.id === 'peVia') { const n = inPiano(p.id).length; if (!confirm(`Togliere il piano «${p.nome}»?${n ? ` ${n} persone resteranno senza piano.` : ''} Resta archiviato con le prove già inviate.`)) return;
+          try { await api('DELETE', '/api/sp/admin/piano/' + p.id); toast('Piano tolto.'); PG = { vista: 'elenco' }; ricarica(); } catch (er) { toast(er.message); } return; }
+        if (t.id === 'peSalva') { leggi(); t.disabled = true;
+          try { const x = await api('PUT', '/api/sp/admin/piano/' + p.id, P); toast(PG.vista === 'nuovo' ? 'Piano creato.' : 'Piano salvato.'); PG = { vista: 'piano', id: x.id, tab: 'vedi' }; ricarica(); } catch (er) { toast(er.message); t.disabled = false; } }
+      };
+      h.onchange = null;
+      return;
+    }
+  }
+  h.onclick = async e => {
+    const t = e.target;
+    if (t.closest('[data-pg]')) { PG = { vista: t.closest('[data-pg]').dataset.pg, tab: 'vedi' }; return gestionePiani(h, r, ricarica); }
+    const ap = t.closest('[data-pgapri]'); if (ap) { PG = { vista: 'piano', id: ap.dataset.pgapri, tab: 'vedi' }; return gestionePiani(h, r, ricarica); }
+    const tb = t.closest('[data-pgtab]'); if (tb) { PG.tab = tb.dataset.pgtab; return gestionePiani(h, r, ricarica); }
+    if (t.id === 'pgRegS') { try { await api('PUT', '/api/sp/admin/regole', { regole: h.querySelector('#pgReg').value }); toast('Regole salvate.'); } catch (er) { toast(er.message); } return; }
+    const via = t.closest('[data-pgvia]');
+    if (via) { const x = r.persone.find(y => y.id === via.dataset.pgvia); if (!confirm(`Togliere ${x.nome} da questo piano?`)) return;
+      try { await api('PUT', `/api/sp/admin/perf/${x.id}`, { piano: '' }); toast('Tolta dal piano.'); ricarica(); } catch (er) { toast(er.message); } return; }
+    if (t.id === 'pgAgg') { const chi = h.querySelector('#pgChi').value; if (!chi) return toast('Scegli la persona.');
+      try { await api('PUT', `/api/sp/admin/perf/${chi}`, { piano: PG.id, livello: h.querySelector('#pgLiv').value }); toast('Assegnata.'); ricarica(); } catch (er) { toast(er.message); } }
+  };
+  h.onchange = async e => {
+    const l = e.target.closest('[data-pgliv]');
+    if (l) { try { await api('PUT', `/api/sp/admin/perf/${l.dataset.pgliv}`, { piano: PG.id, livello: l.value }); toast('Livello aggiornato.'); ricarica(); } catch (er) { toast(er.message); } }
+  };
+}
+
+// Carica da Excel: per ogni file scegli se aggiungerlo come piano nuovo o sostituire un piano; poi chi va dove
+function pianiExcel(h, r, dopo, testata){
   let F = null, A = null;
-  const eurA = n => '€ ' + Number(n).toLocaleString('it-IT', { maximumFractionDigits: 2, useGrouping: 'always' });
-  const tipoTag = r => r.tipo === 'perc' ? '<span class="tag ok">automatico</span>' : r.tipo === 'manuale' ? '<span class="tag warn">a mano</span>' : '<span class="tag">nota</span>';
+  const tipoTag = g => g.tipo === 'perc' ? '<span class="tag ok">automatico</span>' : g.tipo === 'manuale' ? '<span class="tag warn">a mano</span>' : '<span class="tag">nota</span>';
   const draw = () => {
-    const fonti = piani.filter(x => x.fonte).map(x => `${x.nome} (${x.fonte})`).join(' · ');
-    h.innerHTML = `<div class="card"><h2 style="margin:0">Carica i piani da Excel</h2>
-      <p class="muted small" style="margin:6px 0 10px">Il file «Piano di inserimento e crescita» (colonne RUOLO · FISSO · VARIABILE · OBIETTIVI · SOTTO OBIETTIVI · SOFT SKILL · SCUOLA DI FORMAZIONE). Puoi scegliere insieme il file CCNL e quello Partita IVA.
-      Confermando, i piani di adesso si archiviano (le prove già inviate restano salvate) e ognuno va nel piano del suo contratto.${fonti ? `<br><b>Caricati adesso:</b> ${esc(fonti)}` : ''}</p>
-      <div class="row" style="gap:8px;flex-wrap:wrap"><label class="btn" style="cursor:pointer">Scegli i file .xlsx<input type="file" id="xlF" accept=".xlsx" multiple hidden></label><span class="small muted grow" id="xlN">${F ? [...F].map(f => esc(f.name)).join(', ') : 'Nessun file scelto'}</span>
-        <button class="btn primary" id="xlA" ${F ? '' : 'disabled'}>Anteprima</button></div>
-      ${A ? `<div style="margin-top:14px">${A.piani.map(p => `<details class="card" style="background:var(--sunken);box-shadow:none" open><summary><b>${esc(p.nome)}</b> <span class="muted small">· ${p.livelli.length} livelli · ${p.livelli.reduce((t, l) => t + l.obiettivi.length, 0)} righe · ${esc(p.file)}</span></summary>
-          ${p.livelli.map(l => `<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--line)"><b>${esc(l.ruolo)}</b> <span class="muted small">· fisso ${esc(l.fisso || '—')} · ${l.obiettivi.length} obiettivi</span>
-            ${l.regole.length ? `<div style="margin-top:4px">${l.regole.map(r => `<div class="small" style="display:flex;gap:8px;align-items:baseline;margin:3px 0">${tipoTag(r)}<span><span class="muted">${esc(r.testo)}</span><br>→ ${esc(r.spiega)}</span></div>`).join('')}</div>` : '<div class="small muted">Nessun variabile.</div>'}</div>`).join('')}</details>`).join('')}
-        <div class="card" style="box-shadow:none;border:1px solid var(--line)"><h3 style="margin:0 0 6px">Chi va dove</h3><p class="xs muted" style="margin:0 0 8px">Proposta: piano del suo contratto, stesso ruolo di adesso o il primo della sua figura. Puoi cambiarla qui.</p>
-          <div class="tw"><table class="t"><thead><tr><th>Persona</th><th>Contratto</th><th>Adesso</th><th>Dopo</th></tr></thead><tbody>
-          ${A.persone.map(x => `<tr><td><b>${esc(x.nome)}</b><br><span class="xs muted">${esc(x.figura)}</span></td><td>${x.contratto === 'piva' ? 'P.IVA' : x.contratto === 'dip' ? 'CCNL' : '—'}</td><td class="small">${esc(x.da || '—')}</td>
-            <td><select data-xs="${esc(x.id)}"><option value="">Nessun piano</option>${A.piani.map(p => `<optgroup label="${esc(p.nome)}">${p.livelli.map((l, i) => `<option value="${p.contratto}|${i + 1}" ${x.piano === p.contratto && x.livello === i + 1 ? 'selected' : ''}>${esc(p.nome)} · ${esc(l.ruolo)}</option>`).join('')}</optgroup>`).join('')}</select></td></tr>`).join('')}
-          </tbody></table></div></div>
-        <div class="row"><span class="grow"></span><button class="btn" id="xlX">Annulla</button><button class="btn primary" id="xlOk">Conferma e sostituisci i piani</button></div></div>` : ''}</div>`;
+    h.innerHTML = testata('Carica da Excel') + `<div class="card">
+      <p class="muted small" style="margin:0 0 10px">Il file «Piano di inserimento e crescita» (colonne ${H7.join(' · ')}). Puoi scegliere più file insieme (es. CCNL e Partita IVA).</p>
+      <div class="row" style="gap:8px;flex-wrap:wrap"><label class="btn" style="cursor:pointer">Scegli i file .xlsx<input type="file" id="xlF" accept=".xlsx" multiple hidden></label><span class="small muted grow">${F ? [...F].map(f => esc(f.name)).join(', ') : 'Nessun file scelto'}</span>
+        <button class="btn primary" id="xlA" ${F ? '' : 'disabled'}>Anteprima</button></div></div>
+      ${A ? `${A.piani.map(p => `<div class="card"><div class="row" style="flex-wrap:wrap;gap:8px"><div class="grow"><b>${esc(p.nome)}</b> <span class="muted small">· ${p.livelli.length} livelli · ${p.livelli.reduce((t, l) => t + l.obiettivi.length, 0)} obiettivi · ${esc(p.file)}</span></div>
+          <label class="f" style="min-width:260px">Cosa faccio con questo file?<select data-xm="${esc(p.file)}"><option value="nuovo" ${A.modi[p.file] === 'nuovo' ? 'selected' : ''}>Aggiungilo come piano nuovo</option>
+            ${A.esistenti.map(x => `<option value="${x.id}" ${A.modi[p.file] === x.id ? 'selected' : ''}>Sostituisci «${esc(x.nome)}»</option>`).join('')}</select></label></div>
+          <details style="margin-top:8px"><summary class="small">Livelli e variabile</summary>${p.livelli.map(l => `<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--line)"><b class="small">${esc(l.ruolo)}</b> <span class="muted xs">· fisso ${esc(l.fisso || '—')} · ${l.obiettivi.length} obiettivi</span>
+            ${l.regole.map(g => `<div class="xs" style="display:flex;gap:8px;align-items:baseline;margin:3px 0">${tipoTag(g)}<span><span class="muted">${esc(g.testo)}</span> → ${esc(g.spiega)}</span></div>`).join('')}</div>`).join('')}</details></div>`).join('')}
+        <div class="card"><h3 style="margin:0 0 6px">Chi va dove</h3><p class="xs muted" style="margin:0 0 8px">Se sostituisci un piano, ci sono le sue persone (stesso ruolo, se c'è). Se aggiungi un piano nuovo, le persone del suo contratto che oggi non hanno un piano. «Lascia com'è» non cambia niente.</p>
+          ${A.persone.length ? `<div class="tw"><table class="t"><thead><tr><th>Persona</th><th>Adesso</th><th>Dopo</th></tr></thead><tbody>
+          ${A.persone.map(x => { const p = A.piani.find(y => y.file === x.file); return `<tr><td><b>${esc(x.nome)}</b><br><span class="xs muted">${esc(x.figura)} · ${x.contratto === 'piva' ? 'P.IVA' : x.contratto === 'dip' ? 'CCNL' : '—'}</span></td><td class="small">${esc(x.da || 'Nessun piano')}</td>
+            <td><select data-xs="${esc(x.id)}"><option value="">Lascia com'è</option>${p.livelli.map((l, i) => `<option value="${esc(p.file)}|${i + 1}" ${x.livello === i + 1 ? 'selected' : ''}>${esc(p.nome)} · ${esc(l.ruolo)}</option>`).join('')}</select></td></tr>`; }).join('')}
+          </tbody></table></div>` : '<p class="small muted" style="margin:0">Nessuna persona da spostare: le assegni dopo, dal piano → Persone.</p>'}</div>
+        <div class="row"><span class="grow"></span><button class="btn" data-pg="elenco">Annulla</button><button class="btn primary" id="xlOk">Conferma</button></div>` : ''}`;
   };
   const fd = () => { const f = new FormData(); [...F].forEach(x => f.append('file', x)); return f; };
-  h.onchange = e => { if (e.target.id === 'xlF') { F = e.target.files.length ? e.target.files : null; A = null; draw(); } };
+  const anteprima = async modi => { const f = fd(); if (modi) f.append('modi', JSON.stringify(modi)); A = await api('POST', '/api/sp/admin/piani/excel/anteprima', undefined, f); draw(); };
+  h.onchange = async e => {
+    if (e.target.id === 'xlF') { F = e.target.files.length ? e.target.files : null; A = null; return draw(); }
+    const m = e.target.closest('[data-xm]'); if (m) { const modi = { ...A.modi, [m.dataset.xm]: m.value }; try { await anteprima(modi); } catch (er) { toast(er.message); } }
+  };
   h.onclick = async e => {
-    if (e.target.id === 'xlA') { e.target.disabled = true; try { A = await api('POST', '/api/sp/admin/piani/excel/anteprima', undefined, fd()); draw(); } catch (er) { toast(er.message); e.target.disabled = false; } }
-    if (e.target.id === 'xlX') { A = null; F = null; draw(); }
+    if (e.target.closest('[data-pg]')) { PG = { vista: e.target.closest('[data-pg]').dataset.pg }; return gestionePiani(h, r, dopo); }
+    if (e.target.id === 'xlA') { e.target.disabled = true; try { await anteprima(null); } catch (er) { toast(er.message); e.target.disabled = false; } }
     if (e.target.id === 'xlOk') {
-      if (!confirm('Sostituire i piani di adesso con quelli del file? I piani di prima si archiviano, le prove già inviate restano salvate.')) return;
-      const scelte = {}; h.querySelectorAll('[data-xs]').forEach(sl => { const [pc, lv] = sl.value.split('|'); scelte[sl.dataset.xs] = { piano: pc || '', livello: lv || '' }; });
-      const f = fd(); f.append('scelte', JSON.stringify(scelte)); e.target.disabled = true;
-      try { await api('POST', '/api/sp/admin/piani/excel/conferma', undefined, f); toast('Piani caricati e persone assegnate.'); A = null; F = null; dopo(); } catch (er) { toast(er.message); e.target.disabled = false; }
+      const sost = A.piani.filter(p => A.modi[p.file] !== 'nuovo').map(p => `«${A.esistenti.find(x => x.id === A.modi[p.file])?.nome}» con ${p.file}`);
+      if (!confirm(`${sost.length ? 'Sostituisco ' + sost.join(', ') + ' (livelli e obiettivi di prima restano archiviati con le prove già inviate). ' : ''}${A.piani.length - sost.length ? 'Aggiungo ' + (A.piani.length - sost.length) + ' piano nuovo. ' : ''}Confermi?`)) return;
+      const scelte = {}; h.querySelectorAll('[data-xs]').forEach(sl => { const [file, lv] = sl.value.split('|'); if (file) scelte[sl.dataset.xs] = { file, livello: lv }; });
+      const f = fd(); f.append('modi', JSON.stringify(A.modi)); f.append('scelte', JSON.stringify(scelte)); e.target.disabled = true;
+      try { await api('POST', '/api/sp/admin/piani/excel/conferma', undefined, f); toast('Fatto.'); PG = { vista: 'elenco' }; dopo(); } catch (er) { toast(er.message); e.target.disabled = false; }
     }
   };
   draw();
@@ -596,73 +715,6 @@ async function guadagniAdmin(h){
     }
   };
 }
-function editorPiani(h, piani, dopo, regole){
-  let P = JSON.parse(JSON.stringify(piani)), sel = 0, R = regole || '', apertoL = null;
-  const nuovoL = () => ({ruolo: '', bonus: '', fisso: '', variabile: '', area: '', skill: [], obiettivi: [{testo: '', misura: ''}]});
-  const ta = (cls, v, ph, rows = 3) => `<textarea class="${cls}" rows="${rows}" placeholder="${ph}" style="width:100%;resize:vertical">${esc(v || '')}</textarea>`;
-  const draw = () => {
-    const p = P[sel];
-    h.innerHTML = `<div class="card"><div class="row" style="flex-wrap:wrap;gap:6px"><div class="chips grow">${P.map((x, i) => `<button class="chip" data-sel="${i}" aria-pressed="${i === sel}">${esc(x.nome || 'Nuovo piano')}</button>`).join('')}<button class="chip" id="nuovoP">+ Nuovo piano</button></div>
-        <button class="btn small" id="modello" title="Carica qui il piano di crescita To Smile 2025 (dal documento ufficiale): poi controlli e salvi">Carica il piano di crescita To Smile</button></div></div>
-      <details class="card" ${R ? '' : 'open'}><summary><b>Regole del piano di crescita</b> <span class="muted small">· le vede ogni persona nella sua Performance</span></summary>
-        <div style="margin-top:8px">${ta('regole', R, 'Regole valide per tutti i piani (passaggi, retrocessioni, incentivi, note di credito…)', 10)}</div></details>
-      ${p ? `<div class="card"><label class="f">Nome del piano<input type="text" id="pNome" value="${esc(p.nome)}" placeholder="es. ASO"></label>
-        <p class="muted small">Il livello 1 è il ruolo di ingresso (es. in training). Per ogni livello: compenso, competenze da sviluppare e gli obiettivi (pass) per arrivarci. Tocca un livello per aprirlo.</p>
-        ${p.livelli.map((l, i) => { const ap = apertoL === i; return `<div class="card" style="background:var(--sunken);box-shadow:none" data-l="${i}">
-          <div class="row"><button class="btn small" data-apri="${i}" aria-expanded="${ap}" style="min-width:34px">${ap ? '▾' : '▸'}</button><b>Livello ${i + 1}</b><input type="text" class="ruolo grow" value="${esc(l.ruolo)}" placeholder="Ruolo">
-            ${ap ? '' : `<span class="muted xs">${esc(l.fisso || '')}${i ? ' · ' + (l.obiettivi || []).filter(o => o.testo).length + ' obiettivi' : ''}</span>`}<button class="btn small danger" data-vl="${i}">×</button></div>
-          <div ${ap ? '' : 'hidden'} style="margin-top:10px;display:grid;gap:8px">
-            <div class="row" style="flex-wrap:wrap"><label class="f grow">Compenso fisso<input type="text" class="fisso" value="${esc(l.fisso)}" placeholder="es. 1.530 € netti/mese (13ª e 14ª incluse)"></label>
-              <label class="f grow">Bonus al passaggio<input type="text" class="bonus" value="${esc(l.bonus)}" placeholder="${i ? 'facoltativo' : 'livello di ingresso'}" ${i ? '' : 'disabled'}></label></div>
-            <label class="f">Compenso variabile (%) <span class="muted xs">· una voce per riga</span>${ta('variabile', l.variabile, 'es. 1% su porta pazienti')}</label>
-            <div class="row" style="flex-wrap:wrap;align-items:flex-end;gap:8px;background:var(--surface);border-radius:10px;padding:8px 10px"><span class="small"><b>Incentivo calcolato in automatico</b></span>
-              <label class="f" style="width:110px">% sul fatturato<input type="text" inputmode="decimal" class="incPerc" value="${l.incPerc ?? ''}" placeholder="es. 0,15"></label>
-              <label class="f">della sede<select class="incSoglia"><option value="target" ${l.incSoglia !== 'sempre' ? 'selected' : ''}>solo se a target</option><option value="sempre" ${l.incSoglia === 'sempre' ? 'selected' : ''}>sempre</option></select></label>
-              <span class="muted xs" style="flex-basis:100%">Vuoto = nessun calcolo automatico. Il fatturato e il target arrivano dal consuntivo della sede della persona in Gestione finanziaria.</span></div>
-            <label class="f">Compenso di area${ta('area', l.area, 'facoltativo', 2)}</label>
-            <label class="f">Hard skill da sviluppare <span class="muted xs">· una per riga</span>${ta('skill', (l.skill || []).join('\n'), 'es. Time management', 4)}</label>
-            ${i ? `<div><b class="small">Obiettivi da raggiungere (pass per diventare ${esc(l.ruolo || 'questo ruolo')})</b>
-              <div style="margin-top:6px">${l.obiettivi.map((o, j) => `<div class="row" data-o="${j}" style="margin-bottom:6px"><input type="text" class="testo grow" value="${esc(o.testo)}" placeholder="Obiettivo"><input type="text" class="misura" value="${esc(o.misura)}" placeholder="Come si misura (facoltativo)"><button class="btn small danger" data-vo="${i}|${j}">×</button></div>`).join('')}
-              <button class="btn small" data-po="${i}">+ Obiettivo</button></div></div>` : ''}
-          </div></div>`; }).join('')}
-        <div class="row"><button class="btn small" id="piuL">+ Livello</button><span class="grow"></span><button class="btn danger" id="viaP">Togli il piano</button><button class="btn primary" id="salvaP">Salva i piani</button></div></div>`
-      : '<div class="card"><p class="muted">Nessun piano. Carica quello ufficiale con «Carica il piano di crescita To Smile» oppure crea il primo con «+ Nuovo piano».</p><div class="row"><span class="grow"></span><button class="btn primary" id="salvaP">Salva</button></div></div>'}`;
-  };
-  const leggi = () => {
-    const rg = h.querySelector('.regole'); if (rg) R = rg.value;
-    const p = P[sel]; if (!p) return;
-    p.nome = h.querySelector('#pNome').value;
-    h.querySelectorAll('[data-l]').forEach(el => { const l = p.livelli[+el.dataset.l]; const v = c => el.querySelector('.' + c).value;
-      l.ruolo = v('ruolo'); l.bonus = v('bonus'); l.fisso = v('fisso'); l.variabile = v('variabile'); l.area = v('area'); l.incPerc = v('incPerc').trim(); l.incSoglia = v('incSoglia');
-      l.skill = v('skill').split('\n').map(x => x.trim()).filter(Boolean);
-      el.querySelectorAll('[data-o]').forEach(oe => { const o = l.obiettivi[+oe.dataset.o]; o.testo = oe.querySelector('.testo').value; o.misura = oe.querySelector('.misura').value; }); });
-  };
-  h.onclick = async e => {
-    const s = e.target.closest('[data-sel]'); if (s) { leggi(); sel = +s.dataset.sel; apertoL = null; return draw(); }
-    const ap = e.target.closest('[data-apri]'); if (ap) { leggi(); apertoL = apertoL === +ap.dataset.apri ? null : +ap.dataset.apri; return draw(); }
-    if (e.target.id === 'modello') {
-      leggi();
-      const m = await api('GET', '/api/sp/admin/piani/modello');
-      const gia = new Set(P.map(x => x.nome.trim().toLowerCase())), nuovi = m.piani.filter(x => !gia.has(x.nome.trim().toLowerCase()));
-      if (!confirm(`Carico il piano di crescita To Smile: ${nuovi.length} piani${nuovi.length < m.piani.length ? ` (${m.piani.length - nuovi.length} già presenti con lo stesso nome restano come sono)` : ''}${!R.trim() ? ' e le regole' : ''}.\n\nPoi controlla e premi «Salva i piani».`)) return;
-      nuovi.forEach(x => P.push({ nome: x.nome, livelli: x.livelli.map(l => ({ ...l, bonus: '', obiettivi: l.obiettivi.map(t => ({testo: t, misura: ''})) })) }));
-      if (!R.trim()) R = m.regole;
-      sel = Math.max(0, P.length - nuovi.length); apertoL = null; draw(); toast('Caricato: controlla e premi «Salva i piani».'); return;
-    }
-    if (e.target.id === 'nuovoP') { leggi(); P.push({nome: '', livelli: [{...nuovoL(), obiettivi: []}, nuovoL()]}); sel = P.length - 1; apertoL = 0; return draw(); }
-    if (e.target.id === 'piuL') { leggi(); P[sel].livelli.push(nuovoL()); apertoL = P[sel].livelli.length - 1; return draw(); }
-    const vl = e.target.closest('[data-vl]'); if (vl) { leggi(); P[sel].livelli.splice(+vl.dataset.vl, 1); apertoL = null; return draw(); }
-    const po = e.target.closest('[data-po]'); if (po) { leggi(); P[sel].livelli[+po.dataset.po].obiettivi.push({testo: '', misura: ''}); return draw(); }
-    const vo = e.target.closest('[data-vo]'); if (vo) { leggi(); const [i, j] = vo.dataset.vo.split('|').map(Number); P[sel].livelli[i].obiettivi.splice(j, 1); return draw(); }
-    if (e.target.id === 'viaP') { if (!confirm('Togliere questo piano? Resta archiviato con i dati già inviati.')) return; P.splice(sel, 1); sel = 0; }
-    if (e.target.id === 'salvaP' || e.target.id === 'viaP') {
-      if (e.target.id === 'salvaP') leggi();
-      try { await api('PUT', '/api/sp/admin/piani', {piani: P, regole: R}); toast('Piani salvati.'); dopo(); } catch (er) { toast(er.message); }
-    }
-  };
-  draw();
-}
-
 /* ---------- documenti: buste paga, CU, contratti ---------- */
 let DOCF = { tipo: 'busta' };
 async function aDoc(m){
