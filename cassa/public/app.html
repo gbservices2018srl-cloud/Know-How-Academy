@@ -287,6 +287,9 @@ async function vUscite() {
     <div class="field"><label for="u-imp">Importo (€) <span class="req">*</span></label><input id="u-imp" class="big-in" inputmode="decimal" placeholder="0,00" autocomplete="off"></div>
     <div class="field"><label for="u-nota">Note: a cosa si riferisce <span class="req">*</span></label><textarea id="u-nota" maxlength="1000" placeholder="es. Acquisto cancelleria, rimborso spese corriere…"></textarea></div>
     <div class="field"><span class="lbl">Come hai pagato <span class="req">*</span></span><div class="seg" id="u-met">${Object.entries(METODI).map(([k, t]) => `<button type="button" data-met="${k}">${t}</button>`).join('')}</div></div>
+    <div class="field"><span class="lbl">Foto della fattura <span class="req">*</span></span>
+      <label class="btn wide" style="cursor:pointer" id="u-fl">📷 Fotografa o scegli la fattura<input type="file" id="u-fat" accept="image/*,application/pdf" hidden></label>
+      <div class="muted" id="u-fn" style="font-size:13px;margin-top:6px">La vede solo l'amministrazione: quando la scarica, si cancella dal server.</div></div>
     <button class="btn primary wide" type="submit">Registra uscita</button>
   </form>
   <div class="card pad form" style="margin:0 0 16px">
@@ -308,7 +311,7 @@ async function vUscite() {
       <div class="tot">${meseOra ? `<span>Oggi <b>${fE(d.totaleOggi)}</b></span>` : ''}<span>Totale del mese <b>${fE(d.totale)}</b></span></div></div>
     ${d.totale ? `<div class="tot" style="margin-top:-4px">${esc(metTxt(d.perMetodo))}</div>` : ''}
     ${d.uscite.length ? d.uscite.map(u => `<div class="riga ${u.annullata ? 'off' : ''}"><div class="gr"><div class="t">${esc(u.nota)}</div>
-      <div class="s"><b>${esc(METODI[u.metodo] || u.metodo)}</b> · ${esc(fD(u.data))} · ${esc(fOra(u.il))} · ${esc(u.chi)}${tutte ? ' · ' + esc(u.sedeNome) : ''}${u.annullata ? ' · <b>annullata</b>' + (u.annullataMotivo ? ': ' + esc(u.annullataMotivo) : '') : ''}</div></div>
+      <div class="s"><b>${esc(METODI[u.metodo] || u.metodo)}</b> · ${esc(fD(u.data))} · ${esc(fOra(u.il))} · ${esc(u.chi)}${tutte ? ' · ' + esc(u.sedeNome) : ''}${u.fattura ? (u.fattura.scaricata ? ' · 🧾 fattura presa dall\'amministrazione' : ' · 🧾 fattura allegata') : ''}${u.annullata ? ' · <b>annullata</b>' + (u.annullataMotivo ? ': ' + esc(u.annullataMotivo) : '') : ''}</div></div>
       <div class="imp">${fE(u.importo)}</div>${u.puoiAnnullare ? `<button class="btn sm danger" data-ann="${esc(u.id)}">Annulla</button>` : ''}</div>`).join('')
       : '<div class="empty"><b>Nessuna uscita</b>In questo mese non ci sono uscite registrate.</div>'}
   </div>`;
@@ -341,7 +344,19 @@ async function vUscite() {
   $('#main').querySelectorAll('[data-vann]').forEach(b => b.onclick = () => conferma('Annullare questo versamento?', 'Non è ancora stato approvato: si toglie dall\'elenco.', false, async () => {
     await api('POST', `api/versamenti/${b.dataset.vann}/annulla`, {}); toast('Versamento annullato.'); vUscite(); }));
   const f = $('#fu');
-  let met = '';
+  let met = '', fat = null;
+  // foto della fattura: le immagini si rimpiccioliscono (max 1800 px) prima dell'invio; i PDF vanno come sono (max 6 MB)
+  if ($('#u-fat')) $('#u-fat').onchange = async e => {
+    const file = e.target.files[0]; if (!file) return;
+    try {
+      if (file.type === 'application/pdf') { if (file.size > 6 * 1024 * 1024) { fat = null; return toast('Il PDF è troppo pesante (massimo 6 MB).'); }
+        fat = { dati: await new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(file); }), nome: file.name }; }
+      else { const img = await createImageBitmap(file), sc = Math.min(1, 1800 / Math.max(img.width, img.height)), cv = document.createElement('canvas');
+        cv.width = Math.round(img.width * sc); cv.height = Math.round(img.height * sc); const cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height); cx.drawImage(img, 0, 0, cv.width, cv.height);
+        fat = { dati: cv.toDataURL('image/jpeg', .82), nome: file.name }; }
+      $('#u-fn').innerHTML = `✅ <b>${esc(file.name)}</b> allegata · <span class="muted">la vede solo l'amministrazione</span>`; $('#u-fl').firstChild.textContent = '📷 Cambia la foto della fattura';
+    } catch { fat = null; toast('Non riesco a leggere il file: riprova con una foto.'); }
+  };
   if (f) f.querySelectorAll('[data-met]').forEach(b => b.onclick = () => { met = b.dataset.met; f.querySelectorAll('[data-met]').forEach(x => x.classList.toggle('on', x === b)); });
   if (f) f.onsubmit = async e => {
     e.preventDefault();
@@ -349,8 +364,9 @@ async function vUscite() {
     if (!(imp > 0)) return toast('Scrivi l\'importo dell\'uscita.');
     if (nota.length < 3) return toast('Scrivi a cosa si riferisce l\'uscita.');
     if (!met) return toast('Scegli come hai pagato: contanti, POS o assegno.');
+    if (!fat) return toast('Allega la foto della fattura.');
     const b = f.querySelector('button[type=submit]'); b.disabled = true;
-    try { await api('POST', 'api/uscite', { sede: S.sede, importo: $('#u-imp').value, nota, metodo: met }); toast(`Uscita di ${fE(imp)} (${METODI[met]}) registrata.`); S.periodo = S.st.oggi.slice(0, 7); vUscite(); }
+    try { await api('POST', 'api/uscite', { sede: S.sede, importo: $('#u-imp').value, nota, metodo: met, fattura: fat.dati, fatturaNome: fat.nome }); toast(`Uscita di ${fE(imp)} (${METODI[met]}) registrata.`); S.periodo = S.st.oggi.slice(0, 7); vUscite(); }
     catch (x) { b.disabled = false; toast(x.message); }
   };
   $('#main').querySelectorAll('[data-ann]').forEach(b => b.onclick = () => conferma('Annullare questa uscita?', 'Resta nello storico, barrata, e non conta più nei totali.', true, async motivo => {
@@ -459,6 +475,7 @@ async function vPannello() {
         ${u.annullata ? '' : `<select data-voce="${esc(u.id)}" aria-label="Voce del consuntivo" style="border:1px solid var(--line);border-radius:9px;padding:6px 9px;min-height:36px;background:${u.voce ? 'var(--surface-2)' : 'var(--warn-soft)'}">${opt('', '— Voce del consuntivo —', !u.voce)}${(PN.voci.voci || []).map(v => opt(v, v, v === u.voce)).join('')}</select>`}
         ${si ? `<span class="tag ${si[1]}">${si[0]}${u.inviata && u.statoInvio !== 'nel_consuntivo' ? ' · ora: ' + esc(u.inviata.voce) : ''}</span>` : ''}
         ${u.statoInvio === 'da_mandare' || u.statoInvio === 'da_togliere' ? `<button class="btn sm" data-inv="${esc(u.id)}">${u.statoInvio === 'da_togliere' ? 'Togli' : 'Manda'}</button>` : ''}
+        ${u.fattura ? (u.fattura.scaricata ? `<span class="tag">🧾 Fattura scaricata ${esc(fD(String(u.fattura.scaricata).slice(0, 10)))} · ${esc(u.fattura.da)}</span>` : `<button class="btn sm primary" data-fat="${esc(u.id)}">⬇ Scarica fattura</button>`) : '<span class="tag">senza fattura</span>'}
       </div></div>`; };
   const C = ch.totali;
   $('#main').innerHTML = `
@@ -521,6 +538,14 @@ async function vPannello() {
     catch (x) { if (b) b.disabled = false; toast(x.message, 8000); }
   };
   $('#main').querySelectorAll('[data-inv]').forEach(b => b.onclick = () => invia([b.dataset.inv], b));
+  // scarica la fattura: dopo lo scarico si cancella dal server
+  $('#main').querySelectorAll('[data-fat]').forEach(b => b.onclick = () => conferma('Scaricare la fattura?', 'Il file si salva sul tuo computer e poi si cancella dal server: non si potrà scaricare di nuovo.', false, async () => {
+    const r = await fetch(`api/uscite/${b.dataset.fat}/fattura`, { credentials: 'include' });
+    if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || 'Scarico non riuscito.'); }
+    const nome = (/filename="([^"]+)"/.exec(r.headers.get('Content-Disposition') || '') || [, 'fattura'])[1], blob = await r.blob(), a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = nome; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast('Fattura scaricata: ora non è più sul server.'); vPannello();
+  }));
   const it = $('#invTutte'); if (it) it.onclick = () => conferma(`Mandare ${daAllineare.length} ${daAllineare.length === 1 ? 'spesa' : 'spese'} nel consuntivo?`, 'Ogni importo si aggiunge alla voce scelta della sede, nel mese della spesa. Le spese annullate o con la voce cambiata si tolgono da dove erano.', false, () => invia(daAllineare.map(u => u.id), it));
 }
 

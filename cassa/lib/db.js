@@ -32,6 +32,12 @@ async function migrate() {
     alter table uscite add column if not exists metodo text not null default 'contanti';
     -- voce del Consuntivo (Gestione finanziaria) scelta dall'amministratore, e cosa è già stato mandato (per non mandarlo due volte)
     alter table uscite add column if not exists voce text;
+    -- foto della fattura: resta sul server finché l'amministrazione la scarica, poi si cancella (resta solo chi e quando)
+    alter table uscite add column if not exists fattura bytea;
+    alter table uscite add column if not exists fattura_tipo text;
+    alter table uscite add column if not exists fattura_nome text;
+    alter table uscite add column if not exists fattura_scaricata timestamptz;
+    alter table uscite add column if not exists fattura_scaricata_da text;
     alter table uscite add column if not exists inviata_voce text;
     alter table uscite add column if not exists inviata_importo numeric(12,2);
     alter table uscite add column if not exists inviata_anno smallint;

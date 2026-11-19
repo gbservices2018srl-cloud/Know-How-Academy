@@ -13,7 +13,9 @@ const app = express();
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 app.use((req, res, next) => { res.set({ 'X-Frame-Options': 'DENY', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin' }); next(); });
-app.use(express.json({ limit: '200kb' }));
+// la nuova uscita porta la foto della fattura: per quella sola richiesta il limite è più alto
+const jsonPiccolo = express.json({ limit: '200kb' }), jsonFattura = express.json({ limit: '9mb' });
+app.use((req, res, next) => (req.method === 'POST' && req.path === '/api/uscite' ? jsonFattura : jsonPiccolo)(req, res, next));
 
 const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const bad = (res, code, msg) => res.status(code).json({ error: msg });
@@ -98,7 +100,7 @@ app.get('/api/stato', needAny, (req, res) => {
 
 /* ============ USCITE DI CASSA ============ */
 const formaU = r => ({ id: r.id, sede: r.sede_id, sedeNome: r.sede_nome, data: r.data, importo: num(r.importo), nota: r.nota, chi: r.creato_nome, il: r.creato_il,
-  metodo: r.metodo || 'contanti', annullata: r.annullata, annullataMotivo: r.annullata_motivo || '', mia: false,
+  metodo: r.metodo || 'contanti', fattura: r.fattura_nome ? { nome: r.fattura_nome, scaricata: r.fattura_scaricata, da: r.fattura_scaricata_da || '' } : null, annullata: r.annullata, annullataMotivo: r.annullata_motivo || '', mia: false,
   voce: r.voce || '', inviata: r.inviata_voce ? { voce: r.inviata_voce, importo: num(r.inviata_importo), il: r.inviata_il } : null, statoInvio: statoInvio(r) });
 // cosa deve esserci nel Consuntivo per questa spesa, e cosa c'è già (mandato prima)
 const voluto = r => !r.annullata && r.voce ? { voce: r.voce, importo: num(r.importo), anno: Number(String(r.data).slice(0, 4)), mese: Number(String(r.data).slice(5, 7)) } : null;
@@ -112,7 +114,8 @@ function statoInvio(r) {
 app.get('/api/uscite', needVedere, wrap(async (req, res) => {
   const sedi = sediRichieste(req); if (!sedi) return bad(res, 403, 'Sede non tua.');
   const p = periodo(req.query.periodo);
-  const { rows } = await db.q(`select * from uscite where sede_id = any($1) and data between $2 and $3 order by data desc, creato_il desc`, [sedi.map(s => s.id), p.dal, p.al]);
+  const { rows } = await db.q(`select id, sede_id, sede_nome, data, importo, nota, metodo, creato_da, creato_nome, creato_il, annullata, annullata_motivo, voce, inviata_voce, inviata_importo, inviata_anno, inviata_mese, inviata_il,
+      fattura_nome, fattura_scaricata, fattura_scaricata_da from uscite where sede_id = any($1) and data between $2 and $3 order by data desc, creato_il desc`, [sedi.map(s => s.id), p.dal, p.al]);
   const g = oggi();
   const lista = rows.map(r => ({ ...formaU(r), puoiAnnullare: !r.annullata && (!!req.me.pan || (r.creato_da === req.me.id && r.data === g)) }));
   const valide = rows.filter(r => !r.annullata);
@@ -127,12 +130,31 @@ app.post('/api/uscite', needUser, wrap(async (req, res) => {
   if (importo > 100000) return bad(res, 400, 'Importo troppo alto: controlla le cifre.');
   const nota = String(b.nota ?? '').trim().slice(0, 1000); if (nota.length < 3) return bad(res, 400, 'Scrivi a cosa si riferisce l\'uscita.');
   const metodo = str(b.metodo, 20); if (!METODI[metodo]) return bad(res, 400, 'Scegli come hai pagato: contanti, POS o assegno.');
+  // foto della fattura obbligatoria (immagine o PDF)
+  const fm = /^data:(image\/(?:jpeg|png|webp)|application\/pdf);base64,([A-Za-z0-9+/=]+)$/.exec(String(b.fattura || ''));
+  if (!fm) return bad(res, 400, 'Allega la foto della fattura.');
+  const fbuf = Buffer.from(fm[2], 'base64'); if (fbuf.length > 6 * 1024 * 1024) return bad(res, 400, 'La fattura è troppo pesante (massimo 6 MB).');
+  const fnome = (str(b.fatturaNome, 120).replace(/[^\w.\- ]/g, '') || 'fattura') .replace(/\.[a-z0-9]+$/i, '') + (fm[1] === 'application/pdf' ? '.pdf' : fm[1] === 'image/png' ? '.png' : '.jpg');
   const id = db.newId();
   // la data è sempre quella di oggi: si compila da sola
-  await db.q(`insert into uscite (id, sede_id, sede_nome, data, importo, nota, metodo, creato_da, creato_nome) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-    [id, sede.id, sede.nome, oggi(), importo, nota, metodo, req.me.id, req.me.nome]);
+  await db.q(`insert into uscite (id, sede_id, sede_nome, data, importo, nota, metodo, creato_da, creato_nome, fattura, fattura_tipo, fattura_nome) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+    [id, sede.id, sede.nome, oggi(), importo, nota, metodo, req.me.id, req.me.nome, fbuf, fm[1], fnome]);
   log('uscita', id, req.me.nome, null, { sede: sede.nome, importo, nota, metodo });
   res.json({ ok: true, id });
+}));
+// l'amministrazione scarica la fattura: appena lo scarico è finito, la foto si cancella dal server (restano chi e quando)
+app.get('/api/uscite/:id/fattura', needAdmin, wrap(async (req, res) => {
+  const id = str(req.params.id, 60);
+  const { rows: [r] } = await db.q('select sede_nome, data, fattura, fattura_tipo, fattura_nome, fattura_scaricata, fattura_scaricata_da from uscite where id = $1', [id]);
+  if (!r) return bad(res, 404, 'Uscita non trovata.');
+  if (!r.fattura) return bad(res, 410, r.fattura_scaricata ? `Fattura già scaricata il ${new Date(r.fattura_scaricata).toLocaleString('it-IT', { timeZone: 'Europe/Rome' })} da ${r.fattura_scaricata_da}: non è più sul server.` : 'Questa uscita non ha la fattura.');
+  const nome = `Fattura ${r.sede_nome} ${r.data} ${r.fattura_nome}`.replace(/[^\w.\- ]/g, '');
+  res.set({ 'Content-Type': r.fattura_tipo || 'application/octet-stream', 'Content-Disposition': `attachment; filename="${nome}"`, 'Cache-Control': 'no-store' });
+  res.on('finish', () => {
+    db.q('update uscite set fattura = null, fattura_scaricata = now(), fattura_scaricata_da = $2 where id = $1 and fattura is not null', [id, req.me.nome])
+      .then(() => log('fattura_scaricata', id, req.me.nome, null, { nome: r.fattura_nome })).catch(e => console.warn('Fattura non cancellata:', e.message));
+  });
+  res.end(r.fattura);
 }));
 // l'amministratore associa la spesa a una voce del Consuntivo ('' = nessuna)
 app.put('/api/uscite/:id/voce', needAdmin, wrap(async (req, res) => {
