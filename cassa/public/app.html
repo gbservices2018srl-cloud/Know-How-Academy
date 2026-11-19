@@ -183,6 +183,10 @@ main{max-width:1100px}
 .riga .s{font-size:13px;color:var(--muted)}
 .riga .imp{font:800 17px var(--f-display);white-space:nowrap;font-variant-numeric:tabular-nums}
 .riga.off .t,.riga.off .imp{text-decoration:line-through;color:var(--muted)}
+
+.riga .az{display:flex;gap:8px}
+/* telefono: il testo della riga prende tutta la larghezza; importo, stato e tasti vanno sotto */
+@media (max-width:640px){.riga{flex-wrap:wrap;row-gap:8px}.riga .gr{flex:1 1 100%}.riga .imp{margin-right:auto;align-self:center}.riga>.btn,.riga>.tag{align-self:center}.riga .az{flex:1 1 100%;display:grid;grid-template-columns:1fr 1fr;gap:8px}.riga .az .btn{min-height:44px}}
 .t tfoot td{font-weight:800;border-top:2px solid var(--line);background:var(--surface-2)}
 .t td.click{cursor:pointer;color:var(--accent);font-weight:700}
 .sez-t{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
@@ -232,7 +236,7 @@ const rigaVers = (v, admin) => `<div class="riga"><div class="gr"><div class="t"
   ${v.notaAdmin ? `<div class="s">Amministrazione: ${esc(v.notaAdmin)}</div>` : ''}</div>
   <div class="imp">${fE(v.totale)}</div><span class="tag ${STATO_V[v.stato]?.[1] || 'plain'}">${STATO_V[v.stato]?.[0] || v.stato}</span>
   ${v.puoiAnnullare && !admin ? `<button class="btn sm danger" data-vann="${esc(v.id)}">Annulla</button>` : ''}
-  ${admin && v.stato === 'attesa' ? `<button class="btn sm danger" data-vno="${esc(v.id)}">Rifiuta</button><button class="btn sm primary" data-vok="${esc(v.id)}">Approva</button>` : ''}</div>`;
+  ${admin && v.stato === 'attesa' ? `<span class="az"><button class="btn sm danger" data-vno="${esc(v.id)}">Rifiuta</button><button class="btn sm primary" data-vok="${esc(v.id)}">Approva</button></span>` : ''}</div>`;
 const SEZ = [['uscite', 'Uscite di cassa'], ['chiusura', 'Chiusura di cassa'], ['pannello', 'Pannello cassa'], ['produzione', 'Produzione di UL']];
 const S = { st: null, v: null, sede: '', periodo: '' };
 
