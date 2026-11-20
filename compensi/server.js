@@ -82,8 +82,8 @@ const forma = r => ({ id: r.id, medico: r.medico_id, medicoNome: r.medico_nome, 
 
 // medici della tabella: le persone attive con figura Medico (più chi ha già un compenso, anche se poi è stato disattivato)
 async function medici() {
-  const { rows } = await store.q(`select id, first_name, last_name, email, status from users where figura = 'Medico' and not owner and status <> 'pending'`);
-  return rows.map(u => ({ id: u.id, nome: nomeU(u), attivo: u.status === 'active' }));
+  const { rows } = await store.q(`select id, first_name, last_name, email, status, sedi from users where figura = 'Medico' and not owner and status <> 'pending'`);
+  return rows.map(u => ({ id: u.id, nome: nomeU(u), attivo: u.status === 'active', sedi: Array.isArray(u.sedi) ? u.sedi : [] }));
 }
 async function sedi() { return (await store.listSedi()).filter(s => s.attiva !== false).map(s => ({ id: s.id, nome: s.nome })); }
 
@@ -110,6 +110,7 @@ app.put('/api/compenso', needAdmin, wrap(async (req, res) => {
   if (!(anno > 2000 && mese >= 1 && mese <= 12)) return bad(res, 400, 'Mese non valido.');
   const m = (await medici()).find(x => x.id === str(b.medico, 60)); if (!m) return bad(res, 400, 'Medico non trovato.');
   const s = (await sedi()).find(x => x.id === str(b.sede, 60)); if (!s) return bad(res, 400, 'Sede non trovata.');
+  if (!m.sedi.includes(s.id)) return bad(res, 403, `${s.nome} non è tra le sedi di ${m.nome} (anagrafica in Gestione accessi).`);
   const imp = euro(b.importo); if (imp == null) return bad(res, 400, 'Importo non valido.');
   if (imp > 1000000) return bad(res, 400, 'Importo troppo alto: controlla le cifre.');
   const { rows: [p] } = await q('select * from compensi where medico_id = $1 and sede_id = $2 and anno = $3 and mese = $4', [m.id, s.id, anno, mese]);

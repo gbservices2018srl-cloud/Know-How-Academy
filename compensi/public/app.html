@@ -175,6 +175,7 @@ table.cm{border-collapse:separate;border-spacing:0;font-size:14px;font-variant-n
 .cm .fermo{display:inline-block;width:108px;text-align:right;padding:6px 8px;border-radius:8px;font-weight:700}
 .cm .c-da_pagare .fermo{background:var(--purple-soft);color:var(--brand-purple)}
 .cm .c-pagato .fermo{background:var(--surface-3);color:var(--muted)}
+.cm td.no{background:repeating-linear-gradient(135deg,var(--surface-3) 0 6px,var(--surface-2) 6px 12px)}
 .leg{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 16px}
 .blocco{margin-top:16px}
 .blocco h3{margin-bottom:8px}
@@ -256,6 +257,7 @@ async function vTabella() {
   const cella = (m, s) => {
     const c = C.get(m.id + '|' + s.id), st = c?.stato || '';
     const tit = c ? STATI[st][0] + (c.motivo ? ': ' + c.motivo : '') + (c.pagatoIl ? ' il ' + fD(c.pagatoIl) : '') : '';
+    if (!m.sedi.includes(s.id)) return c ? `<td class="c-${st}"><span class="fermo" title="${esc(tit)} (sede non sua)">${fN(c.importo)}</span></td>` : '<td class="no" title="Sede non autorizzata per questo medico"></td>';
     if (c && (st === 'da_pagare' || st === 'pagato')) return `<td class="c-${st}"><span class="fermo" title="${esc(tit)}">${fN(c.importo)}</span></td>`;
     return `<td class="c-${st}"><input inputmode="decimal" aria-label="${esc(m.nome)}, ${esc(s.nome)}" title="${esc(tit)}" data-m="${esc(m.id)}" data-s="${esc(s.id)}" value="${c ? fN(c.importo) : ''}"></td>`;
   };
@@ -266,7 +268,8 @@ async function vTabella() {
   $('#main').innerHTML = `
     <div class="head"><div><h2 class="view">Compensi dei medici</h2><p>Scrivi il compenso di ogni medico nella sede: lo vede subito nella sua app e lo approva.</p></div></div>
     <div class="sedebar"><label class="lbl" for="mese">Mese</label><input type="month" id="mese" value="${S.mese}"><span class="spacer"></span><b>Totale ${fE(totale)}</b></div>
-    <div class="leg">${['attesa', 'approvato', 'rifiutato', 'da_pagare', 'pagato'].map(s => tagS(s)).join('')}</div>
+    <div class="leg">${['attesa', 'approvato', 'rifiutato', 'da_pagare', 'pagato'].map(s => tagS(s)).join('')}<span class="tag plain" style="background:repeating-linear-gradient(135deg,var(--surface-3) 0 5px,var(--surface-2) 5px 10px)">Sede non sua: bloccata</span></div>
+    ${d.medici.filter(m => !m.sedi.length).length ? `<p class="muted" style="margin:-6px 0 12px">Senza sede in anagrafica (tutto bloccato): ${d.medici.filter(m => !m.sedi.length).map(m => esc(m.nome)).join(', ')}. Le sedi si danno in Gestione accessi.</p>` : ''}
     ${!d.medici.length ? '<div class="card empty"><b>Nessun medico registrato</b>I medici compaiono qui quando si registrano nelle app.</div>' : `
     <div class="card tw"><table class="cm"><thead><tr><th>Medico</th>${d.sedi.map(s => `<th class="n">${esc(s.nome.toUpperCase())}</th>`).join('')}<th class="n">TOTALE</th></tr></thead>
       <tbody>${d.medici.map(m => `<tr><td class="nome" title="${esc(m.nome)}">${esc(m.nome)}</td>${d.sedi.map(s => cella(m, s)).join('')}<td class="tot">${totM[m.id] ? fE(totM[m.id]) : ''}</td></tr>`).join('')}</tbody>
