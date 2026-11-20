@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#4CAAAA">
+<base href="/compensi/">
+<title>Compenso medici · To Smile</title>
+<link rel="icon" href="logo.png">
+<link rel="stylesheet" href="/fonts/tosmile.css?f=fira-sans:400,500,600,700,800">
+<style>
+/* Colori e caratteri To Smile (gli stessi di Comunicazioni, Calendario e Turni), con tema scuro automatico */
+:root{
+  --bg:#EFF5F5; --dot:#D3E2E2; --surface:#FFFFFF; --surface-2:#F5F9F9; --surface-3:#EAF1F1; --fg:#1F2A2B; --muted:#5E6B6C;
+  --line:#DCE7E7; --accent:#2B8384; --accent-soft:#DCEFEF; --accent-fg:#FFFFFF;
+  --brand-teal:#4CAAAA; --brand-purple:#8C6898; --brand-yellow:#E8E564; --purple-soft:#EFE7F2;
+  --danger:#B42318; --danger-soft:#FBE3E0; --ok:#1F7A4D; --ok-soft:#DDF1E6; --warn:#8A4A12; --warn-soft:#FBEBDD;
+  --shadow:0 1px 2px rgba(20,48,48,.05),0 8px 28px rgba(20,48,48,.09);
+  --f-display:"Fira Sans",system-ui,sans-serif; --f-body:"Fira Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#101818; --dot:#1E2B2B; --surface:#172121; --surface-2:#1D2929; --surface-3:#223030; --fg:#E7F0F0; --muted:#9FB0B0;
+  --line:#2A3939; --accent:#62C3C3; --accent-soft:#163536; --accent-fg:#062222;
+  --brand-teal:#62C3C3; --brand-purple:#B597C2; --purple-soft:#2E2433;
+  --danger:#FF8A7A; --danger-soft:#3A1D1A; --ok:#6FD39C; --ok-soft:#173326; --warn:#F0B07A; --warn-soft:#3A2817;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35); color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:var(--bg);background-image:radial-gradient(var(--dot) 1.2px,transparent 1.3px);background-size:22px 22px;background-attachment:fixed;
+  color:var(--fg);font:15px/1.5 var(--f-body);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+svg.i{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+[hidden]{display:none!important}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.top{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:14px;padding:10px max(16px,env(safe-area-inset-left));
+  background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);box-shadow:inset 0 -3px 0 -1px color-mix(in srgb,var(--brand-yellow) 70%,transparent)}
+.brand{display:flex;align-items:center;gap:10px;min-width:0;text-decoration:none;color:inherit}
+.brand .logo{height:40px;width:auto;flex:none;display:block}
+.brand .sep{width:1px;height:26px;background:var(--line);flex:none}
+.brand h1{font:600 16px/1.1 var(--f-display);margin:0;white-space:nowrap;color:var(--muted)}
+@media (max-width:900px){.brand h1,.brand .sep{display:none}.who b{display:none}.who{padding:3px}}
+.tabs{display:flex;gap:4px;overflow-x:auto;flex:1;scrollbar-width:none;min-width:0;padding:2px}
+.tabs::-webkit-scrollbar{display:none}
+.tab{display:inline-flex;align-items:center;gap:7px;border:1px solid transparent;background:none;padding:7px 13px;border-radius:999px;white-space:nowrap;color:var(--muted);font-weight:600;font-size:14px;min-height:40px;text-decoration:none}
+.tab:hover{background:var(--surface-2)}
+.tab.on{background:var(--accent-soft);color:var(--fg);border-color:color-mix(in srgb,var(--accent) 30%,transparent)}
+.spacer{flex:1}
+.who{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:3px 12px 3px 3px;font-size:13px;flex:none;min-height:40px;text-decoration:none;color:inherit}
+.av{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:12px;background:var(--accent-soft);color:var(--accent);flex:none}
+main{max-width:1000px;margin:0 auto;padding:20px max(16px,env(safe-area-inset-left)) max(48px,env(safe-area-inset-bottom))}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--line);background:var(--surface);padding:9px 15px;border-radius:10px;font-weight:600;font-size:14.5px;white-space:nowrap;text-decoration:none;color:inherit;min-height:44px}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.primary:hover{filter:brightness(1.06);background:var(--accent)}
+.btn.wide{min-height:52px;font-size:16px;width:100%}
+.btn.danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 35%,transparent)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.sm{padding:6px 11px;font-size:13.5px;min-height:38px}
+.link{border:0;background:none;color:var(--accent);font-weight:600;padding:8px 0;min-height:40px;display:inline-flex;align-items:center;gap:4px;text-decoration:none}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}
+.pad{padding:16px 18px}
+.muted{color:var(--muted)}
+h2.view{font:700 26px/1.15 var(--f-display);letter-spacing:-.015em;margin:0}
+h3{font:700 17px/1.2 var(--f-display);margin:0}
+.head{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.head p{margin:4px 0 0;color:var(--muted)}
+.empty{padding:30px 16px;text-align:center;color:var(--muted)}
+.empty b{display:block;color:var(--fg);font-size:16px;margin-bottom:4px}
+.tag{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.tag.ok{background:var(--ok-soft);color:var(--ok)}
+.tag.ko{background:var(--danger-soft);color:var(--danger)}
+.tag.todo{background:var(--warn-soft);color:var(--warn)}
+.tag.plain{background:var(--surface-3);color:var(--muted)}
+.tag.q{background:var(--purple-soft);color:var(--brand-purple)}
+.err{background:var(--danger-soft);color:var(--danger);border-radius:10px;padding:10px 12px;font-size:14px;font-weight:600}
+.avvisi{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.avviso{display:flex;gap:8px;align-items:flex-start;padding:8px 11px;border-radius:10px;font-size:14px;font-weight:600}
+.avviso.rosso{background:var(--danger-soft);color:var(--danger)}
+.avviso.giallo{background:var(--warn-soft);color:var(--warn)}
+/* pagina d'ingresso */
+.hello{font:800 28px/1.15 var(--f-display);margin:6px 0 4px;letter-spacing:-.01em}
+.bigs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:18px}
+.big{position:relative;display:flex;flex-direction:column;gap:12px;text-align:left;text-decoration:none;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:22px;min-height:200px;box-shadow:var(--shadow);overflow:hidden;transition:transform .15s,border-color .15s}
+.big:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--bc) 55%,var(--line))}
+.big::before{content:"";position:absolute;inset:0 0 auto 0;height:5px;background:var(--bc)}
+.big .bi{width:52px;height:52px;border-radius:15px;display:grid;place-items:center;background:color-mix(in srgb,var(--bc) 16%,transparent);color:var(--bc)}
+.big .bi svg{width:28px;height:28px}
+.big h2{font:800 21px/1.15 var(--f-display);margin:0}
+.big p{margin:4px 0 0;color:var(--muted);font-size:14.5px}
+.big .st{margin-top:auto;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.big .go{color:var(--accent);font-weight:700}
+/* moduli */
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;min-width:0}
+.field label,.lbl{font-weight:700;font-size:13.5px;color:var(--muted)}
+.field input,.field select,.field textarea{border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:10px 12px;width:100%;min-height:44px}
+.field textarea{min-height:70px;resize:vertical}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 12px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:12px;padding:3px;background:var(--surface-2);gap:3px;flex-wrap:wrap}
+.seg button{border:0;background:none;padding:8px 14px;border-radius:9px;font-weight:700;min-height:42px;color:var(--muted)}
+.seg button.on{background:var(--surface);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.seg button.on.ok{background:var(--ok);color:#fff}
+.seg button.on.ko{background:var(--danger);color:#fff}
+.seg button.on.att{background:var(--brand-purple);color:#fff}
+.toast{position:fixed;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:11px 16px;border-radius:12px;font-weight:600;z-index:50;max-width:92vw;box-shadow:var(--shadow)}
+dialog.dlg{border:0;border-radius:22px;padding:0;width:min(480px,94vw);background:var(--surface);color:var(--fg);box-shadow:var(--shadow)}
+dialog.dlg::backdrop{background:rgba(10,30,30,.45);backdrop-filter:blur(2px)}
+.dlg .dh{display:flex;gap:14px;align-items:center;padding:18px 20px 12px;border-bottom:1px solid var(--line)}
+.dlg .db{padding:14px 20px}
+.dlg .df{display:flex;gap:8px;justify-content:flex-end;padding:12px 20px 18px;flex-wrap:wrap}
+/* filtri e tabelle */
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.bar input[type=search]{flex:1 1 240px;min-width:0;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:10px 14px;min-height:44px}
+.fil{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:12px}
+.fil select,.bar select{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 10px;min-height:40px;width:100%;font-size:14px}
+.fil select.on{border-color:var(--accent);background:var(--accent-soft);font-weight:600}
+.bar select{width:auto}
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table.t{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+.t th{text-align:left;font-size:12px;font-weight:700;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;background:var(--surface)}
+.t td{padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:middle}
+.t td.n,.t th.n{text-align:right}
+.t td.wrap{white-space:normal;min-width:160px}
+.t tr:hover td{background:var(--surface-2)}
+.t th button{all:unset;cursor:pointer}
+.t th[aria-sort] button::after{content:" ▾"}.t th[aria-sort=ascending] button::after{content:" ▴"}
+.t td.low{color:var(--danger);font-weight:700}
+.es{border:1.5px solid var(--line);border-radius:9px;padding:5px 8px;font-weight:800;min-height:36px;background:var(--surface-2)}
+.notab{border:1px solid var(--line);background:var(--surface-2);border-radius:9px;padding:5px 10px;min-height:36px;max-width:240px;overflow:hidden;text-overflow:ellipsis;text-align:left;font-size:13px}
+.tot{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13.5px;color:var(--muted);margin:2px 0 10px}
+.tot b{color:var(--fg)}
+/* dashboard */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:12px;margin-bottom:8px}
+.tile{padding:14px 16px}
+.tile .l{font-size:13px;color:var(--muted);font-weight:600}
+.tile .v{font:800 28px/1.15 var(--f-display);margin-top:4px;font-variant-numeric:tabular-nums}
+.tile .b{font-size:12.5px;color:var(--muted);margin-top:2px}
+.tile.low{border-color:var(--danger)}.tile.low .v{color:var(--danger)}
+.tile.fin{background:linear-gradient(135deg,var(--purple-soft),var(--surface))}
+.take{margin:4px 0 16px;color:var(--muted)}
+.dsec{margin:22px 0 10px}
+.dgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:12px}
+.dgrid.sm{grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}
+.dcard{padding:14px 16px;min-width:0}
+.dcard h4{margin:0 0 4px;font:700 15px/1.2 var(--f-display)}
+.dnote{font-size:12.5px;color:var(--muted);margin:0 0 8px}
+.scroll{max-height:26rem;overflow:auto}
+.legend{font-size:12.5px;color:var(--muted)}
+.legend .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--danger);margin-right:5px;vertical-align:middle}
+svg.ch text{font-size:11.5px;fill:var(--muted)}
+svg.ch .lab{fill:var(--fg)}
+
+.mieapp{display:inline-flex;align-items:center;gap:4px;flex:none;padding:7px 12px;border:1px solid #DADAD3;border-radius:999px;background:#fff;color:#2B3033;font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap;min-height:36px}.mieapp:hover{border-color:#2A7C7D;color:#2A7C7D}.mieapp .c{display:none}@media (max-width:480px){.mieapp{padding:6px 10px}.mieapp .t{display:none}.mieapp .c{display:inline}}
+
+main{max-width:1200px}
+@media (max-width:700px){.top{flex-wrap:wrap;row-gap:6px}.tabs{order:3;flex-basis:100%}.who{margin-left:auto}}
+.sedebar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.sedebar input[type=month],.sedebar input[type=date]{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 10px;min-height:42px;font-size:14.5px}
+/* tabella medici × sedi, come il foglio Excel */
+table.cm{border-collapse:separate;border-spacing:0;font-size:14px;font-variant-numeric:tabular-nums;min-width:100%}
+.cm th{background:var(--brand-yellow);color:#1F2A2B;font-weight:800;font-size:12.5px;padding:8px;text-align:left;white-space:nowrap;position:sticky;top:0;z-index:2}
+.cm th.n{text-align:right}
+.cm td{border-bottom:1px solid var(--line);padding:4px;white-space:nowrap}
+.cm td.nome{font-weight:700;padding:4px 10px;position:sticky;left:0;background:var(--surface);z-index:1;max-width:190px;overflow:hidden;text-overflow:ellipsis}
+.cm th:first-child{position:sticky;left:0;z-index:3}
+.cm td.tot{text-align:right;font-weight:800;padding:4px 10px;background:color-mix(in srgb,var(--brand-purple) 14%,var(--surface))}
+.cm tfoot td{font-weight:800;border-top:2px solid var(--fg);text-align:right;padding:8px 10px}
+.cm input{width:108px;text-align:right;border:1.5px solid var(--line);background:var(--surface-2);border-radius:8px;padding:6px 8px;min-height:36px;font-weight:600}
+.cm input:focus{background:var(--surface)}
+.cm .c-attesa input{border-color:#C9A227;background:color-mix(in srgb,#E8E564 22%,var(--surface))}
+.cm .c-approvato input{border-color:var(--ok);background:var(--ok-soft)}
+.cm .c-rifiutato input{border-color:var(--danger);background:var(--danger-soft)}
+.cm .fermo{display:inline-block;width:108px;text-align:right;padding:6px 8px;border-radius:8px;font-weight:700}
+.cm .c-da_pagare .fermo{background:var(--purple-soft);color:var(--brand-purple)}
+.cm .c-pagato .fermo{background:var(--surface-3);color:var(--muted)}
+.leg{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 16px}
+.blocco{margin-top:16px}
+.blocco h3{margin-bottom:8px}
+.chk{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.chk:last-child{border-bottom:0}
+.chk input[type=checkbox]{width:20px;height:20px;flex:none}
+.chk .gr{flex:1;min-width:0}
+.chk .s{font-size:13px;color:var(--muted)}
+.chk .imp{font:800 16px var(--f-display);white-space:nowrap}
+.riga{display:flex;gap:10px;align-items:flex-start;padding:11px 0;border-bottom:1px solid var(--line)}
+.riga:last-child{border-bottom:0}
+.riga .gr{flex:1;min-width:0}
+.riga .t{font-weight:700;overflow-wrap:anywhere}
+.riga .s{font-size:13px;color:var(--muted)}
+.riga .imp{font:800 17px var(--f-display);white-space:nowrap;font-variant-numeric:tabular-nums}
+.riga.off .t,.riga.off .imp{text-decoration:line-through;color:var(--muted)}
+
+.riga .az{display:flex;gap:8px}
+/* telefono: il testo della riga prende tutta la larghezza; importo, stato e tasti vanno sotto */
+@media (max-width:640px){.riga{flex-wrap:wrap;row-gap:8px}.riga .gr{flex:1 1 100%}.riga .imp{margin-right:auto;align-self:center}.riga>.btn,.riga>.tag{align-self:center}.riga .az{flex:1 1 100%;display:grid;grid-template-columns:1fr 1fr;gap:8px}.riga .az .btn{min-height:44px}}
+.sez-t{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.cm td{text-align:right}.cm td.nome{text-align:left}
+.mese-card{margin-bottom:14px}
+.mese-card .sez-t{padding:14px 18px 0}
+</style>
+<body>
+<header class="top">
+  <a class="brand" href="./" aria-label="Compenso medici, inizio"><img class="logo" src="logo.png" alt="To Smile" width="543" height="162"><span class="sep"></span><h1>Compenso medici</h1></a>
+  <nav class="tabs" id="tabs" aria-label="Sezioni"></nav>
+  <a class="mieapp" href="/" title="Torna alle tue app">← <span class="t">Le mie app</span><span class="c">App</span></a>
+</header>
+<main id="main"><div class="empty">Caricamento…</div></main>
+<dialog class="dlg" id="dlg" aria-label="Conferma"></dialog>
+<div class="toast" id="toast" hidden role="status"></div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+async function api(method, url, body) {
+  const r = await fetch(url, { method, credentials: 'include', headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401) { location.href = '/accedi?next=' + encodeURIComponent(location.href); throw new Error('Accesso richiesto'); }
+  if (!r.ok) throw new Error(j.error || 'Errore, riprova.');
+  return j;
+}
+let toastT;
+function toast(t, ms = 3500) { const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => el.hidden = true, ms); }
+const MESI = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+const fE = n => { const v = Math.round((Number(n) || 0) * 100) / 100, a = Math.abs(v); const [i, d] = a.toFixed(2).split('.'); return (v < 0 ? '−' : '') + '€ ' + i.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + d; };
+const fN = n => { const [i, d] = (Math.round((Number(n) || 0) * 100) / 100).toFixed(2).split('.'); return i.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + d; };
+const fD = s => s ? s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4) : '';
+const parseE = v => { let s = String(v ?? '').trim().replace(/[€\s]/g, ''); if (!s) return 0; if (s.includes(',') || /^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '').replace(',', '.'); const n = Number(s); return isFinite(n) && n >= 0 ? n : NaN; };
+const STATI = { attesa: ['Da approvare', 'todo'], approvato: ['Approvato', 'ok'], rifiutato: ['Rifiutato', 'ko'], da_pagare: ['Da pagare', 'q'], pagato: ['Pagato', 'plain'] };
+const tagS = (st, extra = '') => `<span class="tag ${STATI[st][1]}">${STATI[st][0]}${extra}</span>`;
+const S = { st: null, v: null, mese: '', d: null };
+
+async function boot() {
+  try { S.st = await api('GET', 'api/stato'); } catch (x) { $('#main').innerHTML = `<div class="err">${esc(x.message)}</div>`; return; }
+  const u = new URLSearchParams(location.search);
+  const od = S.st.oggi, prec = new Date(Date.UTC(+od.slice(0, 4), +od.slice(5, 7) - 2, 1));
+  S.mese = u.get('anno') && u.get('mese') ? `${u.get('anno')}-${String(u.get('mese')).padStart(2, '0')}` : prec.toISOString().slice(0, 7);
+  S.v = S.st.admin ? (u.get('v') === 'miei' && S.st.medico ? 'miei' : 'tabella') : 'miei';
+  tabs(); vai();
+}
+function tabs() {
+  const T = [S.st.admin && ['tabella', 'Compensi dei medici'], S.st.medico && ['miei', 'I miei compensi']].filter(Boolean);
+  $('#tabs').innerHTML = T.length > 1 ? T.map(([k, t]) => `<button class="tab ${S.v === k ? 'on' : ''}" data-v="${k}">${t}</button>`).join('') : '';
+  $('#tabs').querySelectorAll('[data-v]').forEach(b => b.onclick = () => { S.v = b.dataset.v; tabs(); vai(); });
+}
+const vai = () => S.v === 'tabella' ? vTabella() : vMiei();
+
+/* ---------- amministrazione ---------- */
+async function vTabella() {
+  const [a, m] = S.mese.split('-').map(Number);
+  let d; try { d = S.d = await api('GET', `api/mese?anno=${a}&mese=${m}`); } catch (x) { return toast(x.message); }
+  const C = new Map(d.compensi.map(c => [c.medico + '|' + c.sede, c]));
+  const totS = {}, totM = {};
+  d.compensi.forEach(c => { totS[c.sede] = (totS[c.sede] || 0) + c.importo; totM[c.medico] = (totM[c.medico] || 0) + c.importo; });
+  const totale = d.compensi.reduce((s, c) => s + c.importo, 0);
+  const cella = (m, s) => {
+    const c = C.get(m.id + '|' + s.id), st = c?.stato || '';
+    const tit = c ? STATI[st][0] + (c.motivo ? ': ' + c.motivo : '') + (c.pagatoIl ? ' il ' + fD(c.pagatoIl) : '') : '';
+    if (c && (st === 'da_pagare' || st === 'pagato')) return `<td class="c-${st}"><span class="fermo" title="${esc(tit)}">${fN(c.importo)}</span></td>`;
+    return `<td class="c-${st}"><input inputmode="decimal" aria-label="${esc(m.nome)}, ${esc(s.nome)}" title="${esc(tit)}" data-m="${esc(m.id)}" data-s="${esc(s.id)}" value="${c ? fN(c.importo) : ''}"></td>`;
+  };
+  const per = st => { const g = new Map(); d.compensi.filter(c => c.stato === st).forEach(c => { const x = g.get(c.medico) || { nome: c.medicoNome, ids: [], tot: 0, righe: [] }; x.ids.push(c.id); x.tot += c.importo; x.righe.push(c); g.set(c.medico, x); }); return [...g.values()].sort((p, q) => p.nome.localeCompare(q.nome, 'it')); };
+  const rif = per('rifiutato'), app = per('approvato'), dap = per('da_pagare'), att = per('attesa');
+  const errFin = d.compensi.filter(c => c.stato === 'pagato' && !c.finOk);
+  const lista = (g, nome) => g.map(x => `<label class="chk"><input type="checkbox" name="${nome}" value="${esc(x.ids.join(','))}" checked><span class="gr"><b>${esc(x.nome)}</b><div class="s">${x.righe.map(c => `${esc(c.sedeNome)} ${fE(c.importo)}`).join(' · ')}</div></span><span class="imp">${fE(x.tot)}</span></label>`).join('');
+  $('#main').innerHTML = `
+    <div class="head"><div><h2 class="view">Compensi dei medici</h2><p>Scrivi il compenso di ogni medico nella sede: lo vede subito nella sua app e lo approva.</p></div></div>
+    <div class="sedebar"><label class="lbl" for="mese">Mese</label><input type="month" id="mese" value="${S.mese}"><span class="spacer"></span><b>Totale ${fE(totale)}</b></div>
+    <div class="leg">${['attesa', 'approvato', 'rifiutato', 'da_pagare', 'pagato'].map(s => tagS(s)).join('')}</div>
+    ${!d.medici.length ? '<div class="card empty"><b>Nessun medico registrato</b>I medici compaiono qui quando si registrano nelle app.</div>' : `
+    <div class="card tw"><table class="cm"><thead><tr><th>Medico</th>${d.sedi.map(s => `<th class="n">${esc(s.nome.toUpperCase())}</th>`).join('')}<th class="n">TOTALE</th></tr></thead>
+      <tbody>${d.medici.map(m => `<tr><td class="nome" title="${esc(m.nome)}">${esc(m.nome)}</td>${d.sedi.map(s => cella(m, s)).join('')}<td class="tot">${totM[m.id] ? fE(totM[m.id]) : ''}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td></td>${d.sedi.map(s => `<td>${totS[s.id] ? fE(totS[s.id]) : ''}</td>`).join('')}<td>${fE(totale)}</td></tr></tfoot></table></div>`}
+    ${att.length ? `<p class="muted" style="margin:10px 0 0">${att.length} ${att.length === 1 ? 'medico deve' : 'medici devono'} ancora approvare: ${att.map(x => esc(x.nome)).join(', ')}.</p>` : ''}
+    ${rif.length ? `<div class="card pad blocco"><h3>Rifiutati: correggi l'importo nella tabella</h3>${rif.map(x => x.righe.map(c => `<div class="chk"><span class="gr"><b>${esc(x.nome)}</b> · ${esc(c.sedeNome)} ${fE(c.importo)}<div class="s">Motivo: ${esc(c.motivo)}</div></span><button class="btn sm" data-rimanda="${esc(c.medico + '|' + c.sede)}">Rimanda uguale</button></div>`).join('')).join('')}</div>` : ''}
+    ${app.length ? `<div class="card pad blocco"><h3>Approvati dal medico</h3>${lista(app, 'app')}<div class="row" style="margin-top:10px"><button class="btn primary" id="b-dap">Segna da pagare</button></div></div>` : ''}
+    ${dap.length ? `<div class="card pad blocco"><h3>Da pagare</h3>${lista(dap, 'dap')}<div class="sedebar" style="margin:10px 0 0"><label class="lbl" for="dpag">Pagato il</label><input type="date" id="dpag" value="${S.st.oggi}" max="${S.st.oggi}"><button class="btn primary" id="b-pag">Segna pagati</button></div>
+      <p class="muted" style="font-size:13px;margin:8px 0 0">Il pagato va da solo nella Gestione finanziaria: riga del medico in «Costi per dottori», nella sede e nel mese del pagamento.</p></div>` : ''}
+    ${errFin.length ? `<div class="err blocco">${errFin.length} ${errFin.length === 1 ? 'pagamento non è arrivato' : 'pagamenti non sono arrivati'} in Gestione finanziaria: ${esc(errFin[0].finErrore)} <button class="btn sm" id="b-rip" style="margin-left:8px">Riprova</button></div>` : ''}`;
+  $('#mese').onchange = e => { if (e.target.value) { S.mese = e.target.value; vTabella(); } };
+  $('#main').querySelectorAll('input[data-m]').forEach(inp => {
+    inp.onfocus = () => inp.select();
+    inp.onkeydown = e => { if (e.key === 'Enter') inp.blur(); };
+    inp.onchange = async () => {
+      const v = parseE(inp.value); if (isNaN(v)) { toast('Importo non valido'); return; }
+      try { const r = await api('PUT', 'api/compenso', { anno: a, mese: m, medico: inp.dataset.m, sede: inp.dataset.s, importo: v }); toast(r.tolto ? 'Tolto.' : 'Salvato: il medico lo vede da approvare.'); vTabella(); }
+      catch (x) { toast(x.message); vTabella(); }
+    };
+  });
+  $('#main').querySelectorAll('[data-rimanda]').forEach(b => b.onclick = async () => {
+    const [mm, ss] = b.dataset.rimanda.split('|'), c = C.get(b.dataset.rimanda);
+    try { await api('PUT', 'api/compenso', { anno: a, mese: m, medico: mm, sede: ss, importo: c.importo }); toast('Rimandato al medico.'); vTabella(); } catch (x) { toast(x.message); }
+  });
+  const ids = n => [...$('#main').querySelectorAll(`input[name=${n}]:checked`)].flatMap(x => x.value.split(','));
+  $('#b-dap') && ($('#b-dap').onclick = async () => { const i = ids('app'); if (!i.length) return toast('Spunta almeno un medico.');
+    try { const r = await api('POST', 'api/da-pagare', { ids: i }); toast(`${r.n} ${r.n === 1 ? 'compenso segnato' : 'compensi segnati'} da pagare.`); vTabella(); } catch (x) { toast(x.message); } });
+  $('#b-pag') && ($('#b-pag').onclick = async e => { const i = ids('dap'), dt = $('#dpag').value; if (!i.length) return toast('Spunta almeno un medico.'); if (!dt) return toast('Scegli la data del pagamento.');
+    e.target.disabled = true;
+    try { const r = await api('POST', 'api/pagato', { ids: i, data: dt }); toast(r.fin?.ok === false ? 'Segnati pagati, ma non sono arrivati in Gestione finanziaria: ' + r.fin.errore : 'Segnati pagati e messi nella Gestione finanziaria.', 6000); vTabella(); } catch (x) { e.target.disabled = false; toast(x.message); } });
+  $('#b-rip') && ($('#b-rip').onclick = async () => { try { const r = await api('POST', 'api/riprova-finanza', {}); toast(r.fin?.ok === false ? r.fin.errore : 'Fatto: arrivati in Gestione finanziaria.', 5000); vTabella(); } catch (x) { toast(x.message); } });
+}
+
+/* ---------- medico ---------- */
+async function vMiei() {
+  let d; try { d = await api('GET', 'api/miei'); } catch (x) { return toast(x.message); }
+  const g = new Map(); d.compensi.forEach(c => { const k = c.anno + '-' + String(c.mese).padStart(2, '0'); (g.get(k) || g.set(k, []).get(k)).push(c); });
+  const card = (k, L) => {
+    const [a, m] = k.split('-').map(Number), tot = L.reduce((s, c) => s + c.importo, 0), att = L.filter(c => c.stato === 'attesa');
+    return `<div class="card mese-card"><div class="sez-t"><h3>${MESI[m - 1]} ${a}</h3><b>${fE(tot)}</b></div><div class="pad" style="padding-top:4px">
+      ${L.map(c => `<div class="riga"><div class="gr"><div class="t">${esc(c.sedeNome)}</div>${c.stato === 'pagato' ? `<div class="s">Pagato il <b>${fD(c.pagatoIl)}</b></div>` : c.stato === 'rifiutato' ? `<div class="s">Il tuo motivo: ${esc(c.motivo)}. L'amministrazione lo corregge.</div>` : ''}</div><div class="imp">${fE(c.importo)}</div>${tagS(c.stato)}</div>`).join('')}
+      ${att.length ? `<div class="row" style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap"><button class="btn danger" data-no="${esc(att.map(c => c.id).join(','))}">Rifiuta</button><button class="btn primary" data-si="${esc(att.map(c => c.id).join(','))}">Approva ${fE(att.reduce((s, c) => s + c.importo, 0))}</button></div>` : ''}
+    </div></div>`;
+  };
+  $('#main').innerHTML = `<div class="head"><div><h2 class="view">I miei compensi</h2><p>Controlla il compenso di ogni mese e approvalo: dopo l'approvazione l'amministrazione lo paga e qui vedi la data del pagamento.</p></div></div>
+    ${g.size ? [...g].map(([k, L]) => card(k, L)).join('') : '<div class="card empty"><b>Ancora nessun compenso</b>Quando l\'amministrazione inserisce il tuo compenso lo trovi qui.</div>'}`;
+  $('#main').querySelectorAll('[data-si]').forEach(b => b.onclick = async () => { b.disabled = true;
+    try { await api('POST', 'api/decidi', { ids: b.dataset.si.split(','), ok: true }); toast('Approvato. Grazie!'); vMiei(); } catch (x) { b.disabled = false; toast(x.message); } });
+  $('#main').querySelectorAll('[data-no]').forEach(b => b.onclick = () => {
+    const dlg = $('#dlg');
+    dlg.innerHTML = `<form method="dialog"><div class="dh"><h3>Perché lo rifiuti?</h3></div><div class="db"><div class="field"><label for="mot">Motivo (lo legge l'amministrazione)</label><textarea id="mot" maxlength="500" required></textarea></div><div class="err" id="merr" hidden></div></div>
+      <div class="df"><button class="btn" value="no">Annulla</button><button class="btn danger" id="mok" value="ok">Rifiuta</button></div></form>`;
+    dlg.showModal();
+    $('#mok').onclick = async e => { e.preventDefault(); const motivo = $('#mot').value.trim(); if (motivo.length < 3) { $('#merr').hidden = false; $('#merr').textContent = 'Scrivi il motivo.'; return; }
+      try { await api('POST', 'api/decidi', { ids: b.dataset.no.split(','), ok: false, motivo }); dlg.close(); toast('Rifiutato: l\'amministrazione vede il motivo.'); vMiei(); } catch (x) { $('#merr').hidden = false; $('#merr').textContent = x.message; } };
+  });
+}
+boot();
+</script>

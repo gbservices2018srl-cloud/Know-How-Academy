@@ -9,8 +9,8 @@
 module.exports = [
   // Gestione amministrativa (prima "Controllo di gestione"): Gestione finanziaria, App di bilancio e Raffronto prezzi
   { key: 'controllo', name: 'Gestione amministrativa', url: 'https://appgestione.it/c/controllo', color: 'teal', virtuale: true,
-    gruppo: ['finanza', 'bilancio', 'prezzi'],
-    desc: 'Gestione finanziaria, bilancio e raffronto dei prezzi tra listini e fatture dei fornitori.' },
+    gruppo: ['finanza', 'bilancio', 'prezzi', 'compensi'],
+    desc: 'Gestione finanziaria, bilancio, raffronto dei prezzi tra listini e fatture dei fornitori e compensi dei medici.' },
   { key: 'finanza', name: 'Gestione finanziaria', url: 'https://finanza.appgestione.it', color: 'teal', dentro: 'controllo',
     desc: 'Andamento economico e dati finanziari del gruppo.' },
   { key: 'bilancio', name: 'Controllo di gestione · Bilancio', url: 'https://finanza.appgestione.it/bilancio', color: 'purple', dentro: 'controllo',
@@ -37,6 +37,15 @@ module.exports = [
       { key: 'operatore', label: 'Operatore', ente: 'sedi', enteLabel: 'Quale sede', multi: true },
     ],
     desc: 'La produzione del mese di ogni sede: dopo l\'approvazione dell\'amministratore va nel Consuntivo della Gestione finanziaria.' },
+  // Compenso medici: l'amministrazione scrive i compensi del mese (medici × sedi); il medico li approva o li rifiuta;
+  // pagati, vanno da soli nel Consuntivo della Gestione finanziaria. I medici la trovano da soli (solo i loro compensi).
+  { key: 'compensi', name: 'Compenso medici', url: 'https://appgestione.it/compensi/', color: 'purple', dentro: 'controllo',
+    autoFigura: 'Medico', autoLivello: 'medico',
+    livelli: [
+      { key: 'admin', label: 'Amministrazione (scrive, segna da pagare e pagato)', role: 'admin' },
+      { key: 'medico', label: 'Medico (vede e approva i suoi compensi)' },
+    ],
+    desc: 'Compensi dei medici mese per mese e sede per sede: il medico li approva, l\'amministrazione li paga e vanno nel Consuntivo.' },
   // Raffronto prezzi: listini dei fornitori salvati; la fattura si confronta con il listino (della fattura non si salva niente)
   { key: 'prezzi', name: 'Raffronto prezzi', url: 'https://appgestione.it/amm/prezzi', color: 'yellow', dentro: 'controllo',
     desc: 'Carica i listini dei fornitori (PDF, foto o Excel) e confronta le fatture: voci corrette, più care, più economiche o non a listino.' },
