@@ -1014,7 +1014,7 @@ module.exports = function sp(app, ctx) {
       const ok = new Set((await sch.sedi()).map(s => s.id)), ids = (Array.isArray(b.sedi) ? b.sedi : []).filter(x => ok.has(x));
       add('sedi', JSON.stringify(ids));
       const { rows: [pu] } = await store.q('select figura from users where id = $1', [req.params.id]);
-      if (pu && pu.figura !== MEDICO) await store.impostaSedi(req.params.id, ids); // le sedi stanno nell'anagrafica unica: valgono per tutte le app
+      if (pu && pu.figura !== MEDICO) { await store.impostaSedi(req.params.id, ids); require('../accessi/lib/finanzaPersone').allineaUno(req.params.id); } // le sedi stanno nell'anagrafica unica: valgono per tutte le app
     }
     if ('conferma' in b) add('tipo_ok', true);
     if (!sets.length) return res.json({ ok: true });

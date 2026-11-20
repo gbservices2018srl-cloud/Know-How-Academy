@@ -658,6 +658,8 @@ app.patch('/api/admin/users/:id', needAdmin, wrap(async (req, res) => {
   const fresh = await store.getUser(u.id);
   // persona attiva: le app ricevono subito i dati aggiornati (o il nuovo profilo, appena approvata)
   if (fresh.status === 'active' && b.status !== 'disabled') avvisi = await provisiona(fresh, null, { oldEmail: u.email !== fresh.email ? u.email : null });
+  // Gestione finanziaria: medico P.IVA tra i dottori, gli altri negli stipendi, nelle sue sedi (solo aggiunte)
+  if (fresh.status === 'active') require('./lib/finanzaPersone').allineaUno(fresh.id);
   res.json({ user: store.publicUser(fresh, await store.appsOf(fresh)), livelli: await store.livelliOf(u.id), sent, avvisi });
 }));
 
@@ -816,6 +818,12 @@ async function salvaSede(id, d) {
   return id;
 }
 app.get('/api/admin/sedi', needAdmin, wrap(async (req, res) => res.json({ sedi: await store.listSedi() })));
+
+/* ---------- Gestione finanziaria: allineare le persone già registrate (prima si vede cosa cambia) ---------- */
+app.post('/api/admin/finanza/persone', needAdmin, wrap(async (req, res) => {
+  try { res.json(await require('./lib/finanzaPersone').allineaTutti(!req.body?.conferma)); }
+  catch (e) { bad(res, 502, require('../lib/finanza').messaggio(e)); }
+}));
 
 /* ---------- contatti utili (si vedono in Scheda personale → Info utili, per sede) ---------- */
 const contattoBody = async b => {
@@ -1333,7 +1341,7 @@ async function sediMediciInAnagrafica(userId = null) {
   for (const r of rows) {
     const nuove = lista.find(m => m.id === r.id)?.sedi || [];
     const ora = Array.isArray(r.sedi) ? r.sedi : [];
-    if (nuove.length && [...nuove].sort().join('|') !== [...ora].sort().join('|')) await store.impostaSedi(r.id, nuove);
+    if (nuove.length && [...nuove].sort().join('|') !== [...ora].sort().join('|')) { await store.impostaSedi(r.id, nuove); require('./lib/finanzaPersone').allineaUno(r.id); }
   }
 }
 // una volta (riempie solo chi non ha ancora le sedi in anagrafica): dalla Scheda personale o dalle app per sede

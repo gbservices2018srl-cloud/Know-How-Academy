@@ -592,6 +592,27 @@ function contattiHtml() {
       <div class="actions"><button class="btn small" data-contatto-edit="${c.id}">Modifica</button><button class="btn small" data-contatto-togli="${c.id}">Togli</button></div></div>`).join('')
       : '<p class="muted" style="margin:6px 0 0">Nessun contatto ancora.</p>'}</div>`;
 }
+// Gestione finanziaria: le persone registrate vanno da sole nelle sue sedi (medici P.IVA tra i dottori, gli altri negli stipendi).
+// Per chi era già registrato prima: «Controlla» mostra cosa cambierebbe, poi si conferma.
+function finPersHtml() {
+  return `<div class="card" style="margin-top:14px"><div class="tools" style="margin:0"><div style="flex:1 1 260px"><b>Gestione finanziaria: persone</b><p class="hint" style="margin:2px 0 0">Quando approvi o modifichi una persona va da sola in Gestione finanziaria, nelle sue sedi: medici a partita IVA tra i dottori dei costi variabili, dipendenti CCNL e partite IVA non medici negli stipendi lordi. Si aggiunge soltanto: niente viene tolto, i medici messi a mano restano.</p></div>
+    <button class="btn" data-finpers>Controlla le persone già registrate</button></div></div>`;
+}
+async function apriFinPers(conferma) {
+  let r; try { r = await api('POST', '/api/admin/finanza/persone', conferma ? { conferma: true } : {}); } catch (e) { return toast(e.message); }
+  if (conferma) { dlg.close(); return toast(r.scritto ? 'Persone aggiunte in Gestione finanziaria.' : 'Niente da aggiungere.'); }
+  const da = r.esiti.filter(e => e.azione !== 'presente' || e.nuove.length), ok = r.esiti.length - da.length;
+  const T = { medico: 'Dottori (costi variabili)', stipendio: 'Stipendi lordi' };
+  const az = e => e.azione === 'nuovo' ? 'nuovo' : e.azione === 'collegato' ? 'già presente con lo stesso nome: lo collego' : e.azione === 'presente' ? 'già presente' : e.azione;
+  open(`<h2>Gestione finanziaria: persone</h2>
+    <p class="muted" style="margin:0">${ok} già a posto. ${da.length ? `Da aggiungere o collegare: <b>${da.length}</b>.` : 'Niente da aggiungere.'}</p>
+    ${da.length ? `<div style="max-height:46vh;overflow:auto;border:1px solid #E6E6DF;border-radius:10px">${da.map(e => `<div style="padding:8px 10px;border-bottom:1px solid #EFEFE9;font-size:14px"><b>${esc(e.nome)}</b> <span class="muted">· ${T[e.tipo]}</span><br><span class="muted">${esc(az(e))}${e.nuove.length ? ' · sedi: ' + esc(e.nuove.join(', ')) : ''}${e.senzaSede.length ? ' · <b>sede non trovata</b>: ' + esc(e.senzaSede.join(', ')) : ''}</span></div>`).join('')}</div>` : ''}
+    ${(r.senzaContratto || []).length ? `<p class="muted" style="margin:0;font-size:13px"><b>Restano fuori perché manca il contratto (CCNL o partita IVA):</b> ${esc(r.senzaContratto.join(', '))}</p>` : ''}
+    ${(r.senzaSede || []).length ? `<p class="muted" style="margin:0;font-size:13px"><b>Restano fuori perché senza sede:</b> ${esc(r.senzaSede.join(', '))}</p>` : ''}
+    <p class="muted" style="margin:0;font-size:13px">Non si toglie niente e gli importi non si toccano. Prima di scrivere, Gestione finanziaria salva una versione.</p>
+    <div class="row"><button class="btn" value="cancel" formnovalidate>Chiudi</button>${da.length ? '<button class="btn primary" value="ok">Aggiungi in Gestione finanziaria</button>' : ''}</div>`, async v => { if (v === 'ok') await apriFinPers(true); });
+}
+document.addEventListener('click', e => { if (e.target.closest('[data-finpers]')) apriFinPers(false); });
 // Convenzioni: nome, descrizione, link; per quali sedi e per chi (CCNL / partita IVA). Le vedono in Info utili.
 // QR: l'immagine si rimpicciolisce (max 600 px) prima di salvarla
 document.addEventListener('change', async e => {
@@ -684,7 +705,7 @@ function renderSedi() {
   box.innerHTML = `<div class="tools"><p class="hint" style="flex:1 1 300px">Le sedi del gruppo valgono per tutte le app: si copiano da sole in Turni (con i riuniti), Manutenzione attrezzature (riuniti e aspiratori con il loro nome), Calendario (luoghi degli eventi), Ticket (studi, con la società) e Nuovalab (studi, serve l'email della sede).</p>
       <button class="btn" data-sede-sync>Aggiorna le app</button><button class="btn primary" data-sede-new>+ Nuova sede</button></div>
     ${SEDI && !SEDI.length ? `<div class="card empty">Nessuna sede ancora. <button class="btn small primary" data-sede-import style="margin-left:8px">Importa le sedi già presenti in Nuovalab e Ticket</button></div>` : `<div class="card" style="padding:0">${righe || '<div class="empty">Caricamento…</div>'}</div>`}
-    ${SEDI && SEDI.length ? contattiHtml() + convHtml() : ''}`;
+    ${SEDI && SEDI.length ? contattiHtml() + convHtml() + finPersHtml() : ''}`;
 }
 // riuniti e aspiratori della sede: quanti sono e come si chiamano (li legge Manutenzione attrezzature)
 const ICO_RIU = '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M13.5 17.5l3.6-.8 4.6 17.8-4.4 1z"/><path d="M19 36.5h22.5l11 8.5"/><path d="M30 40.5v11M21 54h18"/><path d="M38 6.5h15.5v7"/></svg>';
