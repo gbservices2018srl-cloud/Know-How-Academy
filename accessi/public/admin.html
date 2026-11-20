@@ -205,6 +205,7 @@ dialog form{padding:22px;display:flex;flex-direction:column;gap:14px}
       <button class="chip" data-f="pending">In attesa <span class="n" id="n-pending"></span></button>
       <button class="chip" data-f="contratti" hidden>Contratti da confermare <span class="n" id="n-contratti"></span></button>
       <button class="chip" data-f="rivedere" hidden>Figura da rivedere <span class="n" id="n-rivedere"></span></button>
+      <button class="chip" data-f="incompleti" hidden>Profili incompleti <span class="n" id="n-incompleti"></span></button>
       <button class="chip" data-f="senzasede" hidden>Senza sede <span class="n" id="n-senzasede"></span></button>
       <button class="chip" data-f="crescita" hidden>Ruolo da assegnare <span class="n" id="n-crescita"></span></button>
       <button class="chip" data-f="active">Attivi <span class="n" id="n-active"></span></button>
@@ -289,7 +290,7 @@ async function load() {
   S.livelli ||= {};
   $('#mailwarn').hidden = S.mail;
   const fUrl = new URLSearchParams(location.search).get('f');
-  if (!load.done && ['pending', 'contratti', 'rivedere', 'crescita', 'senzasede', 'active', 'disabled', 'all'].includes(fUrl)) filter = fUrl;
+  if (!load.done && ['pending', 'contratti', 'rivedere', 'crescita', 'senzasede', 'incompleti', 'active', 'disabled', 'all'].includes(fUrl)) filter = fUrl;
   if (filter === 'pending' && !S.users.some(u => u.status === 'pending') && !load.done) filter = S.users.some(daConfermare) ? 'contratti' : 'active';
   load.done = true;
   caricaSetup();
@@ -297,13 +298,14 @@ async function load() {
 }
 const fullName = u => `${u.firstName} ${u.lastName}`.trim() || u.email;
 function counts() {
-  const c = {pending: 0, active: 0, disabled: 0, all: S.users.length, contratti: 0, rivedere: 0, crescita: 0, senzasede: 0};
-  S.users.forEach(u => { c[u.status]++; if (daConfermare(u)) c.contratti++; if (daRivedere(u)) c.rivedere++; if (daAssegnare(u)) c.crescita++; if (senzaSede(u)) c.senzasede++; });
+  const c = {pending: 0, active: 0, disabled: 0, all: S.users.length, contratti: 0, rivedere: 0, crescita: 0, senzasede: 0, incompleti: 0};
+  S.users.forEach(u => { c[u.status]++; if (incompleto(u)) c.incompleti++; if (daConfermare(u)) c.contratti++; if (daRivedere(u)) c.rivedere++; if (daAssegnare(u)) c.crescita++; if (senzaSede(u)) c.senzasede++; });
   for (const k in c) $('#n-' + k).textContent = c[k];
   document.querySelector('[data-f="pending"]').classList.toggle('attn', c.pending > 0);
   const cc = document.querySelector('[data-f="contratti"]'); cc.hidden = !c.contratti && filter !== 'contratti'; cc.classList.toggle('attn', c.contratti > 0);
   const cr = document.querySelector('[data-f="rivedere"]'); cr.hidden = !c.rivedere && filter !== 'rivedere'; cr.classList.toggle('attn', c.rivedere > 0);
   const cg = document.querySelector('[data-f="crescita"]'); cg.hidden = !c.crescita && filter !== 'crescita'; cg.classList.toggle('attn', c.crescita > 0);
+  const ci = document.querySelector('[data-f="incompleti"]'); ci.hidden = !c.incompleti && filter !== 'incompleti'; ci.classList.toggle('attn', c.incompleti > 0);
   const cs = document.querySelector('[data-f="senzasede"]'); cs.hidden = !c.senzasede && filter !== 'senzasede'; cs.classList.toggle('attn', c.senzasede > 0);
   renderSetup(c);
   renderPassaggi();
@@ -356,7 +358,7 @@ function render() {
   document.querySelectorAll('.chip').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === filter));
   const q = $('#q').value.trim().toLowerCase();
   // filtro per ruolo (figura professionale): i numeri accanto contano le persone dello stato scelto
-  const fr = $('#fruolo'), frv = fr.value, nelloStato = S.users.filter(u => filter === 'all' || (filter === 'contratti' ? daConfermare(u) : filter === 'rivedere' ? daRivedere(u) : filter === 'crescita' ? daAssegnare(u) : filter === 'senzasede' ? senzaSede(u) : u.status === filter));
+  const fr = $('#fruolo'), frv = fr.value, nelloStato = S.users.filter(u => filter === 'all' || (filter === 'contratti' ? daConfermare(u) : filter === 'rivedere' ? daRivedere(u) : filter === 'crescita' ? daAssegnare(u) : filter === 'senzasede' ? senzaSede(u) : filter === 'incompleti' ? incompleto(u) : u.status === filter));
   fr.innerHTML = `<option value="">Tutti i ruoli (${nelloStato.length})</option>` + (S.figure || []).map(f => { const n = nelloStato.filter(u => u.figura === f.id).length;
     return `<option value="${esc(f.id)}">${esc(f.nome)} (${n})</option>`; }).join('') + `<option value="-">Ruolo da scegliere (${nelloStato.filter(u => !u.figura).length})</option>`;
   fr.value = frv;
@@ -364,7 +366,7 @@ function render() {
     (!q || `${u.firstName} ${u.lastName} ${u.email}`.toLowerCase().includes(q)));
   if (!rows.length) {
     $('#list').className = 'list';
-    $('#list').innerHTML = `<div class="card empty">${filter === 'pending' && !q ? 'Nessuna richiesta in attesa.' : filter === 'contratti' && !q ? 'Nessun contratto da confermare.' : filter === 'rivedere' && !q ? 'Nessuna figura da rivedere.' : filter === 'crescita' && !q ? 'Tutti hanno un ruolo nel piano di crescita.' : filter === 'senzasede' && !q ? 'Tutti hanno una sede in anagrafica.' : 'Nessun utente trovato.'}</div>`;
+    $('#list').innerHTML = `<div class="card empty">${filter === 'pending' && !q ? 'Nessuna richiesta in attesa.' : filter === 'contratti' && !q ? 'Nessun contratto da confermare.' : filter === 'rivedere' && !q ? 'Nessuna figura da rivedere.' : filter === 'crescita' && !q ? 'Tutti hanno un ruolo nel piano di crescita.' : filter === 'senzasede' && !q ? 'Tutti hanno una sede in anagrafica.' : filter === 'incompleti' && !q ? 'Tutti i profili sono completi.' : 'Nessun utente trovato.'}</div>`;
     return;
   }
   // omonimi: stesso nome e cognome → la data di nascita aiuta a distinguerli
@@ -424,7 +426,7 @@ function card(u, homonym) {
   const open = aperti.has(u.id), nApp = Object.keys(u.apps).filter(k => k !== 'accessi').length;
   const row = `<button class="urow" data-toggle="${u.id}" aria-expanded="${open}" aria-controls="ub-${u.id}">
       <span class="nm">${esc(fullName(u))}${homonym ? ` <small>nato/a il ${fmtDate(u.birthDate)}</small>` : ''}</span>
-      ${u.status !== 'active' ? `<span class="pill ${u.status}">${st}</span>` : ''}${u.owner ? '<span class="pill owner">Proprietario</span>' : ''}${daRivedere(u) ? '<span class="pill pending">Figura da rivedere</span>' : ''}${daAssegnare(u) ? '<span class="pill pending">Ruolo da assegnare</span>' : crDi(u) ? `<span class="pill">${esc(crDi(u).ruolo)}</span>` : ''}${u.status === 'active' && u.contratto && !u.contratto.ok ? '<span class="pill pending">Contratto da confermare</span>' : u.status === 'active' && u.mancanti?.length ? '<span class="pill pending">Dati mancanti</span>' : ''}
+      ${u.status !== 'active' ? `<span class="pill ${u.status}">${st}</span>` : ''}${u.owner ? '<span class="pill owner">Proprietario</span>' : ''}${daRivedere(u) ? '<span class="pill pending">Figura da rivedere</span>' : ''}${daAssegnare(u) ? '<span class="pill pending">Ruolo da assegnare</span>' : crDi(u) ? `<span class="pill">${esc(crDi(u).ruolo)}</span>` : ''}${u.status === 'active' && u.contratto && !u.contratto.ok ? '<span class="pill pending">Contratto da confermare</span>' : incompleto(u) ? '<span class="pill pending">Profilo incompleto</span>' : ''}
       <span class="ad">${u.owner ? 'tutte le app' : nApp ? nApp + (nApp === 1 ? ' app' : ' app') : 'nessuna app'}</span>
       <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>`;
   if (!open) return `<article class="user ${u.status}">${row}</article>`;
@@ -476,7 +478,8 @@ function anagMeta(u) {
   if (u.haIban) out.push(`<span>IBAN •••• ${esc(u.ibanFine)} <button class="btn small" type="button" data-act="iban" data-u="${u.id}" style="min-height:26px;padding:2px 8px">Mostra</button></span>`);
   if (u.contratto) out.push(`<span>${u.contratto.tipo === 'dip' ? `Dipendente, ${esc(u.contratto.ore)} h/settimana` : 'Partita IVA'} ${u.contratto.ok ? '<b style="color:var(--ok)">✓ confermato</b>'
     : `<b style="color:var(--olive-ink)">da confermare</b> <button class="btn small primary" type="button" data-act="okcontr" data-u="${u.id}" style="min-height:26px;padding:2px 8px">Conferma</button>`}</span>`);
-  if (u.mancanti?.length) out.push(`<span style="color:var(--olive-ink)">Mancano: ${esc(u.mancanti.map(k => nomi[k] || k).join(', '))}${u.status === 'active' ? ' (gli verranno chiesti al prossimo accesso)' : ''}</span>`);
+  const cm = u.status === 'active' ? cosaManca(u) : (u.mancanti || []).map(k => nomi[k] || k);
+  if (cm.length) out.push(`<span style="color:var(--olive-ink)"><b>Manca:</b> ${esc(cm.join(', '))}${u.mancanti?.length ? ' (i dati dell’anagrafica gli verranno chiesti al prossimo accesso)' : ''}</span>`);
   return out.join('');
 }
 /* ---------- permessi per app ---------- */
@@ -784,6 +787,16 @@ document.addEventListener('click', async e => {
 
 /* ---------- procedura guidata: riquadro «Da completare», sede nuova, persona nuova ---------- */
 let SETUP = null;
+// profilo incompleto: persona attiva a cui manca qualcosa (dati dell'anagrafica, codice fiscale, sede)
+function cosaManca(u) {
+  if (!u || u.status !== 'active' || u.owner) return [];
+  const nomi = Object.fromEntries((S?.campi || []).map(c => [c.k, c.nome.toLowerCase()]));
+  const m = (u.mancanti || []).map(k => nomi[k] || k);
+  if (!u.cf) m.push('codice fiscale');
+  if (!(u.sedi || []).length) m.push(u.figura === 'Medico' ? 'sede (ai medici arriva dagli studi di Nuovalab)' : 'sede');
+  return m;
+}
+const incompleto = u => cosaManca(u).length > 0;
 const senzaSede = u => u.status === 'active' && !u.owner && u.figura !== 'Medico' && !(u.sedi || []).length;
 async function caricaSetup() { try { SETUP = await api('GET', '/api/admin/setup'); } catch { SETUP = null; } renderSetup(); if (!$('#sediBox').hidden) renderSedi(); }
 function renderSetup(c) {
@@ -793,6 +806,7 @@ function renderSetup(c) {
   if (c.pending) righe.push(`<div class="srow"><span><b>${c.pending}</b> ${c.pending === 1 ? 'persona in attesa' : 'persone in attesa'} di approvazione</span><span class="grow"></span><button class="btn small primary" type="button" data-setf="pending">Apri</button></div>`);
   const sd = (SETUP?.sedi || []).filter(x => x.mancano);
   for (const x of sd) righe.push(`<div class="srow"><span>Sede <b>${esc(x.nome)}</b>: ${x.mancano} ${x.mancano === 1 ? 'cosa' : 'cose'} da completare</span><span class="grow"></span><button class="btn small primary" type="button" data-setup-sede="${x.id}">Completa</button></div>`);
+  if (c.incompleti) righe.push(`<div class="srow"><span><b>${c.incompleti}</b> ${c.incompleti === 1 ? 'profilo incompleto' : 'profili incompleti'} (manca qualche dato)</span><span class="grow"></span><button class="btn small primary" type="button" data-setf="incompleti">Vedi</button></div>`);
   if (c.senzasede) righe.push(`<div class="srow"><span><b>${c.senzasede}</b> ${c.senzasede === 1 ? 'persona' : 'persone'} senza sede in anagrafica</span><span class="grow"></span><button class="btn small" type="button" data-setf="senzasede">Vedi</button></div>`);
   if (c.contratti) righe.push(`<div class="srow"><span><b>${c.contratti}</b> contratti da confermare</span><span class="grow"></span><button class="btn small" type="button" data-setf="contratti">Vedi</button></div>`);
   if (c.rivedere) righe.push(`<div class="srow"><span><b>${c.rivedere}</b> figure da rivedere</span><span class="grow"></span><button class="btn small" type="button" data-setf="rivedere">Vedi</button></div>`);
