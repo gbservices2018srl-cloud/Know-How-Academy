@@ -1004,6 +1004,32 @@ module.exports = function sp(app, ctx) {
     const s = await saldi(pp.map(p => p.id));
     res.json({ persone: pp.map(p => ({ ...p, cf: p.cf ? p.cf.slice(0, 6) + '…' + p.cf.slice(-2) : '', haCf: !!p.cf, saldi: s[p.id] })), sedi: (await sch.sedi()).map(x => ({ id: x.id, nome: x.nome })) });
   }));
+  // Azienda: i dati delle registrazioni di tutto il personale attivo (solo numeri per l'amministrazione: niente indirizzi né codici)
+  app.get('/api/sp/admin/azienda', needAd, wrap(async (req, res) => {
+    const { rows } = await store.q(`select id, first_name, last_name, email, figura, cf, birth_date, residenza, contratto_tipo, sedi, created_at, owner from users where status = 'active' and not (owner and coalesce(figura, '') = '')`);
+    const [{ rows: sp }, meds] = await Promise.all([q('select user_id, tipo from sp_persone where user_id = any($1)', [rows.map(r => r.id)]), sch.sediMedici()]);
+    const spm = new Map(sp.map(x => [x.user_id, x.tipo])), mm = new Map(meds.map(m => [m.id, m.sedi]));
+    const oggi = new Date(), yy = oggi.getFullYear() % 100;
+    const daCf = cf => { // data di nascita e sesso dal codice fiscale
+      const c = String(cf || '').toUpperCase(); if (!/^[A-Z]{6}\d{2}[A-EHLMPRST]\d{2}/.test(c)) return {};
+      const a = +c.slice(6, 8), m = 'ABCDEHLMPRST'.indexOf(c[8]), g = +c.slice(9, 11);
+      return { nato: new Date(Date.UTC(a > yy ? 1900 + a : 2000 + a, m, g > 40 ? g - 40 : g)), sesso: g > 40 ? 'F' : 'M' };
+    };
+    const persone = rows.map(r => {
+      const medico = r.figura === MEDICO, c = daCf(r.cf);
+      const nato = r.birth_date ? new Date(r.birth_date) : c.nato;
+      const eta = nato && !isNaN(nato) ? Math.floor((oggi - nato) / (365.25 * 864e5)) : null;
+      const res = typeof r.residenza === 'string' ? (() => { try { return JSON.parse(r.residenza); } catch { return null; } })() : r.residenza;
+      return { nome: nomeDi(r) || r.email, figura: r.figura || '', medico,
+        tipo: r.contratto_tipo || spm.get(r.id) || (medico ? 'piva' : null),
+        sedi: medico ? (mm.get(r.id) || []) : Array.isArray(r.sedi) ? r.sedi : [],
+        comune: res?.comune ? String(res.comune).trim().replace(/\s+/g, ' ').toLowerCase().replace(/(^|[\s'-])\p{L}/gu, x => x.toUpperCase()) : '',
+        provincia: res?.provincia ? String(res.provincia).toUpperCase() : '',
+        eta: eta != null && eta >= 14 && eta < 100 ? eta : null, sesso: c.sesso || '',
+        dal: r.created_at ? new Date(r.created_at).toISOString().slice(0, 7) : '' };
+    });
+    res.json({ persone, sedi: (await sch.sedi()).map(x => ({ id: x.id, nome: x.nome })) });
+  }));
   app.put('/api/sp/admin/persone/:id', needAd, wrap(async (req, res) => {
     const b = req.body, sets = [], vals = [req.params.id];
     const add = (col, v) => { vals.push(v); sets.push(`${col} = $${vals.length}`); };

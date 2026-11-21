@@ -1,13 +1,13 @@
 /* Scheda personale · amministrazione (menu laterale). Le persone vedono solo la loro parte. */
 let ASEZ = 'timbra', AD = {};
 const VOCI_ADMIN = [
-  ['timbra', 'Timbratura'], ['presenze', 'Report presenze'], ['ore', 'Ore riconosciute'], ['richieste', 'Richieste e saldi'],
+  ['azienda', 'Azienda'], '-', ['timbra', 'Timbratura'], ['presenze', 'Report presenze'], ['ore', 'Ore riconosciute'], ['richieste', 'Richieste e saldi'],
   ['persone', 'Persone e contratti'], ['turni', 'Turni di lavoro'], '-', ['branche', 'Branche medici'], ['info', 'Info utili'],
   ['perf', 'Performance'], ['doc', 'Documenti'], '-', ['tag', 'Sedi e tag NFC'], ['attiva', 'Attivazione'],
 ];
 window.avvioAdmin = async function(st){
   const sez = new URLSearchParams(location.search).get('sez');
-  const alias = { assenze: 'richieste', doc: 'doc', perf: 'perf', turni: 'turni', persone: 'persone', timbra: 'timbra', richieste: 'richieste', info: 'info', tag: 'tag' };
+  const alias = { assenze: 'richieste', doc: 'doc', perf: 'perf', turni: 'turni', persone: 'persone', azienda: 'azienda', timbra: 'timbra', richieste: 'richieste', info: 'info', tag: 'tag' };
   if (alias[sez]) ASEZ = alias[sez];
   const side = document.createElement('aside'); side.className = 'sidemenu'; side.id = 'side';
   side.innerHTML = '<div class="sidemenu-h">Amministrazione</div>' + VOCI_ADMIN.map(v => v === '-' ? '<div class="sep"></div>' : `<button data-v="${v[0]}"><span>${v[1]}</span><span data-n="${v[0]}"></span></button>`).join('');
@@ -27,7 +27,7 @@ async function disegnaAdmin(){
   document.querySelectorAll('#side [data-v]').forEach(b => b.setAttribute('aria-selected', b.dataset.v === ASEZ));
   const m = $('#main'); m.className = ''; m.onclick = null; m.onchange = null; m.oninput = null;
   m.innerHTML = '<p class="muted">Carico…</p>';
-  const f = { timbra: aTimbra, presenze: aPresenze, ore: aOre, richieste: aRichieste, persone: aPersone, turni: aTurni, branche: aBranche, info: aInfo, perf: aPerf, doc: aDoc, tag: aTag, attiva: aAttiva }[ASEZ];
+  const f = { azienda: aAzienda, timbra: aTimbra, presenze: aPresenze, ore: aOre, richieste: aRichieste, persone: aPersone, turni: aTurni, branche: aBranche, info: aInfo, perf: aPerf, doc: aDoc, tag: aTag, attiva: aAttiva }[ASEZ];
   try { await f(m); } catch (e) { m.innerHTML = `<div class="card">${esc(e.message)}</div>`; }
 }
 const ridisegna = () => { disegnaAdmin(); contatori(); };
@@ -182,6 +182,62 @@ function registraAssenza(persone, dopo){
 }
 
 /* ---------- persone e contratti ---------- */
+// Azienda: i numeri del personale dalle registrazioni (contratto, ruolo, residenza, età, sedi), in tutte le sedi o in una
+async function aAzienda(m){
+  const { persone, sedi } = await api('GET', '/api/sp/admin/azienda');
+  const sn = new Map(sedi.map(s => [s.id, s.nome]));
+  let sede = AD.azSede || '', aperto = null;
+  const tipo = p => p.tipo === 'dip' ? 'dip' : p.tipo === 'piva' ? 'piva' : '';
+  const COL = ['#4CAAAA', '#8C6898', '#C9A227', '#5B8DB8', '#D9776B', '#7BA05B', '#A0A0A0'];
+  // grafico a barre orizzontali: [[etichetta, numero], …]
+  const barre = (titolo, V, nota = '') => {
+    const max = Math.max(1, ...V.map(v => v[1]));
+    return `<div class="card" style="margin:0;padding:14px 16px"><h3 style="margin:0 0 10px;font-size:15px">${titolo}</h3>
+      ${V.length ? V.map(([t, n], i) => `<div style="display:grid;grid-template-columns:minmax(80px,38%) 1fr 34px;gap:8px;align-items:center;margin:5px 0;font-size:13px">
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(t)}">${esc(t)}</span>
+        <span style="background:var(--surface-2,#f1f1ee);border-radius:6px;height:14px;overflow:hidden"><span style="display:block;height:100%;width:${Math.max(3, n / max * 100)}%;background:${COL[i % COL.length]};border-radius:6px"></span></span>
+        <b style="text-align:right">${n}</b></div>`).join('') : '<p class="muted small">Nessun dato.</p>'}${nota ? `<p class="muted xs" style="margin:8px 0 0">${nota}</p>` : ''}</div>`;
+  };
+  const conteggio = (L, f, max = 0) => {
+    const c = new Map(); L.forEach(p => { const k = f(p); if (k) c.set(k, (c.get(k) || 0) + 1); });
+    let V = [...c].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'it'));
+    if (max && V.length > max) V = [...V.slice(0, max - 1), ['Altri', V.slice(max - 1).reduce((s, x) => s + x[1], 0)]];
+    return V;
+  };
+  const disegna = () => {
+    const L = persone.filter(p => !sede || (p.sedi || []).includes(sede));
+    const conta = A => ({ tot: A.length, dip: A.filter(p => tipo(p) === 'dip').length, piva: A.filter(p => tipo(p) === 'piva').length, no: A.filter(p => !tipo(p)).length });
+    const T = conta(L);
+    const righe = [...new Set(L.map(p => p.figura || 'Senza ruolo'))].map(r => ({ r, A: L.filter(p => (p.figura || 'Senza ruolo') === r) })).map(x => ({ ...x, c: conta(x.A) })).sort((a, b) => b.c.tot - a.c.tot || a.r.localeCompare(b.r, 'it'));
+    const n = v => v ? `<b>${v}</b>` : '<span class="muted">0</span>';
+    const nomi = (A, t) => A.filter(p => tipo(p) === t).map(p => esc(p.nome)).join(', ');
+    const senzaRes = L.filter(p => !p.comune).length, senzaEta = L.filter(p => p.eta == null).length;
+    const fascia = e => e == null ? '' : e < 25 ? 'Meno di 25' : e < 35 ? '25–34' : e < 45 ? '35–44' : e < 55 ? '45–54' : '55 e più';
+    const etaV = ['Meno di 25', '25–34', '35–44', '45–54', '55 e più'].map(f => [f, L.filter(p => fascia(p.eta) === f).length]).filter(x => x[1]);
+    const etaMedia = L.filter(p => p.eta != null).length ? Math.round(L.filter(p => p.eta != null).reduce((s, p) => s + p.eta, 0) / L.filter(p => p.eta != null).length) : null;
+    m.innerHTML = `<h1>Azienda</h1><p class="sub">I numeri del personale, presi dalle registrazioni. Visibile solo all'amministrazione. Tocca un ruolo per vedere i nomi.</p>
+      <div class="row" style="margin-bottom:12px"><label class="f">Sede<select id="azSede"><option value="">Tutte le sedi</option>${sedi.map(s => `<option value="${s.id}" ${sede === s.id ? 'selected' : ''}>${esc(s.nome)}</option>`).join('')}</select></label></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px">
+        ${[['Persone', T.tot], ['CCNL', T.dip], ['Partita IVA', T.piva], ['Senza contratto', T.no], ['Età media', etaMedia != null ? etaMedia + ' anni' : '—']].map(([t, v], i) => `<div class="card" style="margin:0;padding:12px 14px"><div class="muted xs">${t}</div><div style="font-size:24px;font-weight:800;${i === 3 && v ? 'color:var(--danger,#b3261e)' : ''}">${v}</div></div>`).join('')}
+      </div>
+      <div class="tw"><table class="t"><thead><tr><th>Ruolo</th><th style="text-align:right">Totale</th><th style="text-align:right">CCNL</th><th style="text-align:right">Partita IVA</th><th style="text-align:right">Senza contratto</th></tr></thead><tbody>
+      ${righe.map(x => `<tr data-r="${esc(x.r)}" style="cursor:pointer"><td><b>${esc(x.r)}</b></td><td style="text-align:right">${n(x.c.tot)}</td><td style="text-align:right">${n(x.c.dip)}</td><td style="text-align:right">${n(x.c.piva)}</td><td style="text-align:right">${x.c.no ? `<span class="tag warn">${x.c.no}</span>` : n(0)}</td></tr>
+        ${aperto === x.r ? `<tr><td colspan="5" class="small" style="background:var(--surface-2,#f6f6f4)">${x.c.dip ? `<div><b>CCNL:</b> ${nomi(x.A, 'dip')}</div>` : ''}${x.c.piva ? `<div><b>Partita IVA:</b> ${nomi(x.A, 'piva')}</div>` : ''}${x.c.no ? `<div><b>Senza contratto:</b> ${nomi(x.A, '')}</div>` : ''}</td></tr>` : ''}`).join('')}
+      </tbody><tfoot><tr><td><b>Totale</b></td><td style="text-align:right"><b>${T.tot}</b></td><td style="text-align:right"><b>${T.dip}</b></td><td style="text-align:right"><b>${T.piva}</b></td><td style="text-align:right"><b>${T.no}</b></td></tr></tfoot></table></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:14px">
+        ${barre('Dove abitano (comune)', conteggio(L, p => p.comune, 12), senzaRes ? `${senzaRes} senza residenza indicata.` : '')}
+        ${barre('Provincia di residenza', conteggio(L, p => p.provincia))}
+        ${barre('Età', etaV, senzaEta ? `${senzaEta} senza data di nascita o codice fiscale.` : '')}
+        ${barre('Uomini e donne', conteggio(L, p => p.sesso === 'F' ? 'Donne' : p.sesso === 'M' ? 'Uomini' : ''), 'Dal codice fiscale.')}
+        ${!sede ? barre('Persone per sede', conteggio(persone.flatMap(p => (p.sedi || []).map(id => ({ k: sn.get(id) }))), x => x.k), 'Chi lavora in più sedi conta in ognuna.') : ''}
+        ${barre('Registrati per anno', conteggio(L, p => p.dal.slice(0, 4)).sort((a, b) => a[0].localeCompare(b[0])))}
+      </div>
+      <p class="muted xs" style="margin-top:10px">I medici senza contratto indicato si contano a partita IVA. Chi lavora in più sedi conta una volta sola in «Tutte le sedi». Il contratto si corregge in «Persone e contratti».</p>`;
+  };
+  disegna();
+  m.onchange = e => { if (e.target.id === 'azSede') { sede = AD.azSede = e.target.value; aperto = null; disegna(); } };
+  m.onclick = e => { const tr = e.target.closest('tr[data-r]'); if (tr) { aperto = aperto === tr.dataset.r ? null : tr.dataset.r; disegna(); } };
+}
 async function aPersone(m){
   AD.persone = await api('GET', '/api/sp/admin/persone');
   const { persone, sedi } = AD.persone, sn = new Map(sedi.map(s => [s.id, s.nome]));
