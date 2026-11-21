@@ -84,7 +84,7 @@ module.exports = [
   { key: 'area_comunicazioni', name: 'Comunicazioni ed eventi', url: 'https://appgestione.it/c/area_comunicazioni', color: 'purple', virtuale: true,
     gruppo: ['comunicazioni', 'clinica', 'calendario'],
     desc: 'Comunicazioni aziendali, calendario eventi e, per i medici, le comunicazioni cliniche con le ASO.' },
-  { key: 'calendario', name: 'Calendario eventi', url: 'https://calendario.appgestione.it', color: 'purple',
+  { key: 'calendario', name: 'Calendario eventi', url: 'https://calendario.appgestione.it', color: 'yellow',
     dentro: 'area_comunicazioni', // si apre dal riquadro Comunicazioni (e dal pulsante "Eventi" di Comunicazioni aziendali)
     segue: 'comunicazioni',  // non è più un'app a sé: permesso, ruolo, sospensione, interruttore e notifiche sono quelli di Comunicazioni ed eventi
     desc: 'Formazione, riunioni ed eventi aziendali, con iscrizione.' },
@@ -124,7 +124,7 @@ module.exports = [
     desc: 'Richieste di misure implantari al medico della sede: standard o emergenza, con documentazione su DTX.' },
   // Comunicazioni cliniche: l'app dei medici con le richieste delle ASO. Si attiva da sola a ogni profilo "Medico odontoiatra";
   // le sedi del medico arrivano dai Turni (sedi con ore), oppure si scelgono qui con il livello Medico.
-  { key: 'clinica', name: 'Comunicazioni cliniche con ASO', url: 'https://appgestione.it/clinica/', color: 'purple', dentro: 'area_comunicazioni',
+  { key: 'clinica', name: 'Comunicazioni cliniche con ASO', url: 'https://appgestione.it/clinica/', color: 'teal', dentro: 'area_comunicazioni',
     autoFigura: 'Medico', autoLivello: 'medico',
     enti: 'sedi',
     livelli: [
