@@ -257,11 +257,15 @@ async function vComm() {
     mio = `<div class="card pad"><div class="grado">${cap('comm', me.grado, 64)}<div><div class="muted" style="font-size:13px">Il tuo grado${me.grado ? ' · ' + G[me.grado].titolo : ''}</div><h2 style="margin:0">${G[me.grado].nome}</h2>
       ${t ? `<div class="muted" style="font-size:13px;margin-top:2px">Trimestre in corso: con questi numeri a fine trimestre sei <b>${G[me.gradoTrim].nome}</b></div>
       ${nx ? `<div class="req"><span>Concretizzazione ${pc(t.conc)} <span class="muted">→ ${nx.conc}% per ${nx.nome}</span></span><b>${t.conc >= nx.conc ? '✓' : ''}</b></div><div class="barra"><i style="width:${Math.min(100, t.conc / nx.conc * 100)}%"></i></div>
-      <div class="req"><span>Ticket medio ${fE(t.ticket)} <span class="muted">→ ${fE(nx.ticket)} per ${nx.nome}</span></span><b>${t.ticket >= nx.ticket ? '✓' : ''}</b></div><div class="barra"><i style="width:${Math.min(100, t.ticket / nx.ticket * 100)}%"></i></div>` : ''}` : '<p class="muted" style="font-size:13px;margin:4px 0 0">Il grado si calcola sui numeri del trimestre.</p>'}</div></div>
-      <div class="mie"><div><span class="muted">Fatturato accettato di ${MESI[d.mese - 1]}</span><b>${fE(me.fatt)}</b></div><div><span class="muted">Ticket medio</span><b>${fE(me.ticket)} ${stelle(me.sT)}</b></div><div><span class="muted">Concretizzazione</span><b>${pc(me.conc)} ${stelle(me.sC)}</b></div><div><span class="muted">Accettati</span><b>${me.acc} su ${me.n}</b></div></div></div>`;
+      <div class="req"><span>TMV ${fE(t.ticket)} <span class="muted">→ ${fE(nx.ticket)} per ${nx.nome}</span></span><b>${t.ticket >= nx.ticket ? '✓' : ''}</b></div><div class="barra"><i style="width:${Math.min(100, t.ticket / nx.ticket * 100)}%"></i></div>` : ''}` : '<p class="muted" style="font-size:13px;margin:4px 0 0">Il grado si calcola sui numeri del trimestre.</p>'}</div></div>
+      <div class="mie"><div><span class="muted">Fatturato accettato di ${MESI[d.mese - 1]}</span><b>${fE(me.fatt)}</b></div><div><span class="muted">TMV (ticket medio di vendita)</span><b>${fE(me.ticket)} ${stelle(me.sT)}</b></div><div><span class="muted">Concretizzazione</span><b>${pc(me.conc)} ${stelle(me.sC)}</b></div><div><span class="muted">Accettati</span><b>${me.acc} su ${me.n}</b></div></div></div>`;
   }
-  $('#main').innerHTML = `<div class="sez">${mio}<div class="card pad"><h3 style="margin:0 0 10px">Gradi dei commerciali</h3>${d.completo ? barMese('Mese') : ''}
-    <div class="cl">${d.righe.map(x => `<div class="pos ${x.io ? 'io' : ''}" style="grid-template-columns:48px 1fr auto">${cap('comm', x.grado)}<span>${esc(x.nome)}${x.io ? ' (tu)' : ''}<small>${G[x.grado].nome}${x.grado ? ' · ' + G[x.grado].titolo : ''}${d.completo && x.fatt != null ? ` · ${x.acc} accettati su ${x.n} · ticket ${stelle(x.sT)} · conc. ${pc(x.conc)} ${stelle(x.sC)}` : ''}</small></span><b class="r">${d.completo && x.fatt != null ? fE(x.fatt) : ''}</b></div>`).join('') || '<p class="muted">Nessun commerciale registrato.</p>'}</div>${notaVista(d)}</div></div>`;
+  // amministrazione: classifica sulla % del target di TMV e di concretizzazione (in media); i commerciali vedono solo i gradi
+  const rigaAdm = (x, i) => `<div class="pos" style="grid-template-columns:30px 40px 1fr auto">${x.n ? posto(i + 1) : '<span class="n">–</span>'}${cap('comm', x.grado, 40)}<span>${esc(x.nome)}<small>${G[x.grado].nome} · TMV ${fE(x.ticket)} (${pc(x.pTmv)} del target) ${stelle(x.sT)} · conc. ${pc(x.conc)} (${pc(x.pConc)} del target) ${stelle(x.sC)} · ${x.acc} accettati su ${x.n} · fatturato ${fE(x.fatt)}</small></span><b class="r" title="Media della % del target di TMV e di concretizzazione">${x.n ? pc(x.punteggio) : '—'}</b></div>`;
+  const rigaComm = x => `<div class="pos ${x.io ? 'io' : ''}" style="grid-template-columns:48px 1fr">${cap('comm', x.grado)}<span>${esc(x.nome)}${x.io ? ' (tu)' : ''}<small>${G[x.grado].nome}${x.grado ? ' · ' + G[x.grado].titolo : ''}</small></span></div>`;
+  $('#main').innerHTML = `<div class="sez">${mio}<div class="card pad"><h3 style="margin:0 0 10px">${d.completo ? `Classifica commerciali di ${MESI[d.mese - 1]} · % del target di TMV e concretizzazione` : 'Gradi dei commerciali'}</h3>${d.completo ? barMese('Mese') : ''}
+    <div class="cl">${d.righe.map((x, i) => d.completo ? rigaAdm(x, i) : rigaComm(x)).join('') || '<p class="muted">Nessun commerciale registrato.</p>'}</div>
+    ${d.completo ? `<p class="muted" style="font-size:12.5px;margin:8px 0 0">Il numero a destra è la media tra la % del target di TMV (3.000 €) e la % del target di concretizzazione (50%): conta come lavori, non quanto fatturi. Il cappello è il grado dell'ultimo trimestre chiuso.</p>` : ''}${notaVista(d)}</div></div>`;
   legaMese();
 }
 async function vMed() {
@@ -312,9 +316,9 @@ function vRegole() {
   $('#main').innerHTML = `<div class="card pad reg">
     <h3>Lo spirito</h3><p>Lo spirito è quello della sana competizione, nel rispetto dell'etica, ma comunque un modo per misurarci!<br><b>Una medaglia o un grado qualificano il tuo lavoro!</b></p>
     ${ha('comm') ? `<h3>Commerciali (RAP e RUL)</h3>
-    <ul><li><b>Quando metti A</b>: festoni, complimenti, le tue stelle e chi hai superato per fatturato del mese.</li>
-      <li><b>Stelle</b> su ticket medio di vendita e concretizzazione (accettati ÷ presentati).</li></ul>
-    <p><b>Ticket medio</b> (target 3.000 €)</p><table><tr><th>Stelle</th><th>Ticket medio</th></tr>${r.ticket.slice().reverse().map((x, i, a) => `<tr><td>${stelle(x.s)}</td><td>${x.s === 1 ? 'sotto ' + fE(a[a.length - 2].da) : 'da ' + fE(x.da)}</td></tr>`).join('')}</table>
+    <ul><li><b>Quando metti A</b>: festoni, complimenti, le tue stelle e chi hai superato su TMV e concretizzazione del mese.</li>
+      <li><b>Stelle</b> su TMV (ticket medio di vendita) e concretizzazione (accettati ÷ presentati).</li></ul>
+    <p><b>TMV</b> (target 3.000 €)</p><table><tr><th>Stelle</th><th>TMV</th></tr>${r.ticket.slice().reverse().map((x, i, a) => `<tr><td>${stelle(x.s)}</td><td>${x.s === 1 ? 'sotto ' + fE(a[a.length - 2].da) : 'da ' + fE(x.da)}</td></tr>`).join('')}</table>
     <p><b>Concretizzazione</b> (target ${r.targetConc}%)</p>${fasce(r.targetConc, pc)}
     <p><b>Gradi del trimestre</b>: si decidono da soli l'ultimo giorno del trimestre.</p>
     ${gradi('comm', G.map(g => g.nome), G.map((g, i) => i ? `${g.titolo}<br>da ${g.conc}% · ${fE(g.ticket)}` : 'base'))}` : ''}

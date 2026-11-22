@@ -46,11 +46,12 @@ app.get('/api/classifica', needUser, wrap(async (req, res) => {
     // tutti i commerciali registrati compaiono con il loro grado, anche senza preventivi nel mese
     const U = await C.utenti(), ids = new Set([...L.map(x => x.id), ...[...U.values()].filter(u => u.attivo && C.CATEGORIA_DI[u.figura] === 'comm').map(u => u.id)]);
     const righe = await Promise.all([...ids].map(async id => {
-      const x = L.find(y => y.id === id) || { id, nome: U.get(id)?.nome || '', n: 0, acc: 0, fatt: 0, conc: 0, ticket: 0 }, tt = T.find(y => y.id === id);
+      const x = L.find(y => y.id === id) || { id, nome: U.get(id)?.nome || '', n: 0, acc: 0, fatt: 0, conc: 0, ticket: 0, pTmv: 0, pConc: 0, punteggio: 0 }, tt = T.find(y => y.id === id);
       const base = { nome: x.nome, grado: (await C.gradoSalvato('comm', id))?.grado ?? 0, io: mia(x) };
       return adm || mia(x) ? { ...base, ...x, id: undefined, sT: C.stelleTicket(x.ticket), sC: C.stelleConc(x.conc), gradoTrim: tt ? C.gradoComm(tt.conc, tt.ticket) : 0, trim: tt ? { conc: tt.conc, ticket: tt.ticket } : null } : base;
     }));
-    righe.sort((a, b) => b.grado - a.grado || (b.fatt ?? 0) - (a.fatt ?? 0) || a.nome.localeCompare(b.nome, 'it'));
+    // amministrazione: classifica sulla % del target di TMV e concretizzazione; i commerciali vedono solo i gradi (dal più alto)
+    righe.sort(adm ? (a, b) => (b.punteggio ?? -1) - (a.punteggio ?? -1) || a.nome.localeCompare(b.nome, 'it') : (a, b) => b.grado - a.grado || a.nome.localeCompare(b.nome, 'it'));
     return res.json({ cat, anno, mese, trimestre: t, righe, completo: adm });
   }
   if (cat === 'medici') {

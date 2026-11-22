@@ -82,6 +82,13 @@ async function utenti() {
 const CATEGORIA_DI = { RAP: 'comm', RUL: 'comm', Medico: 'medici', REC: 'rec', ASO: 'aso' };
 
 /* ---------- calcoli ---------- */
+// commerciali: la classifica si fa sulla % del target di TMV (3.000 €) e di concretizzazione (50%), in media, non sul fatturato
+function conPunteggio(x) {
+  const conc = x.n ? x.acc / x.n * 100 : 0, ticket = x.acc ? x.fatt / x.acc : 0;
+  const pTmv = ticket / REGOLE.ticket.find(t => t.s === 4).da * 100, pConc = conc / REGOLE.targetConc * 100;
+  return { ...x, conc, ticket, pTmv, pConc, punteggio: (pTmv + pConc) / 2 };
+}
+const ordineComm = (a, b) => b.punteggio - a.punteggio || b.pConc - a.pConc || a.nome.localeCompare(b.nome, 'it');
 // commerciali: preventivi del periodo per commerciale (come la Scheda personale: € piano di cura con esito A, mese del preventivo)
 async function commerciali(anno, mesi) {
   const U = await utenti();
@@ -96,8 +103,7 @@ async function commerciali(anno, mesi) {
     const x = per.get(uid) || { id: uid, nome: U.get(uid).nome, n: 0, acc: 0, fatt: 0 };
     x.n += r.n; x.acc += r.na; x.fatt += r.fatt; per.set(uid, x);
   }
-  return [...per.values()].map(x => ({ ...x, fatt: Math.round(x.fatt * 100) / 100, conc: x.n ? x.acc / x.n * 100 : 0, ticket: x.acc ? x.fatt / x.acc : 0 }))
-    .sort((a, b) => b.fatt - a.fatt || b.conc - a.conc);
+  return [...per.values()].map(x => conPunteggio({ ...x, fatt: Math.round(x.fatt * 100) / 100 })).sort(ordineComm);
 }
 // medici: ogni preventivo col medico è una visita; % = accettati / visite. In gara per l'oro solo con almeno 10 visite.
 async function medici(anno, mese) {
@@ -171,7 +177,7 @@ const sorpassi = (prima, dopo, uid) => { const pp = prima.findIndex(x => x.id ==
 // commerciale: preventivo passato ad «A». prima = classifica senza questo accettato (per vedere i sorpassi)
 async function lodeCommerciale({ uid, anno, mese, pdc, primaDi }) {
   const dopo = await commerciali(anno, [mese]), me = dopo.find(x => x.id === uid); if (!me) return null;
-  const prima = primaDi || dopo.map(x => x.id === uid ? { ...x, fatt: x.fatt - pdc } : x).sort((a, b) => b.fatt - a.fatt);
+  const prima = primaDi || dopo.map(x => x.id === uid ? conPunteggio({ ...x, acc: x.acc - 1, fatt: x.fatt - pdc }) : x).sort(ordineComm);
   const sp = sorpassi(prima, dopo, uid), sT = stelleTicket(me.ticket), sC = stelleConc(me.conc);
   const tr = pdc >= 10000 ? ['Preventivo d\'oro!', 'Un preventivo importante, chiuso con grande sicurezza. Lavoro di altissimo livello.']
     : me.acc === 1 ? ['Il primo sì del mese!', 'Il mese parte alla grande: hai dato il ritmo giusto alla squadra.']
@@ -179,14 +185,14 @@ async function lodeCommerciale({ uid, anno, mese, pdc, primaDi }) {
   const t = trimDi(mese), tr3 = await commerciali(anno, mesiTrim(t).filter(m => m <= mese)), mt = tr3.find(x => x.id === uid);
   const g = mt ? gradoComm(mt.conc, mt.ticket) : 0, gs = (await gradoSalvato('comm', uid))?.grado ?? 0;
   const passi = [];
-  if (sT < 5) passi.push(`ticket medio a ${fE(REGOLE.ticket[sT].da)} per la ${sT + 1}ª stella`);
+  if (sT < 5) passi.push(`TMV a ${fE(REGOLE.ticket[sT].da)} per la ${sT + 1}ª stella`);
   if (sC < 5) { const soglia = REGOLE.fasce[sC] * REGOLE.targetConc / 100, serve = Math.max(1, Math.ceil((soglia * me.n - me.acc) / (1 - soglia))); passi.push(`${serve} ${serve === 1 ? 'accettato' : 'accettati'} in più per la ${sC + 1}ª stella di concretizzazione`); }
   return { tipo: 'comm', titolo: 'Preventivo accettato!', chi: `${caso(TITOLI)}, ${nomeBreve(me.nome)}!`, traguardo: tr?.[0] || '', frase: tr ? tr[1] : await frase('comm', uid),
-    sorpasso: sp.superati.length ? `Hai superato ${sp.superati.join(' e ')} per fatturato di ${MESI[mese - 1]}!` : '',
+    sorpasso: sp.superati.length ? `Hai superato ${sp.superati.join(' e ')} su TMV e concretizzazione di ${MESI[mese - 1]}!` : '',
     posizione: `Il tuo fatturato accettato di ${MESI[mese - 1]}: ${fE(me.fatt)}`,
     stelle: Math.round((sT + sC) / 2),
     parametri: [
-      { nome: 'Ticket medio di vendita', stelle: sT, valore: `${fE(me.ticket)} su ${nAcc(me.acc)}`, ok: me.ticket >= 3000, goal: me.ticket >= 3000 ? '✓ Target di 3.000 € raggiunto' : 'Target: 3.000 €' },
+      { nome: 'TMV (ticket medio di vendita)', stelle: sT, valore: `${fE(me.ticket)} su ${nAcc(me.acc)}`, ok: me.ticket >= 3000, goal: me.ticket >= 3000 ? '✓ Target di 3.000 € raggiunto' : 'Target: 3.000 €' },
       { nome: 'Concretizzazione', stelle: sC, valore: `${pc(me.conc)} · ${nAcc(me.acc)} su ${me.n} presentati`, ok: me.conc >= 50, goal: me.conc >= 50 ? '✓ Target del 50% raggiunto' : 'Target: 50%' }],
     doppio: me.ticket >= 3000 && me.conc >= 50 ? 'Doppio obiettivo centrato. Lavoro da vero commerciale!' : '',
     grado: g > gs ? `Con questi numeri a fine trimestre diventi ${REGOLE.gradiComm[g].nome}!` : '',
@@ -313,7 +319,7 @@ async function chiudiMese(anno, mese, muto = false) {
       if (g > prima) {
         pro.push(`${x.nome} è ${REGOLE.gradiComm[g].nome}`);
         const fid = await festaDaAprire(x.id, { tipo: 'grado', titolo: `Promozione: ${REGOLE.gradiComm[g].nome}!`, chi: x.nome, grado: g, cat: 'comm', grande: true, bottone: 'Grazie!',
-          frase: `Nel trimestre: concretizzazione ${pc(x.conc)} e ticket medio ${fE(x.ticket)}. Il grado è tuo: lo vede tutta la squadra.` });
+          frase: `Nel trimestre: concretizzazione ${pc(x.conc)} e TMV ${fE(x.ticket)}. Il grado è tuo: lo vede tutta la squadra.` });
         avvisa([x.id], { title: `Promozione: ${REGOLE.gradiComm[g].nome}! 🎉`, body: `${REGOLE.gradiComm[g].titolo} sui numeri del trimestre.`, url: URL_C + '?festa=' + fid });
       } else if (g < prima) avvisa([x.id], { title: `Il tuo grado del trimestre: ${REGOLE.gradiComm[g].nome}`, body: 'Il grado si riconquista nel prossimo trimestre: hai tutto per farlo.', url: URL_C });
     }
@@ -344,7 +350,7 @@ async function statoAttuale() {
     const cat = CATEGORIA_DI[u.figura]; let body = '';
     if (cat === 'comm') {
       const g = (await gradoSalvato('comm', u.id))?.grado ?? 0, x = C.find(y => y.id === u.id);
-      body = `Il tuo grado: ${REGOLE.gradiComm[g].nome}.` + (x ? ` A ${MESI[mese - 1]}: ${x.acc} accettati, ticket medio ${fE(x.ticket)}, concretizzazione ${pc(x.conc)}.` : '');
+      body = `Il tuo grado: ${REGOLE.gradiComm[g].nome}.` + (x ? ` A ${MESI[mese - 1]}: ${x.acc} accettati, TMV ${fE(x.ticket)}, concretizzazione ${pc(x.conc)}.` : '');
     } else if (cat === 'medici') {
       const L = M.filter(x => x.inGara), i = L.findIndex(x => x.id === u.id), x = M.find(y => y.id === u.id);
       body = (i >= 0 ? `Sei ${i + 1}° a ${MESI[mese - 1]} con il ${pc(x.conc)} di accettati. ` : x ? `A ${MESI[mese - 1]}: ${x.visite} visite, in gara da ${REGOLE.minVisite}. ` : '') + `Hai ${med(MM, u.id)}.`;
