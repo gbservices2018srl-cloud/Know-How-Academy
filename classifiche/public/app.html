@@ -320,7 +320,11 @@ function vRegole() {
       <li><b>Stelle</b> su TMV (ticket medio di vendita) e concretizzazione (accettati ÷ presentati).</li></ul>
     <p><b>TMV</b> (target 3.000 €)</p><table><tr><th>Stelle</th><th>TMV</th></tr>${r.ticket.slice().reverse().map((x, i, a) => `<tr><td>${stelle(x.s)}</td><td>${x.s === 1 ? 'sotto ' + fE(a[a.length - 2].da) : 'da ' + fE(x.da)}</td></tr>`).join('')}</table>
     <p><b>Concretizzazione</b> (target ${r.targetConc}%)</p>${fasce(r.targetConc, pc)}
-    <p><b>Gradi del trimestre</b>: si decidono da soli l'ultimo giorno del trimestre.</p>
+    <p><b>Gradi del trimestre</b></p>
+    <ul><li>Il grado si decide sui numeri di <b>tutto il trimestre</b> (gennaio–marzo, aprile–giugno, luglio–settembre, ottobre–dicembre): <b>concretizzazione</b> e <b>TMV</b>, non il fatturato.</li>
+      <li>Per ogni grado servono <b>tutti e due</b> i numeri: basta che uno dei due resti sotto la soglia e il grado è quello inferiore.</li>
+      <li>Il grado che vedi è quello dell'<b>ultimo trimestre chiuso</b> e resta tale fino alla fine del trimestre in corso: i numeri del mese che stai vivendo contano per il prossimo grado.</li>
+      <li>L'ultimo giorno del trimestre il grado si ricalcola da solo: si può salire, restare o scendere.</li></ul>
     ${gradi('comm', G.map(g => g.nome), G.map((g, i) => i ? `${g.titolo}<br>da ${g.conc}% · ${fE(g.ticket)}` : 'base'))}` : ''}
     ${ha('medici') ? `<h3>Medici</h3>
     <ul><li>Ogni preventivo nel CRM con il tuo nome è una visita; la % è accettati ÷ visite del mese.</li>
