@@ -182,6 +182,7 @@ main{max-width:860px}
 .reg h3{margin:18px 0 6px}.reg h3:first-child{margin-top:0}.reg p,.reg li{font-size:14.5px;line-height:1.55}.reg ul{padding-left:20px;margin:6px 0}
 .reg table{border-collapse:collapse;font-size:14px;margin:6px 0;font-variant-numeric:tabular-nums}.reg td,.reg th{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left}
 .sez{display:grid;gap:14px}
+.pos.clic{cursor:pointer}.pos.clic:hover{outline:2px solid color-mix(in srgb,var(--brand-teal) 40%,transparent)}
 .pos .nm{width:30px;height:33px;display:block;margin-top:-4px}.pos .nm svg{width:30px;height:33px}
 .cap{display:inline-block}.cap svg{width:100%;height:100%;display:block}
 .medc{display:inline-flex;gap:8px;align-items:center}.mc{display:inline-flex;align-items:center;gap:3px;font-weight:800}.mc .mi{width:22px;height:24px;display:inline-block}.mc .mi svg{width:22px;height:24px}.mc.zero{opacity:.35}.mc.tot{border-left:1px solid var(--line);padding-left:10px}
@@ -195,6 +196,7 @@ main{max-width:860px}
   <a class="mieapp" href="/" title="Torna alle tue app">← <span class="t">Le mie app</span><span class="c">App</span></a>
 </header>
 <main id="main"><div class="empty">Caricamento…</div></main>
+<dialog class="dlg" id="dlg" aria-label="Dettaglio"></dialog>
 <div class="toast" id="toast" hidden role="status"></div>
 <script src="festa.js"></script>
 <script>
@@ -244,8 +246,27 @@ const medIco = (t, testo) => { const c = MCOL[t];
 const T3 = ['oro', 'argento', 'bronzo'];
 const posto = (p, inGara = true) => !inGara ? '<span class="n">–</span>' : p <= 3 ? `<span class="nm" title="${p}° posto">${medIco(T3[p - 1], p)}</span>` : `<span class="n">${p}</span>`;
 const cap = (cat, g, w = 44) => `<span class="cap" style="width:${w}px;height:${Math.round(w * .94)}px">${TSFesta.insegna(cat, g)}</span>`;
-const medagliere = M => M.length ? M.map((r, i) => `<div class="pos ${r.io ? 'io' : ''}">${posto(i + 1)}<span>${esc(r.nome)}${r.io ? ' (tu)' : ''}</span><b class="medc">${T3.map(t => `<span class="mc ${r[t] ? '' : 'zero'}"><span class="mi">${medIco(t)}</span>${r[t]}</span>`).join('')}<span class="mc tot">${r.totale}</span></b></div>`).join('')
+const medagliere = M => M.length ? M.map((r, i) => `<div class="pos clic ${r.io ? 'io' : ''}" role="button" tabindex="0" data-med="${i}" title="Vedi i mesi vinti">${posto(i + 1)}<span>${esc(r.nome)}${r.io ? ' (tu)' : ''}</span><b class="medc">${T3.map(t => `<span class="mc ${r[t] ? '' : 'zero'}"><span class="mi">${medIco(t)}</span>${r[t]}</span>`).join('')}<span class="mc tot">${r.totale}</span></b></div>`).join('')
   : '<p class="muted">Le medaglie arrivano a fine mese.</p>';
+// finestra: mesi vinti (medaglieri) o storico dei gradi (commerciali e REC)
+const nomeMese = per => /-T\d$/.test(per) ? ['', 'gennaio–marzo', 'aprile–giugno', 'luglio–settembre', 'ottobre–dicembre'][+per.slice(-1)] + ' ' + per.slice(0, 4) : MESI[+per.slice(5, 7) - 1] + ' ' + per.slice(0, 4);
+function finestra(titolo, corpo) {
+  const d = $('#dlg');
+  d.innerHTML = `<div class="dh"><h3 style="margin:0">${esc(titolo)}</h3></div><div class="db" style="padding:14px 20px;max-height:60vh;overflow:auto">${corpo}</div><div class="df" style="padding:12px 20px 18px"><button class="btn" id="dlgOk" style="width:100%">Chiudi</button></div>`;
+  d.showModal(); $('#dlgOk').onclick = () => d.close(); d.onclick = e => { if (e.target === d) d.close(); };
+}
+function apriMedaglie(r) {
+  finestra(`Medaglie di ${r.nome}`, r.mesi.length ? `<div class="cl">${r.mesi.map(x => `<div class="pos" style="grid-template-columns:34px 1fr"><span class="nm">${medIco(x.tipo)}</span><span><b>${esc(nomeMese(x.periodo))}</b> · ${x.tipo === 'oro' ? 'oro' : x.tipo}${x.valore ? `<small>${esc(x.valore)}</small>` : ''}</span></div>`).join('')}</div>
+    ${r.mesi.some(x => !x.valore) ? '<p class="muted" style="font-size:12.5px;margin:10px 0 0">I risultati dei colleghi li vede solo l\'amministrazione.</p>' : ''}` : '<p class="muted">Ancora nessuna medaglia.</p>');
+}
+function apriGradi(cat, r) {
+  const nome = g => cat === 'rec' ? R().gradiRec[g] : R().gradiComm[g].nome;
+  finestra(`Gradi di ${r.nome}`, r.storico.length ? `<div class="cl">${r.storico.slice().reverse().map(x => `<div class="pos" style="grid-template-columns:44px 1fr">${cap(cat, x.grado, 40)}<span><b>${esc(nomeMese(x.periodo))}</b><small>${esc(nome(x.grado))}</small></span></div>`).join('')}</div>` : '<p class="muted">Il primo grado arriva alla fine del primo periodo chiuso.</p>');
+}
+function legaClic(d, cat) {
+  $('#main').querySelectorAll('[data-med]').forEach(el => { const go = () => apriMedaglie(d.medagliere[+el.dataset.med]); el.onclick = go; el.onkeydown = e => { if (e.key === 'Enter') go(); }; });
+  $('#main').querySelectorAll('[data-gr]').forEach(el => { const go = () => apriGradi(cat, d.righe[+el.dataset.gr]); el.onclick = go; el.onkeydown = e => { if (e.key === 'Enter') go(); }; });
+}
 const notaVista = d => d.completo ? '<p class="muted" style="font-size:12.5px;margin:6px 0 0">Vista amministrazione: vedi i numeri di tutti. Ognuno vede solo i suoi.</p>' : '';
 
 async function vComm() {
@@ -261,11 +282,12 @@ async function vComm() {
       <div class="mie"><div><span class="muted">Fatturato accettato di ${MESI[d.mese - 1]}</span><b>${fE(me.fatt)}</b></div><div><span class="muted">TMV (ticket medio di vendita)</span><b>${fE(me.ticket)} ${stelle(me.sT)}</b></div><div><span class="muted">Concretizzazione</span><b>${pc(me.conc)} ${stelle(me.sC)}</b></div><div><span class="muted">Accettati</span><b>${me.acc} su ${me.n}</b></div></div></div>`;
   }
   // amministrazione: classifica sulla % del target di TMV e di concretizzazione (in media); i commerciali vedono solo i gradi
-  const rigaAdm = (x, i) => `<div class="pos" style="grid-template-columns:30px 40px 1fr auto">${x.n ? posto(i + 1) : '<span class="n">–</span>'}${cap('comm', x.grado, 40)}<span>${esc(x.nome)}<small>${G[x.grado].nome} · TMV ${fE(x.ticket)} (${pc(x.pTmv)} del target) ${stelle(x.sT)} · conc. ${pc(x.conc)} (${pc(x.pConc)} del target) ${stelle(x.sC)} · ${x.acc} accettati su ${x.n} · fatturato ${fE(x.fatt)}</small></span><b class="r" title="Media della % del target di TMV e di concretizzazione">${x.n ? pc(x.punteggio) : '—'}</b></div>`;
-  const rigaComm = x => `<div class="pos ${x.io ? 'io' : ''}" style="grid-template-columns:48px 1fr">${cap('comm', x.grado)}<span>${esc(x.nome)}${x.io ? ' (tu)' : ''}<small>${G[x.grado].nome}${x.grado ? ' · ' + G[x.grado].titolo : ''}</small></span></div>`;
+  const rigaAdm = (x, i) => `<div class="pos clic" role="button" tabindex="0" data-gr="${i}" title="Vedi lo storico dei gradi" style="grid-template-columns:30px 40px 1fr auto">${x.n ? posto(i + 1) : '<span class="n">–</span>'}${cap('comm', x.grado, 40)}<span>${esc(x.nome)}<small>${G[x.grado].nome} · TMV ${fE(x.ticket)} (${pc(x.pTmv)} del target) ${stelle(x.sT)} · conc. ${pc(x.conc)} (${pc(x.pConc)} del target) ${stelle(x.sC)} · ${x.acc} accettati su ${x.n} · fatturato ${fE(x.fatt)}</small></span><b class="r" title="Media della % del target di TMV e di concretizzazione">${x.n ? pc(x.punteggio) : '—'}</b></div>`;
+  const rigaComm = (x, i) => `<div class="pos clic ${x.io ? 'io' : ''}" role="button" tabindex="0" data-gr="${i}" title="Vedi lo storico dei gradi" style="grid-template-columns:48px 1fr">${cap('comm', x.grado)}<span>${esc(x.nome)}${x.io ? ' (tu)' : ''}<small>${G[x.grado].nome}${x.grado ? ' · ' + G[x.grado].titolo : ''}</small></span></div>`;
   $('#main').innerHTML = `<div class="sez">${mio}<div class="card pad"><h3 style="margin:0 0 10px">${d.completo ? `Classifica commerciali di ${MESI[d.mese - 1]} · % del target di TMV e concretizzazione` : 'Gradi dei commerciali'}</h3>${d.completo ? barMese('Mese') : ''}
-    <div class="cl">${d.righe.map((x, i) => d.completo ? rigaAdm(x, i) : rigaComm(x)).join('') || '<p class="muted">Nessun commerciale registrato.</p>'}</div>
+    <div class="cl">${d.righe.map((x, i) => d.completo ? rigaAdm(x, i) : rigaComm(x, i)).join('') || '<p class="muted">Nessun commerciale registrato.</p>'}</div>
     ${d.completo ? `<p class="muted" style="font-size:12.5px;margin:8px 0 0">Il numero a destra è la media tra la % del target di TMV (3.000 €) e la % del target di concretizzazione (50%): conta come lavori, non quanto fatturi. Il cappello è il grado dell'ultimo trimestre chiuso.</p>` : ''}${notaVista(d)}</div></div>`;
+  legaClic(d, 'comm');
   legaMese();
 }
 async function vMed() {
@@ -275,7 +297,8 @@ async function vMed() {
       <small>${x.visite != null ? `${x.acc} ${x.acc === 1 ? "accettato" : "accettati"} su ${x.visite} visite ${stelle(x.s)}` : ''}${x.inGara ? '' : `${x.visite != null ? ' · ' : ''}in gara da ${R().minVisite} visite`}</small></span><b class="r">${x.conc != null ? pc(x.conc) : ''}</b></div>`).join('') : '<p class="muted">Ancora nessuna visita nel mese.</p>'}</div>
     <p class="muted" style="font-size:13px;margin:8px 0 0">L'ultimo giorno del mese oro, argento e bronzo ai primi tre (almeno ${R().minVisite} visite).</p>${notaVista(d)}</div>
     <div class="card pad"><h3 style="margin:0 0 10px">Medagliere ${d.anno} · a fine anno vince chi ha più medaglie</h3><div class="cl">${medagliere(d.medagliere)}</div>
-    <p class="muted" style="font-size:13px;margin:8px 0 0">A parità di medaglie vince chi ha più ori.</p></div></div>`;
+    <p class="muted" style="font-size:13px;margin:8px 0 0">A parità di medaglie vince chi ha più ori. Tocca un nome per vedere i mesi vinti.</p></div></div>`;
+  legaClic(d, 'medici');
   legaMese();
 }
 async function vRec() {
@@ -285,7 +308,8 @@ async function vRec() {
     <p class="muted" style="font-size:13px;margin:4px 0 0">${me.gradoProssimo != null && me.gradoProssimo > me.grado ? `Se chiudi il mese così, sali a <b>${G[me.gradoProssimo]}</b>!` : me.grado === 4 ? 'Hai il grado più alto: tienilo fino a fine mese!' : 'Il grado si aggiorna l\'ultimo giorno del mese.'}</p></div></div></div>` : '';
   $('#main').innerHTML = `<div class="sez">${mio}<div class="card pad"><h3 style="margin:0 0 10px">Gradi delle REC</h3>${d.completo ? barMese('Fino a') : ''}
     ${d.senzaFinanza ? '<div class="err">Gestione finanziaria non raggiungibile: la % sul fatturato non si può calcolare ora.</div>' : ''}
-    <div class="cl">${d.righe.map(x => `<div class="pos ${x.io ? 'io' : ''}" style="grid-template-columns:48px 1fr auto">${cap('rec', x.grado)}<span>${esc(x.nome)}${x.io ? ' (tu)' : ''}${x.sedeNome ? ' · ' + esc(x.sedeNome) : ''}<small>${esc(G[x.grado])}</small></span><b class="r">${d.completo ? (x.perc != null ? pc(x.perc) + ' ' + stelle(x.s) : '—') : ''}</b></div>`).join('') || '<p class="muted">Nessuna REC registrata.</p>'}</div>${notaVista(d)}</div></div>`;
+    <div class="cl">${d.righe.map((x, i) => `<div class="pos clic ${x.io ? 'io' : ''}" role="button" tabindex="0" data-gr="${i}" title="Vedi lo storico dei gradi" style="grid-template-columns:48px 1fr auto">${cap('rec', x.grado)}<span>${esc(x.nome)}${x.io ? ' (tu)' : ''}${x.sedeNome ? ' · ' + esc(x.sedeNome) : ''}<small>${esc(G[x.grado])}</small></span><b class="r">${d.completo ? (x.perc != null ? pc(x.perc) + ' ' + stelle(x.s) : '—') : ''}</b></div>`).join('') || '<p class="muted">Nessuna REC registrata.</p>'}</div>${notaVista(d)}</div></div>`;
+  legaClic(d, 'rec');
   legaMese();
 }
 async function vAso() {
@@ -294,7 +318,8 @@ async function vAso() {
     <div class="cl">${d.righe.length ? d.righe.map(x => `<div class="pos ${x.io ? 'io' : ''}">${posto(x.pos)}<span>${esc(x.nome)}${x.io ? ' (tu)' : ''}<small>${x.n != null && x.pos <= 3 ? ['oggi sarebbe oro', 'oggi sarebbe argento', 'oggi sarebbe bronzo'][x.pos - 1] : ''}</small></span><b class="r">${x.n != null ? x.n : ''}</b></div>`).join('') : '<p class="muted">Ancora nessuna manutenzione nel mese.</p>'}</div>
     <p class="muted" style="font-size:13px;margin:8px 0 0">L'ultimo giorno del mese oro, argento e bronzo alle prime tre. Il mese riparte da zero, il medagliere resta.</p>${notaVista(d)}</div>
     <div class="card pad"><h3 style="margin:0 0 10px">Medagliere ${d.anno} · a fine anno vince chi ha più medaglie</h3><div class="cl">${medagliere(d.medagliere)}</div>
-    <p class="muted" style="font-size:13px;margin:8px 0 0">A parità di medaglie vince chi ha più ori.</p></div></div>`;
+    <p class="muted" style="font-size:13px;margin:8px 0 0">A parità di medaglie vince chi ha più ori. Tocca un nome per vedere i mesi vinti.</p></div></div>`;
+  legaClic(d, 'aso');
   legaMese();
 }
 async function vBacheca() {

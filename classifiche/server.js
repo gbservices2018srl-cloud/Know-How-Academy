@@ -35,6 +35,8 @@ app.get('/api/stato', needUser, (req, res) => {
 });
 
 // una classifica. Ognuno vede i suoi numeri; degli altri: commerciali e REC solo grado e nome, medici e ASO solo posizione e nome. L'amministrazione vede tutto.
+const storicoGradi = async (cat, anno) => { const { rows } = await C.q('select user_id, periodo, grado from gradi where categoria = $1 and periodo like $2 order by periodo', [cat, anno + '-%']);
+  const m = new Map(); for (const x of rows) (m.get(x.user_id) || m.set(x.user_id, []).get(x.user_id)).push({ periodo: x.periodo, grado: x.grado }); return m; };
 app.get('/api/classifica', needUser, wrap(async (req, res) => {
   const cat = String(req.query.cat || ''), o = C.oggi(), adm = req.me.admin;
   if (!req.me.categorie.includes(cat)) return bad(res, 403, 'Questa classifica non è del tuo ruolo.');
@@ -45,9 +47,10 @@ app.get('/api/classifica', needUser, wrap(async (req, res) => {
     const L = await C.commerciali(anno, [mese]), t = C.trimDi(mese), T = await C.commerciali(anno, C.mesiTrim(t).filter(m => anno < +o.slice(0, 4) || m <= +o.slice(5, 7)));
     // tutti i commerciali registrati compaiono con il loro grado, anche senza preventivi nel mese
     const U = await C.utenti(), ids = new Set([...L.map(x => x.id), ...[...U.values()].filter(u => u.attivo && C.CATEGORIA_DI[u.figura] === 'comm').map(u => u.id)]);
+    const SG = await storicoGradi('comm', anno);
     const righe = await Promise.all([...ids].map(async id => {
       const x = L.find(y => y.id === id) || { id, nome: U.get(id)?.nome || '', n: 0, acc: 0, fatt: 0, conc: 0, ticket: 0, pTmv: 0, pConc: 0, punteggio: 0 }, tt = T.find(y => y.id === id);
-      const base = { nome: x.nome, grado: (await C.gradoSalvato('comm', id))?.grado ?? 0, io: mia(x) };
+      const base = { nome: x.nome, grado: (await C.gradoSalvato('comm', id))?.grado ?? 0, io: mia(x), storico: SG.get(id) || [] };
       return adm || mia(x) ? { ...base, ...x, id: undefined, sT: C.stelleTicket(x.ticket), sC: C.stelleConc(x.conc), gradoTrim: tt ? C.gradoComm(tt.conc, tt.ticket) : 0, trim: tt ? { conc: tt.conc, ticket: tt.ticket } : null } : base;
     }));
     // amministrazione: classifica sulla % del target di TMV e concretizzazione; i commerciali vedono solo i gradi (dal più alto)
@@ -57,20 +60,23 @@ app.get('/api/classifica', needUser, wrap(async (req, res) => {
   if (cat === 'medici') {
     const L = await C.medici(anno, mese);
     const righe = L.map((x, i) => adm || mia(x) ? { ...x, id: undefined, pos: i + 1, s: C.stelleConc(x.conc), io: mia(x) } : { nome: x.nome, pos: i + 1, inGara: x.inGara });
-    const M = (await C.medagliere('medici', anno)).map(r => ({ nome: r.nome, oro: r.oro, argento: r.argento, bronzo: r.bronzo, totale: r.totale, io: r.user_id === req.me.id }));
+    const M = (await C.medagliere('medici', anno)).map(r => { const io = r.user_id === req.me.id;
+      return { nome: r.nome, oro: r.oro, argento: r.argento, bronzo: r.bronzo, totale: r.totale, io, mesi: (r.lista || []).map(x => ({ periodo: x.periodo, tipo: x.tipo, valore: adm || io ? x.valore : '' })) }; });
     return res.json({ cat, anno, mese, righe, medagliere: M, completo: adm });
   }
   if (cat === 'rec') {
     const { lista, senzaFinanza } = await C.rec(anno, mese), L = lista.filter(x => x.perc != null);
+    const SG = await storicoGradi('rec', anno);
     const righe = await Promise.all(lista.map(async x => { const i = L.indexOf(x), sal = await C.gradoSalvato('rec', x.id);
-      const base = { nome: x.nome, sedeNome: x.sedeNome, grado: sal?.grado ?? (i >= 0 ? C.gradoRecDa(i, L.length) : 0), io: mia(x) };
+      const base = { nome: x.nome, sedeNome: x.sedeNome, grado: sal?.grado ?? (i >= 0 ? C.gradoRecDa(i, L.length) : 0), io: mia(x), storico: SG.get(x.id) || [] };
       return adm || mia(x) ? { ...base, perc: x.perc, s: x.perc != null ? C.stelleRec(x.perc) : 0, gradoProssimo: i >= 0 ? C.gradoRecDa(i, L.length) : null } : base; }));
     righe.sort((a, b) => b.grado - a.grado || (b.perc ?? -1) - (a.perc ?? -1) || a.nome.localeCompare(b.nome, 'it'));
     return res.json({ cat, anno, mese, righe, senzaFinanza: adm ? senzaFinanza : false, completo: adm });
   }
   const L = await C.aso(anno, mese);
   const righe = L.map((x, i) => adm || mia(x) ? { nome: x.nome, n: x.n, pos: i + 1, io: mia(x) } : { nome: x.nome, pos: i + 1 });
-  const M = (await C.medagliere('aso', anno)).map(r => ({ nome: r.nome, oro: r.oro, argento: r.argento, bronzo: r.bronzo, totale: r.totale, io: r.user_id === req.me.id }));
+  const M = (await C.medagliere('aso', anno)).map(r => { const io = r.user_id === req.me.id;
+      return { nome: r.nome, oro: r.oro, argento: r.argento, bronzo: r.bronzo, totale: r.totale, io, mesi: (r.lista || []).map(x => ({ periodo: x.periodo, tipo: x.tipo, valore: adm || io ? x.valore : '' })) }; });
   res.json({ cat, anno, mese, righe, medagliere: M, completo: adm });
 }));
 
