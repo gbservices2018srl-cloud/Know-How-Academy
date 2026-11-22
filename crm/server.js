@@ -152,10 +152,7 @@ app.post('/api/preventivi', needUser, need('preventivi'), wrap(async (req, res) 
     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,'app',$20,$20,$21)`,
     [id, sede.id, sede.nome, data, Number(data.slice(0, 4)), Number(data.slice(5, 7)), paziente, tipo, mk, pdc, esito, pagato, an, tipoPdc, note,
       comm.id, nomeDi(comm).toUpperCase(), JSON.stringify(meds.map(m => m.id)), meds.map(m => String(m.last_name || m.first_name).toUpperCase()).join(' / '), req.me.id, ambassador]);
-  // classifiche: festoni e lode al commerciale, notifica ai medici
-  const festa = esito === 'A' ? await require('../classifiche/lib/core').preventivoAccettato({ anno: Number(data.slice(0, 4)), mese: Number(data.slice(5, 7)), pdc, paziente, tipo_pdc: tipoPdc, data,
-    commerciale_id: comm.id, medici_ids: meds.map(m => m.id) }, req.me.id) : null;
-  res.json({ ok: true, id, festa });
+  res.json({ ok: true, id });
 }));
 
 /* ============ RICHIAMI COMMERCIALI ============ */
@@ -225,14 +222,7 @@ app.patch('/api/richiami/:id', needUser, need('richiami'), wrap(async (req, res)
     await db.q('insert into storico (preventivo_id, chi, campo, prima, dopo) values ($1,$2,$3,$4,$5)', [id, req.me.nome, k, r[k] == null ? null : String(r[k]), set[k] == null ? null : String(set[k])]);
   await db.q(`update preventivi set ${tutti.map((k, i) => `${k} = $${i + 2}`).join(', ')}, aggiornato_da = $${tutti.length + 2}, aggiornato_il = now() where id = $1`,
     [id, ...tutti.map(k => set[k]), req.me.id]);
-  // classifiche: esito diventato A → festoni e lode al commerciale, notifica ai medici
-  let festa = null;
-  if (set.esito === 'A' && r.esito !== 'A') {
-    const dt = set.data || r.data, v = k => set[k] !== undefined ? set[k] : r[k];
-    festa = await require('../classifiche/lib/core').preventivoAccettato({ anno: Number(String(dt).slice(0, 4)), mese: Number(String(dt).slice(5, 7)), pdc: v('pdc'), paziente: v('paziente'), tipo_pdc: v('tipo_pdc'), data: dt,
-      commerciale_id: v('commerciale_id'), medici_ids: set.medici_ids ? JSON.parse(set.medici_ids) : (r.medici_ids || []) }, req.me.id);
-  }
-  res.json({ ok: true, festa });
+  res.json({ ok: true });
 }));
 
 /* ============ DATI PER KPI (senza dati personali) ============ */

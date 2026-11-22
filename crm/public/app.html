@@ -223,7 +223,6 @@ svg.ch .lab{fill:var(--fg)}
 <main id="main"><div class="empty">Caricamento…</div></main>
 <dialog class="dlg" id="dlg" aria-label="Note"></dialog>
 <div class="toast" id="toast" hidden role="status"></div>
-<script src="/classifiche/festa.js"></script>
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -344,7 +343,7 @@ document.addEventListener('click', e => {
   const m = e.target.closest('[data-med]');
   if (m) { const id = m.dataset.med; F.medici = F.medici.includes(id) ? F.medici.filter(x => x !== id) : [...F.medici, id]; m.classList.toggle('on'); return; }
   const es = e.target.closest('[data-esito]');
-  if (es) { F.esito = es.dataset.esito; document.querySelectorAll('[data-esito]').forEach(b => b.classList.toggle('on', b === es)); if (F.esito === 'A') window.TSFesta?.festoni(false); }
+  if (es) { F.esito = es.dataset.esito; document.querySelectorAll('[data-esito]').forEach(b => b.classList.toggle('on', b === es)); }
 });
 document.addEventListener('submit', async e => {
   if (e.target.id !== 'fp') return;
@@ -352,8 +351,8 @@ document.addEventListener('submit', async e => {
   const btn = $('#f-save'); btn.disabled = true; btn.textContent = 'Salvataggio…'; $('#f-err').innerHTML = '';
   try {
     const vp = vocePdc(F.tipoPdc); if (vp) F.tipoPdc = vp;
-    const j = await api('POST', 'api/preventivi', F);
-    toast('Preventivo salvato.'); if (j.festa) window.TSFesta?.mostra(j.festa); F = nuovoF({ sede: F.sede, commerciale: F.commerciale }); vPrev(); scrollTo({ top: 0, behavior: 'smooth' });
+    await api('POST', 'api/preventivi', F);
+    toast('Preventivo salvato.'); F = nuovoF({ sede: F.sede, commerciale: F.commerciale }); vPrev(); scrollTo({ top: 0, behavior: 'smooth' });
   } catch (x) { $('#f-err').innerHTML = `<div class="err" style="margin-bottom:12px">${esc(x.message)}</div>`; btn.disabled = false; btn.textContent = 'Salva preventivo'; }
 });
 
@@ -412,8 +411,7 @@ document.addEventListener('change', async e => {
   if (t.id === 'r-anno') { R.anno = +t.value; R.f = {}; return vRich(); }
   if (t.dataset.esitoR) {
     const r = R.righe.find(x => x.id === t.dataset.esitoR); const prima = r.esito;
-    if (t.value === 'A') window.TSFesta?.festoni(false);
-    try { const j = await api('PATCH', 'api/richiami/' + r.id, { esito: t.value }); if (j.festa) window.TSFesta?.mostra(j.festa); r.esito = t.value; t.className = 'es ' + t.value; t.closest('tr').className = 'e' + t.value; toast('Esito: ' + ESITI[t.value]); }
+    try { await api('PATCH', 'api/richiami/' + r.id, { esito: t.value }); r.esito = t.value; t.className = 'es ' + t.value; t.closest('tr').className = 'e' + t.value; toast('Esito: ' + ESITI[t.value]); }
     catch (x) { t.value = prima; toast(x.message); }
   }
 });
@@ -470,7 +468,7 @@ async function salvaModRich() {
   const body = { paziente: v('mr-paz'), ambassador: v('mr-amb'), data: v('mr-data'), annoNascita: v('mr-an'), tipoOv: v('mr-tov'), marketing: v('mr-mk'), pdc: v('mr-pdc'), pagato: v('mr-pag'),
     tipoPdc: v('mr-tpdc'), esito: v('mr-es'), note: v('mr-note'), commerciale: v('mr-com') || undefined, medici: v('mr-med') ? [v('mr-med')] : undefined, sede: v('mr-sede') };
   const b = $('#mr-ok'); b.disabled = true;
-  try { const j = await api('PATCH', 'api/richiami/' + r.id, body); d.close(); toast('Modifiche salvate.'); if (j.festa) window.TSFesta?.mostra(j.festa);
+  try { await api('PATCH', 'api/richiami/' + r.id, body); d.close(); toast('Modifiche salvate.');
     const anno = R.anno; R.righe = (await api('GET', 'api/richiami?anno=' + anno)).righe; drawRich(false); }
   catch (x) { toast(x.message); } finally { b.disabled = false; }
 }
