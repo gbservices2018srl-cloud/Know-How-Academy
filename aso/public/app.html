@@ -311,6 +311,7 @@ dialog.dlg::backdrop{background:rgba(10,30,30,.45);backdrop-filter:blur(2px)}
 <input type="file" accept="image/*" capture="environment" id="foto-spore" class="sr" tabindex="-1" aria-hidden="true">
 <dialog class="dlg" id="dlg" aria-label="Manutenzione"></dialog>
 <div class="toast" id="toast" hidden role="status"></div>
+<script src="/classifiche/festa.js"></script>
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1091,7 +1092,7 @@ document.addEventListener('click', async e => {
     if (a === 'dlg-registra') {
       S.busy = true; disegnaDlg();
       try { const r = await api('POST', `api/man/attrezzature/${S.dlg.a.id}/registra`, { voci: S.dlg.voci, note: S.dlg.note }); S.busy = false; S.err = '';
-        $('#dlg').close(); toast(r.n === 1 ? 'Manutenzione registrata.' : r.n + ' manutenzioni registrate.'); return load(); }
+        $('#dlg').close(); toast(r.n === 1 ? 'Manutenzione registrata.' : r.n + ' manutenzioni registrate.'); if (r.festa) window.TSFesta?.mostra(r.festa); return load(); }
       catch (x) { S.busy = false; S.err = x.message; return disegnaDlg(); }
     }
   }

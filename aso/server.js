@@ -758,7 +758,9 @@ app.post('/api/man/attrezzature/:id/registra', needUser, need(MT), wrap(async (r
   const note = str(req.body.note, 500);
   for (const v of voci) await db.q('insert into manutenzioni (id, attrezzatura_id, sede_id, voce, operatore_id, operatore_nome, note) values ($1,$2,$3,$4,$5,$6,$7)',
     [db.newId(), a.id, a.sede_id, v, req.me.id, req.me.nome, note]);
-  res.json({ ok: true, n: voci.length });
+  // classifiche ASO: complimenti, posizione del mese e sorpassi
+  const festa = await require('../classifiche/lib/core').manutenzioneFatta(req.me.id);
+  res.json({ ok: true, n: voci.length, festa });
 }));
 // Registro: per sede / attrezzatura / periodo
 app.get('/api/man/registro', needUser, need(MT), wrap(async (req, res) => {

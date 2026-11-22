@@ -74,6 +74,8 @@ footer b{color:var(--fg);font-weight:600}
 .passi{margin:0;padding-left:20px;color:var(--fg);font-size:14.5px;display:flex;flex-direction:column;gap:4px}
 @media (max-width:640px){.grid{grid-template-columns:1fr}.who .name{width:100%;text-align:right;margin:0}}
 @media (prefers-reduced-motion:reduce){.app{transition:none}.app:hover{transform:none}}
+.btn.premio{background:linear-gradient(135deg,#F6D365,#D4A017);color:#3A2A00;border-color:#C99A12;font-weight:700;display:inline-flex;align-items:center;gap:6px}
+.btn.premio:hover{filter:brightness(1.05)}
 </style>
 <!-- dopo una modifica la pagina resta dov'era (comune a tutte le app To Smile) -->
 <script src="/static/resta-qui.js?v=6" defer></script>
@@ -148,6 +150,7 @@ function toast(t) { const d = document.createElement('div'); d.className = 'toas
       pending = richieste + contratti + rivedere + ruoli + passaggi; } catch {}
   }
   $('#who').innerHTML = `<span class="name">${esc(u.email)}</span>
+    ${me.admin || ['RAP', 'RUL', 'Medico', 'REC', 'ASO'].includes(u.figura) ? `<a class="btn small premio" href="/classifiche/" title="Classifiche, gradi e medaglie"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4zM7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3"/></svg> Classifiche e medaglie</a>` : ''}
     ${me.admin ? `<a class="btn small" href="/admin${!richieste && contratti ? '?f=contratti' : !richieste && rivedere ? '?f=rivedere' : !richieste && !contratti && !rivedere && !passaggi && ruoli ? '?f=crescita' : ''}">Gestione accessi${pending ? ` <span class="badge" title="${esc([richieste ? richieste + ' richieste in attesa' : '', contratti ? contratti + ' contratti da confermare' : '', rivedere ? rivedere + ' figure da rivedere' : '', passaggi ? passaggi + ' passaggi di ruolo da approvare' : '', ruoli ? ruoli + ' ruoli da assegnare nel piano di crescita' : ''].filter(Boolean).join(' · '))}">${pending}</span>` : ''}</a>` : ''}
     <a class="btn small" href="/completa-profilo">Il mio profilo</a>
     ${u.owner ? '' : '<button class="btn small" id="pw-open">Cambia password</button>'}

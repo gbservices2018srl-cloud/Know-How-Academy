@@ -456,9 +456,11 @@ app.post('/api/produzione', needProd, wrap(async (req, res) => {
     [sede.id, anno, mese, sede.nome, valore, req.me.id, req.me.nome]);
   log('produzione caricata', `${sede.id}|${anno}-${mese}`, req.me.nome, prima ? { valore: num(prima.valore), stato: prima.stato } : null, { valore });
   const { rows: [r] } = await db.q('select * from produzione where sede_id = $1 and anno = $2 and mese = $3', [sede.id, anno, mese]);
-  if (req.me.prod.admin) { const x = await approva(r, req.me); return res.json({ ok: true, stato: x.ok ? 'approvata' : 'attesa', errore: x.errore || null }); }
+  // classifiche REC: complimenti e posizione nella classifica dell'anno (solo per le REC)
+  const festa = await require('../classifiche/lib/core').produzioneSalvata(req.me.id, anno, mese);
+  if (req.me.prod.admin) { const x = await approva(r, req.me); return res.json({ ok: true, stato: x.ok ? 'approvata' : 'attesa', errore: x.errore || null, festa }); }
   avvisa(await adminProduzione(), { title: 'Produzione da approvare', body: `${sede.nome}: produzione di ${MESI[mese - 1]} ${anno} ${euroTxt(valore)} (da ${req.me.nome}).`, url: 'https://appgestione.it/cassa/?v=produzione' });
-  res.json({ ok: true, stato: 'attesa' });
+  res.json({ ok: true, stato: 'attesa', festa });
 }));
 app.post('/api/produzione/decidi', needProd, wrap(async (req, res) => {
   if (!req.me.prod.admin) return bad(res, 403, 'Solo l\'amministratore approva la produzione.');

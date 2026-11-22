@@ -12,7 +12,7 @@ const q = (t, p) => store.q(t, p);
 const APP_NOTIFICHE = {
   calendario: 'Eventi aziendali', turni: 'Scheda personale', magazzino: 'Magazzino centrale',
   laboratorio: 'Nuovalab', ticket: 'Ticket assistenza', comunicazioni: 'Comunicazioni aziendali ed eventi', documenti: 'Documenti di studio', protocolli: 'Protocolli e test', sistema: 'Avvisi tecnici (AI)',
-  misure: 'Misure implantari', clinica: 'Comunicazioni cliniche con ASO', crm_richiami: 'CRM Commerciale', produzione: 'REC · Produzione di UL', cassa: 'REC · Gestione Cassa', compensi: 'Compenso medici',
+  misure: 'Misure implantari', clinica: 'Comunicazioni cliniche con ASO', crm_richiami: 'CRM Commerciale', produzione: 'REC · Produzione di UL', cassa: 'REC · Gestione Cassa', compensi: 'Compenso medici', classifiche: 'Classifiche e medaglie',
 };
 
 async function migrate() {
@@ -70,7 +70,7 @@ async function notifica(userIds, app, payload) {
     join users u on u.id = s.user_id and u.status = 'active'
     left join notif_prefs p on p.user_id = s.user_id and p.app = $3
     where s.user_id = any($1) and coalesce(p.attiva, true)
-      and (u.owner or exists (select 1 from user_apps a where a.user_id = s.user_id and a.app = $2 and not a.sospesa
+      and (u.owner or $2 = 'classifiche' or exists (select 1 from user_apps a where a.user_id = s.user_id and a.app = $2 and not a.sospesa
         and (a.role = 'admin' or not exists (select 1 from app_stato st where st.app = $3 and st.spenta))))`, [ids, app, store.capo(app)]);
   const base = APP_URL(app);
   const url = payload.url && /^https?:\/\//.test(payload.url) ? payload.url : base + (payload.url || '/');
