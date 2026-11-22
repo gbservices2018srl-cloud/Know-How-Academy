@@ -1126,7 +1126,7 @@ app.post('/api/sso/ticket', wrap(async (req, res) => {
 const str = (v, n) => String(v ?? '').trim().slice(0, n);
 // Le app tra cui scegliere: quelle che mandano notifiche e a cui la persona ha accesso
 // le app che seguono un'altra (Eventi aziendali) non hanno un interruttore a parte: vale quello di Comunicazioni ed eventi
-const appNotificabili = req => Object.keys(notifiche.APP_NOTIFICHE).filter(k => !APPS.find(a => a.key === k)?.segue && (req.user.owner || req.apps?.[k]));
+const appNotificabili = req => Object.keys(notifiche.APP_NOTIFICHE).filter(k => !APPS.find(a => a.key === k)?.segue && (req.user.owner || k === 'classifiche' || req.apps?.[k]));
 app.get('/api/notifiche', needUser, wrap(async (req, res) => {
   const k = await notifiche.chiavi();
   const { rows: pr } = await store.q('select app, attiva from notif_prefs where user_id = $1', [req.user.id]);

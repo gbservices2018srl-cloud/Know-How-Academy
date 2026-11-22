@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#4CAAAA">
+<base href="/classifiche/">
+<title>Classifiche e medaglie · To Smile</title>
+<link rel="icon" href="logo.png">
+<link rel="stylesheet" href="/fonts/tosmile.css?f=fira-sans:400,500,600,700,800">
+<style>
+/* Colori e caratteri To Smile (gli stessi di Comunicazioni, Calendario e Turni), con tema scuro automatico */
+:root{
+  --bg:#EFF5F5; --dot:#D3E2E2; --surface:#FFFFFF; --surface-2:#F5F9F9; --surface-3:#EAF1F1; --fg:#1F2A2B; --muted:#5E6B6C;
+  --line:#DCE7E7; --accent:#2B8384; --accent-soft:#DCEFEF; --accent-fg:#FFFFFF;
+  --brand-teal:#4CAAAA; --brand-purple:#8C6898; --brand-yellow:#E8E564; --purple-soft:#EFE7F2;
+  --danger:#B42318; --danger-soft:#FBE3E0; --ok:#1F7A4D; --ok-soft:#DDF1E6; --warn:#8A4A12; --warn-soft:#FBEBDD;
+  --shadow:0 1px 2px rgba(20,48,48,.05),0 8px 28px rgba(20,48,48,.09);
+  --f-display:"Fira Sans",system-ui,sans-serif; --f-body:"Fira Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#101818; --dot:#1E2B2B; --surface:#172121; --surface-2:#1D2929; --surface-3:#223030; --fg:#E7F0F0; --muted:#9FB0B0;
+  --line:#2A3939; --accent:#62C3C3; --accent-soft:#163536; --accent-fg:#062222;
+  --brand-teal:#62C3C3; --brand-purple:#B597C2; --purple-soft:#2E2433;
+  --danger:#FF8A7A; --danger-soft:#3A1D1A; --ok:#6FD39C; --ok-soft:#173326; --warn:#F0B07A; --warn-soft:#3A2817;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35); color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:var(--bg);background-image:radial-gradient(var(--dot) 1.2px,transparent 1.3px);background-size:22px 22px;background-attachment:fixed;
+  color:var(--fg);font:15px/1.5 var(--f-body);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+svg.i{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+[hidden]{display:none!important}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.top{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:14px;padding:10px max(16px,env(safe-area-inset-left));
+  background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);box-shadow:inset 0 -3px 0 -1px color-mix(in srgb,var(--brand-yellow) 70%,transparent)}
+.brand{display:flex;align-items:center;gap:10px;min-width:0;text-decoration:none;color:inherit}
+.brand .logo{height:40px;width:auto;flex:none;display:block}
+.brand .sep{width:1px;height:26px;background:var(--line);flex:none}
+.brand h1{font:600 16px/1.1 var(--f-display);margin:0;white-space:nowrap;color:var(--muted)}
+@media (max-width:900px){.brand h1,.brand .sep{display:none}.who b{display:none}.who{padding:3px}}
+.tabs{display:flex;gap:4px;overflow-x:auto;flex:1;scrollbar-width:none;min-width:0;padding:2px}
+.tabs::-webkit-scrollbar{display:none}
+.tab{display:inline-flex;align-items:center;gap:7px;border:1px solid transparent;background:none;padding:7px 13px;border-radius:999px;white-space:nowrap;color:var(--muted);font-weight:600;font-size:14px;min-height:40px;text-decoration:none}
+.tab:hover{background:var(--surface-2)}
+.tab.on{background:var(--accent-soft);color:var(--fg);border-color:color-mix(in srgb,var(--accent) 30%,transparent)}
+.spacer{flex:1}
+.who{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:3px 12px 3px 3px;font-size:13px;flex:none;min-height:40px;text-decoration:none;color:inherit}
+.av{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:12px;background:var(--accent-soft);color:var(--accent);flex:none}
+main{max-width:1000px;margin:0 auto;padding:20px max(16px,env(safe-area-inset-left)) max(48px,env(safe-area-inset-bottom))}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--line);background:var(--surface);padding:9px 15px;border-radius:10px;font-weight:600;font-size:14.5px;white-space:nowrap;text-decoration:none;color:inherit;min-height:44px}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.primary:hover{filter:brightness(1.06);background:var(--accent)}
+.btn.wide{min-height:52px;font-size:16px;width:100%}
+.btn.danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 35%,transparent)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.sm{padding:6px 11px;font-size:13.5px;min-height:38px}
+.link{border:0;background:none;color:var(--accent);font-weight:600;padding:8px 0;min-height:40px;display:inline-flex;align-items:center;gap:4px;text-decoration:none}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}
+.pad{padding:16px 18px}
+.muted{color:var(--muted)}
+h2.view{font:700 26px/1.15 var(--f-display);letter-spacing:-.015em;margin:0}
+h3{font:700 17px/1.2 var(--f-display);margin:0}
+.head{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.head p{margin:4px 0 0;color:var(--muted)}
+.empty{padding:30px 16px;text-align:center;color:var(--muted)}
+.empty b{display:block;color:var(--fg);font-size:16px;margin-bottom:4px}
+.tag{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.tag.ok{background:var(--ok-soft);color:var(--ok)}
+.tag.ko{background:var(--danger-soft);color:var(--danger)}
+.tag.todo{background:var(--warn-soft);color:var(--warn)}
+.tag.plain{background:var(--surface-3);color:var(--muted)}
+.tag.q{background:var(--purple-soft);color:var(--brand-purple)}
+.err{background:var(--danger-soft);color:var(--danger);border-radius:10px;padding:10px 12px;font-size:14px;font-weight:600}
+.avvisi{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.avviso{display:flex;gap:8px;align-items:flex-start;padding:8px 11px;border-radius:10px;font-size:14px;font-weight:600}
+.avviso.rosso{background:var(--danger-soft);color:var(--danger)}
+.avviso.giallo{background:var(--warn-soft);color:var(--warn)}
+/* pagina d'ingresso */
+.hello{font:800 28px/1.15 var(--f-display);margin:6px 0 4px;letter-spacing:-.01em}
+.bigs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:18px}
+.big{position:relative;display:flex;flex-direction:column;gap:12px;text-align:left;text-decoration:none;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:22px;min-height:200px;box-shadow:var(--shadow);overflow:hidden;transition:transform .15s,border-color .15s}
+.big:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--bc) 55%,var(--line))}
+.big::before{content:"";position:absolute;inset:0 0 auto 0;height:5px;background:var(--bc)}
+.big .bi{width:52px;height:52px;border-radius:15px;display:grid;place-items:center;background:color-mix(in srgb,var(--bc) 16%,transparent);color:var(--bc)}
+.big .bi svg{width:28px;height:28px}
+.big h2{font:800 21px/1.15 var(--f-display);margin:0}
+.big p{margin:4px 0 0;color:var(--muted);font-size:14.5px}
+.big .st{margin-top:auto;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.big .go{color:var(--accent);font-weight:700}
+/* moduli */
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;min-width:0}
+.field label,.lbl{font-weight:700;font-size:13.5px;color:var(--muted)}
+.field input,.field select,.field textarea{border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:10px 12px;width:100%;min-height:44px}
+.field textarea{min-height:70px;resize:vertical}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 12px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:12px;padding:3px;background:var(--surface-2);gap:3px;flex-wrap:wrap}
+.seg button{border:0;background:none;padding:8px 14px;border-radius:9px;font-weight:700;min-height:42px;color:var(--muted)}
+.seg button.on{background:var(--surface);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.seg button.on.ok{background:var(--ok);color:#fff}
+.seg button.on.ko{background:var(--danger);color:#fff}
+.seg button.on.att{background:var(--brand-purple);color:#fff}
+.toast{position:fixed;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:11px 16px;border-radius:12px;font-weight:600;z-index:50;max-width:92vw;box-shadow:var(--shadow)}
+dialog.dlg{border:0;border-radius:22px;padding:0;width:min(480px,94vw);background:var(--surface);color:var(--fg);box-shadow:var(--shadow)}
+dialog.dlg::backdrop{background:rgba(10,30,30,.45);backdrop-filter:blur(2px)}
+.dlg .dh{display:flex;gap:14px;align-items:center;padding:18px 20px 12px;border-bottom:1px solid var(--line)}
+.dlg .db{padding:14px 20px}
+.dlg .df{display:flex;gap:8px;justify-content:flex-end;padding:12px 20px 18px;flex-wrap:wrap}
+/* filtri e tabelle */
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.bar input[type=search]{flex:1 1 240px;min-width:0;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:10px 14px;min-height:44px}
+.fil{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:12px}
+.fil select,.bar select{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 10px;min-height:40px;width:100%;font-size:14px}
+.fil select.on{border-color:var(--accent);background:var(--accent-soft);font-weight:600}
+.bar select{width:auto}
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table.t{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+.t th{text-align:left;font-size:12px;font-weight:700;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;background:var(--surface)}
+.t td{padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:middle}
+.t td.n,.t th.n{text-align:right}
+.t td.wrap{white-space:normal;min-width:160px}
+.t tr:hover td{background:var(--surface-2)}
+.t th button{all:unset;cursor:pointer}
+.t th[aria-sort] button::after{content:" ▾"}.t th[aria-sort=ascending] button::after{content:" ▴"}
+.t td.low{color:var(--danger);font-weight:700}
+.es{border:1.5px solid var(--line);border-radius:9px;padding:5px 8px;font-weight:800;min-height:36px;background:var(--surface-2)}
+.notab{border:1px solid var(--line);background:var(--surface-2);border-radius:9px;padding:5px 10px;min-height:36px;max-width:240px;overflow:hidden;text-overflow:ellipsis;text-align:left;font-size:13px}
+.tot{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13.5px;color:var(--muted);margin:2px 0 10px}
+.tot b{color:var(--fg)}
+/* dashboard */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:12px;margin-bottom:8px}
+.tile{padding:14px 16px}
+.tile .l{font-size:13px;color:var(--muted);font-weight:600}
+.tile .v{font:800 28px/1.15 var(--f-display);margin-top:4px;font-variant-numeric:tabular-nums}
+.tile .b{font-size:12.5px;color:var(--muted);margin-top:2px}
+.tile.low{border-color:var(--danger)}.tile.low .v{color:var(--danger)}
+.tile.fin{background:linear-gradient(135deg,var(--purple-soft),var(--surface))}
+.take{margin:4px 0 16px;color:var(--muted)}
+.dsec{margin:22px 0 10px}
+.dgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:12px}
+.dgrid.sm{grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}
+.dcard{padding:14px 16px;min-width:0}
+.dcard h4{margin:0 0 4px;font:700 15px/1.2 var(--f-display)}
+.dnote{font-size:12.5px;color:var(--muted);margin:0 0 8px}
+.scroll{max-height:26rem;overflow:auto}
+.legend{font-size:12.5px;color:var(--muted)}
+.legend .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--danger);margin-right:5px;vertical-align:middle}
+svg.ch text{font-size:11.5px;fill:var(--muted)}
+svg.ch .lab{fill:var(--fg)}
+
+.mieapp{display:inline-flex;align-items:center;gap:4px;flex:none;padding:7px 12px;border:1px solid #DADAD3;border-radius:999px;background:#fff;color:#2B3033;font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap;min-height:36px}.mieapp:hover{border-color:#2A7C7D;color:#2A7C7D}.mieapp .c{display:none}@media (max-width:480px){.mieapp{padding:6px 10px}.mieapp .t{display:none}.mieapp .c{display:inline}}
+
+
+main{max-width:860px}
+@media (max-width:700px){.top{flex-wrap:wrap;row-gap:6px}.tabs{order:3;flex-basis:100%;overflow-x:auto}}
+.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.bar input[type=month]{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 10px;min-height:42px;font-size:14.5px;color:var(--fg)}
+.cl{display:grid;gap:6px}
+.pos{display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:center;padding:9px 12px;border-radius:12px;background:var(--surface-2);font-size:14.5px;font-variant-numeric:tabular-nums}
+.pos.io{background:color-mix(in srgb,var(--brand-teal) 18%,var(--surface));font-weight:700}
+.pos .n{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:800;background:var(--surface);font-size:13px}
+.pos .n.p1{background:#D4A017;color:#fff}.pos .n.p2{background:#9AA5A8;color:#fff}.pos .n.p3{background:#B87333;color:#fff}
+.pos small{display:block;color:var(--muted);font-weight:500;font-size:12.5px}
+.pos .r{text-align:right}
+.pos .fuori{opacity:.65}
+.st{display:inline-flex;gap:1px;font-size:14px;line-height:1;vertical-align:middle}.st .on{color:#E0A100}.st .off{color:var(--line)}
+.ins{width:40px;height:40px;display:inline-block;vertical-align:middle}
+.grado{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center}
+.grado .ins{width:60px;height:60px;border-radius:16px;background:var(--surface-2);display:grid;place-items:center}
+.grado .ins svg{width:42px;height:42px}
+.barra{height:10px;border-radius:99px;background:var(--surface-2);overflow:hidden;margin:4px 0 2px}.barra i{display:block;height:100%;border-radius:99px;background:var(--brand-teal)}
+.req{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;margin-top:8px}
+.post{display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:12px;background:var(--surface-2);font-size:14.5px}
+.post .gr{flex:1;min-width:0}.post small{color:var(--muted);display:block;font-size:12.5px}
+.applausi{border:1.5px solid var(--line);background:var(--surface);color:var(--fg);border-radius:99px;padding:6px 12px;font:600 13px var(--f-body,inherit);cursor:pointer;white-space:nowrap}
+.applausi[aria-pressed="true"]{border-color:var(--brand-teal);color:var(--teal-ink,#2F7F7F)}
+.medr{display:inline-flex;align-items:center;gap:3px;margin-left:8px;font-weight:700}.medr svg{width:18px;height:18px}
+.reg h3{margin:18px 0 6px}.reg h3:first-child{margin-top:0}.reg p,.reg li{font-size:14.5px;line-height:1.55}.reg ul{padding-left:20px;margin:6px 0}
+.reg table{border-collapse:collapse;font-size:14px;margin:6px 0;font-variant-numeric:tabular-nums}.reg td,.reg th{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left}
+.sez{display:grid;gap:14px}
+</style>
+<body>
+<header class="top">
+  <a class="brand" href="./" aria-label="Classifiche, inizio"><img class="logo" src="logo.png" alt="To Smile" width="543" height="162"><span class="sep"></span><h1>Classifiche e medaglie</h1></a>
+  <nav class="tabs" id="tabs" aria-label="Sezioni"></nav>
+  <a class="mieapp" href="/" title="Torna alle tue app">← <span class="t">Le mie app</span><span class="c">App</span></a>
+</header>
+<main id="main"><div class="empty">Caricamento…</div></main>
+<div class="toast" id="toast" hidden role="status"></div>
+<script src="festa.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+async function api(method, url, body) {
+  const r = await fetch(url, { method, credentials: 'include', headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401) { location.href = '/accedi?next=' + encodeURIComponent(location.href); throw new Error('Accesso richiesto'); }
+  if (!r.ok) throw new Error(j.error || 'Errore, riprova.');
+  return j;
+}
+let toastT; function toast(t) { const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => el.hidden = true, 3500); }
+const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+const fE = n => '€ ' + Math.round(n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+const pc = n => (Math.round((n || 0) * 10) / 10).toString().replace('.', ',') + '%';
+const stelle = n => `<span class="st" title="${n} stelle su 5"><span class="on">${'★'.repeat(n)}</span><span class="off">${'★'.repeat(5 - n)}</span></span>`;
+const NOMI = { comm: 'Commerciali', medici: 'Medici', rec: 'REC', aso: 'ASO', bacheca: 'Bacheca', regole: 'Regolamento' };
+const S = { st: null, v: '', mese: '' };
+const posN = i => `<span class="n ${i < 3 ? 'p' + (i + 1) : ''}">${i + 1}</span>`;
+
+async function boot() {
+  try { S.st = await api('GET', 'api/stato'); } catch (x) { $('#main').innerHTML = `<div class="err">${esc(x.message)}</div>`; return; }
+  S.mese = S.st.oggi.slice(0, 7);
+  const u = new URLSearchParams(location.search);
+  S.v = u.get('v') || S.st.me.mia || S.st.me.categorie[0] || 'bacheca';
+  tabs(); vai();
+  const f = u.get('festa');
+  if (f) { try { TSFesta.mostra(await api('GET', 'api/festa/' + encodeURIComponent(f))); } catch {} history.replaceState(null, '', './'); }
+}
+function tabs() {
+  const T = [...S.st.me.categorie, 'bacheca', 'regole'];
+  $('#tabs').innerHTML = T.map(k => `<button class="tab ${S.v === k ? 'on' : ''}" data-v="${k}">${NOMI[k]}</button>`).join('');
+  $('#tabs').querySelectorAll('[data-v]').forEach(b => b.onclick = () => { S.v = b.dataset.v; tabs(); vai(); });
+}
+const vai = () => ({ comm: vComm, medici: vMed, rec: vRec, aso: vAso, bacheca: vBacheca, regole: vRegole })[S.v]();
+const barMese = (label) => `<div class="bar"><label class="lbl" for="mese">${label}</label><input type="month" id="mese" value="${S.mese}" max="${S.st.oggi.slice(0, 7)}"></div>`;
+const legaMese = () => { const m = $('#mese'); if (m) m.onchange = () => { if (m.value) { S.mese = m.value; vai(); } }; };
+const qs = cat => `api/classifica?cat=${cat}&anno=${S.mese.slice(0, 4)}&mese=${+S.mese.slice(5, 7)}`;
+const R = () => S.st.regole;
+
+async function vComm() {
+  let d; try { d = await api('GET', qs('comm')); } catch (x) { return toast(x.message); }
+  const G = R().gradiComm, m = d.mio;
+  let gradoHtml = '';
+  if (m) {
+    const nx = G[m.gradoTrim + 1], t = m.trim;
+    gradoHtml = `<div class="card pad"><div class="grado"><div class="ins">${TSFesta.insegna('comm', m.grado)}</div><div><div class="muted" style="font-size:13px">Il tuo grado · ${G[m.grado].titolo}</div><h2 style="margin:0">${G[m.grado].nome}</h2>
+      ${t ? `<div class="muted" style="font-size:13px;margin-top:2px">Trimestre in corso: con questi numeri a fine trimestre sei <b>${G[m.gradoTrim].nome}</b></div>
+      ${nx ? `<div class="req"><span>Concretizzazione ${pc(t.conc)} <span class="muted">→ ${nx.conc}% per ${nx.nome}</span></span><b>${t.conc >= nx.conc ? '✓' : ''}</b></div><div class="barra"><i style="width:${Math.min(100, t.conc / nx.conc * 100)}%"></i></div>
+      <div class="req"><span>Ticket medio ${fE(t.ticket)} <span class="muted">→ ${fE(nx.ticket)} per ${nx.nome}</span></span><b>${t.ticket >= nx.ticket ? '✓' : ''}</b></div><div class="barra"><i style="width:${Math.min(100, t.ticket / nx.ticket * 100)}%"></i></div>` : ''}` : '<p class="muted" style="font-size:13px;margin:4px 0 0">Il grado si calcola sui numeri del trimestre.</p>'}</div></div></div>`;
+  }
+  $('#main').innerHTML = `<div class="sez">${gradoHtml}<div class="card pad"><h3 style="margin:0 0 10px">Classifica commerciali · fatturato accettato di ${MESI[d.mese - 1]} ${d.anno}</h3>${barMese('Mese')}
+    <div class="cl">${d.righe.length ? d.righe.map((x, i) => `<div class="pos ${x.io ? 'io' : ''}">${posN(i)}<span>${esc(x.nome)}${x.io ? ' (tu)' : ''} <span class="ins" style="width:22px;height:22px" title="${esc(G[x.grado].nome)}">${TSFesta.insegna('comm', x.grado)}</span>
+      <small>${x.acc} accettati su ${x.n} · ticket ${stelle(x.sT)} · concretizzazione ${pc(x.conc)} ${stelle(x.sC)}</small></span><b class="r">${fE(x.fatt)}</b></div>`).join('') : '<p class="muted">Ancora nessun preventivo nel mese.</p>'}</div></div></div>`;
+  legaMese();
+}
+const medRiga = r => ['oro', 'argento', 'bronzo'].map(t => r[t] ? `<span class="medr">${TSFesta.medaglia(t)}${r[t]}</span>` : '').join('') || '<span class="muted">—</span>';
+async function vMed() {
+  let d; try { d = await api('GET', qs('medici')); } catch (x) { return toast(x.message); }
+  $('#main').innerHTML = `<div class="sez"><div class="card pad"><h3 style="margin:0 0 10px">Classifica medici · % di accettati sulle visite di ${MESI[d.mese - 1]} ${d.anno}</h3>${barMese('Mese')}
+    <div class="cl">${d.righe.length ? d.righe.map((x, i) => `<div class="pos ${x.io ? 'io' : ''}">${x.inGara ? posN(i) : '<span class="n">–</span>'}<span class="${x.inGara ? '' : 'fuori'}">${esc(x.nome)}${x.io ? ' (tu)' : ''}
+      <small>${x.acc} accettati su ${x.visite} visite ${stelle(x.s)}${x.inGara ? '' : ` · in gara da ${R().minVisite} visite`}</small></span><b class="r">${pc(x.conc)}</b></div>`).join('') : '<p class="muted">Ancora nessuna visita nel mese.</p>'}</div>
+    <p class="muted" style="font-size:13px;margin:8px 0 0">L'ultimo giorno del mese il primo in classifica (almeno ${R().minVisite} visite) vince la medaglia d'oro.</p></div>
+    <div class="card pad"><h3 style="margin:0 0 10px">Medagliere ${d.anno}</h3><div class="cl">${d.medagliere.length ? d.medagliere.map((r, i) => `<div class="pos">${posN(i)}<span>${esc(r.nome)}<small>${r.lista.map(x => MESI[+x.periodo.slice(5) - 1]).join(', ')}</small></span><span class="r">${medRiga(r)}</span></div>`).join('') : '<p class="muted">Le medaglie arrivano a fine mese.</p>'}</div></div></div>`;
+  legaMese();
+}
+async function vRec() {
+  let d; try { d = await api('GET', qs('rec')); } catch (x) { return toast(x.message); }
+  const G = R().gradiRec, me = d.righe.find(x => x.io), L = d.righe.filter(x => x.perc != null);
+  let mio = '';
+  if (me) { const i = L.indexOf(me), dav = L[i - 1];
+    mio = `<div class="card pad"><div class="grado"><div class="ins">${TSFesta.insegna('rec', me.grado)}</div><div><div class="muted" style="font-size:13px">Il tuo grado${me.provvisorio ? ' (dal primo fine mese)' : ''}${i >= 0 ? ` · ${i + 1}ª nella classifica ${d.anno}` : ''}</div><h2 style="margin:0">${G[me.grado]}</h2>
+      <p class="muted" style="font-size:13px;margin:4px 0 0">${me.perc == null ? 'La % arriva quando la produzione è approvata e il fatturato del mese è in Gestione finanziaria.' : dav ? `Ti mancano <b>${pc(dav.perc - me.perc + .1)}</b> punti per superare ${esc(dav.nome)}.` : 'Sei in testa: tieni il comando!'}
+      ${me.gradoProssimo != null && me.gradoProssimo !== me.grado ? ` A fine mese, così: <b>${G[me.gradoProssimo]}</b>.` : ''}</p></div></div></div>`; }
+  $('#main').innerHTML = `<div class="sez">${mio}<div class="card pad"><h3 style="margin:0 0 10px">Classifica REC ${d.anno} · produzione sul fatturato (gold standard ${R().targetRec}%)</h3>${barMese('Fino a')}
+    ${d.senzaFinanza ? '<div class="err">Gestione finanziaria non raggiungibile: la % sul fatturato non si può calcolare ora.</div>' : ''}
+    <div class="cl">${d.righe.map((x, i) => `<div class="pos ${x.io ? 'io' : ''}">${x.perc != null ? posN(i) : '<span class="n">–</span>'}<span>${esc(x.nome)}${x.io ? ' (tu)' : ''}${x.sedeNome ? ' · ' + esc(x.sedeNome) : ''} <span class="ins" style="width:22px;height:22px">${TSFesta.insegna('rec', x.grado)}</span>
+      <small>${esc(G[x.grado])}${x.perc != null ? ' ' + stelle(x.s) : ' · ancora senza dati'}</small></span><b class="r">${x.perc != null ? pc(x.perc) : '—'}</b></div>`).join('') || '<p class="muted">Nessuna REC registrata.</p>'}</div>
+    <p class="muted" style="font-size:13px;margin:8px 0 0">Classifica dell'anno: i gradi si aggiornano da soli l'ultimo giorno del mese, si guadagnano e si perdono.</p></div></div>`;
+  legaMese();
+}
+async function vAso() {
+  let d; try { d = await api('GET', qs('aso')); } catch (x) { return toast(x.message); }
+  $('#main').innerHTML = `<div class="sez"><div class="card pad"><h3 style="margin:0 0 10px">Classifica ASO · manutenzioni attrezzature di ${MESI[d.mese - 1]} ${d.anno}</h3>${barMese('Mese')}
+    <div class="cl">${d.righe.length ? d.righe.map((x, i) => `<div class="pos ${x.io ? 'io' : ''}">${posN(i)}<span>${esc(x.nome)}${x.io ? ' (tu)' : ''}<small>${['oggi sarebbe oro', 'oggi sarebbe argento', 'oggi sarebbe bronzo'][i] || ''}</small></span><b class="r">${x.n}</b></div>`).join('') : '<p class="muted">Ancora nessuna manutenzione nel mese.</p>'}</div>
+    <p class="muted" style="font-size:13px;margin:8px 0 0">L'ultimo giorno del mese oro, argento e bronzo alle prime tre. Il mese riparte da zero, il medagliere resta.</p></div>
+    <div class="card pad"><h3 style="margin:0 0 10px">Medagliere ${d.anno} · a fine anno vince chi ha più ori</h3><div class="cl">${d.medagliere.length ? d.medagliere.map((r, i) => `<div class="pos">${posN(i)}<span>${esc(r.nome)}</span><span class="r">${medRiga(r)}</span></div>`).join('') : '<p class="muted">Le medaglie arrivano a fine mese.</p>'}</div></div></div>`;
+  legaMese();
+}
+async function vBacheca() {
+  let d; try { d = await api('GET', 'api/bacheca'); } catch (x) { return toast(x.message); }
+  const quando = s => { const t = new Date(s), m = Math.round((Date.now() - t) / 6e4); return m < 60 ? (m <= 1 ? 'adesso' : m + ' minuti fa') : m < 1440 ? Math.round(m / 60) + ' ore fa' : t.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' }); };
+  $('#main').innerHTML = `<div class="card pad"><h3 style="margin:0 0 10px">Bacheca della squadra</h3><div class="cl">${d.righe.length ? d.righe.map(r => `<div class="post"><span class="gr">${esc(r.testo)}<small>${quando(r.il)}</small></span><button class="applausi" data-a="${r.id}" aria-pressed="${r.mio}">👏 ${r.applausi}</button></div>`).join('') : '<p class="muted">Qui compaiono i successi di tutti: accettati, sorpassi, promozioni e medaglie.</p>'}</div>
+    <p class="muted" style="font-size:13px;margin:8px 0 0">Solo riconoscimenti: nessuno riceve messaggi negativi.</p></div>`;
+  $('#main').querySelectorAll('[data-a]').forEach(b => b.onclick = async () => { try { const r = await api('POST', `api/bacheca/${b.dataset.a}/applausi`, {}); b.setAttribute('aria-pressed', r.mio); b.textContent = '👏 ' + r.applausi; if (r.mio) TSFesta.festoni(false); } catch (x) { toast(x.message); } });
+}
+function vRegole() {
+  const r = R(), G = r.gradiComm, f = r.fasce.map(k => Math.round(k * 100));
+  const fasce = (target, u) => `<table><tr><th>Stelle</th><th>Quando</th></tr>
+    <tr><td>${stelle(5)}</td><td>overtarget: da ${u(target * r.fasce[4])}</td></tr><tr><td>${stelle(4)}</td><td>target raggiunto: da ${u(target)}</td></tr>
+    <tr><td>${stelle(3)}</td><td>da ${u(target * r.fasce[2])} (${f[2]}% del target)</td></tr><tr><td>${stelle(2)}</td><td>da ${u(target * r.fasce[1])} (${f[1]}% del target)</td></tr>
+    <tr><td>${stelle(1)}</td><td>sotto ${u(target * r.fasce[1])}: sotto standard</td></tr></table>`;
+  const pcU = v => pc(v);
+  $('#main').innerHTML = `<div class="card pad reg">
+    <h3>Lo spirito</h3><p>Le classifiche servono a riconoscere il buon lavoro, subito e in modo concreto. Ogni risultato riceve un complimento nel momento in cui accade; nessuno riceve messaggi negativi. Si vede sempre dove si è e qual è il prossimo passo.</p>
+    <h3>Commerciali (RAP e RUL)</h3>
+    <ul><li><b>Classifica del mese</b>: fatturato accettato (€ del piano di cura dei preventivi con esito A, mese del preventivo).</li>
+      <li><b>Quando metti A</b>: festoni, complimenti, posizione e sorpassi («Hai superato…»).</li>
+      <li><b>Stelle</b> su ticket medio di vendita e concretizzazione (accettati ÷ presentati).</li></ul>
+    <p><b>Ticket medio</b> (target 3.000 €)</p><table><tr><th>Stelle</th><th>Ticket medio</th></tr>${r.ticket.slice().reverse().map((x, i, a) => `<tr><td>${stelle(x.s)}</td><td>${x.s === 1 ? 'sotto ' + fE(a[a.length - 2].da) : x.s === 5 ? 'oltre ' + fE(x.da) : 'da ' + fE(x.da)}</td></tr>`).join('')}</table>
+    <p><b>Concretizzazione</b> (target ${r.targetConc}%)</p>${fasce(r.targetConc, pcU)}
+    <p><b>Gradi del trimestre</b> (si decidono da soli l'ultimo giorno del trimestre)</p>
+    <table><tr><th>Grado</th><th>Concretizzazione</th><th>Ticket medio</th></tr>${G.map((g, i) => `<tr><td><span class="ins" style="width:22px;height:22px">${TSFesta.insegna('comm', i)}</span> ${g.nome}${i ? ' · ' + g.titolo : ''}</td><td>${i ? 'da ' + g.conc + '%' : '—'}</td><td>${i ? 'da ' + fE(g.ticket) : '—'}</td></tr>`).join('')}</table>
+    <h3>Medici</h3>
+    <ul><li>Ogni preventivo nel CRM con il tuo nome è una visita; la % è accettati ÷ visite del mese.</li>
+      <li>Quando un tuo paziente accetta ricevi una notifica: aprendola partono i festoni con il paziente, la tua posizione e le stelle.</li>
+      <li>Per la <b>medaglia d'oro</b> servono almeno ${r.minVisite} visite nel mese: l'ultimo giorno vince la % più alta, e lo sanno tutti.</li></ul>
+    <p><b>Stelle della concretizzazione</b></p>${fasce(r.targetConc, pcU)}
+    <h3>REC</h3>
+    <ul><li><b>Classifica dell'anno</b>: produzione approvata della tua sede ÷ fatturato della sede in Gestione finanziaria, da gennaio. Gold standard: ${r.targetRec}%.</li>
+      <li>Quando salvi la produzione: complimenti, posizione e quanto manca per superare chi ti sta davanti.</li>
+      <li><b>Gradi</b>: l'ultimo giorno del mese, dal posto in classifica. Si guadagnano e si perdono di mese in mese.</li></ul>
+    <table><tr><th>Grado</th><th>Posto in classifica</th></tr>${r.gradiRec.slice().reverse().map((g, i) => `<tr><td><span class="ins" style="width:22px;height:22px">${TSFesta.insegna('rec', 4 - i)}</span> ${g}</td><td>${['1ª', '2ª e 3ª', 'fino al 60% della classifica', 'fino all\'85% della classifica', 'le altre'][i]}</td></tr>`).join('')}</table>
+    <p><b>Stelle</b> (gold standard ${r.targetRec}%)</p>${fasce(r.targetRec, pcU)}
+    <h3>ASO</h3>
+    <ul><li><b>Classifica del mese</b>: manutenzioni attrezzature registrate in Gestione ASO (un'attrezzatura in un giorno = una manutenzione).</li>
+      <li>A ogni manutenzione: complimenti, posizione e sorpassi.</li>
+      <li>L'ultimo giorno del mese: <b>oro, argento e bronzo</b> alle prime tre; il mese riparte da zero.</li>
+      <li>Il <b>medagliere</b> resta tutto l'anno: a fine anno vince chi ha più ori (poi argenti, poi bronzi).</li></ul>
+    <h3>Chiusure automatiche</h3><p>Mese, trimestre e anno si chiudono da soli. Medaglie, gradi e annunci arrivano con una notifica: si possono spegnere nelle impostazioni delle notifiche.</p>
+  </div>`;
+}
+boot();
+</script>

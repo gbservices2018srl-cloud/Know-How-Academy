@@ -203,6 +203,7 @@ main{max-width:1100px}
 <main id="main"><div class="empty">Caricamento…</div></main>
 <dialog class="dlg" id="dlg" aria-label="Conferma"></dialog>
 <div class="toast" id="toast" hidden role="status"></div>
+<script src="/classifiche/festa.js"></script>
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -609,6 +610,7 @@ async function vProduzione() {
     try {
       const r = await api('POST', 'api/produzione', { sede: $('#p-sede')?.value || pr.sedi[0].id, anno: a, mese: m, valore: $('#p-val').value });
       toast(r.uguale ? 'Era già nel Consuntivo con questo valore.' : r.errore ? 'Salvata, ma non è andata nel Consuntivo: ' + r.errore : r.stato === 'approvata' ? 'Salvata e mandata nel Consuntivo.' : 'Inviata: l\'amministrazione la controlla.', 6000);
+      if (r.festa) window.TSFesta?.mostra(r.festa);
       P.anno = a; vProduzione();
     } catch (x) { b.disabled = false; toast(x.message); }
   };
