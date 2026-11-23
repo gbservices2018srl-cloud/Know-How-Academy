@@ -646,13 +646,9 @@ app.patch('/api/admin/users/:id', needAdmin, wrap(async (req, res) => {
   const keys = Object.keys(set);
   if (keys.length) await store.q(`update users set ${keys.map((k, i) => `${k} = $${i + 2}`).join(', ')} where id = $1`, [u.id, ...keys.map(k => set[k])]);
   if (b.sedi !== undefined) {
-    if (u.figura === 'Medico') {
-      // medici: le sedi degli studi Nuovalab restano sempre; quelle scelte qui in più si ricordano come «a mano»
-      const nl = (await require('./lib/medici-sedi').sediMedici({ soloNuovalab: true })).find(m => m.id === u.id)?.sedi || [];
-      const manuali = [...new Set(b.sedi.map(String))].filter(id => !nl.includes(id));
-      await store.q('update users set sedi_manuali = $2 where id = $1', [u.id, JSON.stringify(manuali)]);
-      await store.impostaSedi(u.id, [...new Set([...nl, ...manuali])]);
-    } else await store.impostaSedi(u.id, b.sedi);
+    await store.impostaSedi(u.id, b.sedi);
+    // medici: le sedi dell'anagrafica comandano; Nuovalab le riprende (solo aggiunte: niente si toglie, prescrizioni intatte)
+    if (u.figura === 'Medico') setTimeout(() => allineaMedicoNuovalab(u.id, { prova: false, chi: req.user }).catch(e => console.warn('Nuovalab (medico):', e.message)), 300);
   }
   if (keys.length) gateAzzera(u.id);
   let sent, avvisi = [];
@@ -954,10 +950,8 @@ app.post('/api/admin/sedi/:id/persone', needAdmin, wrap(async (req, res) => {
     if (!u || u.owner) continue;
     const prima = (await store.sediAnagrafica(u.id)).map(e => e.id);
     if (prima.includes(s.id)) continue;
-    // medici: la sede aggiunta a mano si ricorda (gli studi Nuovalab restano a parte)
-    if (u.figura === 'Medico') { const { rows: [x] } = await store.q('select sedi_manuali from users where id = $1', [u.id]);
-      await store.q('update users set sedi_manuali = $2 where id = $1', [u.id, JSON.stringify([...new Set([...(x?.sedi_manuali || []), s.id])])]); }
     await store.impostaSedi(u.id, [...prima, s.id]); gateAzzera(u.id); n++;
+    if (u.figura === 'Medico') setTimeout(() => allineaMedicoNuovalab(u.id, { prova: false, chi: req.user }).catch(e => console.warn('Nuovalab (medico):', e.message)), 300);
   }
   res.json({ ok: true, aggiunte: n });
 }));
@@ -1344,16 +1338,65 @@ app.use((err, req, res, next) => {
   bad(res, 500, 'Errore del server. Riprova.');
 });
 
-// medici: le sedi dell'anagrafica sono quelle degli studi Nuovalab assegnati nel pannello, più quelle aggiunte a mano
+// medici: le sedi degli studi Nuovalab assegnati nel pannello si AGGIUNGONO all'anagrafica (non si toglie mai niente).
+// Dopo l'allineamento confermato («Medici in Nuovalab») comanda l'anagrafica: all'avvio non si fa più.
 async function sediMediciInAnagrafica(userId = null) {
   const lista = await require('./lib/medici-sedi').sediMedici({ soloNuovalab: true });
-  const { rows } = await store.q(`select id, sedi, sedi_manuali from users where figura = 'Medico' and status = 'active' ${userId ? 'and id = $1' : ''}`, userId ? [userId] : []);
+  const { rows } = await store.q(`select id, sedi from users where figura = 'Medico' and status = 'active' ${userId ? 'and id = $1' : ''}`, userId ? [userId] : []);
   for (const r of rows) {
-    const nuove = [...new Set([...(lista.find(m => m.id === r.id)?.sedi || []), ...(Array.isArray(r.sedi_manuali) ? r.sedi_manuali : [])])];
-    const ora = Array.isArray(r.sedi) ? r.sedi : [];
-    if (nuove.length && [...nuove].sort().join('|') !== [...ora].sort().join('|')) { await store.impostaSedi(r.id, nuove); require('./lib/finanzaPersone').allineaUno(r.id); }
+    const ora = Array.isArray(r.sedi) ? r.sedi : [], nuove = [...new Set([...ora, ...(lista.find(m => m.id === r.id)?.sedi || [])])];
+    if (nuove.length > ora.length) { await store.impostaSedi(r.id, nuove); require('./lib/finanzaPersone').allineaUno(r.id); }
   }
 }
+const ANAGRAFICA_COMANDA = 'medici-sedi-da-anagrafica';
+const anagraficaComanda = async () => (await store.q('select 1 from migrazioni where k = $1', [ANAGRAFICA_COMANDA])).rows.length > 0;
+
+// Nuovalab dai medici registrati: per ogni sede dell'anagrafica il medico deve avere il suo «medico» in quello studio.
+// Solo aggiunte: si collega il medico già presente con lo stesso nome, altrimenti se ne crea uno nuovo (dati dell'albo).
+// Mai cancellati o disattivati medici, prescrizioni o certificazioni; gli studi in più restano e si segnalano.
+const normS = x => String(x || '').toLowerCase().replace(/to\s*smile|studio|sede|ambulatorio/g, '').replace(/[^a-z0-9]/g, '');
+const TITOLI_M = new Set(['dott', 'dottssa', 'dottore', 'dottoressa', 'dr', 'dssa', 'prof']);
+const paroleNome = x => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(w => w && !TITOLI_M.has(w));
+const stessoNome = (a, b) => { const A = paroleNome(a), B = paroleNome(b); return A.length >= 2 && B.length >= 2 && A.length === B.length && A.every(w => B.includes(w)); };
+async function allineaMedicoNuovalab(userId, { prova = true, chi = null, cat = null } = {}) {
+  const u = await store.getUser(userId), lab = APPS.find(a => a.key === 'laboratorio');
+  const nome = u ? fullName(u) : userId, esito = { id: userId, nome, aggiunti: [], presenti: [], avvisi: [], daControllare: [] };
+  if (!u || u.status !== 'active' || u.figura !== 'Medico') { esito.avvisi.push('non è un medico attivo'); return esito; }
+  const lv = (await store.livelliOf(u.id)).laboratorio;
+  if (lv && lv.livello !== 'MEDICO') { esito.avvisi.push(`in Nuovalab ha il livello ${lv.livello}: non lo tocco`); return esito; }
+  cat = cat || await catalogo(lab, chi || u, true);
+  const sedi = await store.listSedi(), mie = (Array.isArray(u.sedi) ? u.sedi : []).map(id => sedi.find(x => x.id === id)).filter(Boolean);
+  const studioDi = s => (cat.studi || []).find(x => normS(x.nome) === normS(s.nome) || (s.sigla && String(x.sigla || '').toUpperCase() === String(s.sigla).toUpperCase()))
+    || (cat.studi || []).find(x => normS(x.nome).length >= 3 && normS(s.nome).length >= 3 && (normS(x.nome).includes(normS(s.nome)) || normS(s.nome).includes(normS(x.nome))));
+  const enti = [...(lv?.enti || [])];
+  const studioDiEnte = e => (cat.medici || []).find(m => m.id === e.id)?.info || String(e.nome || '').split(' · ').slice(1).join(' · ');
+  for (const s of mie) {
+    const st = studioDi(s);
+    if (!st) { esito.avvisi.push(`${s.nome}: in Nuovalab non trovo lo studio`); continue; }
+    if (enti.some(e => normS(studioDiEnte(e)) === normS(st.nome) || e.id === 'nuovo:' + st.id)) { esito.presenti.push(st.nome); continue; }
+    const gia = (cat.medici || []).find(m => normS(m.info) === normS(st.nome) && stessoNome(m.nome, nome));
+    if (gia) { enti.push({ id: gia.id, nome: gia.nome + ' · ' + gia.info }); esito.aggiunti.push(`${st.nome}: collego il medico già presente «${gia.nome}»`); continue; }
+    if (!(u.albo_provincia && u.albo_numero)) { esito.avvisi.push(`${st.nome}: per creare il medico servono provincia e numero d'albo`); continue; }
+    enti.push({ id: 'nuovo:' + st.id, nome: 'Nuovo medico · ' + st.nome }); esito.aggiunti.push(`${st.nome}: nuovo medico (con i dati dell'albo)`);
+  }
+  for (const e of lv?.enti || []) { const st = studioDiEnte(e); if (st && !mie.some(s => normS(s.nome) === normS(st) || (studioDi(s) && normS(studioDi(s).nome) === normS(st)))) esito.daControllare.push(st); }
+  if (prova || !esito.aggiunti.length) return esito;
+  await store.setAppRole(u.id, 'laboratorio', 'user', { livello: 'MEDICO', ente: enti[0].id, enteNome: enti[0].nome, enti });
+  const w = await provisiona(await store.getUser(u.id), ['laboratorio']);
+  if (w.length) esito.avvisi.push(...w);
+  return esito;
+}
+// tutti i medici: anteprima (prova) o allineamento confermato; alla conferma prima si uniscono le sedi Nuovalab nell'anagrafica
+app.post('/api/admin/nuovalab/medici', needAdmin, wrap(async (req, res) => {
+  const conferma = !!req.body?.conferma, lab = APPS.find(a => a.key === 'laboratorio');
+  if (conferma) await sediMediciInAnagrafica();
+  const cat = await catalogo(lab, req.user, true);
+  const { rows } = await store.q(`select id from users where figura = 'Medico' and status = 'active' and not owner order by last_name, first_name`);
+  const esiti = [];
+  for (const r of rows) esiti.push(await allineaMedicoNuovalab(r.id, { prova: !conferma, chi: req.user, cat }).catch(e => ({ id: r.id, nome: r.id, aggiunti: [], presenti: [], avvisi: [e.message], daControllare: [] })));
+  if (conferma) { await store.q('insert into migrazioni (k) values ($1) on conflict do nothing', [ANAGRAFICA_COMANDA]); catalogCache.delete('laboratorio'); }
+  res.json({ conferma, esiti, comanda: await anagraficaComanda() });
+}));
 // una volta (riempie solo chi non ha ancora le sedi in anagrafica): dalla Scheda personale o dalle app per sede
 async function recuperaSedi() {
   const { rows } = await store.q(`select id from users where status <> 'disabled' and not owner and sedi is null and coalesce(figura, '') <> 'Medico'`);
@@ -1388,7 +1431,7 @@ async function start() {
   await store.fondiSeguaci().catch(e => console.warn('Unione delle app:', e.message));
   await store.accessiAutomatici().catch(e => console.warn('Accessi automatici:', e.message));
   await recuperaSedi().catch(e => console.warn('Recupero sedi:', e.message));
-  await sediMediciInAnagrafica().catch(e => console.warn('Sedi dei medici:', e.message));
+  if (!(await anagraficaComanda().catch(() => true))) await sediMediciInAnagrafica().catch(e => console.warn('Sedi dei medici:', e.message));
   // app per sede rimaste senza sede (es. date in automatico prima che le sedi fossero scelte): ricevono quelle dell'anagrafica
   try { for (const r of (await store.q(`select id, sedi from users where jsonb_typeof(sedi) = 'array' and jsonb_array_length(sedi) > 0`)).rows) await store.impostaSedi(r.id, r.sedi); }
   catch (e) { console.warn('Sedi nelle app:', e.message); }

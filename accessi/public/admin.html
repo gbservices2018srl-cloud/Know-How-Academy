@@ -451,15 +451,8 @@ function card(u, homonym) {
 // sedi della persona (anagrafica unica): scelte una volta, valgono in tutte le app per sede. Ai medici arrivano dagli studi Nuovalab.
 function sediBox(u) {
   const tutte = S.sediTutte || [], mie = u.sedi || [];
-  if (u.figura === 'Medico') {
-    // medici: le sedi degli studi Nuovalab sono fisse (si cambiano in Nuovalab); le altre si aggiungono qui come per tutti
-    const man = u.sediManuali || [], nl = mie.filter(id => !man.includes(id));
-    return `<div class="sedibox"><b>Sedi</b> <span class="muted" style="font-size:13px">quelle con «Nuovalab» arrivano dagli studi assegnati qui sotto; le altre puoi aggiungerle o toglierle tu</span>
-      <div class="chips">${tutte.map(x => nl.includes(x.id) ? `<span class="schip on" title="Dallo studio Nuovalab: si cambia in Nuovalab" style="cursor:default;opacity:.85">${esc(x.nome)} · Nuovalab</span>`
-        : `<button type="button" class="schip ${mie.includes(x.id) ? 'on' : ''}" data-sede="${esc(x.id)}" data-u="${u.id}" aria-pressed="${mie.includes(x.id)}">${esc(x.nome)}</button>`).join('')}</div></div>`;
-  }
   return `<div class="sedibox"><b>Sedi in cui lavora</b>${!mie.length ? ' <b style="color:var(--olive-ink)">· da scegliere</b>' : ''}
-    <span class="muted" style="font-size:13px">valgono per tutte le app (Gestione ASO, Scheda personale, Misure…)</span>
+    <span class="muted" style="font-size:13px">valgono per tutte le app (Gestione ASO, Scheda personale, Misure…)${u.figura === 'Medico' ? ' · Nuovalab le riprende da qui: gli studi si aggiungono da soli' : ''}</span>
     <div class="chips">${tutte.map(x => `<button type="button" class="schip ${mie.includes(x.id) ? 'on' : ''}" data-sede="${esc(x.id)}" data-u="${u.id}" aria-pressed="${mie.includes(x.id)}">${esc(x.nome)}</button>`).join('')}</div></div>`;
 }
 document.addEventListener('click', async e => {
@@ -600,6 +593,26 @@ function contattiHtml() {
 }
 // Gestione finanziaria: le persone registrate vanno da sole nelle sue sedi (medici P.IVA tra i dottori, gli altri negli stipendi).
 // Per chi era già registrato prima: «Controlla» mostra cosa cambierebbe, poi si conferma.
+// Nuovalab dai medici registrati: anteprima, poi conferma. Solo aggiunte: niente si toglie, prescrizioni e certificazioni intatte.
+function nlMedHtml() {
+  return `<div class="card" style="margin-top:14px"><div class="tools" style="margin:0"><div style="flex:1 1 260px"><b>Nuovalab: medici dalle sedi dell'anagrafica</b><p class="hint" style="margin:2px 0 0">La sede del medico si sceglie nella sua anagrafica e Nuovalab la riprende: per ogni sede il medico trova lo studio in Nuovalab. Si aggiunge soltanto: gli studi che ha già restano, i medici e gli studi presenti solo in Nuovalab non si toccano, prescrizioni e certificazioni restano intatte.</p></div>
+    <button class="btn" data-nlmed>Controlla i medici</button></div></div>`;
+}
+async function apriNlMed(conferma) {
+  let r; try { r = await api('POST', '/api/admin/nuovalab/medici', conferma ? { conferma: true } : {}); } catch (e) { return toast(e.message); }
+  const E = r.esiti, da = E.filter(e => e.aggiunti.length), att = E.filter(e => e.avvisi.length), ctrl = E.filter(e => e.daControllare.length);
+  if (conferma) { dlg.close(); toast(da.length ? `Fatto: ${da.length} ${da.length === 1 ? 'medico aggiornato' : 'medici aggiornati'} in Nuovalab.` : 'Tutto già a posto.'); return; }
+  const riga = (e, testo) => `<div style="padding:8px 10px;border-bottom:1px solid #EFEFE9;font-size:14px"><b>${esc(e.nome)}</b><br><span class="muted">${testo}</span></div>`;
+  const box = h => `<div style="max-height:30vh;overflow:auto;border:1px solid #E6E6DF;border-radius:10px">${h}</div>`;
+  open(`<h2>Nuovalab: medici</h2>
+    <p class="muted" style="margin:0">${E.length - da.length} già a posto. ${da.length ? `Da aggiungere in Nuovalab: <b>${da.length}</b>.` : 'Niente da aggiungere.'}</p>
+    ${da.length ? box(da.map(e => riga(e, e.aggiunti.map(esc).join('<br>'))).join('')) : ''}
+    ${att.length ? `<p style="margin:8px 0 4px"><b>Da sistemare (restano come sono)</b></p>${box(att.map(e => riga(e, e.avvisi.map(esc).join('<br>'))).join(''))}` : ''}
+    ${ctrl.length ? `<p style="margin:8px 0 4px"><b>Da controllare</b>: in Nuovalab hanno anche questi studi, che non sono tra le sedi dell'anagrafica. Restano: se vanno tolti, toglili tu in Nuovalab.</p>${box(ctrl.map(e => riga(e, e.daControllare.map(esc).join(', '))).join(''))}` : ''}
+    <p class="muted" style="margin:0;font-size:13px">Confermando: prima le sedi Nuovalab di oggi si aggiungono all'anagrafica (non si perde niente), poi da lì in avanti comanda l'anagrafica. In Nuovalab non si cancella né si disattiva niente.</p>
+    <div class="row"><button class="btn" value="cancel" formnovalidate>Chiudi</button><button class="btn primary" value="ok">${r.comanda ? 'Aggiorna Nuovalab' : 'Conferma e aggiorna Nuovalab'}</button></div>`, async v => { if (v === 'ok') await apriNlMed(true); });
+}
+document.addEventListener('click', e => { if (e.target.closest('[data-nlmed]')) apriNlMed(false); });
 function finPersHtml() {
   return `<div class="card" style="margin-top:14px"><div class="tools" style="margin:0"><div style="flex:1 1 260px"><b>Gestione finanziaria: persone</b><p class="hint" style="margin:2px 0 0">Quando approvi o modifichi una persona va da sola in Gestione finanziaria, nelle sue sedi: medici a partita IVA tra i dottori dei costi variabili, dipendenti CCNL e partite IVA non medici negli stipendi lordi. Si aggiunge soltanto: niente viene tolto, i medici messi a mano restano.</p></div>
     <button class="btn" data-finpers>Controlla le persone già registrate</button></div></div>`;
@@ -711,7 +724,7 @@ function renderSedi() {
   box.innerHTML = `<div class="tools"><p class="hint" style="flex:1 1 300px">Le sedi del gruppo valgono per tutte le app: si copiano da sole in Turni (con i riuniti), Manutenzione attrezzature (riuniti e aspiratori con il loro nome), Calendario (luoghi degli eventi), Ticket (studi, con la società) e Nuovalab (studi, serve l'email della sede).</p>
       <button class="btn" data-sede-sync>Aggiorna le app</button><button class="btn primary" data-sede-new>+ Nuova sede</button></div>
     ${SEDI && !SEDI.length ? `<div class="card empty">Nessuna sede ancora. <button class="btn small primary" data-sede-import style="margin-left:8px">Importa le sedi già presenti in Nuovalab e Ticket</button></div>` : `<div class="card" style="padding:0">${righe || '<div class="empty">Caricamento…</div>'}</div>`}
-    ${SEDI && SEDI.length ? contattiHtml() + convHtml() + finPersHtml() : ''}`;
+    ${SEDI && SEDI.length ? contattiHtml() + convHtml() + finPersHtml() + nlMedHtml() : ''}`;
 }
 // riuniti e aspiratori della sede: quanti sono e come si chiamano (li legge Manutenzione attrezzature)
 const ICO_RIU = '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M13.5 17.5l3.6-.8 4.6 17.8-4.4 1z"/><path d="M19 36.5h22.5l11 8.5"/><path d="M30 40.5v11M21 54h18"/><path d="M38 6.5h15.5v7"/></svg>';
@@ -796,7 +809,7 @@ function cosaManca(u) {
   const nomi = Object.fromEntries((S?.campi || []).map(c => [c.k, c.nome.toLowerCase()]));
   const m = (u.mancanti || []).map(k => nomi[k] || k);
   if (!u.cf) m.push('codice fiscale');
-  if (!(u.sedi || []).length) m.push(u.figura === 'Medico' ? 'sede (ai medici arriva dagli studi di Nuovalab)' : 'sede');
+  if (!(u.sedi || []).length) m.push('sede');
   return m;
 }
 const incompleto = u => cosaManca(u).length > 0;
@@ -844,7 +857,7 @@ function apriPersoneSede(id) {
   const sede = (SEDI || S.sediTutte || []).find(x => x.id === id);
   const lista = S.users.filter(u => u.status === 'active' && !u.owner).sort((a, b) => fullName(a).localeCompare(fullName(b), 'it'));
   open(`<h2>Chi lavora a ${esc(sede.nome)}</h2>
-    <p class="muted" style="margin-top:-6px">Spunta le persone: la sede si aggiunge alla loro anagrafica (le altre sedi restano). Ai medici si aggiunge oltre agli studi di Nuovalab.</p>
+    <p class="muted" style="margin-top:-6px">Spunta le persone: la sede si aggiunge alla loro anagrafica (le altre sedi restano). Ai medici Nuovalab aggiunge da solo lo studio di questa sede.</p>
     <input class="search" id="pp-q" type="search" placeholder="Cerca per nome" style="width:100%;margin-bottom:8px">
     ${(SETUP?.sedi.find(z => z.id === id)?.persone || 0) === 0 ? `<div class="hint" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><span>Per ora non ci lavora nessuno?</span><button class="btn small" type="button" data-ns="persone" data-ns-si="1" data-ns-sede="${id}">Non serve</button></div>` : ''}
     <div class="wz-list" id="pp-l">${lista.map(u => { const gia = (u.sedi || []).includes(id); return `<label class="wz-app" data-nome="${esc(fullName(u).toLowerCase())}"><span style="display:flex;gap:8px;align-items:center;flex:1"><input type="checkbox" value="${u.id}" ${gia ? 'checked disabled' : ''}> <b>${esc(fullName(u))}</b> <small class="muted">${esc(figNome(u.figura) || '')}${gia ? ' · già qui' : ''}</small></span></label>`; }).join('')}</div>
@@ -898,7 +911,7 @@ function disegnaWizard() {
   if (W.step === 1) {
     const sedi = W.sedi || (W.sedi = [...(u.sedi || [])]);
     body = `<label class="field">Figura professionale<select id="wz-fig"><option value="">Da scegliere</option>${(S.figure || []).filter(f => !f.ritirata || u.figura === f.id).map(f => `<option value="${esc(f.id)}" ${u.figura === f.id ? 'selected' : ''}>${esc(f.nome)}</option>`).join('')}</select></label>
-      ${u.figura === 'Medico' ? '<p class="hint">Ai medici le sedi arrivano dagli studi di Nuovalab.</p>' : `<div class="field"><span>Sedi in cui lavora</span><div class="sedibox">${(S.sediTutte || []).map(x => `<button type="button" class="schip ${sedi.includes(x.id) ? 'on' : ''}" data-wzsede="${x.id}">${esc(x.nome)}</button>`).join('')}</div></div>`}`;
+      ${`<div class="field"><span>Sedi in cui lavora${u.figura === 'Medico' ? ' (Nuovalab le riprende da qui)' : ''}</span><div class="sedibox">${(S.sediTutte || []).map(x => `<button type="button" class="schip ${sedi.includes(x.id) ? 'on' : ''}" data-wzsede="${x.id}">${esc(x.nome)}</button>`).join('')}</div></div>`}`;
   } else if (W.step === 2) {
     const grp = (S.riquadri || []).map(r => ({ r, app: APP_WZ().filter(a => r.gruppo ? a.gruppo === r.key : a.key === r.key) })).filter(g => g.app.length);
     body = `<p class="hint" style="margin-top:-4px">Spunta le app che servono. Il livello parte dal più semplice: lo puoi cambiare qui o dopo nella scheda.</p><div class="wz-list">${grp.map(g => `<div class="wz-g">${esc(g.r.name)}</div>${g.app.map(a => {
@@ -928,7 +941,7 @@ async function salvaWizard(v) {
   if (W.step === 1) {
     const body = {}, fig = dlgf.querySelector('#wz-fig').value;
     if (fig !== (u.figura || '')) body.figura = fig;
-    if (u.figura !== 'Medico' && fig !== 'Medico' && JSON.stringify([...W.sedi].sort()) !== JSON.stringify([...(u.sedi || [])].sort())) body.sedi = W.sedi;
+    if (JSON.stringify([...W.sedi].sort()) !== JSON.stringify([...(u.sedi || [])].sort())) body.sedi = W.sedi;
     if (Object.keys(body).length) { const r = await api('PATCH', '/api/admin/users/' + u.id, body); Object.assign(u, r.user); if (r.livelli) S.livelli[u.id] = r.livelli; }
   } else if (W.step === 2) {
     const sel = [...dlgf.querySelectorAll('[data-wzapp]:checked:not([disabled])')].map(x => x.dataset.wzapp);
