@@ -22,7 +22,6 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 40 
 
 const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const bad = (res, code, msg) => res.status(code).json({ error: msg });
-const fail = (status, msg) => Object.assign(new Error(msg), { status });
 const str = (v, max = 200) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 const isDate = s => /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s + 'T00:00:00Z'));
 const oggi = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());

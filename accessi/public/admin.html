@@ -600,16 +600,17 @@ function nlMedHtml() {
 }
 async function apriNlMed(conferma) {
   let r; try { r = await api('POST', '/api/admin/nuovalab/medici', conferma ? { conferma: true } : {}); } catch (e) { return toast(e.message); }
-  const E = r.esiti, da = E.filter(e => e.aggiunti.length), att = E.filter(e => e.avvisi.length), ctrl = E.filter(e => e.daControllare.length);
-  if (conferma) { dlg.close(); toast(da.length ? `Fatto: ${da.length} ${da.length === 1 ? 'medico aggiornato' : 'medici aggiornati'} in Nuovalab.` : 'Tutto già a posto.'); return; }
+  const E = r.esiti, da = E.filter(e => e.aggiunti.length), att = E.filter(e => e.avvisi.length), ctrl = E.filter(e => e.daControllare.length), tl = E.filter(e => (e.tolti || []).length);
+  if (conferma) { dlg.close(); toast(da.length + tl.length ? `Fatto: ${da.length + tl.length} ${da.length + tl.length === 1 ? 'medico aggiornato' : 'medici aggiornati'} in Nuovalab.` : 'Tutto già a posto.'); return; }
   const riga = (e, testo) => `<div style="padding:8px 10px;border-bottom:1px solid #EFEFE9;font-size:14px"><b>${esc(e.nome)}</b><br><span class="muted">${testo}</span></div>`;
   const box = h => `<div style="max-height:30vh;overflow:auto;border:1px solid #E6E6DF;border-radius:10px">${h}</div>`;
   open(`<h2>Nuovalab: medici</h2>
     <p class="muted" style="margin:0">${E.length - da.length} già a posto. ${da.length ? `Da aggiungere in Nuovalab: <b>${da.length}</b>.` : 'Niente da aggiungere.'}</p>
     ${da.length ? box(da.map(e => riga(e, e.aggiunti.map(esc).join('<br>'))).join('')) : ''}
     ${att.length ? `<p style="margin:8px 0 4px"><b>Da sistemare (restano come sono)</b></p>${box(att.map(e => riga(e, e.avvisi.map(esc).join('<br>'))).join(''))}` : ''}
+    ${tl.length ? `<p style="margin:8px 0 4px"><b>Sedi tolte in anagrafica</b>: escono anche da Nuovalab (restano finché ci sono prescrizioni da firmare).</p>${box(tl.map(e => riga(e, e.tolti.map(esc).join(', '))).join(''))}` : ''}
     ${ctrl.length ? `<p style="margin:8px 0 4px"><b>Da controllare</b>: in Nuovalab hanno anche questi studi, che non sono tra le sedi dell'anagrafica. Restano: se vanno tolti, toglili tu in Nuovalab.</p>${box(ctrl.map(e => riga(e, e.daControllare.map(esc).join(', '))).join(''))}` : ''}
-    <p class="muted" style="margin:0;font-size:13px">Confermando: prima le sedi Nuovalab di oggi si aggiungono all'anagrafica (non si perde niente), poi da lì in avanti comanda l'anagrafica. In Nuovalab non si cancella né si disattiva niente.</p>
+    <p class="muted" style="margin:0;font-size:13px">Confermando: prima le sedi Nuovalab di oggi si aggiungono all'anagrafica (non si perde niente), poi da lì in avanti comanda l'anagrafica. Le sedi tolte in anagrafica escono anche da Nuovalab, ma il medico non si disattiva: prescrizioni e certificazioni restano intatte.</p>
     <div class="row"><button class="btn" value="cancel" formnovalidate>Chiudi</button><button class="btn primary" value="ok">${r.comanda ? 'Aggiorna Nuovalab' : 'Conferma e aggiorna Nuovalab'}</button></div>`, async v => { if (v === 'ok') await apriNlMed(true); });
 }
 document.addEventListener('click', e => { if (e.target.closest('[data-nlmed]')) apriNlMed(false); });

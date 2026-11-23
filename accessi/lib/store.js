@@ -97,7 +97,7 @@ async function migrate() {
     alter table users add column if not exists contratto_ok boolean not null default false;
     alter table users add column if not exists contratto_il timestamptz;
     alter table users add column if not exists profilo_il timestamptz;
-    alter table users add column if not exists sedi_manuali jsonb; -- medici: sedi aggiunte a mano oltre agli studi Nuovalab
+    alter table users add column if not exists sedi_manuali jsonb; -- non più usata (le sedi dei medici sono in «sedi»): si lascia per non perdere dati
     alter table users add column if not exists sedi jsonb; -- sedi in cui lavora (id della scheda Sedi): fonte unica per tutte le app
     alter table user_apps add column if not exists livello text;
     alter table user_apps add column if not exists ente text;
@@ -372,7 +372,6 @@ function publicUser(u, apps) {
     contratto: u.contratto_tipo ? { tipo: u.contratto_tipo, ore: u.contratto_ore != null ? Number(u.contratto_ore) : null, ok: !!u.contratto_ok } : null,
     mancanti: require('./profilo').mancanti(u),
     sedi: Array.isArray(u.sedi) ? u.sedi : [],
-    sediManuali: Array.isArray(u.sedi_manuali) ? u.sedi_manuali : [],
     ...(apps ? { apps } : {}),
   };
 }
@@ -513,7 +512,11 @@ async function redeemTicket(token, app) {
     return { purpose: t.purpose, ssoId: u.id, email: u.email, firstName: u.first_name, lastName: u.last_name, birthDate: u.birth_date, role,
       livello: lv?.livello || null, ente: lv?.ente || null, enti: (lv?.enti || []).map(x => x.id),
       cf: u.cf || null, alboProvincia: u.albo_provincia || null, alboNumero: u.albo_numero || null, figura: u.figura || null,
-      oldEmail: t.data?.oldEmail && t.data.oldEmail !== u.email ? t.data.oldEmail : null };
+      oldEmail: t.data?.oldEmail && t.data.oldEmail !== u.email ? t.data.oldEmail : null,
+      // medici: le sedi dell'anagrafica (Gestione accessi). In Nuovalab comandano loro per gli studi To Smile
+      // (solo dopo la conferma in Gestione accessi → Sedi «Nuovalab: medici»)
+      sediAnagrafica: u.figura === 'Medico' && Array.isArray(u.sedi) && u.sedi.length
+        && (await q(`select 1 from migrazioni where k = 'medici-sedi-da-anagrafica'`).catch(() => ({ rows: [] }))).rows.length ? u.sedi.map(String) : null };
   }
   if (t.purpose === 'sedi') return { purpose: 'sedi', email: t.email, sedi: t.data?.sedi || [] };
   return { purpose: t.purpose, ssoId: t.user_id || null, email: t.email };

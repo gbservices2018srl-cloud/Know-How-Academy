@@ -1329,7 +1329,7 @@ app.post('/api/admin/nuovalab/medici', needAdmin, wrap(async (req, res) => {
   const cat = await catalogo(lab, req.user, true).catch(e => { throw Object.assign(new Error(e.status ? e.message : 'Nuovalab non risponde in questo momento: riprova tra poco.'), { status: 502 }); });
   const { rows } = await store.q(`select id from users where figura = 'Medico' and status = 'active' and not owner order by last_name, first_name`);
   const esiti = [];
-  for (const r of rows) esiti.push(await allineaMedicoNuovalab(r.id, { prova: !conferma, chi: req.user, cat }).catch(e => ({ id: r.id, nome: r.id, aggiunti: [], presenti: [], avvisi: [e.message], daControllare: [] })));
+  for (const r of rows) esiti.push(await allineaMedicoNuovalab(r.id, { prova: !conferma, chi: req.user, cat }).catch(e => ({ id: r.id, nome: r.id, aggiunti: [], presenti: [], avvisi: [e.message], daControllare: [], tolti: [] })));
   if (conferma) { await store.q('insert into migrazioni (k) values ($1) on conflict do nothing', [ANAGRAFICA_COMANDA]); catalogCache.delete('laboratorio'); }
   res.json({ conferma, esiti, comanda: await anagraficaComanda() });
 }));
@@ -1390,9 +1390,17 @@ async function allineaMedicoNuovalab(userId, { prova = true, chi = null, cat = n
     if (!(u.albo_provincia && u.albo_numero)) { esito.avvisi.push(`${st.nome}: per creare il medico servono provincia e numero d'albo`); continue; }
     enti.push({ id: 'nuovo:' + st.id, nome: 'Nuovo medico · ' + st.nome }); esito.aggiunti.push(`${st.nome}: nuovo medico (con i dati dell'albo)`);
   }
-  for (const e of lv?.enti || []) { const st = studioDiEnte(e); if (st && !mie.some(s => normS(s.nome) === normS(st) || (studioDi(s) && normS(studioDi(s).nome) === normS(st)))) esito.daControllare.push(st); }
-  if (prova || !esito.aggiunti.length) return esito;
-  await store.setAppRole(u.id, 'laboratorio', 'user', { livello: 'MEDICO', ente: enti[0].id, enteNome: enti[0].nome, enti });
+  // sedi tolte in Gestione accessi: lo studio To Smile esce anche da Nuovalab (lì resta finché ci sono prescrizioni da firmare)
+  const mieStudi = new Set(mie.map(studioDi).filter(Boolean).map(x => normS(x.nome)));
+  const tosmile = new Set(sedi.map(studioDi).filter(Boolean).map(x => normS(x.nome)));
+  esito.tolti = [];
+  const restano = enti.filter(e => { const st = studioDiEnte(e), k = normS(st);
+    if (mie.length && st && tosmile.has(k) && !mieStudi.has(k)) { esito.tolti.push(st); return false; } return true; });
+  for (const e of restano) { const st = studioDiEnte(e); if (st && !tosmile.has(normS(st)) && !mie.some(s => normS(s.nome) === normS(st))) esito.daControllare.push(st); }
+  if (!(await anagraficaComanda())) esito.tolti = []; // prima della conferma non si toglie niente
+  const finali = esito.tolti.length ? restano : enti;
+  if (prova || (!esito.aggiunti.length && !esito.tolti.length) || !finali.length) return esito;
+  await store.setAppRole(u.id, 'laboratorio', 'user', { livello: 'MEDICO', ente: finali[0].id, enteNome: finali[0].nome, enti: finali });
   const w = await provisiona(await store.getUser(u.id), ['laboratorio']);
   if (w.length) esito.avvisi.push(...w);
   return esito;

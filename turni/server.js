@@ -32,7 +32,6 @@ const fail = (status, msg) => Object.assign(new Error(msg), { status });
 const str = (v, max = 200) => String(v ?? '').trim().slice(0, max);
 const isDate = s => /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s + 'T12:00:00Z'));
 const oggi = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' });
-const ora = () => new Date();
 
 /* ---------- accesso unico ---------- */
 const sso = require('../accessi/collega')({ app: 'turni', toLocal: localProfile });
@@ -227,7 +226,7 @@ async function statoAdmin(req) {
 }
 
 async function statoDipendente(req) {
-  const { cfg, e } = await staffDi(req.user);
+  const { e } = await staffDi(req.user);
   const base = { role: 'emp', isAdmin: req.user.role === 'admin', me: { name: req.user.name, email: req.user.email }, links: sso.links(), today: oggi() };
   if (!e) return { ...base, sconosciuto: true };
   const { rows: pr } = await db.q('select accettata_il from privacy where staff_id = $1', [e.id]);
@@ -715,7 +714,7 @@ app.get('/api/buste/:id/file', needUser, wrap(async (req, res) => {
 }));
 // Firma per ricevuta (col dito o col mouse): si salva cifrata, l'amministrazione riceve la ricevuta firmata
 app.post('/api/buste/:id/firma', needUser, wrap(async (req, res) => {
-  const { cfg, e } = await staffDi(req.user);
+  const { e } = await staffDi(req.user);
   if (!e) return bad(res, 403, 'Non sei nell\'elenco del personale.');
   const m = String(req.body.firma || '').match(/^data:image\/png;base64,([A-Za-z0-9+/=]+)$/);
   const png = m ? Buffer.from(m[1], 'base64') : null;

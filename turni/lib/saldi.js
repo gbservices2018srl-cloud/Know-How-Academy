@@ -59,7 +59,6 @@ ESTRATTO DEL CEDOLINO (solo la parte di ferie e permessi; i dati personali sono 
 // Minimizzazione dei dati: dal cedolino si tengono solo i pezzi intorno a ferie / ROL / permessi / ex festività
 // (la tabella dei residui) e si cancellano codice fiscale, IBAN, email, matricole e importi in euro.
 // Così al servizio di lettura non arrivano nome, dati anagrafici né retribuzione del dipendente.
-const CHIAVI = /^(ferie|fer\.?|rol|r\.o\.l\.?|par|permess\w*|perm\.?|festivit\w*|ex-?fest\w*|fest\.?|soppress\w*|residu\w*|res\.?|saldo|maturat\w*|matur\.?|godut\w*|god\.?|spettant\w*|spett\.?|precedent\w*|prec\.?|a\.?p\.?|anno|da|godere|ore|giorni|gg\.?|hh)$/i;
 const FORTI = /^(ferie|rol|r\.o\.l\.?|par|permess\w*|festivit\w*|ex-?fest\w*|soppress\w*|residu\w*)$/i;
 function ritaglia(testo, togli = []) {
   const parole = String(testo || '').replace(/\s+/g, ' ').trim().split(' ');

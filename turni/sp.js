@@ -20,10 +20,8 @@ const isHM = s => /^([01]\d|2[0-3]):[0-5]\d$/.test(s || '');
 const min = hm => +hm.slice(0, 2) * 60 + +hm.slice(3, 5);
 const hmDi = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 const giorniMese = m => { const out = []; for (let g = m + '-01'; g.startsWith(m); g = addG(g, 1)) out.push(g); return out; };
-const fineMese = m => giorniMese(m).pop();
 const str = (v, max = 200) => String(v ?? '').trim().slice(0, max);
 const num = v => { const n = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : null; };
-const r2 = n => Math.round(n * 100) / 100;
 const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
 const fmtG = g => { const d = new Date(g + 'T12:00:00Z'); return `${['dom', 'lun', 'mar', 'mer', 'gio', 'ven', 'sab'][d.getUTCDay()]} ${d.getUTCDate()} ${MESI[d.getUTCMonth()]}`; };
 
@@ -40,7 +38,7 @@ function decifra(r) { const d = crypto.createDecipheriv('aes-256-gcm', KEY(), r.
 
 const crescita = require('../lib/crescita');
 module.exports = function sp(app, ctx) {
-  const { db, needUser, needAdmin, wrap, bad, upload, push, sch } = ctx;
+  const { db, needAdmin, wrap, bad, upload, push, sch } = ctx;
   const q = db.q;
 
   let pronto = null;
@@ -244,7 +242,7 @@ module.exports = function sp(app, ctx) {
     parentale: 'Congedo parentale', maternita: 'Maternità', pnr: 'Permesso non retribuito' };
   // congedo parentale: preavviso minimo e al massimo metà delle ore giornaliere del contratto
   // preavviso: 5 giorni per il congedo a giornate, 2 giorni per quello a ore (art. 32, c. 3, D.Lgs. 151/2001)
-  const PREAVVISO_PARENTALE = 5, PREAVVISO_PARENTALE_ORE = 2;
+  const PREAVVISO_PARENTALE_ORE = 2; // a giornate sarebbero 5 giorni, ma qui il congedo è sempre a ore
   const LEGGE_PREAVVISO = 'art. 32, comma 3, D.Lgs. 26 marzo 2001 n. 151 (Testo unico maternità e paternità)';
   const richShape = (r, nomi) => ({ id: r.id, user: r.user_id, nome: nomi?.get(r.user_id) || '', tipo: r.tipo, tipoTxt: TIPI[r.tipo], dal: r.dal, al: r.al, oraDa: r.ora_da, oraA: r.ora_a,
     quanti: r.quanti != null ? Number(r.quanti) : null, sost: r.sost_id, sostNome: nomi?.get(r.sost_id) || '', sostOk: r.sost_ok, stato: r.stato, nota: r.nota, prot: r.prot,
