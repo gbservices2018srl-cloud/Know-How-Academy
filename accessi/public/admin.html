@@ -452,8 +452,11 @@ function card(u, homonym) {
 function sediBox(u) {
   const tutte = S.sediTutte || [], mie = u.sedi || [];
   if (u.figura === 'Medico') {
-    const nomi = mie.map(id => tutte.find(x => x.id === id)?.nome || id);
-    return `<div class="sedibox"><b>Sedi</b> <span class="muted">${nomi.length ? esc(nomi.join(', ')) : 'nessuna'} · arrivano dagli studi assegnati in Nuovalab (qui sotto)</span></div>`;
+    // medici: le sedi degli studi Nuovalab sono fisse (si cambiano in Nuovalab); le altre si aggiungono qui come per tutti
+    const man = u.sediManuali || [], nl = mie.filter(id => !man.includes(id));
+    return `<div class="sedibox"><b>Sedi</b> <span class="muted" style="font-size:13px">quelle con «Nuovalab» arrivano dagli studi assegnati qui sotto; le altre puoi aggiungerle o toglierle tu</span>
+      <div class="chips">${tutte.map(x => nl.includes(x.id) ? `<span class="schip on" title="Dallo studio Nuovalab: si cambia in Nuovalab" style="cursor:default;opacity:.85">${esc(x.nome)} · Nuovalab</span>`
+        : `<button type="button" class="schip ${mie.includes(x.id) ? 'on' : ''}" data-sede="${esc(x.id)}" data-u="${u.id}" aria-pressed="${mie.includes(x.id)}">${esc(x.nome)}</button>`).join('')}</div></div>`;
   }
   return `<div class="sedibox"><b>Sedi in cui lavora</b>${!mie.length ? ' <b style="color:var(--olive-ink)">· da scegliere</b>' : ''}
     <span class="muted" style="font-size:13px">valgono per tutte le app (Gestione ASO, Scheda personale, Misure…)</span>
@@ -839,9 +842,9 @@ async function apriSetupSede(id, avvisi) {
 }
 function apriPersoneSede(id) {
   const sede = (SEDI || S.sediTutte || []).find(x => x.id === id);
-  const lista = S.users.filter(u => u.status === 'active' && !u.owner && u.figura !== 'Medico').sort((a, b) => fullName(a).localeCompare(fullName(b), 'it'));
+  const lista = S.users.filter(u => u.status === 'active' && !u.owner).sort((a, b) => fullName(a).localeCompare(fullName(b), 'it'));
   open(`<h2>Chi lavora a ${esc(sede.nome)}</h2>
-    <p class="muted" style="margin-top:-6px">Spunta le persone: la sede si aggiunge alla loro anagrafica (le altre sedi restano). Ai medici le sedi arrivano dagli studi di Nuovalab.</p>
+    <p class="muted" style="margin-top:-6px">Spunta le persone: la sede si aggiunge alla loro anagrafica (le altre sedi restano). Ai medici si aggiunge oltre agli studi di Nuovalab.</p>
     <input class="search" id="pp-q" type="search" placeholder="Cerca per nome" style="width:100%;margin-bottom:8px">
     ${(SETUP?.sedi.find(z => z.id === id)?.persone || 0) === 0 ? `<div class="hint" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><span>Per ora non ci lavora nessuno?</span><button class="btn small" type="button" data-ns="persone" data-ns-si="1" data-ns-sede="${id}">Non serve</button></div>` : ''}
     <div class="wz-list" id="pp-l">${lista.map(u => { const gia = (u.sedi || []).includes(id); return `<label class="wz-app" data-nome="${esc(fullName(u).toLowerCase())}"><span style="display:flex;gap:8px;align-items:center;flex:1"><input type="checkbox" value="${u.id}" ${gia ? 'checked disabled' : ''}> <b>${esc(fullName(u))}</b> <small class="muted">${esc(figNome(u.figura) || '')}${gia ? ' · già qui' : ''}</small></span></label>`; }).join('')}</div>

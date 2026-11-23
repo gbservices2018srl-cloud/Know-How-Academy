@@ -97,6 +97,7 @@ async function migrate() {
     alter table users add column if not exists contratto_ok boolean not null default false;
     alter table users add column if not exists contratto_il timestamptz;
     alter table users add column if not exists profilo_il timestamptz;
+    alter table users add column if not exists sedi_manuali jsonb; -- medici: sedi aggiunte a mano oltre agli studi Nuovalab
     alter table users add column if not exists sedi jsonb; -- sedi in cui lavora (id della scheda Sedi): fonte unica per tutte le app
     alter table user_apps add column if not exists livello text;
     alter table user_apps add column if not exists ente text;
@@ -371,6 +372,7 @@ function publicUser(u, apps) {
     contratto: u.contratto_tipo ? { tipo: u.contratto_tipo, ore: u.contratto_ore != null ? Number(u.contratto_ore) : null, ok: !!u.contratto_ok } : null,
     mancanti: require('./profilo').mancanti(u),
     sedi: Array.isArray(u.sedi) ? u.sedi : [],
+    sediManuali: Array.isArray(u.sedi_manuali) ? u.sedi_manuali : [],
     ...(apps ? { apps } : {}),
   };
 }

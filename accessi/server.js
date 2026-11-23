@@ -633,7 +633,6 @@ app.patch('/api/admin/users/:id', needAdmin, wrap(async (req, res) => {
     }
   }
   if (b.sedi !== undefined) {
-    if (u.figura === 'Medico') return bad(res, 400, 'Le sedi dei medici arrivano dagli studi assegnati in Nuovalab: cambiale lì.');
     if (!Array.isArray(b.sedi)) return bad(res, 400, 'Sedi non valide.');
   }
   if (b.contrattoOk !== undefined) { if (!u.contratto_tipo && !set.contratto_tipo) return bad(res, 400, 'Il contratto non è ancora stato indicato.'); set.contratto_ok = !!b.contrattoOk; }
@@ -646,7 +645,15 @@ app.patch('/api/admin/users/:id', needAdmin, wrap(async (req, res) => {
     return bad(res, 400, 'Prima di approvare scegli le sedi in cui lavora (in alto nella scheda).');
   const keys = Object.keys(set);
   if (keys.length) await store.q(`update users set ${keys.map((k, i) => `${k} = $${i + 2}`).join(', ')} where id = $1`, [u.id, ...keys.map(k => set[k])]);
-  if (b.sedi !== undefined) await store.impostaSedi(u.id, b.sedi);
+  if (b.sedi !== undefined) {
+    if (u.figura === 'Medico') {
+      // medici: le sedi degli studi Nuovalab restano sempre; quelle scelte qui in più si ricordano come «a mano»
+      const nl = (await require('./lib/medici-sedi').sediMedici({ soloNuovalab: true })).find(m => m.id === u.id)?.sedi || [];
+      const manuali = [...new Set(b.sedi.map(String))].filter(id => !nl.includes(id));
+      await store.q('update users set sedi_manuali = $2 where id = $1', [u.id, JSON.stringify(manuali)]);
+      await store.impostaSedi(u.id, [...new Set([...nl, ...manuali])]);
+    } else await store.impostaSedi(u.id, b.sedi);
+  }
   if (keys.length) gateAzzera(u.id);
   let sent, avvisi = [];
   if (b.status !== undefined) {
@@ -944,9 +951,12 @@ app.post('/api/admin/sedi/:id/persone', needAdmin, wrap(async (req, res) => {
   let n = 0;
   for (const id of ids) {
     const u = await store.getUser(id);
-    if (!u || u.owner || u.figura === 'Medico') continue; // ai medici le sedi arrivano dagli studi Nuovalab
+    if (!u || u.owner) continue;
     const prima = (await store.sediAnagrafica(u.id)).map(e => e.id);
     if (prima.includes(s.id)) continue;
+    // medici: la sede aggiunta a mano si ricorda (gli studi Nuovalab restano a parte)
+    if (u.figura === 'Medico') { const { rows: [x] } = await store.q('select sedi_manuali from users where id = $1', [u.id]);
+      await store.q('update users set sedi_manuali = $2 where id = $1', [u.id, JSON.stringify([...new Set([...(x?.sedi_manuali || []), s.id])])]); }
     await store.impostaSedi(u.id, [...prima, s.id]); gateAzzera(u.id); n++;
   }
   res.json({ ok: true, aggiunte: n });
@@ -1334,12 +1344,12 @@ app.use((err, req, res, next) => {
   bad(res, 500, 'Errore del server. Riprova.');
 });
 
-// medici: le sedi dell'anagrafica sono quelle degli studi Nuovalab assegnati nel pannello (lì comanda l'assegnazione)
+// medici: le sedi dell'anagrafica sono quelle degli studi Nuovalab assegnati nel pannello, più quelle aggiunte a mano
 async function sediMediciInAnagrafica(userId = null) {
   const lista = await require('./lib/medici-sedi').sediMedici({ soloNuovalab: true });
-  const { rows } = await store.q(`select id, sedi from users where figura = 'Medico' and status = 'active' ${userId ? 'and id = $1' : ''}`, userId ? [userId] : []);
+  const { rows } = await store.q(`select id, sedi, sedi_manuali from users where figura = 'Medico' and status = 'active' ${userId ? 'and id = $1' : ''}`, userId ? [userId] : []);
   for (const r of rows) {
-    const nuove = lista.find(m => m.id === r.id)?.sedi || [];
+    const nuove = [...new Set([...(lista.find(m => m.id === r.id)?.sedi || []), ...(Array.isArray(r.sedi_manuali) ? r.sedi_manuali : [])])];
     const ora = Array.isArray(r.sedi) ? r.sedi : [];
     if (nuove.length && [...nuove].sort().join('|') !== [...ora].sort().join('|')) { await store.impostaSedi(r.id, nuove); require('./lib/finanzaPersone').allineaUno(r.id); }
   }
