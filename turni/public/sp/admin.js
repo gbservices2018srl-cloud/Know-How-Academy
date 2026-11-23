@@ -186,17 +186,19 @@ function registraAssenza(persone, dopo){
 async function aAzienda(m){
   const { persone, sedi } = await api('GET', '/api/sp/admin/azienda');
   const sn = new Map(sedi.map(s => [s.id, s.nome]));
-  let sede = AD.azSede || '', aperto = null;
+  let sede = AD.azSede || '', aperto = null, barAperta = '';
   const tipo = p => p.tipo === 'dip' ? 'dip' : p.tipo === 'piva' ? 'piva' : '';
   const COL = ['#4CAAAA', '#8C6898', '#C9A227', '#5B8DB8', '#D9776B', '#7BA05B', '#A0A0A0'];
   // grafico a barre orizzontali: [[etichetta, numero], …]
-  const barre = (titolo, V, nota = '') => {
+  // chi: etichetta → persone (toccando una barra si vedono i nomi)
+  const barre = (titolo, V, nota = '', chi = null) => {
     const max = Math.max(1, ...V.map(v => v[1]));
     return `<div class="card" style="margin:0;padding:14px 16px"><h3 style="margin:0 0 10px;font-size:15px">${titolo}</h3>
-      ${V.length ? V.map(([t, n], i) => `<div style="display:grid;grid-template-columns:minmax(80px,38%) 1fr 34px;gap:8px;align-items:center;margin:5px 0;font-size:13px">
+      ${V.length ? V.map(([t, n], i) => { const k = titolo + '|' + t, A = chi && barAperta === k ? chi(t) : null;
+        return `<div ${chi ? `data-bar="${esc(k)}" role="button" tabindex="0" title="Vedi chi sono"` : ''} style="display:grid;grid-template-columns:minmax(80px,38%) 1fr 34px;gap:8px;align-items:center;margin:5px 0;font-size:13px;${chi ? 'cursor:pointer' : ''}">
         <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(t)}">${esc(t)}</span>
         <span style="background:var(--surface-2,#f1f1ee);border-radius:6px;height:14px;overflow:hidden"><span style="display:block;height:100%;width:${Math.max(3, n / max * 100)}%;background:${COL[i % COL.length]};border-radius:6px"></span></span>
-        <b style="text-align:right">${n}</b></div>`).join('') : '<p class="muted small">Nessun dato.</p>'}${nota ? `<p class="muted xs" style="margin:8px 0 0">${nota}</p>` : ''}</div>`;
+        <b style="text-align:right">${n}</b></div>${A ? `<div class="small" style="background:var(--surface-2,#f6f6f4);border-radius:10px;padding:8px 10px;margin:2px 0 8px">${A.length ? A.slice().sort((a, b) => a.nome.localeCompare(b.nome, 'it')).map(p => `<div>${esc(p.nome)}${p.figura ? ` <span class="muted">· ${esc(p.figura)}</span>` : ''}</div>`).join('') : '<span class="muted">Nessuno.</span>'}</div>` : ''}`; }).join('') : '<p class="muted small">Nessun dato.</p>'}${nota ? `<p class="muted xs" style="margin:8px 0 0">${nota}</p>` : ''}</div>`;
   };
   const conteggio = (L, f, max = 0) => {
     const c = new Map(); L.forEach(p => { const k = f(p); if (k) c.set(k, (c.get(k) || 0) + 1); });
@@ -215,7 +217,7 @@ async function aAzienda(m){
     const fascia = e => e == null ? '' : e < 25 ? 'Meno di 25' : e < 35 ? '25–34' : e < 45 ? '35–44' : e < 55 ? '45–54' : '55 e più';
     const etaV = ['Meno di 25', '25–34', '35–44', '45–54', '55 e più'].map(f => [f, L.filter(p => fascia(p.eta) === f).length]).filter(x => x[1]);
     const etaMedia = L.filter(p => p.eta != null).length ? Math.round(L.filter(p => p.eta != null).reduce((s, p) => s + p.eta, 0) / L.filter(p => p.eta != null).length) : null;
-    m.innerHTML = `<h1>Azienda</h1><p class="sub">I numeri del personale, presi dalle registrazioni. Visibile solo all'amministrazione. Tocca un ruolo per vedere i nomi.</p>
+    m.innerHTML = `<h1>Azienda</h1><p class="sub">I numeri del personale, presi dalle registrazioni. Visibile solo all'amministrazione. Tocca un ruolo o una barra dei grafici per vedere i nomi.</p>
       <div class="row" style="margin-bottom:12px"><label class="f">Sede<select id="azSede"><option value="">Tutte le sedi</option>${sedi.map(s => `<option value="${s.id}" ${sede === s.id ? 'selected' : ''}>${esc(s.nome)}</option>`).join('')}</select></label></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px">
         ${[['Persone', T.tot], ['CCNL', T.dip], ['Partita IVA', T.piva], ['Senza contratto', T.no], ['Età media', etaMedia != null ? etaMedia + ' anni' : '—']].map(([t, v], i) => `<div class="card" style="margin:0;padding:12px 14px"><div class="muted xs">${t}</div><div style="font-size:24px;font-weight:800;${i === 3 && v ? 'color:var(--danger,#b3261e)' : ''}">${v}</div></div>`).join('')}
@@ -225,18 +227,20 @@ async function aAzienda(m){
         ${aperto === x.r ? `<tr><td colspan="5" class="small" style="background:var(--surface-2,#f6f6f4)">${x.c.dip ? `<div><b>CCNL:</b> ${nomi(x.A, 'dip')}</div>` : ''}${x.c.piva ? `<div><b>Partita IVA:</b> ${nomi(x.A, 'piva')}</div>` : ''}${x.c.no ? `<div><b>Senza contratto:</b> ${nomi(x.A, '')}</div>` : ''}</td></tr>` : ''}`).join('')}
       </tbody><tfoot><tr><td><b>Totale</b></td><td style="text-align:right"><b>${T.tot}</b></td><td style="text-align:right"><b>${T.dip}</b></td><td style="text-align:right"><b>${T.piva}</b></td><td style="text-align:right"><b>${T.no}</b></td></tr></tfoot></table></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:14px">
-        ${barre('Dove abitano (comune)', conteggio(L, p => p.comune, 12), senzaRes ? `${senzaRes} senza residenza indicata.` : '')}
-        ${barre('Provincia di residenza', conteggio(L, p => p.provincia))}
-        ${barre('Età', etaV, senzaEta ? `${senzaEta} senza data di nascita o codice fiscale.` : '')}
-        ${barre('Uomini e donne', conteggio(L, p => p.sesso === 'F' ? 'Donne' : p.sesso === 'M' ? 'Uomini' : ''), 'Dal codice fiscale.')}
-        ${!sede ? barre('Persone per sede', conteggio(persone.flatMap(p => (p.sedi || []).map(id => ({ k: sn.get(id) }))), x => x.k), 'Chi lavora in più sedi conta in ognuna.') : ''}
-        ${barre('Registrati per anno', conteggio(L, p => p.dal.slice(0, 4)).sort((a, b) => a[0].localeCompare(b[0])))}
+        ${barre('Dove abitano (comune)', conteggio(L, p => p.comune, 12), senzaRes ? `${senzaRes} senza residenza indicata.` : '', t => { const V = conteggio(L, p => p.comune, 12).map(v => v[0]).filter(x => x !== 'Altri'); return L.filter(p => t === 'Altri' ? p.comune && !V.includes(p.comune) : p.comune === t); })}
+        ${barre('Provincia di residenza', conteggio(L, p => p.provincia), '', t => L.filter(p => p.provincia === t))}
+        ${barre('Età', etaV, senzaEta ? `${senzaEta} senza data di nascita o codice fiscale.` : '', t => L.filter(p => fascia(p.eta) === t))}
+        ${barre('Uomini e donne', conteggio(L, p => p.sesso === 'F' ? 'Donne' : p.sesso === 'M' ? 'Uomini' : ''), 'Dal codice fiscale.', t => L.filter(p => (p.sesso === 'F' ? 'Donne' : 'Uomini') === t && p.sesso))}
+        ${!sede ? barre('Persone per sede', conteggio(persone.flatMap(p => (p.sedi || []).map(id => ({ k: sn.get(id) }))), x => x.k), 'Chi lavora in più sedi conta in ognuna. Tocca una sede per vedere chi c\'è.', t => persone.filter(p => (p.sedi || []).some(id => sn.get(id) === t))) : ''}
+        ${barre('Registrati per anno', conteggio(L, p => p.dal.slice(0, 4)).sort((a, b) => a[0].localeCompare(b[0])), '', t => L.filter(p => p.dal.slice(0, 4) === t))}
       </div>
       <p class="muted xs" style="margin-top:10px">I medici senza contratto indicato si contano a partita IVA. Chi lavora in più sedi conta una volta sola in «Tutte le sedi». Il contratto si corregge in «Persone e contratti».</p>`;
   };
   disegna();
   m.onchange = e => { if (e.target.id === 'azSede') { sede = AD.azSede = e.target.value; aperto = null; disegna(); } };
-  m.onclick = e => { const tr = e.target.closest('tr[data-r]'); if (tr) { aperto = aperto === tr.dataset.r ? null : tr.dataset.r; disegna(); } };
+  m.onclick = e => { const b = e.target.closest('[data-bar]'); if (b) { barAperta = barAperta === b.dataset.bar ? '' : b.dataset.bar; return disegna(); }
+    const tr = e.target.closest('tr[data-r]'); if (tr) { aperto = aperto === tr.dataset.r ? null : tr.dataset.r; disegna(); } };
+  m.onkeydown = e => { const b = e.target.closest('[data-bar]'); if (b && e.key === 'Enter') b.click(); };
 }
 async function aPersone(m){
   AD.persone = await api('GET', '/api/sp/admin/persone');
