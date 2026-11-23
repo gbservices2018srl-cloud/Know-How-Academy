@@ -863,7 +863,7 @@ module.exports = function sp(app, ctx) {
       fisso: rows[0].fisso_man != null ? Number(rows[0].fisso_man) : cur?.fissoNum ?? null, fissoTesto: rows[0].fisso_man != null ? '' : (cur?.fisso || '') + (cur?.fissoCond === 'senza_target_pers' ? ' · solo se non raggiungi il target personale' : ''), fissoMan: rows[0].fisso_man != null,
       variabile: rows[0].variabile_man != null ? rows[0].variabile_man : cur?.variabile || '', variabileMan: rows[0].variabile_man != null };
     const { rows: [ip] } = await q('select valori, il from sp_iprofile where user_id = $1', [uid]);
-    return { iprofile: ip ? { valori: ip.valori, il: ip.il } : null, piano: piano.nome, pianoId: piano.id, daExcel, intestazioni: piano.intestazioni, righe, situazione, livello: rows[0].livello_n, ruolo: cur?.ruolo || '', attuale: comp(cur), regole: (await sch.imp('sp_regole')) || '',
+    return { iprofile: ip ? { valori: ip.valori, il: ip.il } : null, consigli: require('./lib/consigliIprofile').consigli(ip?.valori), piano: piano.nome, pianoId: piano.id, daExcel, intestazioni: piano.intestazioni, righe, situazione, livello: rows[0].livello_n, ruolo: cur?.ruolo || '', attuale: comp(cur), regole: (await sch.imp('sp_regole')) || '',
 
       prossimo: next ? { ruolo: next.ruolo, bonus: next.bonus, ...comp(next), skill: next.skill } : null, obiettivi: ob,
       pass, inAttesa: !!pas[0], test,
