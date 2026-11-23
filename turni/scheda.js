@@ -44,7 +44,7 @@ module.exports = function scheda(app, { db, needUser, needAdmin, wrap, bad, uplo
   // Medici e loro sedi: sempre dal pannello accessi, dall'assegnazione di Nuovalab (livello "Medico" con uno o più
   // medici, ognuno legato a uno studio = una sede). Si cambia solo lì; vale anche per i medici nuovi.
   // medici e sedi: sempre dal pannello accessi (assegnazione Nuovalab), stessa fonte di Misure implantari
-  const sediMedici = () => require('../accessi/lib/medici-sedi').sediMedici();
+  const sediMedici = (o) => require('../accessi/lib/medici-sedi').sediMedici(o);
   async function orari() {
     await migrate();
     const ss = await sedi();
@@ -69,7 +69,7 @@ module.exports = function scheda(app, { db, needUser, needAdmin, wrap, bad, uplo
     if (!(await vede(req))) return bad(res, 403, 'La Scheda personale non è ancora attiva.');
     const me = await persona(req.user);
     const admin = isAdmin(req.user), medico = me.figura === MEDICO;
-    const [ss, ors, meds, br] = await Promise.all([sedi(), orari(), sediMedici(), branche()]);
+    const [ss, ors, meds, br] = await Promise.all([sedi(), orari(), sediMedici({ conIgienisti: true }), branche()]);
     // sedi della persona: un medico le ha in Branche medici, gli altri quelle assegnate nel pannello accessi
     let mieSedi = medico ? (meds.find(m => m.id === me.ssoId)?.sedi || []) : (await store.sediNote(me.ssoId)).map(e => e.id);
     if (admin && !mieSedi.length) mieSedi = ss.map(s => s.id);
@@ -126,6 +126,54 @@ module.exports = function scheda(app, { db, needUser, needAdmin, wrap, bad, uplo
     await db.q(`insert into sch_branche (medico_id, sede_id, branche, aggiornato) values ($1,$2,$3,now())
       on conflict (medico_id, sede_id) do update set branche = excluded.branche, aggiornato = now()`, [req.params.medico, req.params.sede, JSON.stringify(b)]);
     res.json({ ok: true });
+  }));
+  // PDF delle branche di una sede: tabella branche × medici e igienisti (A4 orizzontale, al massimo 9 colonne per pagina)
+  app.get('/api/scheda/branche-pdf/:sede', needAdmin, wrap(async (req, res) => {
+    const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
+    const [ss, meds, br] = await Promise.all([sedi(), sediMedici({ conIgienisti: true }), branche()]);
+    const sede = ss.find(s => s.id === req.params.sede);
+    if (!sede) return bad(res, 404, 'Sede non trovata.');
+    const ms = meds.filter(m => m.sedi.includes(sede.id));
+    const di = m => (br.find(b => b.medico_id === m.id && b.sede_id === sede.id)?.branche) || [];
+    const doc = await PDFDocument.create(), f = await doc.embedFont(StandardFonts.Helvetica), fb = await doc.embedFont(StandardFonts.HelveticaBold);
+    // i font standard non hanno tutti i caratteri: si tengono le lettere accentate italiane, il resto si toglie
+    const T = x => String(x || '').normalize('NFC').replace(/[^\x20-\x7E\u00A0-\u00FF]/g, '');
+    const W = 842, H = 595, M = 36, PRIMA = 190, PER = 9, RIGA = 25;
+    const verde = rgb(0.10, 0.45, 0.45), linea = rgb(0.85, 0.85, 0.82), grigio = rgb(0.4, 0.4, 0.4);
+    const oggi = new Date().toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' });
+    const gruppi = []; for (let i = 0; i < Math.max(ms.length, 1); i += PER) gruppi.push(ms.slice(i, i + PER));
+    const spezza = (t, font, sz, max) => { const out = []; let r = '';
+      for (const w of T(t).split(' ')) { const p = r ? r + ' ' + w : w; if (font.widthOfTextAtSize(p, sz) > max && r) { out.push(r); r = w; } else r = p; }
+      if (r) out.push(r); return out.slice(0, 2); };
+    gruppi.forEach((g, gi) => {
+      const pg = doc.addPage([W, H]);
+      pg.drawText(T(`Branche medici - ${sede.nome}`), { x: M, y: H - M - 8, size: 16, font: fb, color: verde });
+      pg.drawText(T(`To Smile - aggiornato al ${oggi}${gruppi.length > 1 ? ` - pagina ${gi + 1} di ${gruppi.length}` : ''}`), { x: M, y: H - M - 26, size: 9, font: f, color: grigio });
+      if (!g.length) { pg.drawText('Nessun medico in questa sede.', { x: M, y: H - M - 60, size: 11, font: f }); return; }
+      const col = Math.min(70, (W - 2 * M - PRIMA) / g.length), top = H - M - 50, testa = 34;
+      pg.drawRectangle({ x: M, y: top - testa, width: PRIMA + col * g.length, height: testa, color: rgb(0.95, 0.95, 0.93) });
+      pg.drawText('Branca', { x: M + 6, y: top - testa + 8, size: 9.5, font: fb });
+      g.forEach((m, i) => {
+        const cx = M + PRIMA + col * i + col / 2, righe = spezza(m.nome, fb, 8, col - 6);
+        if (m.igienista) righe.push('Igienista');
+        righe.forEach((r, k) => { const font = m.igienista && k === righe.length - 1 ? f : fb, sz = 8;
+          pg.drawText(r, { x: cx - font.widthOfTextAtSize(r, sz) / 2, y: top - 12 - k * 9.5, size: sz, font, color: k === righe.length - 1 && m.igienista ? grigio : rgb(0, 0, 0) }); });
+      });
+      BRANCHE.forEach((b, r) => {
+        const y = top - testa - RIGA * (r + 1);
+        pg.drawLine({ start: { x: M, y }, end: { x: M + PRIMA + col * g.length, y }, thickness: 0.5, color: linea });
+        pg.drawText(T(b), { x: M + 6, y: y + 8, size: 9.5, font: fb });
+        g.forEach((m, i) => { if (!di(m).includes(b)) return;
+          const cx = M + PRIMA + col * i + col / 2, cy = y + RIGA / 2;
+          pg.drawRectangle({ x: cx - 7, y: cy - 7, width: 14, height: 14, color: verde });
+          pg.drawLine({ start: { x: cx - 4, y: cy }, end: { x: cx - 1, y: cy - 3 }, thickness: 1.8, color: rgb(1, 1, 1) });
+          pg.drawLine({ start: { x: cx - 1, y: cy - 3 }, end: { x: cx + 4.5, y: cy + 3.5 }, thickness: 1.8, color: rgb(1, 1, 1) }); });
+      });
+    });
+    const buf = Buffer.from(await doc.save());
+    const nome = `Branche ${sede.nome}`.replace(/[^\w\s.-]/g, '').trim() + '.pdf';
+    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${nome}"`, 'Cache-Control': 'no-store' });
+    res.send(buf);
   }));
   // documenti: policy (anche più di una) e regolamento (una versione attiva per volta)
   app.post('/api/scheda/doc', needAdmin, upload.single('file'), wrap(async (req, res) => {

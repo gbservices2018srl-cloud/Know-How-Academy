@@ -6,10 +6,11 @@ const MEDICO = 'Medico';
 const normSede = x => String(x || '').toLowerCase().replace(/to\s*smile|studio|sede|ambulatorio/g, '').replace(/[^a-z0-9]/g, '');
 
 // [{ id, nome, sedi: [id sede] }] per tutti i medici attivi (figura Medico o livello MEDICO in Nuovalab)
-async function sediMedici({ soloNuovalab = false } = {}) {
-  const [ss, { rows }] = await Promise.all([store.listSedi(), store.q(`select u.id, u.first_name, u.last_name, u.sedi, ua.enti, ua.ente_nome from users u
+// conIgienisti: anche gli igienisti (Branche medici), con le sedi della loro anagrafica
+async function sediMedici({ soloNuovalab = false, conIgienisti = false } = {}) {
+  const [ss, { rows }] = await Promise.all([store.listSedi(), store.q(`select u.id, u.first_name, u.last_name, u.figura, u.sedi, ua.enti, ua.ente_nome from users u
     left join user_apps ua on ua.user_id = u.id and ua.app = 'laboratorio' and ua.livello = 'MEDICO'
-    where u.status = 'active' and not u.owner and (u.figura = $1 or ua.user_id is not null) order by u.last_name, u.first_name`, [MEDICO])]);
+    where u.status = 'active' and not u.owner and (u.figura = $1 or ua.user_id is not null or ($2 and u.figura = 'Igienista')) order by u.last_name, u.first_name`, [MEDICO, !!conIgienisti])]);
   const attive = ss.filter(s => s.attiva);
   const sedeDi = nome => {
     const n = normSede(String(nome || '').split(' · ').slice(1).join(' · '));
@@ -19,7 +20,7 @@ async function sediMedici({ soloNuovalab = false } = {}) {
   return rows.map(r => {
     const enti = Array.isArray(r.enti) && r.enti.length ? r.enti : r.ente_nome ? [{ nome: r.ente_nome }] : [];
     const anagrafica = soloNuovalab ? [] : (Array.isArray(r.sedi) ? r.sedi : []).filter(id => attive.some(s => s.id === id));
-    return { id: r.id, nome: `${r.first_name || ''} ${r.last_name || ''}`.trim(), sedi: [...new Set([...enti.map(e => sedeDi(e.nome)).filter(Boolean), ...anagrafica])] };
+    return { id: r.id, nome: `${r.first_name || ''} ${r.last_name || ''}`.trim(), ...(r.figura === 'Igienista' && !r.enti ? { igienista: true } : {}), sedi: [...new Set([...enti.map(e => sedeDi(e.nome)).filter(Boolean), ...anagrafica])] };
   });
 }
 
