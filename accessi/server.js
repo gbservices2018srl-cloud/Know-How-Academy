@@ -1336,7 +1336,7 @@ app.use((err, req, res, next) => {
 
 // medici: le sedi dell'anagrafica sono quelle degli studi Nuovalab assegnati nel pannello (lì comanda l'assegnazione)
 async function sediMediciInAnagrafica(userId = null) {
-  const lista = await require('./lib/medici-sedi').sediMedici();
+  const lista = await require('./lib/medici-sedi').sediMedici({ soloNuovalab: true });
   const { rows } = await store.q(`select id, sedi from users where figura = 'Medico' and status = 'active' ${userId ? 'and id = $1' : ''}`, userId ? [userId] : []);
   for (const r of rows) {
     const nuove = lista.find(m => m.id === r.id)?.sedi || [];
