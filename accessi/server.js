@@ -1322,6 +1322,17 @@ app.get(['/termini', '/termini-condizioni', '/termini-e-condizioni'], sendPage('
 // App installabile (schermata Home) + service worker che riceve le notifiche di tutte le app
 app.get('/sw.js', (req, res) => { res.set({ 'Cache-Control': 'no-cache', 'Service-Worker-Allowed': '/' }); res.type('js').sendFile(path.join(PUB, 'sw.js')); });
 app.get('/manifest.webmanifest', (req, res) => { res.set('Cache-Control', 'no-cache'); res.type('application/manifest+json').sendFile(path.join(PUB, 'manifest.webmanifest')); });
+// tutti i medici: anteprima (prova) o allineamento confermato; alla conferma prima si uniscono le sedi Nuovalab nell'anagrafica
+app.post('/api/admin/nuovalab/medici', needAdmin, wrap(async (req, res) => {
+  const conferma = !!req.body?.conferma, lab = APPS.find(a => a.key === 'laboratorio');
+  if (conferma) await sediMediciInAnagrafica();
+  const cat = await catalogo(lab, req.user, true);
+  const { rows } = await store.q(`select id from users where figura = 'Medico' and status = 'active' and not owner order by last_name, first_name`);
+  const esiti = [];
+  for (const r of rows) esiti.push(await allineaMedicoNuovalab(r.id, { prova: !conferma, chi: req.user, cat }).catch(e => ({ id: r.id, nome: r.id, aggiunti: [], presenti: [], avvisi: [e.message], daControllare: [] })));
+  if (conferma) { await store.q('insert into migrazioni (k) values ($1) on conflict do nothing', [ANAGRAFICA_COMANDA]); catalogCache.delete('laboratorio'); }
+  res.json({ conferma, esiti, comanda: await anagraficaComanda() });
+}));
 app.use('/static', express.static(path.join(PUB, 'static'), { maxAge: '7d' }));
 app.get('/favicon.ico', (req, res) => res.redirect('/static/icon.svg'));
 // Vecchi indirizzi della pagina dei riquadri
@@ -1386,17 +1397,7 @@ async function allineaMedicoNuovalab(userId, { prova = true, chi = null, cat = n
   if (w.length) esito.avvisi.push(...w);
   return esito;
 }
-// tutti i medici: anteprima (prova) o allineamento confermato; alla conferma prima si uniscono le sedi Nuovalab nell'anagrafica
-app.post('/api/admin/nuovalab/medici', needAdmin, wrap(async (req, res) => {
-  const conferma = !!req.body?.conferma, lab = APPS.find(a => a.key === 'laboratorio');
-  if (conferma) await sediMediciInAnagrafica();
-  const cat = await catalogo(lab, req.user, true);
-  const { rows } = await store.q(`select id from users where figura = 'Medico' and status = 'active' and not owner order by last_name, first_name`);
-  const esiti = [];
-  for (const r of rows) esiti.push(await allineaMedicoNuovalab(r.id, { prova: !conferma, chi: req.user, cat }).catch(e => ({ id: r.id, nome: r.id, aggiunti: [], presenti: [], avvisi: [e.message], daControllare: [] })));
-  if (conferma) { await store.q('insert into migrazioni (k) values ($1) on conflict do nothing', [ANAGRAFICA_COMANDA]); catalogCache.delete('laboratorio'); }
-  res.json({ conferma, esiti, comanda: await anagraficaComanda() });
-}));
+
 // una volta (riempie solo chi non ha ancora le sedi in anagrafica): dalla Scheda personale o dalle app per sede
 async function recuperaSedi() {
   const { rows } = await store.q(`select id from users where status <> 'disabled' and not owner and sedi is null and coalesce(figura, '') <> 'Medico'`);
