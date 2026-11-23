@@ -146,6 +146,10 @@ table.br th,table.br td{padding:8px 10px;border-bottom:1px solid var(--line);tex
 table.br th:first-child,table.br td:first-child{text-align:left;position:sticky;left:0;background:var(--surface);z-index:1;font-weight:700}
 table.br thead th{background:var(--sunken);font-size:13.5px;vertical-align:bottom}
 table.br thead th:first-child{background:var(--sunken)}
+/* branche: i nomi dei medici restano fermi in alto mentre si scorre */
+.tw-br{max-height:calc(100vh - 110px);max-height:calc(100dvh - 110px);overflow:auto;overscroll-behavior:contain}
+table.br thead th{position:sticky;top:0;z-index:2}
+table.br thead th:first-child{left:0;z-index:3}
 .cb{width:22px;height:22px;accent-color:var(--teal-ink);cursor:pointer}
 .th-acts{display:flex;gap:4px;justify-content:center;margin-top:4px}
 .th-acts button{border:0;background:none;color:var(--teal-ink);font-size:12px;font-weight:700;cursor:pointer;padding:0 2px}
@@ -414,7 +418,7 @@ async function avvio(){
 }
 </script>
 <script src="/sp/utente.js"></script>
-<script src="/sp/admin.js"></script>
+<script src="/sp/admin.js?v=br2"></script>
 <script>avvio();</script>
 </body>
 </html>

@@ -372,10 +372,10 @@ async function aBranche(m){
   const brDi = x => S2.medici.find(y => y.id === x.id)?.branche[sedeBr] || [];
   m.innerHTML = `<h1>Branche medici</h1><p class="sub">Scegli la sede e spunta le branche per cui ogni medico è abilitato. Si salva da solo. I medici vedono le loro abilitazioni in Info utili.</p>
     <div class="chips" style="margin-bottom:14px">${S2.tutteSedi.map(s => `<button class="chip" data-s="${s.id}" aria-pressed="${s.id === sedeBr}">${esc(s.nome)} · ${S2.tuttiMedici.filter(x => x.sedi.includes(s.id)).length}</button>`).join('')}</div>
-    <div class="card">${ms.length ? `<div class="tw"><table class="br"><thead><tr><th>Branca</th>${ms.map(x => `<th>${esc(x.nome)}<div class="th-acts"><button data-tutte="${x.id}">Tutte</button>·<button data-nessuna="${x.id}">Nessuna</button></div></th>`).join('')}</tr></thead>
+    <div class="card">${ms.length ? `<div class="tw tw-br"><table class="br"><thead><tr><th>Branca</th>${ms.map(x => `<th>${esc(x.nome)}<div class="th-acts"><button data-tutte="${x.id}">Tutte</button>·<button data-nessuna="${x.id}">Nessuna</button></div></th>`).join('')}</tr></thead>
       <tbody>${S2.branche.map(b => `<tr><td>${esc(b)}</td>${ms.map(x => `<td><input type="checkbox" class="cb" data-m="${x.id}" data-b="${esc(b)}" ${brDi(x).includes(b) ? 'checked' : ''} aria-label="${esc(x.nome)} – ${esc(b)}"></td>`).join('')}</tr>`).join('')}</tbody></table></div>`
       : '<p class="muted">Nessun medico in questa sede.</p>'}
-      <p class="muted small" style="margin:14px 0 0">I medici e le loro sedi arrivano in automatico dal pannello accessi: sono quelli assegnati in Nuovalab con il livello «Medico», ognuno nello studio della sua sede. Per aggiungere o togliere un medico da una sede cambialo lì.</p></div>`;
+      <p class="muted small" style="margin:14px 0 0">I medici e le loro sedi arrivano dall'anagrafica di Gestione accessi (le sedi della persona). Per aggiungere o togliere un medico da una sede cambialo lì: Nuovalab si aggiorna da solo.</p></div>`;
   const salva = async (id, lista) => {
     let med = S2.medici.find(y => y.id === id); if (!med) { med = {id, branche: {}, sedi: []}; S2.medici.push(med); }
     await api('PUT', `/api/scheda/branche/${id}/${sedeBr}`, {branche: lista}); med.branche[sedeBr] = lista;
