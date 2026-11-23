@@ -28,6 +28,9 @@
   .tsf .tsf-btn{border:0;border-radius:12px;background:#4CAAAA;color:#fff;font:inherit;font-weight:700;font-size:15px;min-height:46px;width:100%;cursor:pointer;margin-top:4px}
   .tsf a.tsf-link{font-size:13.5px;color:var(--tsf-mu);font-weight:600}
   .tsf .tsf-med{width:110px;height:110px;justify-self:center}
+  .tsf .tsf-chat{display:grid;gap:6px;text-align:left}.tsf .tsf-chi2{display:flex;gap:8px;align-items:center;font-size:14px}.tsf .tsf-chi2 small{display:block;color:var(--tsf-mu);font-size:12px}
+  .tsf .tsf-av{width:36px;height:36px;border-radius:50%;background:#4CAAAA;color:#fff;display:grid;place-items:center;font-weight:800;font-size:13px;flex:none}
+  .tsf .tsf-bolla{background:var(--tsf-oks);border-radius:4px 18px 18px 18px;padding:12px 14px;font-size:15px;line-height:1.45;margin-left:44px}.tsf .tsf-bf{font-size:18px;font-weight:800}
   @keyframes tsf-in{from{transform:scale(.7);opacity:0}to{transform:none;opacity:1}}
   @media (prefers-reduced-motion: reduce){.tsf{animation:none}}`;
   const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
@@ -61,6 +64,8 @@
       ${d.tipo === 'grado' ? `<div class="tsf-med" style="width:100px;height:94px">${insegna(d.cat, d.grado)}</div>` : ''}
       <h2>${esc(d.titolo)}</h2>
       ${d.chi ? `<p class="tsf-chi">${esc(d.chi)}</p>` : ''}
+      ${d.messaggio ? `<div class="tsf-chat"><div class="tsf-chi2"><span class="tsf-av">${esc(d.messaggio.iniziali)}</span><span><b>${esc(d.messaggio.da)}</b><small>${esc(d.messaggio.ruolo)}</small></span></div>
+        <div class="tsf-bolla">${esc(d.messaggio.apertura)}<br>${esc(d.messaggio.testo)}<br><br><span class="tsf-bf">${esc(d.messaggio.frase)}</span><br><br>${esc(d.messaggio.chiusura)}</div></div>` : ''}
       ${d.paziente ? `<div class="tsf-par"><b>${esc(d.paziente.nome)}</b><span></span><span class="v">${esc(d.paziente.dettaglio)}</span></div>` : ''}
       ${d.frase ? `<p class="tsf-frase">${esc(d.frase)}</p>` : ''}
       ${d.insegna ? `<div class="tsf-med" style="width:84px;height:79px">${insegna(d.insegna.cat, d.insegna.grado)}</div>` : ''}

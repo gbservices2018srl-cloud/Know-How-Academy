@@ -76,8 +76,8 @@ async function frase(cat, uid) {
 /* ---------- persone ---------- */
 const nomeU = u => `${u.first_name || ''} ${u.last_name || ''}`.replace(/\s+/g, ' ').trim() || u.email || '';
 async function utenti() {
-  const { rows } = await store.q(`select id, first_name, last_name, email, figura, sedi, status from users where not owner or coalesce(figura, '') <> ''`);
-  return new Map(rows.map(u => [u.id, { id: u.id, nome: nomeU(u), cognome: u.last_name || '', figura: u.figura || '', sedi: Array.isArray(u.sedi) ? u.sedi : [], attivo: u.status === 'active' }]));
+  const { rows } = await store.q(`select id, first_name, last_name, email, figura, sedi, status, cf from users where not owner or coalesce(figura, '') <> ''`);
+  return new Map(rows.map(u => [u.id, { id: u.id, nome: nomeU(u), cognome: u.last_name || '', nomeProprio: u.first_name || '', donna: /^[A-Z]{6}\d{2}[A-Z]([4-7]\d)/i.test(u.cf || ''), figura: u.figura || '', sedi: Array.isArray(u.sedi) ? u.sedi : [], attivo: u.status === 'active' }]));
 }
 const CATEGORIA_DI = { RAP: 'comm', RUL: 'comm', Medico: 'medici', REC: 'rec', ASO: 'aso' };
 
@@ -199,12 +199,17 @@ async function lodeCommerciale({ uid, anno, mese, pdc, primaDi }) {
     passo: passi.join(' · '), grande: !!(sp.superati.length || tr || (me.ticket >= 3000 && me.conc >= 50)), nome: me.nome, pos: sp.pos, superati: sp.superati };
 }
 // medico: un suo paziente ha accettato
-async function lodeMedico({ uid, anno, mese, paziente, pdc, tipo, data }) {
+async function lodeMedico({ uid, anno, mese, paziente, pdc, tipo, data, da }) {
   const dopo = await medici(anno, mese), me = dopo.find(x => x.id === uid); if (!me) return null;
   const prima = dopo.map(x => x.id === uid ? { ...x, acc: x.acc - 1, conc: (x.acc - 1) / x.visite * 100 } : x).sort((a, b) => b.inGara - a.inGara || b.conc - a.conc || b.visite - a.visite);
   const sp = sorpassi(prima, dopo, uid), s = stelleConc(me.conc), primo = sp.pos === 1 && me.inGara;
-  return { tipo: 'medici', titolo: 'Il tuo paziente ha accettato!', chi: `Complimenti, ${me.nome}!`, frase: await frase('medici', uid),
-    paziente: { nome: paziente, dettaglio: [tipo, pdc ? fE(pdc) : '', data ? 'visita del ' + data.split('-').reverse().join('/') : ''].filter(Boolean).join(' · ') },
+  const fr = await frase('medici', uid);
+  // la lode arriva come messaggio del commerciale che ha chiuso il preventivo
+  const messaggio = da ? { da: da.nome, ruolo: [da.figura, da.sede].filter(Boolean).join(' · '), iniziali: da.nome.split(/\s+/).map(x => x[0] || '').join('').slice(0, 2).toUpperCase(),
+    apertura: `Ciao ${da.dott}, sono ${da.nomeProprio}! 🎉`, testo: `Abbiamo chiuso il piano di cura di ${paziente}${tipo || pdc ? ` (${[tipo, pdc ? fE(pdc) : ''].filter(Boolean).join(' · ')})` : ''} dopo la tua visita${data ? ' del ' + data.split('-').reverse().slice(0, 2).join('/') : ''}.`,
+    frase: fr, chiusura: 'Grazie, continuiamo così!' } : null;
+  return { tipo: 'medici', titolo: 'Il tuo paziente ha accettato!', chi: messaggio ? '' : `Complimenti, ${me.nome}!`, frase: messaggio ? '' : fr, messaggio,
+    paziente: messaggio ? null : { nome: paziente, dettaglio: [tipo, pdc ? fE(pdc) : '', data ? 'visita del ' + data.split('-').reverse().join('/') : ''].filter(Boolean).join(' · ') },
     sorpasso: sp.superati.length && me.inGara ? `Hai superato ${sp.superati.join(' e ')}: ora sei ${sp.pos}° nella classifica medici!` : '',
     posizione: me.inGara ? `Sei ${sp.pos}° nella classifica medici di ${MESI[mese - 1]}` : `Ancora ${REGOLE.minVisite - me.visite} visite per entrare in gara per la medaglia d'oro`,
     parametri: [{ nome: `La tua concretizzazione di ${MESI[mese - 1]}`, stelle: s, valore: `${pc(me.conc)} · ${nAcc(me.acc)} su ${me.visite} visite`, ok: primo,
@@ -247,12 +252,16 @@ async function preventivoAccettato(p, salvatoDa) {
       }
     }
     const parti = String(p.paziente || '').trim().split(/\s+/), breve = parti.length > 1 ? `${titolo(parti[0])} ${parti[1][0]}.` : titolo(parti[0]);
+    const U = await utenti(), cm = U.get(p.commerciale_id);
+    const da = cm ? { nome: cm.nome, nomeProprio: cm.nomeProprio || cm.nome.split(' ')[0], figura: cm.figura, sede: titolo(p.sede_nome || '') } : null;
     for (const mid of (Array.isArray(p.medici_ids) ? p.medici_ids : [])) {
-      const l = await lodeMedico({ uid: mid, anno, mese, paziente: titolo(p.paziente), pdc, tipo: titolo(p.tipo_pdc), data: p.data });
+      const md = U.get(mid), dott = md ? `${md.donna ? 'Dott.ssa' : 'Dott.'} ${titolo(md.cognome || md.nome)}` : 'Dottore';
+      const l = await lodeMedico({ uid: mid, anno, mese, paziente: titolo(p.paziente), pdc, tipo: titolo(p.tipo_pdc), data: p.data, da: da && { ...da, dott } });
       if (!l) continue;
       const fid = await festaDaAprire(mid, l);
       // sul telefono bloccato solo cognome e iniziale; il nome intero si vede aprendo l'app
-      avvisa([mid], { title: 'Il tuo paziente ha accettato! 🎉', body: `${breve} ha accettato il piano di cura dopo la tua visita. Tocca per vedere.`, url: URL_C + '?festa=' + fid });
+      avvisa([mid], da ? { title: `${da.nomeProprio} · CRM To Smile`, body: `Ciao ${dott}, abbiamo chiuso ${breve} dopo la tua visita! 🎉 Tocca per leggere`, url: URL_C + '?festa=' + fid }
+        : { title: 'Il tuo paziente ha accettato! 🎉', body: `${breve} ha accettato il piano di cura dopo la tua visita. Tocca per vedere.`, url: URL_C + '?festa=' + fid });
       bacheca('medici', `${l.nome}: un paziente ha accettato dopo la sua visita 🎉`, mid);
     }
   } catch (e) { console.warn('Classifiche (preventivo accettato):', e.message); }
