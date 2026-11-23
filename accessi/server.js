@@ -1326,7 +1326,7 @@ app.get('/manifest.webmanifest', (req, res) => { res.set('Cache-Control', 'no-ca
 app.post('/api/admin/nuovalab/medici', needAdmin, wrap(async (req, res) => {
   const conferma = !!req.body?.conferma, lab = APPS.find(a => a.key === 'laboratorio');
   if (conferma) await sediMediciInAnagrafica();
-  const cat = await catalogo(lab, req.user, true);
+  const cat = await catalogo(lab, req.user, true).catch(e => { throw Object.assign(new Error(e.status ? e.message : 'Nuovalab non risponde in questo momento: riprova tra poco.'), { status: 502 }); });
   const { rows } = await store.q(`select id from users where figura = 'Medico' and status = 'active' and not owner order by last_name, first_name`);
   const esiti = [];
   for (const r of rows) esiti.push(await allineaMedicoNuovalab(r.id, { prova: !conferma, chi: req.user, cat }).catch(e => ({ id: r.id, nome: r.id, aggiunti: [], presenti: [], avvisi: [e.message], daControllare: [] })));
