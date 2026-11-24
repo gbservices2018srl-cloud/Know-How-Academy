@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Collegamenti · To Smile</title>
+<link rel="stylesheet" href="/fonts/tosmile.css?f=figtree:400,600,700,800">
+<style>
+:root{--bg:#FBFBF8;--card:#fff;--fg:#2B3033;--muted:#6B7276;--line:#e1e7e5;--teal:#2b8a83;--teal-soft:#e2f2f0;--ok:#1e8a5a;--ok-soft:#e3f4ec;--warn:#b45309;--warn-soft:#fdecd3;--bad:#b42318}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:Figtree,system-ui,sans-serif;font-size:14.5px}
+.wrap{max-width:760px;margin:0 auto;padding:18px max(16px,env(safe-area-inset-left,0px)) 60px}
+a{color:var(--teal);font-weight:700}
+h1{font-size:22px;margin:12px 0 4px}h2{font-size:16px;margin:0}
+.small{font-size:12.5px;color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:12px}
+.head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.chip{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700}
+.ok{background:var(--ok-soft);color:var(--ok)}.warn{background:var(--warn-soft);color:var(--warn)}.off{background:var(--line);color:var(--muted)}
+.f{display:grid;gap:4px;margin-top:10px}.f label{font-size:12px;font-weight:700;color:var(--muted)}
+input{font:inherit;padding:8px 10px;border:1px solid #d8dedc;border-radius:8px;background:#fff;color:var(--fg);width:100%}
+.two{display:grid;grid-template-columns:1fr 1.4fr;gap:10px}@media (max-width:560px){.two{grid-template-columns:1fr}}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.btn{border:1px solid var(--line);background:transparent;color:var(--fg);border-radius:8px;padding:7px 12px;font:inherit;font-weight:700;cursor:pointer}
+.btn.pri{background:var(--teal);border-color:var(--teal);color:#fff}.btn.sm{padding:3px 9px;font-size:12.5px}
+code{background:var(--teal-soft);padding:2px 6px;border-radius:6px;font-size:12.5px;word-break:break-all}
+.note{background:var(--teal-soft);border-radius:10px;padding:10px 12px;margin-top:10px;font-size:13.5px;line-height:1.6}
+.msg{font-weight:700;margin-top:8px;min-height:18px}.msg.err{color:var(--bad)}.msg.ok{color:var(--ok)}
+.pg{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/">← Le mie app</a>
+  <h1>Collegamenti</h1>
+  <p class="small">Le chiavi dei tuoi servizi. Valgono solo per la tua azienda: To Smile e gli altri clienti non le vedono e non vedono i tuoi dati. Una volta salvate, le chiavi non si rileggono più: si possono solo sostituire.</p>
+
+  <div class="card" id="meta">
+    <div class="head"><h2>Meta · lead da Facebook e Instagram</h2><span class="chip off" id="m-stato">…</span></div>
+    <p class="small">I contatti che lasciano i tuoi moduli pubblicitari arrivano da soli nel tuo CRM, in «Gestione lead» (sede presa dal modulo o dal nome della campagna).</p>
+    <div id="m-nocrm" class="note" hidden>Per ricevere i lead serve l'app <b>CRM Commerciale</b>: chiedila a To Smile.</div>
+    <div id="m-form">
+      <div class="note"><b>1.</b> Nella tua app su Meta (developers.facebook.com → la tua app → Webhooks → Page → «leadgen») inserisci:<br>
+        Indirizzo: <code id="m-url"></code> <button class="btn sm" type="button" data-copia="m-url">Copia</button><br>
+        Token di verifica: <code id="m-ver"></code> <button class="btn sm" type="button" data-copia="m-ver">Copia</button></div>
+      <div class="f"><label for="m-sec">2. Chiave segreta dell'app (App Secret) <span id="m-sec-ok" class="chip ok" hidden>salvata ✓</span></label><input id="m-sec" type="password" autocomplete="off" placeholder="incolla qui (lascia vuoto per tenere quella salvata)"></div>
+      <div class="f"><label>3. Le tue pagine Facebook collegate</label><div id="m-pagine"></div></div>
+      <div class="two">
+        <div class="f"><label for="m-pid">ID della pagina</label><input id="m-pid" inputmode="numeric" autocomplete="off" placeholder="es. 1234567890"></div>
+        <div class="f"><label for="m-tok">Token della pagina</label><input id="m-tok" type="password" autocomplete="off" placeholder="incolla qui"></div>
+      </div>
+      <div class="row"><button class="btn pri" type="button" id="m-salva">Salva</button><button class="btn" type="button" id="m-prova">Prova il collegamento</button><button class="btn" type="button" id="m-via">Scollega tutto</button></div>
+      <div class="msg" id="m-msg" role="status"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="head"><h2>AlfaDocs</h2><span class="chip off">in preparazione</span></div>
+    <p class="small">Il collegamento con il gestionale AlfaDocs (pazienti e appuntamenti nel tuo CRM) è in preparazione: quando è pronto qui potrai inserire la tua chiave.</p>
+  </div>
+
+  <div class="card">
+    <div class="head"><h2>Nuovalab</h2><span class="chip off">non attivo</span></div>
+    <p class="small">Prescrizioni e lavori con i tuoi laboratori e i tuoi medici, in un archivio solo tuo, separato da tutti gli altri. Per attivarlo contatta To Smile.</p>
+  </div>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const msg = (t, ok) => { const m = $('#m-msg'); m.textContent = t; m.className = 'msg ' + (ok ? 'ok' : 'err'); };
+async function api(m, u, b) {
+  const r = await fetch(u, { method: m, headers: b ? { 'Content-Type': 'application/json' } : {}, body: b ? JSON.stringify(b) : undefined });
+  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Errore, riprova.'); return j;
+}
+function disegna(s) {
+  const m = s.meta;
+  $('#m-nocrm').hidden = s.crm; $('#m-form').hidden = !s.crm;
+  $('#m-stato').textContent = m.pronto ? 'collegato ✓' : (m.secret || m.pagine.length ? 'da completare' : 'non collegato');
+  $('#m-stato').className = 'chip ' + (m.pronto ? 'ok' : m.secret || m.pagine.length ? 'warn' : 'off');
+  $('#m-url').textContent = m.webhook; $('#m-ver').textContent = m.verify; $('#m-sec-ok').hidden = !m.secret;
+  $('#m-pagine').innerHTML = m.pagine.length ? m.pagine.map(id => `<div class="pg"><span>Pagina <b>${esc(id)}</b> <span class="small">(token salvato)</span></span><button class="btn sm" type="button" data-togli="${esc(id)}">Togli</button></div>`).join('') : '<p class="small" style="margin:4px 0">Nessuna pagina ancora: aggiungila qui sotto.</p>';
+}
+const carica = () => api('GET', '/api/collegamenti').then(disegna).catch(e => msg(e.message));
+document.addEventListener('click', async e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.copia) { try { await navigator.clipboard.writeText($('#' + b.dataset.copia).textContent); b.textContent = 'Copiato ✓'; } catch { b.textContent = 'Selezionalo e copialo'; } return; }
+  if (b.id === 'm-salva') {
+    b.disabled = true;
+    try { disegna(await api('PUT', '/api/collegamenti/meta', { secret: $('#m-sec').value, pagine: [{ id: $('#m-pid').value, token: $('#m-tok').value }] }));
+      $('#m-sec').value = ''; $('#m-pid').value = ''; $('#m-tok').value = ''; msg('Salvato. Ora premi «Prova il collegamento».', true); }
+    catch (x) { msg(x.message); } b.disabled = false;
+  }
+  if (b.dataset.togli) {
+    if (b.dataset.ok !== '1') { b.dataset.ok = '1'; b.textContent = 'Confermi?'; return; }
+    try { disegna(await api('PUT', '/api/collegamenti/meta', { togli: [b.dataset.togli] })); msg('Pagina tolta.', true); } catch (x) { msg(x.message); }
+  }
+  if (b.id === 'm-via') {
+    if (b.dataset.ok !== '1') { b.dataset.ok = '1'; b.textContent = 'Confermi? Non arriveranno più lead'; return; }
+    try { disegna(await api('PUT', '/api/collegamenti/meta', { scollega: true })); msg('Scollegato: le chiavi sono state tolte. I lead già arrivati restano nel CRM.', true); } catch (x) { msg(x.message); }
+    b.dataset.ok = ''; b.textContent = 'Scollega tutto';
+  }
+  if (b.id === 'm-prova') {
+    b.disabled = true; msg('Provo…', true);
+    try { const r = await api('POST', '/api/collegamenti/meta/prova', {});
+      if (!r.esiti.length) msg('Aggiungi almeno una pagina con il suo token.');
+      else msg(r.esiti.map(x => x.ok ? `Pagina «${x.nome}»: OK` : `Pagina ${x.id}: ${x.errore}`).join(' · ') + (r.secret ? '' : ' · manca la chiave segreta dell’app'), r.esiti.every(x => x.ok) && r.secret); }
+    catch (x) { msg(x.message); } b.disabled = false;
+  }
+});
+carica();
+</script>
+</body>
+</html>

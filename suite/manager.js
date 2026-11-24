@@ -61,7 +61,7 @@ const haMotore = c => !!c.accesso_suite || conAppSuite(c);
 function avvia(c) {
   if (motori.get(c.slug)?.proc || !haMotore(c)) return;
   const porta = motori.get(c.slug)?.porta || prossimaPorta++;
-  const env = { ...process.env, SUITE_ATTIVA: '', ...S.envCliente({ ...c, leggera: !conAppSuite(c) }, porta), SUITE_FINANZA_URL: FIN_URL(), BACKUP_TOKEN: require('../lib/esporta').chiaveCliente(c.slug) };
+  const env = { ...process.env, SUITE_ATTIVA: '', ...S.envCliente({ ...c, leggera: !conAppSuite(c) }, porta), SUITE_FINANZA_URL: FIN_URL(), SUITE_CHIAVI_KEY: crypto.createHmac('sha256', process.env.SSO_API_KEY || 'x').update('chiavi:' + c.slug).digest('hex'), BACKUP_TOKEN: require('../lib/esporta').chiaveCliente(c.slug) };
   const proc = fork(path.join(__dirname, '..', 'index.js'), [], { env, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
   const m = { proc, porta, pronto: false, riavvii: motori.get(c.slug)?.riavvii || 0, avviato: Date.now(), ultimo: Date.now() };
   motori.set(c.slug, m);

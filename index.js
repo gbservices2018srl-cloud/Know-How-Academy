@@ -170,6 +170,7 @@ function motoreCliente(req, res) {
   await compensi.start();
   await classifiche.start();
   await suite.start();
+  await require('./suite/collegamenti').carica(); // cliente della suite: le sue chiavi (Meta) diventano le impostazioni del suo CRM
   { // quali fornitori esterni sono attivi (solo i nomi, mai le chiavi): serve per l'elenco dei fornitori nella privacy
     const ai = require('./lib/ai'), p = ai.providerInfo(), e = ai.embedInfo();
     console.log(`Fornitori esterni attivi: assistente Protocolli = ${p.ok ? p.provider + ' (' + p.model + ')' : 'nessuno'}, ricerca per significato = ${e.ok ? e.provider : 'nessuna'}, `
