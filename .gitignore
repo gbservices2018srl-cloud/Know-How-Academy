@@ -6,3 +6,4 @@ build/
 # mai dati dei pazienti nel codice
 *.xlsx
 *.csv
+package-lock.json
