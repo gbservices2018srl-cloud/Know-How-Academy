@@ -3,32 +3,65 @@
 const DILAZ = 'PAGAMENTO DILAZIONATO';
 const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
 // gennaio–luglio 2026: ogni studio aveva un solo commerciale e i preventivi vanno a lui, qualunque cosa dica il CRM
-const UNICO_2026 = { cabras: 'Luca', elmas: 'Guarino', dolianova: 'Veronica', capoterra: 'Laura', maracalagonis: 'Alessandro Zoppi', sardara: 'Sardara (studio)' };
+// (a Cabras è Luca Annunziata, non Luca Concas: novembre 2026)
+const UNICO_2026 = { cabras: 'Luca Annunziata', elmas: 'Guarino', dolianova: 'Veronica', capoterra: 'Laura', maracalagonis: 'Alessandro Zoppi', sardara: 'Sardara (studio)' };
 const ALIAS = { FRATTINI: 'FRATINI', CCAMPUS: 'CAMPUS', 'GV MANCA': 'MANCA', 'MANCA GV': 'MANCA', GV: 'MANCA', 'PINNA ALESSANDRO': 'PINNA', DIAS: 'DEIAS' };
-const SCARTA = new Set(['IGIENISTA', 'NESSUNO', 'VARI', '?', '0', '--', '//', 'OK', 'SETTEMBRE', 'OTTOBRE']);
 
 const r2 = x => Math.round(x * 100) / 100;
 const cap = s => { s = String(s || '').trim(); return s ? s[0].toUpperCase() + s.slice(1).toLowerCase() : s; };
 const titolo = s => String(s || '').toLowerCase().replace(/(^|[\s'’-])(\S)/g, (m, a, b) => a + b.toUpperCase());
 const normSede = x => String(x || '').toLowerCase().replace(/to\s*smile|studio|sede|ambulatorio/g, '').replace(/[^a-z0-9]/g, '');
 
-// medici dalla colonna "Medico": maiuscolo, alias, più medici con / o +, scarti
-function medici(raw) {
-  const o = String(raw || '').trim().toUpperCase();
-  if (!o || /\d/.test(o) || /PAG|DILAZ|RECALL|ORAL/.test(o)) return [];
-  const out = [];
-  for (let p of o.split(/[\/+]/)) {
-    p = p.trim().replace(/\s+/g, ' '); p = ALIAS[p] || p;
-    if (!p || SCARTA.has(p) || p.split(' ').length > 2) continue;
-    if (!out.includes(p)) out.push(p);
+// Medici: gli unici medici sono quelli registrati nell'app (anagrafica, figura Medico; Liste → Commerciali e medici per sede).
+// Righe inserite nell'app: il medico scelto (medici_ids). Righe del vecchio foglio: il testo della colonna "Medico" si confronta
+// con i medici registrati (cognome; con due medici dello stesso cognome decide il nome scritto, poi la sede della visita).
+// Ciò che non corrisponde a un medico registrato non è un medico e non entra nella classifica.
+const parole = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z]+/g, ' ').trim().split(' ').filter(Boolean);
+// distanza di una lettera (errori di battitura nel vecchio foglio: Frattini/Fratini, Ccampus/Campus)
+function quasi(a, b) {
+  if (a === b) return true;
+  if (Math.min(a.length, b.length) < 5 || Math.abs(a.length - b.length) > 1) return false;
+  let i = 0, j = 0, diff = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i++; j++; continue; }
+    if (++diff > 1) return false;
+    if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; }
   }
-  return out.map(titolo);
+  return diff + (a.length - i) + (b.length - j) <= 1;
+}
+// reg: [{ id, nome, cognome, sedi: [id sede] }] → { ids: [...], ambigui: [testo] }
+function trovaMedici(raw, sedeId, reg) {
+  const w = parole(raw).map(x => ALIAS[x] || x);
+  if (!w.length) return { ids: [], ambigui: [] };
+  const ha = x => w.some(y => quasi(x, y));
+  const cand = reg.filter(d => { const c = parole(d.cognome); return c.length && c.every(ha); });
+  const perCog = new Map();
+  for (const d of cand) { const k = parole(d.cognome).join(' '); if (!perCog.has(k)) perCog.set(k, []); perCog.get(k).push(d); }
+  const ids = [], ambigui = [];
+  for (const [cog, ds] of perCog) {
+    let scelti = ds;
+    if (scelti.length > 1) { const n = scelti.filter(d => parole(d.nome).some(x => w.includes(x))); if (n.length) scelti = n; }
+    if (scelti.length > 1) { const s = scelti.filter(d => (d.sedi || []).includes(sedeId)); if (s.length) scelti = s; }
+    if (scelti.length === 1) ids.push(scelti[0].id); else ambigui.push(cog);
+  }
+  return { ids: [...new Set(ids)], ambigui };
 }
 
 // righe del database → dataset senza dati personali (come in "Chiedi al CRM")
 // canaleDi: marketing grezzo → canale uniformato (dalla micro app Liste)
-function dataset(rows, canaleDi, alias = c => c) {
+// opz.reg = medici registrati [{ id, nome, cognome, sedi }], opz.medId(id) → nome in classifica (Cognome, o Cognome Nome se il cognome è di più medici)
+function dataset(rows, canaleDi, alias = c => c, opz = {}) {
   const preventivi = [], med = [], dilazionati = [], opportunita = [];
+  const ctrl = { da_settembre: 0, con_medico: 0, senza_medico: 0, condivisi: 0, non_riconosciuti: new Map() };
+  const reg = opz.reg || [], nomeId = opz.medId || (() => null);
+  const mediciDi = (r, conta) => {
+    let ids = (Array.isArray(r.medici_ids) ? r.medici_ids : []).filter(id => nomeId(id));
+    if (!ids.length && String(r.medico || '').trim()) {
+      const t = trovaMedici(r.medico, r.sede_id, reg); ids = t.ids;
+      if (conta && !ids.length) { const k = String(r.medico).trim().toUpperCase(); ctrl.non_riconosciuti.set(k, (ctrl.non_riconosciuti.get(k) || 0) + 1); }
+    }
+    return [...new Set(ids.map(nomeId))];
+  };
   for (const r of rows) {
     const sede = r.sede_nome, mese = Number(r.mese), anno = Number(r.anno), tri = Math.ceil(mese / 3);
     const pdc = Number(r.pdc) || 0, pagRaw = Number(r.pagato) || 0;
@@ -40,16 +73,21 @@ function dataset(rows, canaleDi, alias = c => c) {
     const canale = canaleDi(mk) || (mk ? cap(mk) : 'Non indicato');
     // commerciale unico (gennaio–luglio 2026): se in Liste quel nome è collegato a una persona, si usa la persona
     let unico = anno === 2026 && mese <= 7 ? UNICO_2026[normSede(sede)] : null;
-    if (unico) { const m = alias(unico.toUpperCase()); if (m && m !== unico.toUpperCase()) unico = titolo(m); }
+    if (unico) { const m = alias(unico.toUpperCase(), r.sede_id); if (m && m !== unico.toUpperCase()) unico = titolo(m); }
     const venditore = unico || titolo(r.commerciale) || 'Non indicato';
-    const meds = medici(r.medico);
-    preventivi.push({ sede, anno, mese, trimestre: tri, venditore, canale, tipologia, pdc, accettato: acc, pagato: acc ? pagRaw : 0 });
-    opportunita.push({ sede, anno, mese, trimestre: tri, data: r.data || '', tipologia, canale_crm: mk || 'N/D', pdc, esito: r.esito || 'vuoto', accettato: acc,
-      pagato: acc ? pagRaw : 0, tipo_pdc: String(r.tipo_pdc || '').toUpperCase(), venditore_crm: String(r.commerciale || '').toUpperCase(), medici: meds.join(' / ') });
     // il medico è indicato da settembre 2026
-    if (anno > 2026 || mese >= 9) for (const m of meds) med.push({ sede, anno, mese, trimestre: tri, medico: m, tipologia, pdc, accettato: acc, pagato: acc ? pagRaw : 0, condiviso: meds.length > 1 ? 1 : 0 });
+    const conMedico = anno > 2026 || (anno === 2026 && mese >= 9);
+    const meds = mediciDi(r, conMedico);
+    preventivi.push({ sede, anno, mese, trimestre: tri, venditore, canale, tipologia, pdc, accettato: acc, pagato: acc ? pagRaw : 0 });
+    opportunita.push({ sede, anno, mese, trimestre: tri, data: r.data || '', tipologia, canale_crm: mk || 'N/D', dettaglio_canale: String(r.canale_info || '').toUpperCase(), pdc, esito: r.esito || 'vuoto', accettato: acc,
+      pagato: acc ? pagRaw : 0, tipo_pdc: String(r.tipo_pdc || '').toUpperCase(), venditore_crm: String(r.commerciale || '').toUpperCase(), medici: meds.join(' / ') });
+    if (conMedico) {
+      ctrl.da_settembre++; if (meds.length) ctrl.con_medico++; else ctrl.senza_medico++; if (meds.length > 1) ctrl.condivisi++;
+      for (const m of meds) med.push({ sede, anno, mese, trimestre: tri, medico: m, tipologia, pdc, accettato: acc, pagato: acc ? pagRaw : 0, condiviso: meds.length > 1 ? 1 : 0 });
+    }
   }
-  return { preventivi, medici: med, dilazionati, opportunita };
+  const controllo_medici = { ...ctrl, non_riconosciuti: [...ctrl.non_riconosciuti].sort((a, b) => b[1] - a[1]).slice(0, 40).map(([nome, n]) => ({ nome, n })) };
+  return { preventivi, medici: med, dilazionati, opportunita, controllo_medici };
 }
 
 /* ---------- KPI della dashboard (stesse funzioni della vecchia pagina) ---------- */
@@ -127,9 +165,13 @@ function kpiMed(M) {
   }
   return [...agg.values()].map(({ sediSet, ...a }) => ({ ...a, sedi: Object.keys(sediSet).sort().join(', '), perc: a.presentati ? a.accettati / a.presentati : null, ticket: a.accettati ? a.pagato / a.accettati : null }));
 }
-function medieMed(KM, K) {
+// confronto dei medici: % accettazione e ticket della rete nei soli mesi in cui il medico è indicato (da settembre 2026),
+// non dell'anno intero (prima i medici erano confrontati anche con gennaio–agosto, dove il medico non c'è).
+function medieMed(KM, P) {
   return ['tutti', 'no0'].map(modo => {
-    const anno = K.find(r => r.key === `rete|anno|${modo}|Rete`);
+    const rs = P.filter(r => (r.anno > 2026 || (r.anno === 2026 && r.mese >= 9)) && (modo === 'tutti' || r.pdc >= 200));
+    const acc = rs.reduce((a, r) => a + r.accettato, 0), pag = rs.reduce((a, r) => a + r.pagato, 0);
+    const anno = { perc: rs.length ? acc / rs.length : null, ticket: acc ? pag / acc : null };
     const base = KM.filter(r => r.modo === modo && r.sede === 'Tutti');
     const per = pre => base.filter(r => pre === 'anno' ? r.periodo === 'anno' : r.periodo[0] === pre);
     const m = per('m'), q = per('q'), y = per('anno');
@@ -141,7 +183,7 @@ function medieMed(KM, K) {
 }
 function dashboard(ds) {
   const K = kpi(ds.preventivi), KM = kpiMed(ds.medici);
-  return { kpi: K, medie: medie(K), dilaz_studi: dilazStudi(ds.dilazionati), kpi_med: KM, medie_med: medieMed(KM, K) };
+  return { kpi: K, medie: medie(K), dilaz_studi: dilazStudi(ds.dilazionati), kpi_med: KM, medie_med: medieMed(KM, ds.preventivi), controllo_medici: ds.controllo_medici };
 }
 
 /* ---------- strumenti per "Chiedi al CRM" (stessi della vecchia pagina) ---------- */
@@ -189,7 +231,7 @@ const DESC = {
   preventivi: 'Un preventivo presentato per riga (esclusi i pagamenti dilazionati). È la base dei KPI della dashboard. Campi: sede, anno, mese (1-12), trimestre, venditore (gennaio-luglio 2026 = commerciale unico dello studio; poi quello indicato; "Non indicato" se manca), canale (uniformato), tipologia, pdc (€ piano di cura), accettato (0/1), pagato (€, solo se accettato).',
   medici: 'Un preventivo per medico che ha fatto la visita, da settembre 2026. Una visita con più medici compare una volta per ognuno (condiviso=1). Campi: sede, anno, mese, trimestre, medico, tipologia, pdc, accettato, pagato, condiviso.',
   dilazionati: 'Rate di pagamenti dilazionati: sede, anno, mese, pagato. Non entrano nei KPI; servono solo per il fatturato totale (incassato + dilazionati).',
-  opportunita: 'Riga per riga (esclusi dilazionati), per analisi di dettaglio: sede, anno, mese, trimestre, data (AAAA-MM-GG), tipologia, canale_crm (marketing grezzo), pdc, esito (A accettato, S sospeso, R rifiutato), accettato, pagato, tipo_pdc, venditore_crm, medici.',
+  opportunita: 'Riga per riga (esclusi dilazionati), per analisi di dettaglio: sede, anno, mese, trimestre, data (AAAA-MM-GG), tipologia, canale_crm (marketing grezzo), dettaglio_canale (nome del partner per CONVENZIONI, nome dell\'evento per EVENTO), pdc, esito (A accettato, S sospeso, R rifiutato), accettato, pagato, tipo_pdc, venditore_crm, medici.',
 };
 const NOMI_DS = ['preventivi', 'medici', 'dilazionati', 'opportunita'];
 function strumenti(DATA) {
@@ -241,4 +283,4 @@ function strumenti(DATA) {
   ];
 }
 
-module.exports = { DILAZ, MESI, medici, dataset, dashboard, strumenti, normSede, cap, titolo };
+module.exports = { DILAZ, MESI, trovaMedici, dataset, dashboard, strumenti, normSede, cap, titolo };

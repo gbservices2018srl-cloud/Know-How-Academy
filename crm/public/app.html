@@ -245,7 +245,10 @@ const fPct = x => x == null ? '—' : (x * 100).toLocaleString('it-IT', { minimu
 const fN = x => x == null ? '—' : Number(x).toLocaleString('it-IT', { maximumFractionDigits: 1 });
 const fD = s => s ? s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4) : '—';
 const ESITI = { A: 'Accettato', S: 'Sospeso', R: 'Rifiutato' };
-const SEZ = [['preventivi', 'Inserimento Preventivi'], ['richiami', 'Richiami commerciali'], ['dashboard', 'Dashboard dati'], ['chiedi', 'Chiedi al CRM'], ['liste', 'Liste']];
+const SEZ = [['preventivi', 'Inserimento Preventivi'], ['richiami', 'Richiami commerciali'], ['dashboard', 'Dashboard dati'], ['chiedi', 'Chiedi al CRM'], ['lead', 'Gestione lead'], ['liste', 'Liste']];
+// canali con un'informazione obbligatoria (come sul server): CONVENZIONI → partner, EVENTO → nome dell'evento
+const infoCanale = mk => /^CONVENZION[EI]$/.test(mk || '') ? { lab: 'Partner della convenzione', breve: 'Convenzione', ph: 'Nome del partner (es. azienda, associazione)' }
+  : /^EVENT[OI]$/.test(mk || '') ? { lab: "Nome dell'evento", breve: 'Evento', ph: "Nome dell'evento" } : null;
 
 const S = { st: null, v: null };
 async function boot() {
@@ -262,7 +265,7 @@ function go(v, replace) {
   const u = new URL(location.href); u.searchParams.set('v', v);
   history[replace ? 'replaceState' : 'pushState']({ v }, '', u);
   $('#tabs').innerHTML = SEZ.filter(([k]) => S.st.perm[k]).map(([k, t]) => `<button class="tab ${k === v ? 'on' : ''}" data-go="${k}">${esc(t)}</button>`).join('');
-  ({ preventivi: vPrev, richiami: vRich, dashboard: vDash, chiedi: vChiedi, liste: vListe })[v]();
+  ({ preventivi: vPrev, richiami: vRich, dashboard: vDash, chiedi: vChiedi, lead: vLead, liste: vListe })[v]();
 }
 window.addEventListener('popstate', e => { if (e.state?.v) go(e.state.v, true); });
 document.addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) go(b.dataset.go); });
@@ -273,7 +276,7 @@ const opt = (v, t, sel) => `<option value="${esc(v)}" ${sel ? 'selected' : ''}>$
 
 /* ================= INSERIMENTO PREVENTIVI ================= */
 let F = null;
-const nuovoF = (keep = {}) => ({ sede: keep.sede || sedePrima('preventivi')?.id || sediDi('preventivi')[0]?.id || '', data: S.st.oggi, paziente: '', ambassador: '', annoNascita: '', commerciale: keep.commerciale || '', medici: [],
+const nuovoF = (keep = {}) => ({ sede: keep.sede || sedePrima('preventivi')?.id || sediDi('preventivi')[0]?.id || '', data: S.st.oggi, paziente: '', ambassador: '', canaleInfo: '', annoNascita: '', commerciale: keep.commerciale || '', medici: [],
   tipoOv: '', marketing: '', pdc: '', tipoPdc: '', esito: '', pagato: '', note: '' });
 const persone = {};
 async function personeDi(sede) { if (!persone[sede]) persone[sede] = await api('GET', 'api/persone?sede=' + encodeURIComponent(sede)); return persone[sede]; }
@@ -313,7 +316,8 @@ async function vPrev() {
     </div>
     <div class="field"><span class="lbl">Esito <span class="req">*</span></span>
       <div class="esiti" id="f-esito">${Object.entries(ESITI).map(([k, t]) => `<button type="button" data-esito="${k}" class="${k} ${F.esito === k ? 'on' : ''}">${k} — ${t}</button>`).join('')}</div></div>
-    <div class="field"><label for="f-amb">Paziente che lo ha mandato (ambassador) ${/REFERRAL/i.test(F.marketing || '') ? '<span class="req">*</span>' : '<span class="muted" style="font-weight:500">facoltativo · obbligatorio con REFERRAL</span>'}</label><input id="f-amb" name="ambassador" autocomplete="off" placeholder="Cognome Nome di chi lo ha consigliato" value="${esc(F.ambassador)}"></div>
+    <div id="f-ci-box">${ciHtml()}</div>
+    <div class="field"><label for="f-amb" id="f-amb-l">${ambLab()}</label><input id="f-amb" name="ambassador" autocomplete="off" placeholder="Cognome Nome di chi lo ha consigliato" value="${esc(F.ambassador)}"></div>
     <div class="field"><label for="f-pag">Importo pagato <span class="req">*</span></label><input id="f-pag" name="pagato" inputmode="decimal" placeholder="0" value="${esc(F.pagato)}"></div>
   </div>
   <div class="card sez"><h3>Note</h3>
@@ -325,6 +329,9 @@ async function vPrev() {
   </form></div>`;
   cnt();
 }
+const ambLab = () => `Paziente che lo ha mandato (ambassador) ${/REFERRAL/i.test(F.marketing || '') ? '<span class="req">*</span>' : '<span class="muted" style="font-weight:500">facoltativo · obbligatorio con REFERRAL</span>'}`;
+// campo del partner / dell'evento: compare solo con CONVENZIONI o EVENTO, ed è obbligatorio
+function ciHtml() { const ic = infoCanale(F.marketing); return ic ? `<div class="field"><label for="f-ci">${esc(ic.lab)} <span class="req">*</span></label><input id="f-ci" name="canaleInfo" autocomplete="off" placeholder="${esc(ic.ph)}" value="${esc(F.canaleInfo)}"></div>` : ''; }
 function cnt() { const n = ($('#f-note')?.value || '').trim().length, el = $('#f-cnt'); if (!el) return; el.textContent = n + ' / 50 caratteri'; el.className = 'cnt' + (n >= 50 ? ' ok' : ''); }
 document.addEventListener('input', e => {
   const f = e.target.closest('#fp [name]'); if (!f || !F) return;
@@ -339,6 +346,7 @@ function vocePdc(v) {
 document.addEventListener('change', e => {
   if (e.target.id === 'f-tpdc') { const v = vocePdc(e.target.value); if (v) { e.target.value = v; F.tipoPdc = v; } else if (v === null) toast("Scegli il tipo di piano di cura dall'elenco che compare mentre scrivi."); }
   if (e.target.id === 'f-sede') { F.sede = e.target.value; F.medici = []; F.commerciale = ''; vPrev(); }
+  if (e.target.id === 'f-mk') { F.marketing = e.target.value; if (!infoCanale(F.marketing)) F.canaleInfo = ''; $('#f-ci-box').innerHTML = ciHtml(); $('#f-amb-l').innerHTML = ambLab(); }
 });
 document.addEventListener('click', e => {
   const m = e.target.closest('[data-med]');
@@ -372,7 +380,7 @@ async function vRich() {
 }
 function filtrate() {
   const q = R.q.trim().toLowerCase();
-  return R.righe.filter(r => (!q || r.paziente.toLowerCase().includes(q) || (r.ambassador || '').toLowerCase().includes(q)) && RCOL.every(([k]) => !R.f[k] || String(r[k] ?? '') === R.f[k])
+  return R.righe.filter(r => (!q || r.paziente.toLowerCase().includes(q) || (r.ambassador || '').toLowerCase().includes(q) || (r.canale_info || '').toLowerCase().includes(q)) && RCOL.every(([k]) => !R.f[k] || String(r[k] ?? '') === R.f[k])
     && (!R.f.pdc || FASCE_PDC.find(f => f[0] === R.f.pdc)[2](r.pdc)) && (!R.f.pag || FASCE_PAG.find(f => f[0] === R.f.pag)[2](r.pagato))
     && (!R.f.eta || FASCE_ETA.find(f => f[0] === R.f.eta)[2](r.eta)));
 }
@@ -383,7 +391,7 @@ function drawRich(full) {
   const sel = (k, t, opts) => `<select data-rf="${k}" class="${R.f[k] ? 'on' : ''}" aria-label="${esc(t)}"><option value="">${esc(t)}: tutti</option>${opts.map(([v, l]) => opt(v, l, R.f[k] === v)).join('')}</select>`;
   if (full) $('#main').innerHTML = `<div class="head"><div><h2 class="view">Richiami commerciali</h2><p>I pazienti con preventivo. Parti dalla tua sede; con il filtro Sede vedi anche le altre. Note ed esito si cambiano qui.</p></div><span class="spacer"></span>
     <select id="r-anno" class="btn sm" aria-label="Anno">${S.st.anni.map(a => opt(a, a, a == R.anno)).join('')}</select></div>
-    <div class="bar"><input type="search" id="r-q" placeholder="Cerca il paziente (o chi lo ha mandato) per nome…" value="${esc(R.q)}" autocomplete="off"><button class="btn sm" id="r-reset" type="button">Togli i filtri</button></div>
+    <div class="bar"><input type="search" id="r-q" placeholder="Cerca il paziente, chi lo ha mandato, il partner o l'evento…" value="${esc(R.q)}" autocomplete="off"><button class="btn sm" id="r-reset" type="button">Togli i filtri</button></div>
     <details class="fd" id="r-fd" ${innerWidth > 700 ? 'open' : ''}><summary id="r-fsum">Filtri</summary><div class="fil" id="r-fil"></div></details><div id="r-out"></div>`;
   $('#r-fil').innerHTML = RCOL.map(([k, t]) => sel(k, t, val(k).map(v => [v, lab(k, v)]))).join('')
     + sel('pdc', '€ Piano di cura', FASCE_PDC.map(f => [f[0], f[1]])) + sel('pag', 'Importo pagato', FASCE_PAG.map(f => [f[0], f[1]])) + sel('eta', 'Età', FASCE_ETA.map(f => [f[0], f[1]]));
@@ -396,7 +404,7 @@ function drawRich(full) {
   $('#r-out').innerHTML = `<div class="tot"><span><b>${rows.length.toLocaleString('it-IT')}</b> preventivi</span><span>Piani di cura <b>${fE(tot.pdc)}</b></span><span>Pagato <b>${fE(tot.pag)}</b></span>
       <span>A <b>${tot.A}</b> · S <b>${tot.S}</b> · R <b>${tot.R}</b></span></div>
     ${rows.length ? `<div class="card tw"><table class="t"><thead><tr>${th('paziente', 'Nome e cognome')}${th('data', 'Data preventivo')}${th('tipo_ov', 'Tipo opportunità')}${th('marketing', 'Marketing')}${th('pdc', '€ Piano di cura', 1)}${th('pagato', 'Importo pagato', 1)}${th('tipo_pdc', 'Tipo di piano di cura')}${th('eta', 'Età', 1)}${th('commerciale', 'Commerciale')}${th('medico', 'Medico')}${th('esito', 'Esito')}<th>Note</th>${sediDi('richiami').length > 1 ? th('sede_nome', 'Sede') : ''}</tr></thead>
-    <tbody>${vis.map(r => `<tr class="${r.esito ? 'e' + esc(r.esito) : ''}"><td><button class="edr" data-modr="${esc(r.id)}" title="Modifica tutti i campi"><b>${esc(r.paziente)}</b><span class="pen">✎ Modifica</span>${r.ambassador ? `<span class="amb">Mandato da: ${esc(r.ambassador)}</span>` : ''}</button></td><td>${fD(r.data)}</td><td>${esc(r.tipo_ov)}</td><td>${esc(r.marketing)}</td><td class="n">${fE(r.pdc)}</td><td class="n">${fE(r.pagato)}</td>
+    <tbody>${vis.map(r => `<tr class="${r.esito ? 'e' + esc(r.esito) : ''}"><td><button class="edr" data-modr="${esc(r.id)}" title="Modifica tutti i campi"><b>${esc(r.paziente)}</b><span class="pen">✎ Modifica</span>${r.ambassador ? `<span class="amb">Mandato da: ${esc(r.ambassador)}</span>` : ''}${r.canale_info ? `<span class="amb">${esc((infoCanale(r.marketing) || { breve: 'Dettaglio canale' }).breve)}: ${esc(r.canale_info)}</span>` : ''}</button></td><td>${fD(r.data)}</td><td>${esc(r.tipo_ov)}</td><td>${esc(r.marketing)}</td><td class="n">${fE(r.pdc)}</td><td class="n">${fE(r.pagato)}</td>
       <td>${esc(r.tipo_pdc)}</td><td class="n">${r.eta ?? '—'}</td><td>${esc(r.commerciale)}</td><td>${esc(r.medico)}</td>
       <td><select class="es ${esc(r.esito)}" data-esito-r="${esc(r.id)}" aria-label="Esito">${r.esito ? '' : '<option value="">—</option>'}${Object.entries(ESITI).map(([k, t]) => `<option value="${k}" ${r.esito === k ? 'selected' : ''} title="${t}">${k}</option>`).join('')}</select></td>
       <td><button class="notab" data-nota="${esc(r.id)}" title="Scrivi o leggi le note">${r.note ? esc(r.note.slice(0, 40)) + (r.note.length > 40 ? '…' : '') : '<span class="muted">+ nota</span>'}</button></td>
@@ -433,6 +441,7 @@ document.addEventListener('click', e => {
   const mr = e.target.closest('[data-modr]'); if (mr) return apriModRich(R.righe.find(x => x.id === mr.dataset.modr));
   if (e.target.id === 'mr-x') return $('#dlg').close();
   if (e.target.id === 'mr-ok') return salvaModRich();
+  if (e.target.id === 'mr-del') return cancellaRich();
   if (e.target.id === 'nota-x') return $('#dlg').close();
   if (e.target.id === 'nota-ok') {
     const d = $('#dlg'), r = R.righe.find(x => x.id === d.dataset.id), v = $('#nota-t').value;
@@ -448,7 +457,8 @@ async function apriModRich(r) {
   const sedi = sediDi('richiami');
   d.innerHTML = `<form method="dialog" id="mr-f"><div class="db"><h3 style="margin-bottom:10px">Modifica preventivo</h3>
     <div class="field"><label for="mr-paz">Nome e cognome</label><input id="mr-paz" value="${esc(r.paziente)}" maxlength="120"></div>
-    <div class="field"><label for="mr-amb">Paziente che lo ha mandato (ambassador)</label><input id="mr-amb" value="${esc(r.ambassador || '')}" maxlength="120" placeholder="facoltativo"></div>
+    <div class="field"><label for="mr-amb">Paziente che lo ha mandato (ambassador)</label><input id="mr-amb" value="${esc(r.ambassador || '')}" maxlength="120" placeholder="facoltativo · obbligatorio con REFERRAL"></div>
+    <div class="field"><label for="mr-ci">Partner della convenzione / nome dell'evento</label><input id="mr-ci" value="${esc(r.canale_info || '')}" maxlength="120" placeholder="obbligatorio con CONVENZIONI o EVENTO"></div>
     <div class="ed2"><div class="field"><label for="mr-data">Data preventivo</label><input id="mr-data" type="date" value="${esc(r.data || '')}"></div>
       <div class="field"><label for="mr-an">Anno di nascita</label><input id="mr-an" inputmode="numeric" maxlength="4" value="${an}"></div>
       <div class="field"><label for="mr-tov">Tipo opportunità</label><select id="mr-tov">${lista(L.tipo_ov, r.tipo_ov)}</select></div>
@@ -462,17 +472,25 @@ async function apriModRich(r) {
       ${sedi.length > 1 ? `<div class="field"><label for="mr-sede">Sede</label><select id="mr-sede">${sedi.map(x => opt(x.id, x.nome, x.id === r.sede_id)).join('')}</select></div>` : ''}</div>
     <div class="field"><label for="mr-note">Note</label><textarea id="mr-note" rows="4">${esc(r.note || '')}</textarea></div>
     <p class="muted" style="margin:4px 0 0;font-size:12px">Ogni modifica resta registrata (chi, quando, prima e dopo).</p></div>
-    <div class="df"><button class="btn" type="button" id="mr-x">Annulla</button><button class="btn primary" type="button" id="mr-ok">Salva</button></div></form>`;
+    <div class="df">${S.st.cancella ? '<button class="btn danger" type="button" id="mr-del" style="margin-right:auto">Elimina riga</button>' : ''}<button class="btn" type="button" id="mr-x">Annulla</button><button class="btn primary" type="button" id="mr-ok">Salva</button></div></form>`;
   d.dataset.id = r.id; d.showModal();
 }
 async function salvaModRich() {
   const d = $('#dlg'), r = R.righe.find(x => x.id === d.dataset.id), v = id => ($('#' + id) || {}).value;
-  const body = { paziente: v('mr-paz'), ambassador: v('mr-amb'), data: v('mr-data'), annoNascita: v('mr-an'), tipoOv: v('mr-tov'), marketing: v('mr-mk'), pdc: v('mr-pdc'), pagato: v('mr-pag'),
+  const body = { paziente: v('mr-paz'), ambassador: v('mr-amb'), canaleInfo: v('mr-ci'), data: v('mr-data'), annoNascita: v('mr-an'), tipoOv: v('mr-tov'), marketing: v('mr-mk'), pdc: v('mr-pdc'), pagato: v('mr-pag'),
     tipoPdc: v('mr-tpdc'), esito: v('mr-es'), note: v('mr-note'), commerciale: v('mr-com') || undefined, medici: v('mr-med') ? [v('mr-med')] : undefined, sede: v('mr-sede') };
   const b = $('#mr-ok'); b.disabled = true;
   try { const j = await api('PATCH', 'api/richiami/' + r.id, body); d.close(); toast('Modifiche salvate.'); if (j.festa) window.TSFesta?.mostra(j.festa);
     const anno = R.anno; R.righe = (await api('GET', 'api/richiami?anno=' + anno)).righe; drawRich(false); }
   catch (x) { toast(x.message); } finally { b.disabled = false; }
+}
+
+// solo l'account di Marco: la riga va in archivio (non si perde) e sparisce da Richiami, Dashboard e Chiedi al CRM
+async function cancellaRich() {
+  const d = $('#dlg'), r = R.righe.find(x => x.id === d.dataset.id); if (!r) return;
+  if (!confirm(`Eliminare il preventivo di ${r.paziente} del ${fD(r.data)}?\n\nSparisce dai Richiami e dai KPI. Resta in archivio.`)) return;
+  try { await api('DELETE', 'api/richiami/' + r.id); R.righe = R.righe.filter(x => x.id !== r.id); d.close(); drawRich(false); toast('Riga eliminata.'); }
+  catch (x) { toast(x.message); }
 }
 
 /* ================= DASHBOARD DATI ================= */
@@ -600,13 +618,14 @@ function drawDash() {
   ${fattBox}
   ${finBox(FIN, studio)}
   <h3 class="dsec">Classifica venditori</h3>
-  <div class="dgrid"><div class="card dcard"><p class="dnote">Da gennaio a luglio 2026 i preventivi vanno al commerciale unico dello studio (Cabras Luca, Elmas Guarino, Dolianova Veronica, Capoterra Laura, Maracalagonis Zoppi; Sardara allo studio). Poi vale il commerciale indicato.</p>
+  <div class="dgrid"><div class="card dcard"><p class="dnote">Da gennaio a luglio 2026 i preventivi vanno al commerciale unico dello studio (Cabras Luca Annunziata, Elmas Guarino, Dolianova Veronica, Capoterra Laura, Maracalagonis Zoppi; Sardara allo studio). Poi vale il commerciale indicato.</p>
     ${tab('vend', rowsVend, ['nome', 'sede', ...base], bench('venditore'), 'Venditore')}</div>
     <div class="card dcard"><h4>% accettazione per venditore${esc(where)}</h4>${bars(byPerc(rowsVend), d => studio ? d.nome : d.nome + ' · ' + d.sede, ref)}</div></div>
   <h3 class="dsec">Classifica medici</h3>
-  <div class="dgrid"><div class="card dcard"><p class="dnote">Il medico è indicato da settembre 2026. Una visita fatta da più medici conta per ognuno; nomi simili uniti (es. Manca e Manca GV).</p>
-    ${rowsMed.length ? tab('med', rowsMed, ['nome', 'sedi', ...base], bMed, 'Medico') : '<div class="empty" style="padding:14px">Il medico è indicato da settembre 2026: scegli settembre, ottobre, il 3° o 4° trimestre o l\'anno.</div>'}</div>
-    <div class="card dcard"><h4>% accettazione per medico${esc(where)}</h4>${bars(byPerc(rowsMed), d => d.nome, ref)}</div></div>
+  <div class="dgrid"><div class="card dcard"><p class="dnote">Il medico è indicato da settembre 2026. In classifica ci sono solo i medici registrati nell'app (Liste → Commerciali e medici per sede): per i preventivi dell'app il medico scelto; per le righe del vecchio foglio il medico registrato che corrisponde al nome scritto (con due medici dello stesso cognome decide il nome, poi la sede). Una visita fatta da più medici conta per ognuno. Il confronto (rosso) è con la rete da settembre: ${fPct(bMed?.perc_anno)}.</p>
+    ${rowsMed.length ? tab('med', rowsMed, ['nome', 'sedi', ...base], bMed, 'Medico') : '<div class="empty" style="padding:14px">Il medico è indicato da settembre 2026: scegli settembre, ottobre, il 3° o 4° trimestre o l\'anno.</div>'}
+    ${ctrlMed(D.data.controllo_medici)}</div>
+    <div class="card dcard"><h4>% accettazione per medico${esc(where)}</h4>${bars(byPerc(rowsMed), d => d.nome, bMed?.perc_anno ?? null)}</div></div>
   <h3 class="dsec">Classifica canali di provenienza</h3>
   <div class="dgrid"><div class="card dcard"><p class="dnote">Canale = colonna Marketing, con i nomi uniformati in Liste.</p>${tab('canali', rowsCan, ['nome', ...base], bench('canale'), 'Canale')}</div>
     <div class="card dcard"><h4>Incassato per canale${esc(where)}</h4>${bars(rowsCan.filter(r => r.pagato > 0).sort((a, b) => b.pagato - a.pagato), d => d.nome, null, d => d.pagato, fE)}</div></div>
@@ -620,6 +639,13 @@ function drawDash() {
     .map(([f, t, fmt, rv], i) => `<div class="card dcard"><h4>${t}</h4>${linea(trend.filter(d => d[f] != null), f, fmt, rv, periodo, COL[i])}</div>`).join('')}</div>`;
   $('#take').textContent = `${studio ? studio + ' · ' : ''}${perLabel(periodo, anno)}: ${fN(rete.presentati)} preventivi presentati, ${fN(rete.accettati)} accettati (${fPct(rete.perc)}).` + (best ? ` Studio con l'accettazione più alta: ${best.nome} (${fPct(best.perc)}).` : '');
   D.periodo = periodo;
+}
+// controllo dei dati dei medici: quanti preventivi da settembre non hanno il medico, quanti cognomi non sono nell'anagrafica
+function ctrlMed(c) {
+  if (!c || !c.da_settembre) return '';
+  const nr = c.non_riconosciuti || [];
+  return `<details class="fd" style="margin-top:10px"><summary>Controllo dati medici (${D.anno})</summary><p class="dnote">Da settembre: <b>${c.da_settembre}</b> preventivi (pag. dilazionati esclusi), <b>${c.con_medico}</b> con il medico, <b style="color:${c.senza_medico ? 'var(--danger)' : 'inherit'}">${c.senza_medico}</b> senza medico (non entrano nella classifica), ${c.condivisi} con più medici.
+    ${nr.length ? `<br>Scritto nella colonna Medico del vecchio foglio ma nessun medico registrato corrisponde (queste visite non sono assegnate: correggile da Richiami → Modifica): ${nr.map(x => `<b>${esc(x.nome)}</b> (${x.n})`).join(', ')}.` : '<br>Tutte le visite con un medico scritto sono assegnate a un medico registrato.'}</p></details>`;
 }
 function finBox(FIN, studio) {
   if (!FIN) return '';
@@ -705,6 +731,226 @@ document.addEventListener('submit', e => { if (e.target.id !== 'cq') return; e.p
 document.addEventListener('keydown', e => { if (e.target.id === 'q' && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#cq').requestSubmit(); } });
 document.addEventListener('click', e => { const b = e.target.closest('[data-q]'); if (b) chiedi(b.dataset.q); });
 
+/* ================= GESTIONE LEAD (setter) ================= */
+// Lead: inserimento a mano o da Excel, esito della chiamata, appuntamento e setter. Dashboard: chiamate, appuntamenti e cosa dice il CRM.
+const LE = { tab: 'lista', d: null, q: '', f: {}, quanti: 200, nuovo: null, imp: null, dash: null, df: { anno: '', mese: '', setter: '', canale: '' } };
+const ES_LEAD_CL = { 'APPUNTAMENTO FISSATO': 'eA', 'DA RICHIAMARE': 'eS', 'NON RISPONDE': '', 'NON INTERESSATO': 'eR', 'NUMERO ERRATO': 'eR', 'DA CHIAMARE': '' };
+const nuovoLead = () => ({ nome: '', cognome: '', telefono: '', marketing: '', dataLead: S.st.oggi, info: '' });
+async function vLead() {
+  if (!LE.nuovo) LE.nuovo = nuovoLead();
+  $('#main').innerHTML = leadHead() + '<div class="empty">Caricamento…</div>';
+  try { LE.d = await api('GET', 'api/lead'); } catch (x) { $('#main').innerHTML = leadHead() + `<div class="err">${esc(x.message)}</div>`; return; }
+  if (LE.tab === 'dash') return vLeadDash();
+  drawLead(true);
+}
+const leadHead = () => `<div class="head"><div><h2 class="view">Gestione lead</h2><p>${LE.tab === 'dash' ? 'Chiamate e appuntamenti dei setter; per chi ha l\'appuntamento, la visita cercata nel CRM per nome e cognome.' : 'I lead da chiamare: inseriscili a mano o carica un file Excel. Esito, appuntamento e setter si cambiano nella tabella.'}</p></div><span class="spacer"></span>
+  <div class="seg"><button type="button" data-ltab="lista" class="${LE.tab === 'lista' ? 'on' : ''}">Lead</button><button type="button" data-ltab="dash" class="${LE.tab === 'dash' ? 'on' : ''}">Dashboard setter</button></div></div>`;
+const canaliAtt = () => S.st.liste.marketing.filter(x => x.attivo);
+function drawLead(full) {
+  const d = LE.d, N = LE.nuovo;
+  if (full) $('#main').innerHTML = leadHead() + `
+  <div class="dgrid" style="margin-bottom:14px">
+    <div class="card sez"><h3>Nuovo lead</h3><form id="ln-f" novalidate>
+      <div class="grid2"><div class="field"><label for="ln-nome">Nome <span class="req">*</span></label><input id="ln-nome" name="nome" autocomplete="off" value="${esc(N.nome)}"></div>
+        <div class="field"><label for="ln-cog">Cognome <span class="req">*</span></label><input id="ln-cog" name="cognome" autocomplete="off" value="${esc(N.cognome)}"></div>
+        <div class="field"><label for="ln-tel">Numero di telefono <span class="req">*</span></label><input id="ln-tel" name="telefono" type="tel" inputmode="tel" autocomplete="off" value="${esc(N.telefono)}"></div>
+        <div class="field"><label for="ln-mk">Canale marketing di arrivo <span class="req">*</span></label><select id="ln-mk" name="marketing"><option value="">— Scegli —</option>${canaliAtt().map(x => opt(x.valore, x.valore, x.valore === N.marketing)).join('')}</select></div>
+        <div class="field"><label for="ln-dl">Arrivato il</label><input id="ln-dl" name="dataLead" type="date" value="${esc(N.dataLead)}" max="${esc(S.st.oggi)}"></div></div>
+      <div class="field"><label for="ln-info">Info aggiuntive</label><textarea id="ln-info" name="info" rows="2" placeholder="Cosa ha chiesto, orari in cui chiamarlo…">${esc(N.info)}</textarea></div>
+      <div id="ln-err"></div><button class="btn primary" id="ln-save" type="submit">Salva lead</button></form></div>
+    <div class="card sez"><h3>Carica da Excel</h3>
+      <p class="muted" style="margin-top:0;font-size:13.5px">File .xlsx (o .csv) con una riga di intestazione. Dopo la lettura scegli quale colonna è il nome, il cognome, il telefono, il canale…: niente si salva finché non confermi. I numeri già presenti non si caricano di nuovo.</p>
+      <div class="bar"><input type="file" id="li-f" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" style="flex:1;min-width:0"><button class="btn sm" id="li-go" type="button">Leggi il file</button></div>
+      <div id="li-out"></div></div>
+  </div>
+  <div class="bar"><input type="search" id="l-q" placeholder="Cerca per nome, cognome o telefono…" value="${esc(LE.q)}" autocomplete="off"><button class="btn sm" id="l-reset" type="button">Togli i filtri</button></div>
+  <div class="fil" id="l-fil"></div><div id="l-out"></div>`;
+  const val = k => [...new Set(d.righe.map(r => r[k]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'it'));
+  const sel = (k, t, opts) => `<select data-lf="${k}" class="${LE.f[k] ? 'on' : ''}" aria-label="${esc(t)}"><option value="">${esc(t)}: tutti</option>${opts.map(([v, l]) => opt(v, l, LE.f[k] === v)).join('')}</select>`;
+  $('#l-fil').innerHTML = sel('esito', 'Esito chiamata', d.esiti.map(e => [e, e])) + sel('setter_nome', 'Setter', val('setter_nome').map(v => [v, v])) + sel('marketing', 'Canale', val('marketing').map(v => [v, v]))
+    + sel('mese', 'Mese di arrivo', [...new Set(d.righe.map(r => (r.data_lead || '').slice(0, 7)).filter(Boolean))].sort().reverse().map(m => [m, MESI[+m.slice(5) - 1] + ' ' + m.slice(0, 4)]));
+  const q = LE.q.trim().toLowerCase(), qd = q.replace(/\D/g, '');
+  const rows = d.righe.filter(r => (!q || `${r.nome} ${r.cognome}`.toLowerCase().includes(q) || `${r.cognome} ${r.nome}`.toLowerCase().includes(q) || (qd.length >= 3 && r.telefono.replace(/\D/g, '').includes(qd)))
+    && ['esito', 'setter_nome', 'marketing'].every(k => !LE.f[k] || r[k] === LE.f[k]) && (!LE.f.mese || (r.data_lead || '').startsWith(LE.f.mese)));
+  const cnt = k => rows.filter(r => r.esito === k).length;
+  const setOpts = (r) => { const v = d.setter.slice(); if (r.setter_id && !v.some(s => s.user_id === r.setter_id)) v.unshift({ user_id: r.setter_id, nome: r.setter_nome }); return `<option value="">—</option>` + v.map(s => opt(s.user_id, s.nome, s.user_id === r.setter_id)).join(''); };
+  const vis = rows.slice(0, LE.quanti);
+  $('#l-out').innerHTML = `<div class="tot"><span><b>${rows.length.toLocaleString('it-IT')}</b> lead</span><span>Da chiamare <b>${cnt('DA CHIAMARE')}</b></span><span>Appuntamenti <b>${cnt('APPUNTAMENTO FISSATO')}</b></span><span>Da richiamare <b>${cnt('DA RICHIAMARE')}</b></span><span>Non risponde <b>${cnt('NON RISPONDE')}</b></span></div>
+  ${rows.length ? `<div class="card tw"><table class="t"><thead><tr><th>Lead</th><th>Telefono</th><th>Canale</th><th>Arrivato il</th><th>Esito chiamata</th><th>Fissato il</th><th>Appuntamento</th><th>Setter</th><th>Note</th></tr></thead><tbody>
+    ${vis.map(r => `<tr class="${ES_LEAD_CL[r.esito] || ''}"><td><button class="edr" data-lmod="${esc(r.id)}" title="Modifica il lead"><b>${esc(r.cognome)} ${esc(r.nome)}</b><span class="pen">✎</span>${r.info ? `<span class="amb" style="white-space:normal;max-width:260px">${esc(r.info.slice(0, 90))}${r.info.length > 90 ? '…' : ''}</span>` : ''}</button></td>
+      <td><a href="tel:${esc(r.telefono.replace(/[^\d+]/g, ''))}" style="color:var(--accent);font-weight:600">${esc(r.telefono)}</a></td><td>${esc(r.marketing)}</td><td>${fD(r.data_lead)}</td>
+      <td><select class="es" data-lset="esito" data-id="${esc(r.id)}" aria-label="Esito chiamata">${d.esiti.map(e => opt(e, e, e === r.esito)).join('')}</select></td>
+      <td><input type="date" class="es" data-lset="dataFissato" data-id="${esc(r.id)}" value="${esc(r.data_fissato || '')}" aria-label="Fissato il"></td>
+      <td><input type="date" class="es" data-lset="dataApp" data-id="${esc(r.id)}" value="${esc(r.data_app || '')}" aria-label="Data appuntamento"></td>
+      <td><select class="es" data-lset="setter" data-id="${esc(r.id)}" aria-label="Setter">${setOpts(r)}</select></td>
+      <td><button class="notab" data-lnota="${esc(r.id)}">${r.note ? esc(r.note.slice(0, 40)) + (r.note.length > 40 ? '…' : '') : '<span class="muted">+ nota</span>'}</button></td></tr>`).join('')}</tbody></table></div>
+    ${rows.length > LE.quanti ? `<div style="text-align:center;margin-top:12px"><button class="btn" id="l-piu">Mostra altri ${Math.min(200, rows.length - LE.quanti)}</button></div>` : ''}`
+    : `<div class="card empty"><b>Nessun lead</b>${d.righe.length ? 'Cambia la ricerca o i filtri.' : 'Inseriscine uno o carica un file Excel.'}</div>`}
+  ${d.setter.length ? '' : '<p class="err" style="margin-top:10px">Nessun setter impostato: l\'amministratore li sceglie in Liste → Setter.</p>'}`;
+}
+const leadRiga = id => LE.d.righe.find(x => x.id === id);
+function aggiornaLead(riga) { const i = LE.d.righe.findIndex(x => x.id === riga.id); if (i >= 0) LE.d.righe[i] = riga; else LE.d.righe.unshift(riga); }
+let lqT;
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.id === 'l-q') { LE.q = t.value; LE.quanti = 200; clearTimeout(lqT); lqT = setTimeout(() => drawLead(false), 150); }
+  const f = t.closest('#ln-f [name]'); if (f) LE.nuovo[f.name] = f.value;
+});
+document.addEventListener('change', async e => {
+  const t = e.target;
+  if (t.dataset.lf) { LE.f[t.dataset.lf] = t.value; LE.quanti = 200; return drawLead(false); }
+  if (t.dataset.lset) {
+    const r = leadRiga(t.dataset.id), k = t.dataset.lset;
+    try { const o = await api('PATCH', 'api/lead/' + r.id, { [k]: t.value }); aggiornaLead(o.riga); drawLead(false); toast(k === 'esito' && t.value === 'APPUNTAMENTO FISSATO' ? 'Appuntamento fissato: scrivi la data dell\'appuntamento.' : 'Salvato.'); }
+    catch (x) { toast(x.message, 5000); drawLead(false); }
+  }
+  if (t.dataset.dsf !== undefined) { LE.df[t.dataset.dsf] = t.value; return drawLeadDash(); }
+});
+document.addEventListener('submit', async e => {
+  if (e.target.id !== 'ln-f') return; e.preventDefault();
+  const b = $('#ln-save'); b.disabled = true; $('#ln-err').innerHTML = '';
+  const salva = async forza => { const o = await api('POST', 'api/lead', { ...LE.nuovo, forza }); aggiornaLead(o.riga); LE.nuovo = nuovoLead(); drawLead(true); toast('Lead salvato.'); };
+  try { await salva(false); }
+  catch (x) {
+    if (x.status === 409 && confirm(x.message + '\n\nSalvarlo lo stesso?')) { try { await salva(true); } catch (y) { $('#ln-err').innerHTML = `<div class="err" style="margin-bottom:10px">${esc(y.message)}</div>`; } }
+    else if (x.status !== 409) $('#ln-err').innerHTML = `<div class="err" style="margin-bottom:10px">${esc(x.message)}</div>`;
+  }
+  if ($('#ln-save')) $('#ln-save').disabled = false;
+});
+document.addEventListener('click', async e => {
+  const tb = e.target.closest('[data-ltab]'); if (tb) { LE.tab = tb.dataset.ltab; return LE.tab === 'dash' ? vLeadDash() : vLead(); }
+  if (e.target.id === 'l-reset') { LE.f = {}; LE.q = ''; return drawLead(true); }
+  if (e.target.id === 'l-piu') { LE.quanti += 200; return drawLead(false); }
+  const n = e.target.closest('[data-lnota]');
+  if (n) {
+    const r = leadRiga(n.dataset.lnota), d = $('#dlg');
+    d.innerHTML = `<form method="dialog"><div class="db"><h3 style="margin-bottom:4px">${esc(r.cognome)} ${esc(r.nome)}</h3><p class="muted" style="margin:0 0 10px">${esc(r.telefono)} · ${esc(r.esito)}</p>
+      <div class="field"><label for="ln-nt">Note</label><textarea id="ln-nt" rows="7">${esc(r.note)}</textarea></div></div>
+      <div class="df"><button class="btn" type="button" data-lclose>Annulla</button><button class="btn primary" type="button" id="ln-nok">Salva nota</button></div></form>`;
+    d.dataset.lid = r.id; d.showModal(); return;
+  }
+  if (e.target.closest('[data-lclose]')) return $('#dlg').close();
+  if (e.target.id === 'ln-nok') {
+    const d = $('#dlg');
+    try { const o = await api('PATCH', 'api/lead/' + d.dataset.lid, { note: $('#ln-nt').value }); aggiornaLead(o.riga); d.close(); drawLead(false); toast('Nota salvata.'); } catch (x) { toast(x.message); }
+    return;
+  }
+  const m = e.target.closest('[data-lmod]'); if (m) return apriModLead(leadRiga(m.dataset.lmod));
+  if (e.target.id === 'lm-ok') {
+    const d = $('#dlg'), v = id => $('#' + id).value;
+    try { const o = await api('PATCH', 'api/lead/' + d.dataset.lid, { nome: v('lm-nome'), cognome: v('lm-cog'), telefono: v('lm-tel'), marketing: v('lm-mk'), dataLead: v('lm-dl'), info: v('lm-info'),
+        esito: v('lm-es'), dataFissato: v('lm-df'), dataApp: v('lm-da'), setter: v('lm-set'), note: v('lm-note') });
+      aggiornaLead(o.riga); d.close(); drawLead(false); toast('Lead salvato.'); } catch (x) { toast(x.message, 5000); }
+    return;
+  }
+  if (e.target.id === 'lm-del') {
+    const d = $('#dlg'), r = leadRiga(d.dataset.lid);
+    if (!confirm(`Eliminare il lead ${r.cognome} ${r.nome}? Resta in archivio.`)) return;
+    try { await api('DELETE', 'api/lead/' + r.id); LE.d.righe = LE.d.righe.filter(x => x.id !== r.id); d.close(); drawLead(false); toast('Lead eliminato.'); } catch (x) { toast(x.message); }
+    return;
+  }
+  if (e.target.id === 'li-go') {
+    const f = $('#li-f').files[0]; if (!f) return toast('Scegli il file Excel.');
+    const fd = new FormData(); fd.append('file', f);
+    e.target.disabled = true; e.target.textContent = 'Lettura…'; $('#li-out').innerHTML = '';
+    try { LE.imp = await api('POST', 'api/lead/importa/anteprima', fd); drawImpLead(); } catch (x) { $('#li-out').innerHTML = `<div class="err">${esc(x.message)}</div>`; }
+    e.target.disabled = false; e.target.textContent = 'Leggi il file';
+  }
+  if (e.target.id === 'li-ok') {
+    const mappa = {}; document.querySelectorAll('[data-lcol]').forEach(s => { if (s.value) mappa[s.dataset.lcol] = s.value; });
+    e.target.disabled = true; e.target.textContent = 'Caricamento…';
+    try {
+      const o = await api('POST', 'api/lead/importa/conferma', { token: LE.imp.token, mappa, canale: $('#li-can').value });
+      LE.imp = null; toast(`Caricati ${o.inseriti} lead` + (o.doppioni ? `, ${o.doppioni} numeri già presenti saltati` : '') + (o.scartate ? `, ${o.scartate} righe senza nome o telefono saltate` : '') + '.', 7000); vLead();
+    } catch (x) { e.target.disabled = false; e.target.textContent = 'Carica i lead'; toast(x.message, 6000); }
+  }
+});
+function drawImpLead() {
+  const p = LE.imp;
+  $('#li-out').innerHTML = `<div class="ok-box" style="margin-bottom:10px">Trovate <b>${p.righe.toLocaleString('it-IT')}</b> righe. Controlla le colonne, poi carica. Non è ancora stato salvato niente.</div>
+  <div class="tw"><table class="t"><thead><tr><th>Colonna del file</th><th>Esempi</th><th>Va in</th></tr></thead><tbody>
+  ${p.colonne.map(c => `<tr><td><b>${esc(c.titolo)}</b></td><td class="wrap muted">${c.esempi.filter(Boolean).map(esc).join(' · ')}</td>
+    <td><select data-lcol="${c.i}"><option value="">— Non usare —</option>${Object.entries(p.campi).map(([k, t]) => opt(k, t, k === c.campo)).join('')}</select></td></tr>`).join('')}</tbody></table></div>
+  <div class="field" style="margin-top:10px"><label for="li-can">Canale marketing quando nel file manca (o non è nell'elenco)</label><select id="li-can"><option value="">— Nessuno: salta quelle righe —</option>${canaliAtt().map(x => opt(x.valore, x.valore)).join('')}</select></div>
+  <button class="btn primary" id="li-ok" type="button">Carica i lead</button>`;
+}
+function apriModLead(r) {
+  const d = $('#dlg'), L = LE.d;
+  const mk = canaliAtt().map(x => x.valore); if (r.marketing && !mk.includes(r.marketing)) mk.unshift(r.marketing);
+  const st = L.setter.slice(); if (r.setter_id && !st.some(s => s.user_id === r.setter_id)) st.unshift({ user_id: r.setter_id, nome: r.setter_nome });
+  d.innerHTML = `<form method="dialog"><div class="db"><h3 style="margin-bottom:10px">Modifica lead</h3>
+    <div class="ed2"><div class="field"><label for="lm-nome">Nome</label><input id="lm-nome" value="${esc(r.nome)}"></div><div class="field"><label for="lm-cog">Cognome</label><input id="lm-cog" value="${esc(r.cognome)}"></div>
+      <div class="field"><label for="lm-tel">Telefono</label><input id="lm-tel" type="tel" value="${esc(r.telefono)}"></div><div class="field"><label for="lm-mk">Canale marketing</label><select id="lm-mk">${mk.map(x => opt(x, x, x === r.marketing)).join('')}</select></div>
+      <div class="field"><label for="lm-dl">Arrivato il</label><input id="lm-dl" type="date" value="${esc(r.data_lead || '')}"></div><div class="field"><label for="lm-es">Esito chiamata</label><select id="lm-es">${L.esiti.map(e => opt(e, e, e === r.esito)).join('')}</select></div>
+      <div class="field"><label for="lm-df">Appuntamento fissato il</label><input id="lm-df" type="date" value="${esc(r.data_fissato || '')}"></div><div class="field"><label for="lm-da">Data dell'appuntamento</label><input id="lm-da" type="date" value="${esc(r.data_app || '')}"></div>
+      <div class="field"><label for="lm-set">Setter che l'ha fissato</label><select id="lm-set"><option value="">—</option>${st.map(s => opt(s.user_id, s.nome, s.user_id === r.setter_id)).join('')}</select></div></div>
+    <div class="field"><label for="lm-info">Info aggiuntive</label><textarea id="lm-info" rows="2">${esc(r.info)}</textarea></div>
+    <div class="field"><label for="lm-note">Note</label><textarea id="lm-note" rows="3">${esc(r.note)}</textarea></div></div>
+    <div class="df">${L.cancella ? '<button class="btn danger" type="button" id="lm-del" style="margin-right:auto">Elimina</button>' : ''}<button class="btn" type="button" data-lclose>Annulla</button><button class="btn primary" type="button" id="lm-ok">Salva</button></div></form>`;
+  d.dataset.lid = r.id; d.showModal();
+}
+
+/* ---------- Dashboard setter ---------- */
+async function vLeadDash() {
+  $('#main').innerHTML = leadHead() + '<div class="empty">Caricamento…</div>';
+  try { LE.dash = await api('GET', 'api/lead/dashboard'); } catch (x) { $('#main').innerHTML = leadHead() + `<div class="err">${esc(x.message)}</div>`; return; }
+  if (!LE.df.anno) LE.df.anno = LE.dash.oggi.slice(0, 4);
+  drawLeadDash();
+}
+const STATO_V = { trovato: 'Presentato', attesa: 'In attesa', non_trovato: 'Non trovato nel CRM' };
+function drawLeadDash() {
+  const D2 = LE.dash, F2 = LE.df;
+  const anni = [...new Set(D2.righe.map(r => (r.data_lead || '').slice(0, 4)).filter(Boolean))].sort().reverse();
+  if (!anni.includes(F2.anno)) anni.unshift(F2.anno);
+  // periodo: mese di arrivo del lead (per le chiamate) e mese in cui è stato fissato l'appuntamento (per gli appuntamenti)
+  const inPer = d => !!d && d.startsWith(F2.anno) && (!F2.mese || d.slice(5, 7) === F2.mese);
+  const filt = r => (!F2.setter || r.setter_nome === F2.setter) && (!F2.canale || r.marketing === F2.canale);
+  const arrivati = D2.righe.filter(r => inPer(r.data_lead) && (!F2.canale || r.marketing === F2.canale));
+  // chiamati = lead arrivati nel periodo con un esito diverso da «da chiamare» (il setter si segna solo sugli appuntamenti)
+  const lavorati = arrivati.filter(r => r.esito !== 'DA CHIAMARE');
+  const app = D2.righe.filter(r => r.esito === 'APPUNTAMENTO FISSATO' && inPer(r.data_fissato || r.data_lead) && filt(r));
+  const vis = app.filter(r => r.visita?.stato === 'trovato'), att = app.filter(r => r.visita?.stato === 'attesa'), nt = app.filter(r => r.visita?.stato === 'non_trovato');
+  const acc = vis.filter(r => r.visita.esito === 'A');
+  const inc = vis.reduce((a, r) => a + r.visita.incassato, 0);
+  const pct = (a, b) => b ? a / b : null;
+  const tile = (t, v, b, low) => `<div class="card tile ${low ? 'low' : ''}"><div class="l">${t}</div><div class="v">${v}</div><div class="b">${b}</div></div>`;
+  const gruppo = (key, rows) => { const m = new Map(); for (const r of rows) { const k = r[key] || 'Non indicato'; if (!m.has(k)) m.set(k, []); m.get(k).push(r); } return m; };
+  const riga = (nome, ap, extra = '') => { const v = ap.filter(r => r.visita?.stato === 'trovato'), a = v.filter(r => r.visita.esito === 'A'), n = ap.filter(r => r.visita?.stato === 'non_trovato');
+    return `<tr><td>${esc(nome)}</td>${extra}<td class="n">${ap.length}</td><td class="n">${v.length}</td><td class="n ${n.length ? 'low' : ''}">${n.length}</td><td class="n">${a.length}</td><td class="n">${fPct(pct(a.length, v.length))}</td><td class="n"><b>${fE(v.reduce((s, r) => s + r.visita.incassato, 0))}</b></td></tr>`; };
+  const perSet = gruppo('setter_nome', app), perCan = gruppo('marketing', app), arrCan = gruppo('marketing', arrivati);
+  const setterNomi = [...new Set(D2.righe.map(r => r.setter_nome).filter(Boolean))].sort();
+  const canali = [...new Set(D2.righe.map(r => r.marketing).filter(Boolean))].sort();
+  const cl = r => r.visita?.stato === 'non_trovato' ? 'eR' : r.visita?.stato === 'attesa' ? '' : r.visita?.esito === 'A' ? 'eA' : r.visita?.esito === 'S' ? 'eS' : '';
+  const ordinati = app.slice().sort((a, b) => (b.data_app || b.data_fissato || '').localeCompare(a.data_app || a.data_fissato || ''));
+  $('#main').innerHTML = leadHead() + `
+  <div class="bar"><select data-dsf="anno" aria-label="Anno">${anni.map(a => opt(a, a, a === F2.anno)).join('')}</select>
+    <select data-dsf="mese" aria-label="Mese"><option value="">Tutto l'anno</option>${MESI.map((m, i) => opt(String(i + 1).padStart(2, '0'), m, String(i + 1).padStart(2, '0') === F2.mese)).join('')}</select>
+    <select data-dsf="setter" aria-label="Setter"><option value="">Tutti i setter</option>${setterNomi.map(n => opt(n, n, n === F2.setter)).join('')}</select>
+    <select data-dsf="canale" aria-label="Canale"><option value="">Tutti i canali</option>${canali.map(n => opt(n, n, n === F2.canale)).join('')}</select></div>
+  <div class="tiles">
+    ${tile('Lead arrivati', fN(arrivati.length), `${fN(lavorati.length)} chiamati (${fPct(pct(lavorati.length, arrivati.length))})`)}
+    ${tile('Appuntamenti fissati', fN(app.length), `${fPct(pct(arrivati.filter(r => r.esito === 'APPUNTAMENTO FISSATO').length, lavorati.length))} dei lead chiamati arrivati nel periodo`)}
+    ${tile('Presentati (trovati nel CRM)', fN(vis.length), `${fPct(pct(vis.length, app.length - att.length))} degli appuntamenti già passati`)}
+    ${tile('Non trovati nel CRM', fN(nt.length), 'Appuntamento passato, nessun preventivo con quel nome', nt.length > 0)}
+    ${tile('Accettati', fN(acc.length), `${fPct(pct(acc.length, vis.length))} dei presentati`)}
+    ${tile('Incassato dai lead', fE(inc), `Media ${fE(pct(inc, vis.length))} per lead presentato`)}
+  </div>
+  <p class="legend">Ogni appuntamento si cerca nel CRM per nome e cognome (tutte le parole, in qualsiasi ordine) tra i preventivi dalla settimana prima in poi, in tutte le sedi. <span style="color:var(--danger);font-weight:700">In rosso</span>: appuntamento passato e nessun preventivo con quel nome, come se non si fosse presentato. «In attesa»: appuntamento non ancora arrivato. Incassato = tutto il pagato del paziente nel CRM da quella data (anche rate dei dilazionati).</p>
+  <h3 class="dsec">Per setter</h3>
+  <div class="card dcard tw"><table class="t"><thead><tr><th>Setter</th><th class="n">Appuntamenti</th><th class="n">Presentati</th><th class="n">Non trovati</th><th class="n">Accettati</th><th class="n">% acc.</th><th class="n">Incassato</th></tr></thead>
+    <tbody>${[...perSet].sort((a, b) => b[1].length - a[1].length).map(([n, ap]) => riga(n, ap)).join('') || '<tr><td colspan="7" class="muted">Nessun appuntamento nel periodo.</td></tr>'}</tbody></table></div>
+  <h3 class="dsec">Per canale di arrivo</h3>
+  <div class="card dcard tw"><table class="t"><thead><tr><th>Canale</th><th class="n">Lead arrivati</th><th class="n">Appuntamenti</th><th class="n">Presentati</th><th class="n">Non trovati</th><th class="n">Accettati</th><th class="n">% acc.</th><th class="n">Incassato</th></tr></thead>
+    <tbody>${[...new Set([...arrCan.keys(), ...perCan.keys()])].sort((a, b) => (perCan.get(b)?.length || 0) - (perCan.get(a)?.length || 0)).map(n => riga(n, perCan.get(n) || [], `<td class="n">${arrCan.get(n)?.length || 0}</td>`)).join('') || '<tr><td colspan="8" class="muted">Nessun lead nel periodo.</td></tr>'}</tbody></table></div>
+  <h3 class="dsec">Appuntamenti e visita nel CRM</h3>
+  ${ordinati.length ? `<div class="card tw scroll"><table class="t"><thead><tr><th>Lead</th><th>Canale</th><th>Setter</th><th>Fissato il</th><th>Appuntamento</th><th>Visita nel CRM</th><th>Esito visita</th><th class="n">Piano di cura</th><th class="n">Incassato</th><th>Sede</th></tr></thead><tbody>
+    ${ordinati.map(r => { const v = r.visita || {}; return `<tr class="${cl(r)}"><td><b>${esc(r.cognome)} ${esc(r.nome)}</b></td><td>${esc(r.marketing)}</td><td>${esc(r.setter_nome || '—')}</td><td>${fD(r.data_fissato)}</td><td>${fD(r.data_app)}</td>
+      <td>${v.stato === 'non_trovato' ? `<b style="color:var(--danger)">${STATO_V[v.stato]}</b>` : v.stato === 'trovato' ? `${STATO_V[v.stato]} · ${fD(v.data)}${v.preventivi > 1 ? ` · ${v.preventivi} preventivi` : ''}` : `<span class="muted">${STATO_V[v.stato] || '—'}</span>`}</td>
+      <td>${v.esito ? `<b>${esc(v.esito)} — ${ESITI[v.esito]}</b>` : '—'}</td><td class="n">${v.stato === 'trovato' ? fE(v.pdc) : '—'}</td><td class="n"><b>${v.stato === 'trovato' ? fE(v.incassato) : '—'}</b></td><td>${esc(v.sede || '')}</td></tr>`; }).join('')}
+    <tr><td colspan="8"><b>Totale incassato dai lead</b></td><td class="n"><b>${fE(inc)}</b></td><td></td></tr></tbody></table></div>`
+    : '<div class="card empty"><b>Nessun appuntamento nel periodo</b>Gli appuntamenti compaiono quando l\'esito della chiamata è «APPUNTAMENTO FISSATO».</div>'}`;
+}
+
 /* ================= LISTE (amministratore) ================= */
 const LI = { d: null, prev: null };
 const persLab = u => u ? u.nome + (u.figura ? ' · ' + u.figura : '') : '';
@@ -727,7 +973,40 @@ function drawListe() {
     <form class="bar" data-add="${t}"><input name="v" placeholder="Nuova voce" style="flex:1;border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:40px"><button class="btn sm primary">Aggiungi</button></form>
     ${lista(t) || '<p class="muted">Nessuna voce.</p>'}
     ${(n => n ? `<button class="btn sm" type="button" data-nasc="${t}" style="margin-top:10px;border:0;background:none;color:var(--muted);text-decoration:underline">${LI.nascoste === t ? 'Chiudi le voci nascoste' : 'Voci nascoste: ' + n}</button>` : '')(d.liste[t].filter(x => !x.attivo).length)}</div>`).join('')}</div>
-  ${personeSediHtml()}`;
+  ${personeSediHtml()}${setterHtml()}${controlloVendHtml()}
+  <datalist id="dl-pers">${(d.persone || []).map(u => `<option value="${esc(persLab(u))}">`).join('')}</datalist>`;
+}
+// persona dell'anagrafica dal testo scritto: nome esatto, oppure l'unica che contiene tutte le parole
+function personaDa(testo) {
+  const v = String(testo || '').trim().toLowerCase(), P = LI.d.persone || [];
+  if (!v) return null;
+  return P.find(x => persLab(x).toLowerCase() === v) || P.find(x => x.nome.toLowerCase() === v)
+    || (c => c.length === 1 ? c[0] : undefined)(P.filter(x => v.split(/\s+/).every(w => persLab(x).toLowerCase().includes(w))));
+}
+// Setter di Gestione lead
+function setterHtml() {
+  const st = LI.d.setter || [];
+  return `<div class="card sez" style="margin-top:12px"><h3>Setter (Gestione lead)</h3>
+    <p class="muted" style="margin-top:0;font-size:13px">Chi è qui vede la sezione Gestione lead (anche senza la micro app in Gestione accessi) e compare nel menu «Setter» degli appuntamenti.</p>
+    ${st.map(x => `<div class="lrow"><span class="nm">${esc(x.nome)}</span><button class="btn sm" type="button" data-settogli="${esc(x.user_id)}">Togli</button></div>`).join('') || '<p class="muted">Nessun setter.</p>'}
+    <div class="bar" style="margin-top:10px"><input id="set-add" list="dl-pers" placeholder="Scrivi il nome e scegli dall'elenco" style="flex:1;border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:40px"><button class="btn sm primary" type="button" id="set-ok">Aggiungi setter</button></div></div>`;
+}
+// Controllo venditori: per sede, i nomi scritti nei preventivi e a chi vanno nella classifica. Il collegamento vale solo in quella sede.
+function controlloVendHtml() {
+  const d = LI.d, cs = d.commSede || [], va = d.vendAnno || { righe: [] };
+  const sedi = [...new Set([...cs.map(r => r.sede_nome), ...va.righe.map(r => r.sede)])].sort((a, b) => a.localeCompare(b, 'it'));
+  const pers = id => (d.persone || []).find(x => x.id === id);
+  const blocco = sede => {
+    const rs = cs.filter(r => r.sede_nome === sede), cl = va.righe.filter(r => r.sede === sede);
+    return `<details class="fd"><summary>${esc(sede)} · ${cl.map(r => `${esc(r.venditore)} ${r.n}`).join(' · ') || 'nessun preventivo nel ' + va.anno}</summary>
+      <p class="muted" style="margin:0 0 6px;font-size:13px">Classifica venditori ${va.anno} di questa sede (come in Dashboard dati): ${cl.map(r => `<b>${esc(r.venditore)}</b> ${r.n}`).join(', ') || '—'}.</p>
+      <div class="tw"><table class="t"><thead><tr><th>Nome scritto nei preventivi</th><th class="n">Preventivi</th><th>Risulta come</th><th>Collega solo in ${esc(sede)}</th></tr></thead><tbody>
+      ${rs.map(r => `<tr><td><b>${esc(r.nome)}</b></td><td class="n">${r.n}</td><td>${esc(r.risulta)}</td>
+        <td><input data-asede="${esc(r.sede_id)}|${esc(r.nome)}" list="dl-pers" value="${esc(r.sedeAlias ? persLab(pers(r.sedeAlias)) || r.risulta : '')}" placeholder="(collegamento generale)" style="min-width:220px;border:1px solid var(--line);border-radius:9px;padding:6px 9px;min-height:36px"></td></tr>`).join('')}</tbody></table></div></details>`;
+  };
+  return `<div class="card sez" style="margin-top:12px"><h3>Controllo venditori per sede</h3>
+    <p class="muted" style="margin-top:0;font-size:13px">Per ogni sede: i nomi dei commerciali scritti nei preventivi, quanti sono e a chi vanno nella classifica. Se un nome è della persona sbagliata (es. «LUCA» a Cabras è Luca Annunziata, non Luca Concas), collegalo qui: vale solo in quella sede e i preventivi non si modificano. Da gennaio a luglio 2026 conta comunque il commerciale unico dello studio.</p>
+    ${sedi.map(blocco).join('') || '<p class="muted">Nessun preventivo.</p>'}</div>`;
 }
 // Commerciali e medici per sede: in quali sedi compaiono nel modulo e nei Richiami. Vale solo nel CRM.
 function personeSediHtml() {
@@ -760,6 +1039,11 @@ document.addEventListener('change', async e => {
     if (v && !u) { toast('Non trovo una sola persona con quel nome: scegli dall\'elenco che compare mentre scrivi.'); t.value = persLab(LI.d.persone.find(x => x.id === LI.d.alias[t.dataset.alias])); return; }
     try { await api('POST', 'api/liste/alias', { nome: t.dataset.alias, userId: u ? u.id : '' }); LI.d.alias[t.dataset.alias] = u ? u.id : ''; t.value = persLab(u); toast(u ? 'Collegato a ' + u.nome + '.' : 'Collegamento tolto.'); } catch (y) { toast(y.message); }
   }
+  if (t.dataset.asede !== undefined) {
+    const [sedeId, nome] = t.dataset.asede.split(/\|(.*)/s), u = personaDa(t.value);
+    if (t.value.trim() && !u) { toast('Non trovo una sola persona con quel nome: scegli dall\'elenco che compare mentre scrivi.'); return; }
+    try { await api('POST', 'api/liste/alias-sede', { nome, sedeId, userId: u ? u.id : '' }); toast(u ? `${nome} → ${u.nome}, solo in questa sede.` : 'Collegamento della sede tolto.'); vListe(); } catch (y) { toast(y.message); }
+  }
   if (t.id === 'fin-az') { try { await api('PUT', 'api/liste/azienda', { azienda: t.value }); toast('Azienda salvata.'); } catch (y) { toast(y.message); } }
 });
 document.addEventListener('click', async e => {
@@ -770,6 +1054,13 @@ document.addEventListener('click', async e => {
     if (ps && !body.sedi.length && !confirm(`${u.nome} non comparirà in nessuna sede del CRM. Va bene?`)) return;
     try { LI.d.personeSedi = (await api('PUT', 'api/liste/persona-sedi', body)).personeSedi; Object.keys(persone).forEach(k => delete persone[k]); drawListe();
       toast(pr ? 'Sedi come in Gestione accessi.' : 'Sedi aggiornate.'); } catch (y) { toast(y.message); }
+    return;
+  }
+  const sg = e.target.closest('[data-settogli]');
+  if (sg || e.target.id === 'set-ok') {
+    const u = sg ? { id: sg.dataset.settogli } : personaDa($('#set-add').value);
+    if (!u) return toast('Scrivi il nome e scegli la persona dall\'elenco.');
+    try { LI.d.setter = (await api('POST', 'api/liste/setter', { userId: u.id, togli: !!sg })).setter; drawListe(); toast(sg ? 'Setter tolto.' : 'Setter aggiunto.'); } catch (y) { toast(y.message); }
     return;
   }
   const nb = e.target.closest('[data-nasc]'); if (nb) { LI.nascoste = LI.nascoste === nb.dataset.nasc ? null : nb.dataset.nasc; return drawListe(); }

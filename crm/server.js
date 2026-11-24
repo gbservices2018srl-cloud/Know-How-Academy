@@ -1,6 +1,6 @@
 // CRM Commerciale — server (stesso servizio delle altre app, all'indirizzo appgestione.it/crm/).
 // Prende il posto del vecchio CRM su Google Sheets: i dati dei pazienti stanno solo nel database su Render (Europa).
-// Micro app: Inserimento Preventivi, Richiami commerciali, Dashboard dati, Chiedi al CRM, Liste (solo amministratore).
+// Micro app: Inserimento Preventivi, Richiami commerciali, Dashboard dati, Chiedi al CRM, Gestione lead (setter), Liste (solo amministratore).
 // Permessi dal pannello Gestione accessi: Amministratore = tutte le sedi; Operatore/Commerciale = le sedi scelte.
 // Dati personali (paziente, ambassador, anno di nascita, note): solo in Inserimento e Richiami, mai nei KPI, nell'AI o nei log.
 const path = require('path');
@@ -9,6 +9,7 @@ const multer = require('multer');
 const db = require('./lib/db');
 const K = require('./lib/kpi');
 const importa = require('./lib/importa');
+const LD = require('./lib/lead');
 const accessi = require('../accessi/server');
 const store = accessi.store;
 const consumo = require('../lib/consumo');
@@ -27,9 +28,14 @@ const isDate = s => /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s + 'T00:
 const oggi = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
 const PUB = path.join(__dirname, 'public');
 const ESITI = ['A', 'S', 'R'];
+// solo questo account può cancellare righe (Richiami commerciali e Gestione lead). Le righe cancellate restano in archivio.
+const CANCELLA_EMAIL = (process.env.CRM_CANCELLA_EMAIL || 'marcotosmile@gmail.com').trim().toLowerCase();
+// canali con un'informazione obbligatoria (oltre a REFERRAL → ambassador): CONVENZIONI → partner, EVENTO → nome dell'evento
+const infoCanale = mk => /^CONVENZION[EI]$/.test(mk) ? { tipo: 'partner', msg: 'Canale CONVENZIONI: scrivi il nome del partner della convenzione.' }
+  : /^EVENT[OI]$/.test(mk) ? { tipo: 'evento', msg: "Canale EVENTO: scrivi il nome dell'evento." } : null;
 
 /* ---------- chi sta usando l'app ---------- */
-const SEZ = { preventivi: 'crm_preventivi', richiami: 'crm_richiami', dashboard: 'crm_dashboard', chiedi: 'crm_chiedi' };
+const SEZ = { preventivi: 'crm_preventivi', richiami: 'crm_richiami', dashboard: 'crm_dashboard', chiedi: 'crm_chiedi', lead: 'crm_lead' };
 let sediCache = null, sediT = 0;
 async function tutteLeSedi() {
   if (!sediCache || Date.now() - sediT > 60000) {
@@ -41,6 +47,12 @@ async function tutteLeSedi() {
 }
 // una sede salvata in Gestione accessi entra subito nel CRM
 store.events.on('sedi', () => { sediCache = null; });
+// setter (Liste → Setter): entrano in Gestione lead anche senza la micro app in Gestione accessi
+let setCache = null, setT = 0;
+async function setterList() {
+  if (!setCache || Date.now() - setT > 60000) { setCache = (await db.q('select user_id, nome from setter where attivo order by nome')).rows; setT = Date.now(); }
+  return setCache;
+}
 app.use(wrap(async (req, res, next) => {
   const c = await store.check(accessi.readCookie(req));
   if (!c) return next();
@@ -58,7 +70,11 @@ app.use(wrap(async (req, res, next) => {
     else perm[s] = { admin: false, sedi: tutte, mie: (lv[k]?.enti || []).map(e => e.id).filter(id => tutte.some(x => x.id === id)) };
   }
   if (owner || c.apps.crm_liste === 'admin') perm.liste = { admin: true, sedi: tutte };
-  req.me = { id: u.id, nome: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email, owner, perm };
+  // Gestione lead: chi ha la micro app in Gestione accessi, i setter scelti in Liste e gli amministratori del CRM
+  if (perm.liste) perm.lead = { admin: true, sedi: tutte };
+  else if (!perm.lead && (await setterList()).some(s => s.user_id === u.id)) perm.lead = { admin: false, sedi: tutte };
+  const email = String(u.email || '').trim().toLowerCase();
+  req.me = { id: u.id, nome: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email, owner, perm, cancella: !!email && email === CANCELLA_EMAIL };
   next();
 }));
 const needUser = (req, res, next) => req.me ? next() : bad(res, 401, 'Accesso richiesto');
@@ -79,11 +95,13 @@ async function canaleDi() {
   const m = new Map(rows.map(r => [r.valore, r.canale]));
   return mk => m.get(mk) || null;
 }
-// nomi del vecchio foglio collegati a una persona (Liste): così nei KPI e nei filtri la stessa persona è una riga sola
+// nomi del vecchio foglio collegati a una persona (Liste): così nei KPI e nei filtri la stessa persona è una riga sola.
+// Il collegamento di una sede vince su quello generale: "LUCA" a Cabras è Luca Annunziata, anche se altrove "LUCA" è un'altra persona.
 async function aliasComm() {
   const { rows } = await db.q('select nome, user_nome from alias_commerciali');
-  const m = new Map(rows.map(r => [r.nome, r.user_nome]));
-  return c => m.get(String(c || '').trim().toUpperCase()) || c;
+  const { rows: rs } = await db.q(`select nome, sede_id, user_nome from alias_commerciali_sede where user_nome <> ''`);
+  const m = new Map(rows.map(r => [r.nome, r.user_nome])), ms = new Map(rs.map(r => [r.sede_id + '|' + r.nome, r.user_nome]));
+  return (c, sedeId) => { const k = String(c || '').trim().toUpperCase(); return (sedeId && ms.get(sedeId + '|' + k)) || m.get(k) || c; };
 }
 const imp = async k => (await db.q('select v from impostazioni where k = $1', [k])).rows[0]?.v ?? null;
 const impSet = (k, v) => db.q('insert into impostazioni (k, v) values ($1,$2) on conflict (k) do update set v = excluded.v', [k, JSON.stringify(v)]);
@@ -92,7 +110,7 @@ const impSet = (k, v) => db.q('insert into impostazioni (k, v) values ($1,$2) on
 app.get('/api/stato', needUser, wrap(async (req, res) => {
   const p = req.me.perm;
   const anni = (await db.q('select distinct anno from preventivi order by anno desc')).rows.map(r => r.anno);
-  res.json({ me: { id: req.me.id, nome: req.me.nome }, perm: p, liste: await liste(), oggi: oggi(), home: accessi.publicUrl(),
+  res.json({ me: { id: req.me.id, nome: req.me.nome }, perm: p, liste: await liste(), oggi: oggi(), home: accessi.publicUrl(), cancella: req.me.cancella,
     anni: anni.length ? anni : [Number(oggi().slice(0, 4))], ai: !!process.env.ANTHROPIC_API_KEY });
 }));
 
@@ -138,6 +156,9 @@ app.post('/api/preventivi', needUser, need('preventivi'), wrap(async (req, res) 
   const ambassador = str(b.ambassador, 120).toUpperCase();
   // canale REFERRAL: serve il nome del paziente che lo ha mandato
   if (/REFERRAL/i.test(mk) && ambassador.length < 3) return bad(res, 400, 'Canale REFERRAL: scrivi il paziente che lo ha mandato (ambassador).');
+  // canali CONVENZIONI / EVENTO: serve il nome del partner o dell'evento
+  const ic = infoCanale(mk), canaleInfo = ic ? str(b.canaleInfo, 120).toUpperCase() : '';
+  if (ic && canaleInfo.length < 2) return bad(res, 400, ic.msg);
   const note = String(b.note ?? '').trim().slice(0, 4000); if (note.length < 50) return bad(res, 400, `Note troppo brevi: minimo 50 caratteri (${note.length} scritti).`);
   const ids = [str(b.commerciale, 60), ...(Array.isArray(b.medici) ? b.medici : []).map(x => str(x, 60))].filter(Boolean);
   const { rows: us } = await store.q(`select id, first_name, last_name, figura from users where id = any($1) and status = 'active'`, [ids]);
@@ -147,10 +168,10 @@ app.post('/api/preventivi', needUser, need('preventivi'), wrap(async (req, res) 
   const id = db.newId();
   // medico come nel vecchio CRM: cognomi in maiuscolo, più medici separati da "/"
   await db.q(`insert into preventivi (id, sede_id, sede_nome, data, anno, mese, paziente, tipo_ov, marketing, pdc, esito, pagato, anno_nascita, tipo_pdc, note,
-      commerciale_id, commerciale, medici_ids, medico, origine, creato_da, aggiornato_da, ambassador)
-    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,'app',$20,$20,$21)`,
+      commerciale_id, commerciale, medici_ids, medico, origine, creato_da, aggiornato_da, ambassador, canale_info)
+    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,'app',$20,$20,$21,$22)`,
     [id, sede.id, sede.nome, data, Number(data.slice(0, 4)), Number(data.slice(5, 7)), paziente, tipo, mk, pdc, esito, pagato, an, tipoPdc, note,
-      comm.id, nomeDi(comm).toUpperCase(), JSON.stringify(meds.map(m => m.id)), meds.map(m => String(m.last_name || m.first_name).toUpperCase()).join(' / '), req.me.id, ambassador]);
+      comm.id, nomeDi(comm).toUpperCase(), JSON.stringify(meds.map(m => m.id)), meds.map(m => String(m.last_name || m.first_name).toUpperCase()).join(' / '), req.me.id, ambassador, canaleInfo]);
   // classifiche: festoni e lode al commerciale, notifica ai medici
   const festa = esito === 'A' ? await require('../classifiche/lib/core').preventivoAccettato({ anno: Number(data.slice(0, 4)), mese: Number(data.slice(5, 7)), pdc, paziente, tipo_pdc: tipoPdc, data, sede_nome: sede.nome,
     commerciale_id: comm.id, medici_ids: meds.map(m => m.id) }, req.me.id) : null;
@@ -161,17 +182,17 @@ app.post('/api/preventivi', needUser, need('preventivi'), wrap(async (req, res) 
 app.get('/api/richiami', needUser, need('richiami'), wrap(async (req, res) => {
   const sedi = sediDi(req, 'richiami').map(s => s.id);
   const anno = parseInt(req.query.anno, 10) || Number(oggi().slice(0, 4));
-  const { rows } = await db.q(`select id, sede_id, sede_nome, to_char(data, 'YYYY-MM-DD') as data, anno, mese, paziente, ambassador, tipo_ov, marketing, pdc::float, esito,
+  const { rows } = await db.q(`select id, sede_id, sede_nome, to_char(data, 'YYYY-MM-DD') as data, anno, mese, paziente, ambassador, canale_info, tipo_ov, marketing, pdc::float, esito,
       pagato::float, anno_nascita, tipo_pdc, note, commerciale, medico, aggiornato_il
     from preventivi where sede_id = any($1) and anno = $2 order by data desc nulls last, creato_il desc`, [sedi, anno]);
   const annoOra = Number(oggi().slice(0, 4)), al = await aliasComm();
   res.set('Cache-Control', 'no-store');
-  res.json({ righe: rows.map(r => ({ ...r, commerciale: al(r.commerciale), eta: r.anno_nascita ? annoOra - r.anno_nascita : null, anno_nascita: undefined })) });
+  res.json({ righe: rows.map(r => ({ ...r, commerciale: al(r.commerciale, r.sede_id), eta: r.anno_nascita ? annoOra - r.anno_nascita : null, anno_nascita: undefined })) });
 }));
 // Richiami: ogni campo della riga si può modificare. Ogni cambio finisce nello storico (chi, campo, prima, dopo).
 app.patch('/api/richiami/:id', needUser, need('richiami'), wrap(async (req, res) => {
   const id = str(req.params.id, 60), b = req.body || {};
-  const { rows: [r] } = await db.q(`select id, sede_id, sede_nome, to_char(data, 'YYYY-MM-DD') as data, paziente, ambassador, anno_nascita, tipo_ov, marketing, pdc::float, pagato::float,
+  const { rows: [r] } = await db.q(`select id, sede_id, sede_nome, to_char(data, 'YYYY-MM-DD') as data, paziente, ambassador, canale_info, anno_nascita, tipo_ov, marketing, pdc::float, pagato::float,
       tipo_pdc, esito, note, commerciale_id, commerciale, medici_ids, medico from preventivi where id = $1`, [id]);
   if (!r || !sedeOk(req, 'richiami', r.sede_id)) return bad(res, 404, 'Preventivo non trovato.');
   const set = {};
@@ -186,6 +207,7 @@ app.patch('/api/richiami/:id', needUser, need('richiami'), wrap(async (req, res)
     if (b.note !== undefined) set.note = String(b.note ?? '').trim().slice(0, 4000);
     if (b.paziente !== undefined) { const v = str(b.paziente, 120).toUpperCase(); if (v.length < 3) return bad(res, 400, 'Scrivi cognome e nome del paziente.'); set.paziente = v; }
     if (b.ambassador !== undefined) set.ambassador = str(b.ambassador, 120).toUpperCase();
+    if (b.canaleInfo !== undefined) set.canale_info = str(b.canaleInfo, 120).toUpperCase();
     if (b.data !== undefined) { const v = str(b.data, 10); if (!isDate(v)) return bad(res, 400, 'Data non valida.'); set.data = v; }
     if (b.annoNascita !== undefined) { const an = String(b.annoNascita ?? '').trim() === '' ? null : parseInt(b.annoNascita, 10);
       if (an != null && !(an >= 1910 && an <= Number(oggi().slice(0, 4)))) return bad(res, 400, "Anno di nascita non valido (4 cifre, es. 1985)."); set.anno_nascita = an; }
@@ -214,7 +236,10 @@ app.patch('/api/richiami/:id', needUser, need('richiami'), wrap(async (req, res)
   }
   // canale REFERRAL: l'ambassador non può restare vuoto
   { const mkF = set.marketing ?? r.marketing, amF = set.ambassador ?? r.ambassador ?? '';
-    if (/REFERRAL/i.test(mkF || '') && String(amF).trim().length < 3) return bad(res, 400, 'Canale REFERRAL: scrivi il paziente che lo ha mandato (ambassador).'); }
+    if (/REFERRAL/i.test(mkF || '') && String(amF).trim().length < 3) return bad(res, 400, 'Canale REFERRAL: scrivi il paziente che lo ha mandato (ambassador).');
+    // canali CONVENZIONI / EVENTO: il nome del partner / dell'evento non può restare vuoto
+    const ic = infoCanale(mkF || ''), ciF = set.canale_info ?? r.canale_info ?? '';
+    if (ic && String(ciF).trim().length < 2) return bad(res, 400, ic.msg); }
   const uguale = (k) => k === 'medici_ids' ? set[k] === JSON.stringify(r[k] || []) : set[k] === r[k];
   const campi = Object.keys(set).filter(k => !uguale(k));
   if (!campi.length) return res.json({ ok: true });
@@ -234,13 +259,60 @@ app.patch('/api/richiami/:id', needUser, need('richiami'), wrap(async (req, res)
   res.json({ ok: true, festa });
 }));
 
+// Cancellazione di una riga: solo l'account di Marco (CANCELLA_EMAIL). La riga intera resta in preventivi_cancellati.
+app.delete('/api/richiami/:id', needUser, need('richiami'), wrap(async (req, res) => {
+  if (!req.me.cancella) return bad(res, 403, 'Solo Marco può cancellare le righe dei Richiami.');
+  const id = str(req.params.id, 60);
+  const client = await db.pool.connect();
+  try {
+    await client.query('begin');
+    const { rows: [r] } = await client.query('select to_jsonb(p) as dati, sede_id from preventivi p where id = $1 for update', [id]);
+    if (!r || !sedeOk(req, 'richiami', r.sede_id)) { await client.query('rollback'); return bad(res, 404, 'Preventivo non trovato.'); }
+    await client.query(`insert into preventivi_cancellati (id, dati, cancellato_da) values ($1,$2,$3) on conflict (id) do update set dati = excluded.dati, cancellato_da = excluded.cancellato_da, cancellato_il = now()`, [id, r.dati, req.me.nome]);
+    await client.query(`insert into storico (preventivo_id, chi, campo, prima, dopo) values ($1,$2,'cancellato',null,null)`, [id, req.me.nome]);
+    await client.query('delete from preventivi where id = $1', [id]);
+    await client.query('commit');
+  } catch (e) { await client.query('rollback').catch(() => {}); throw e; } finally { client.release(); }
+  res.json({ ok: true });
+}));
+
 /* ============ DATI PER KPI (senza dati personali) ============ */
 async function datiKpi(sediIds, anno) {
-  const { rows } = await db.q(`select sede_nome, to_char(data, 'YYYY-MM-DD') as data, anno, mese, tipo_ov, marketing, pdc::float, esito, pagato::float, tipo_pdc, commerciale, medico
+  const { rows } = await db.q(`select sede_id, sede_nome, to_char(data, 'YYYY-MM-DD') as data, anno, mese, tipo_ov, marketing, canale_info, pdc::float, esito, pagato::float, tipo_pdc, commerciale, medico, medici_ids
     from preventivi where sede_id = any($1) ${anno ? 'and anno = $2' : ''}`, anno ? [sediIds, anno] : [sediIds]);
   const al = await aliasComm();
-  for (const r of rows) r.commerciale = al(r.commerciale);
-  return K.dataset(rows, await canaleDi(), al);
+  for (const r of rows) r.commerciale = al(r.commerciale, r.sede_id);
+  return K.dataset(rows, await canaleDi(), al, await nomiMedici());
+}
+// medici registrati nell'app (anagrafica, figura Medico, anche non più attivi) con le sedi del CRM (Liste) o di Gestione accessi.
+// Nome in classifica = Cognome; Cognome Nome se il cognome è di più medici.
+async function nomiMedici() {
+  const { rows } = await store.q(`select id, first_name, last_name, sedi from users where figura = 'Medico'`);
+  const sc = await sediCrm();
+  const cog = u => String(u.last_name || u.first_name || '').trim().replace(/\s+/g, ' ');
+  const conta = new Map(); for (const u of rows) { const k = cog(u).toUpperCase(); conta.set(k, (conta.get(k) || 0) + 1); }
+  const nome = u => K.titolo(conta.get(cog(u).toUpperCase()) > 1 ? `${cog(u)} ${String(u.first_name || '').trim()}` : cog(u));
+  const perId = new Map(rows.map(u => [u.id, nome(u)]));
+  return { medId: id => perId.get(id) || null,
+    reg: rows.map(u => ({ id: u.id, nome: String(u.first_name || ''), cognome: cog(u), sedi: sc.get(u.id) || (Array.isArray(u.sedi) ? u.sedi : []) })) };
+}
+// Righe del vecchio foglio senza medico collegato: si cerca nel testo "Medico" un medico registrato e, se c'è, si salva sulla riga
+// (medici_ids e il cognome nella colonna, come per le righe dell'app). Ogni cambio va nello storico. Gira a ogni avvio:
+// un medico registrato dopo viene collegato alle sue righe. Le righe senza corrispondenza restano com'erano e non contano come medico.
+async function assegnaMedici() {
+  const M = await nomiMedici();
+  if (!M.reg.length) return 0;
+  const { rows } = await db.q(`select id, sede_id, medico from preventivi where origine = 'import' and medico <> '' and medici_ids = '[]'::jsonb`);
+  let n = 0;
+  for (const r of rows) {
+    const { ids } = K.trovaMedici(r.medico, r.sede_id, M.reg);
+    if (!ids.length) continue;
+    const testo = ids.map(id => M.reg.find(d => d.id === id).cognome.toUpperCase()).join(' / ');
+    await db.q(`insert into storico (preventivo_id, chi, campo, prima, dopo) values ($1, 'Assegnazione medici registrati', 'medico', $2, $3)`, [r.id, r.medico, testo]);
+    await db.q(`update preventivi set medici_ids = $2, medico = $3, aggiornato_il = now() where id = $1`, [r.id, JSON.stringify(ids), testo]);
+    n++;
+  }
+  return n;
 }
 
 /* ---------- Gestione finanziaria: tassi di finanziamento verso pazienti (consuntivo, da inizio anno a oggi) ---------- */
@@ -335,7 +407,17 @@ app.get('/api/liste', needUser, need('liste'), wrap(async (req, res) => {
   const { rows: grezzi } = await db.q(`select commerciale as nome, count(*)::int as n from preventivi where origine = 'import' and commerciale <> '' group by 1 order by 2 desc`);
   const { rows: alias } = await db.q('select nome, user_id from alias_commerciali');
   const { rows: pers } = await store.q(`select id, first_name, last_name, figura from users where status = 'active' and not owner and coalesce(figura, '') <> 'Medico' order by (figura in ('RAP', 'RUL')) desc, last_name, first_name`);
+  // controllo venditori: per sede, i nomi scritti nei preventivi, la persona a cui vanno e la classifica dell'anno che ne esce
+  const { rows: commSede } = await db.q(`select sede_id, sede_nome, commerciale as nome, count(*)::int as n from preventivi where commerciale <> '' group by 1, 2, 3 order by 2, 4 desc`);
+  const al = await aliasComm();
+  const { rows: aliasSede } = await db.q('select nome, sede_id, user_id, user_nome from alias_commerciali_sede');
+  const annoOra = Number(oggi().slice(0, 4));
+  const vend = new Map();
+  for (const r of (await datiKpi(sediDi(req, 'liste').map(x => x.id), annoOra)).preventivi) { const k = r.sede + '|' + r.venditore; vend.set(k, (vend.get(k) || 0) + 1); }
   res.json({ liste: await liste(), usi, importazioni: imps, commGrezzi: grezzi, alias: Object.fromEntries(alias.map(a => [a.nome, a.user_id])),
+    commSede: commSede.map(r => ({ ...r, risulta: al(r.nome, r.sede_id), sedeAlias: aliasSede.find(a => a.sede_id === r.sede_id && a.nome === r.nome.trim().toUpperCase())?.user_id || null })),
+    vendAnno: { anno: annoOra, righe: [...vend].map(([k, n]) => { const [sede, venditore] = k.split('|'); return { sede, venditore, n }; }).sort((a, b) => a.sede.localeCompare(b.sede, 'it') || b.n - a.n) },
+    setter: await setterList(),
     persone: pers.map(u => ({ id: u.id, nome: nomeDi(u), figura: u.figura || '' })), totali: Object.fromEntries(tot.map(r => [r.origine, r.n])),
     personeSedi: await personeSedi(), sediTutte: sediDi(req, 'liste').map(x => ({ id: x.id, nome: x.nome })),
     finAzienda: await imp('fin_azienda'), finAuto: await aziendaFin().catch(() => null), aziende, finErr });
@@ -382,6 +464,27 @@ app.post('/api/liste/alias', needUser, need('liste'), wrap(async (req, res) => {
   await db.q('insert into alias_commerciali (nome, user_id, user_nome) values ($1,$2,$3) on conflict (nome) do update set user_id = excluded.user_id, user_nome = excluded.user_nome',
     [nome, u.id, nomeDi(u).toUpperCase()]);
   res.json({ ok: true });
+}));
+// collegamento di un nome a una persona solo in una sede (vince sul collegamento generale). userId vuoto = togli.
+app.post('/api/liste/alias-sede', needUser, need('liste'), wrap(async (req, res) => {
+  const nome = str(req.body.nome, 80).toUpperCase(); if (!nome) return bad(res, 400, 'Nome mancante.');
+  const sede = sedeOk(req, 'liste', str(req.body.sedeId, 60)); if (!sede) return bad(res, 400, 'Sede non valida.');
+  const uid = str(req.body.userId, 60);
+  if (!uid) { await db.q('delete from alias_commerciali_sede where nome = $1 and sede_id = $2', [nome, sede.id]); return res.json({ ok: true }); }
+  const { rows: [u] } = await store.q(`select id, first_name, last_name from users where id = $1`, [uid]);
+  if (!u) return bad(res, 400, 'Persona non trovata.');
+  await db.q(`insert into alias_commerciali_sede (nome, sede_id, user_id, user_nome) values ($1,$2,$3,$4)
+    on conflict (nome, sede_id) do update set user_id = excluded.user_id, user_nome = excluded.user_nome`, [nome, sede.id, u.id, nomeDi(u).toUpperCase()]);
+  res.json({ ok: true });
+}));
+// setter di Gestione lead: persone di Gestione accessi. togli = non è più setter (i lead che ha fissato restano a suo nome).
+app.post('/api/liste/setter', needUser, need('liste'), wrap(async (req, res) => {
+  const uid = str(req.body.userId, 60);
+  const { rows: [u] } = await store.q(`select id, first_name, last_name from users where id = $1`, [uid]);
+  if (!u) return bad(res, 400, 'Persona non trovata.');
+  await db.q(`insert into setter (user_id, nome, attivo) values ($1,$2,$3) on conflict (user_id) do update set nome = excluded.nome, attivo = excluded.attivo`, [u.id, nomeDi(u), !req.body.togli]);
+  setCache = null;
+  res.json({ ok: true, setter: await setterList() });
 }));
 app.put('/api/liste/azienda', needUser, need('liste'), wrap(async (req, res) => {
   await impSet('fin_azienda', str(req.body.azienda, 80) || null); finCache.clear(); res.json({ ok: true });
@@ -444,6 +547,144 @@ app.post('/api/liste/importa/conferma', needUser, need('liste'), wrap(async (req
   res.json({ ok: true, righe: a.p.righe.length });
 }));
 
+/* ============ GESTIONE LEAD (setter) ============ */
+// Nomi, telefoni, info e note dei lead sono dati personali: restano qui (database su Render) e nella sezione, mai nei KPI di vendita, nell'AI o nei log.
+const LEAD_COL = `id, nome, cognome, telefono, info, marketing, note, esito, to_char(data_lead, 'YYYY-MM-DD') as data_lead, to_char(data_fissato, 'YYYY-MM-DD') as data_fissato,
+  to_char(data_app, 'YYYY-MM-DD') as data_app, setter_id, setter_nome, origine`;
+const puoCancLead = req => req.me.cancella;
+const leadUno = async id => (await db.q(`select ${LEAD_COL} from leads where id = $1`, [id])).rows[0] || null;
+// campi di un lead dal modulo o dalla tabella (solo quelli mandati). r = la riga com'è ora (per la modifica).
+async function campiLead(b, req, r = {}) {
+  const set = {}, L = await liste();
+  if (b.nome !== undefined) set.nome = str(b.nome, 80).toUpperCase();
+  if (b.cognome !== undefined) set.cognome = str(b.cognome, 80).toUpperCase();
+  if (b.telefono !== undefined) set.telefono = str(b.telefono, 40);
+  if (b.info !== undefined) set.info = String(b.info ?? '').trim().slice(0, 2000);
+  if (b.note !== undefined) set.note = String(b.note ?? '').trim().slice(0, 4000);
+  if (b.marketing !== undefined) {
+    const mk = str(b.marketing, 80).toUpperCase();
+    if (mk !== r.marketing && !L.marketing.some(x => x.valore === mk && x.attivo !== false)) throw fail(400, 'Scegli il canale marketing.');
+    set.marketing = mk;
+  }
+  for (const [k, c] of [['dataLead', 'data_lead'], ['dataFissato', 'data_fissato'], ['dataApp', 'data_app']]) if (b[k] !== undefined) {
+    const v = str(b[k], 10); if (v && !isDate(v)) throw fail(400, 'Data non valida.');
+    if (c === 'data_lead' && !v) throw fail(400, 'Scrivi la data di arrivo del lead.');
+    set[c] = v || null;
+  }
+  if (b.esito !== undefined) { const e = str(b.esito, 40).toUpperCase(); if (!LD.ESITI.includes(e)) throw fail(400, 'Esito della chiamata non valido.'); set.esito = e; }
+  if (b.setter !== undefined) {
+    const sid = str(b.setter, 60);
+    if (!sid) { set.setter_id = null; set.setter_nome = ''; }
+    else if (sid !== r.setter_id) { const s = (await setterList()).find(x => x.user_id === sid); if (!s) throw fail(400, 'Scegli il setter.'); set.setter_id = s.user_id; set.setter_nome = s.nome; }
+  }
+  // appuntamento fissato: servono il setter e il giorno in cui è stato fissato (se mancano: oggi e chi sta scrivendo, se è un setter)
+  const fin = { ...r, ...set };
+  if (fin.esito === LD.FISSATO) {
+    if (!fin.data_fissato) set.data_fissato = oggi();
+    if (!fin.setter_id) {
+      const me = (await setterList()).find(x => x.user_id === req.me.id);
+      if (!me) throw fail(400, "Appuntamento fissato: scegli il setter che l'ha fissato.");
+      set.setter_id = me.user_id; set.setter_nome = me.nome;
+    }
+  }
+  return set;
+}
+app.get('/api/lead', needUser, need('lead'), wrap(async (req, res) => {
+  const { rows } = await db.q(`select ${LEAD_COL} from leads order by data_lead desc, creato_il desc`);
+  res.set('Cache-Control', 'no-store');
+  res.json({ righe: rows, setter: await setterList(), esiti: LD.ESITI, cancella: puoCancLead(req) });
+}));
+app.post('/api/lead', needUser, need('lead'), wrap(async (req, res) => {
+  const b = req.body || {};
+  if (str(b.nome, 80).length < 2 || str(b.cognome, 80).length < 2) return bad(res, 400, 'Scrivi nome e cognome del lead.');
+  if (LD.normTel(b.telefono).length < 6) return bad(res, 400, 'Scrivi il numero di telefono.');
+  if (!str(b.marketing, 80)) return bad(res, 400, 'Scegli il canale marketing di arrivo.');
+  const set = await campiLead({ esito: 'DA CHIAMARE', dataLead: oggi(), ...b }, req);
+  // stesso numero già presente: si avvisa (si può salvare lo stesso)
+  if (!b.forza) {
+    const tel = LD.normTel(set.telefono);
+    const { rows } = await db.q(`select nome, cognome, to_char(data_lead, 'DD/MM/YYYY') as d, telefono from leads where right(regexp_replace(telefono, '\\D', '', 'g'), 9) = right($1, 9)`, [tel]);
+    const doppio = rows.find(x => LD.normTel(x.telefono) === tel);
+    if (doppio) return bad(res, 409, `C'è già un lead con questo numero: ${doppio.cognome} ${doppio.nome} (arrivato il ${doppio.d}).`);
+  }
+  const id = db.newId(), cols = Object.keys(set);
+  await db.q(`insert into leads (id, ${cols.join(', ')}, origine, creato_da, aggiornato_da) values ($1, ${cols.map((_, i) => '$' + (i + 2)).join(', ')}, 'manuale', $${cols.length + 2}, $${cols.length + 2})`,
+    [id, ...cols.map(k => set[k]), req.me.id]);
+  res.json({ ok: true, riga: await leadUno(id) });
+}));
+app.patch('/api/lead/:id', needUser, need('lead'), wrap(async (req, res) => {
+  const id = str(req.params.id, 60), r = await leadUno(id); if (!r) return bad(res, 404, 'Lead non trovato.');
+  const set = await campiLead(req.body || {}, req, r);
+  if (set.nome !== undefined && set.nome.length < 2) return bad(res, 400, 'Scrivi il nome.');
+  if (set.cognome !== undefined && set.cognome.length < 2) return bad(res, 400, 'Scrivi il cognome.');
+  const cols = Object.keys(set).filter(k => set[k] !== r[k]);
+  if (cols.length) await db.q(`update leads set ${cols.map((k, i) => `${k} = $${i + 2}`).join(', ')}, aggiornato_da = $${cols.length + 2}, aggiornato_il = now() where id = $1`,
+    [id, ...cols.map(k => set[k]), req.me.id]);
+  res.json({ ok: true, riga: await leadUno(id) });
+}));
+app.delete('/api/lead/:id', needUser, need('lead'), wrap(async (req, res) => {
+  if (!puoCancLead(req)) return bad(res, 403, 'Solo Marco può cancellare i lead.');
+  const id = str(req.params.id, 60);
+  const { rows: [r] } = await db.q('select to_jsonb(l) as dati from leads l where id = $1', [id]); if (!r) return bad(res, 404, 'Lead non trovato.');
+  await db.q(`insert into leads_cancellati (id, dati, cancellato_da) values ($1,$2,$3) on conflict (id) do update set dati = excluded.dati, cancellato_da = excluded.cancellato_da, cancellato_il = now()`, [id, r.dati, req.me.nome]);
+  await db.q('delete from leads where id = $1', [id]);
+  res.json({ ok: true });
+}));
+// caricamento da Excel (.xlsx) o .csv: prima l'anteprima delle colonne (niente si salva), poi la conferma con le colonne scelte
+const antLead = new Map();
+app.post('/api/lead/importa/anteprima', needUser, need('lead'), (req, res, next) => upload.single('file')(req, res, err => {
+  if (err) return bad(res, 400, err.code === 'LIMIT_FILE_SIZE' ? 'Il file è troppo grande (massimo 40 MB).' : 'Caricamento non valido.');
+  next();
+}), wrap(async (req, res) => {
+  if (!req.file) return bad(res, 400, 'Scegli il file Excel (.xlsx) o .csv.');
+  const t = await LD.leggiTabella(req.file.buffer);
+  if (!t.dati.length) return bad(res, 400, 'Nel file non ci sono righe sotto le intestazioni.');
+  for (const [k, v] of antLead) if (Date.now() - v.t > 30 * 60e3) antLead.delete(k);
+  const token = db.newId();
+  antLead.set(token, { t: Date.now(), tab: t, uid: req.me.id, file: str(req.file.originalname, 120) });
+  res.json({ token, righe: t.dati.length, campi: LD.CAMPI, colonne: t.titoli.map((titolo, i) => ({ i, titolo, campo: LD.suggerisci(titolo), esempi: t.dati.slice(0, 3).map(r => str(r[i], 60)) })) });
+}));
+app.post('/api/lead/importa/conferma', needUser, need('lead'), wrap(async (req, res) => {
+  const a = antLead.get(str(req.body.token, 60));
+  if (!a || a.uid !== req.me.id) return bad(res, 400, 'Anteprima scaduta: ricarica il file.');
+  const mappa = req.body.mappa || {};
+  const L = await liste(), canali = new Set(L.marketing.filter(x => x.attivo !== false).map(x => x.valore));
+  const def = str(req.body.canale, 80).toUpperCase();
+  if (def && !canali.has(def)) return bad(res, 400, 'Canale di riserva non valido.');
+  const { rows: esist } = await db.q('select telefono from leads');
+  const visti = new Set(esist.map(r => LD.normTel(r.telefono)).filter(Boolean));
+  const p = LD.preparaImport(a.tab, mappa, { canali, def, oggi: oggi(), visti });
+  if (p.errore) return bad(res, 400, p.errore);
+  const impId = db.newId(), C = ['id', 'nome', 'cognome', 'telefono', 'info', 'marketing', 'note', 'data_lead', 'origine', 'import_id', 'creato_da', 'aggiornato_da'];
+  const client = await db.pool.connect();
+  try {
+    await client.query('begin');
+    for (let i = 0; i < p.righe.length; i += 400) {
+      const parte = p.righe.slice(i, i + 400), vals = [], ph = [];
+      parte.forEach((r, j) => {
+        ph.push('(' + C.map((_, k) => '$' + (j * C.length + k + 1)).join(',') + ')');
+        vals.push(db.newId(), r.nome, r.cognome, r.telefono, r.info, r.marketing, r.note, r.data_lead, 'excel', impId, req.me.id, req.me.id);
+      });
+      await client.query(`insert into leads (${C.join(',')}) values ${ph.join(',')}`, vals);
+    }
+    await client.query('commit');
+  } catch (e) { await client.query('rollback').catch(() => {}); throw e; } finally { client.release(); }
+  antLead.delete(str(req.body.token, 60));
+  res.json({ ok: true, inseriti: p.righe.length, doppioni: p.doppioni, scartate: p.scartate, senzaCanale: p.senzaCanale });
+}));
+// dashboard dei setter: chiamate, appuntamenti e, per chi ha l'appuntamento, cosa dice il CRM (cercato per nome e cognome)
+app.get('/api/lead/dashboard', needUser, need('lead'), wrap(async (req, res) => {
+  const { rows: leads } = await db.q(`select id, nome, cognome, marketing, esito, to_char(data_lead, 'YYYY-MM-DD') as data_lead, to_char(data_fissato, 'YYYY-MM-DD') as data_fissato,
+    to_char(data_app, 'YYYY-MM-DD') as data_app, setter_id, setter_nome from leads`);
+  const fiss = leads.filter(l => l.esito === LD.FISSATO);
+  const date = fiss.flatMap(l => [l.data_fissato, l.data_app, l.data_lead]).filter(Boolean).sort();
+  let prev = [];
+  if (date.length) prev = (await db.q(`select sede_nome, to_char(data, 'YYYY-MM-DD') as data, paziente, esito, pagato::float, pdc::float, tipo_ov from preventivi where data >= $1`, [LD.giorni(date[0], -7)])).rows;
+  const visite = new Map(LD.confronta(fiss, prev, oggi()).map(v => [v.id, v]));
+  res.set('Cache-Control', 'no-store');
+  res.json({ oggi: oggi(), setter: await setterList(), righe: leads.map(l => ({ ...l, visita: visite.get(l.id) || null })) });
+}));
+
 /* ---------- pagine ---------- */
 app.get('/', (req, res) => {
   res.set('Cache-Control', 'no-store');
@@ -487,7 +728,40 @@ async function attivaCommerciali() {
   }
   console.log(`CRM: attivato a ${attivati.length} commerciali (RAP/RUL su ${us.length}); notifica arrivata a ${raggiunti}.`);
 }
-async function start() { await db.migrate(); attivaCommerciali().catch(async e => {
+// Setter di Gestione lead: Ilaria Sanna e Silvia Loi, se sono in Gestione accessi (altrimenti si aggiungono da Liste).
+async function semi() {
+  // Cabras: tutte le righe del vecchio foglio vanno a Luca Annunziata (l'errore era solo nella compilazione del foglio;
+  // nell'app si sceglie nome e cognome). Si scrive sulle righe, con lo storico. Se Luca Annunziata non è in Gestione accessi si riprova al prossimo avvio.
+  if (!(await imp('_cabras_import_annunziata'))) {
+    const cabras = (await tutteLeSedi()).find(s => K.normSede(s.nome) === 'cabras');
+    const { rows } = await store.q(`select id, first_name, last_name from users where lower(trim(first_name)) = 'luca' and lower(trim(last_name)) = 'annunziata'`);
+    if (cabras && rows.length === 1) {
+      const u = rows[0], nome = nomeDi(u).toUpperCase();
+      const client = await db.pool.connect();
+      try {
+        await client.query('begin');
+        await client.query(`insert into storico (preventivo_id, chi, campo, prima, dopo)
+          select id, 'Correzione Cabras → Luca Annunziata', 'commerciale', commerciale, $2 from preventivi where sede_id = $1 and origine = 'import' and commerciale is distinct from $2`, [cabras.id, nome]);
+        const { rowCount } = await client.query(`update preventivi set commerciale_id = $2, commerciale = $3, aggiornato_il = now()
+          where sede_id = $1 and origine = 'import' and (commerciale is distinct from $3 or commerciale_id is distinct from $2)`, [cabras.id, u.id, nome]);
+        await client.query(`insert into impostazioni (k, v) values ('_cabras_import_annunziata', 'true') on conflict (k) do update set v = excluded.v`);
+        await client.query('commit');
+        console.log(`CRM: Cabras, ${rowCount} righe del vecchio foglio assegnate a Luca Annunziata.`);
+      } catch (e) { await client.query('rollback').catch(() => {}); throw e; } finally { client.release(); }
+    } else console.warn('CRM: Cabras → Luca Annunziata non fatto: ' + (cabras ? `in Gestione accessi ci sono ${rows.length} persone «Luca Annunziata» (ne serve una).` : 'sede Cabras non trovata.'));
+  }
+  if ((await db.q(`insert into impostazioni (k, v) values ('_seme_setter_2026_11', 'true') on conflict do nothing`)).rowCount) {
+    let n = 0;
+    for (const [f, l] of [['ilaria', 'sanna'], ['silvia', 'loi']]) {
+      const { rows } = await store.q(`select id, first_name, last_name from users where lower(trim(first_name)) = $1 and lower(trim(last_name)) = $2`, [f, l]);
+      if (rows.length === 1) { await db.q(`insert into setter (user_id, nome) values ($1,$2) on conflict (user_id) do nothing`, [rows[0].id, nomeDi(rows[0])]); n++; }
+    }
+    setCache = null;
+    console.log(`CRM: setter di Gestione lead impostati: ${n} su 2.`);
+  }
+}
+async function start() { await db.migrate(); await semi().catch(e => console.warn('CRM: impostazioni iniziali non riuscite:', e.message));
+  assegnaMedici().then(n => n && console.log(`CRM: medici registrati collegati a ${n} righe del vecchio foglio.`)).catch(e => console.warn('CRM: assegnazione medici non riuscita:', e.message)); attivaCommerciali().catch(async e => {
   console.warn('CRM: attivazione commerciali non riuscita (si riprova al prossimo avvio):', e.message);
   await db.q(`delete from impostazioni where k = '_attiva_rap_rul_2026_11'`).catch(() => {});
 }); }

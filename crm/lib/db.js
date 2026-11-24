@@ -83,6 +83,37 @@ async function migrate() {
       il timestamptz not null default now()
     );
     create index if not exists storico_prev_idx on storico(preventivo_id);
+    -- canali CONVENZIONI ed EVENTO: nome del partner o dell'evento (non è un dato personale)
+    alter table preventivi add column if not exists canale_info text not null default '';
+    -- nome scritto a mano → persona, solo in una sede (es. "LUCA" a Cabras = Luca Annunziata). Vince sul collegamento generale.
+    create table if not exists alias_commerciali_sede (nome text not null, sede_id text not null, user_id text not null default '', user_nome text not null default '', primary key (nome, sede_id));
+    -- righe cancellate dai Richiami: non spariscono, restano qui intere (solo Marco può cancellare)
+    create table if not exists preventivi_cancellati (id text primary key, dati jsonb not null, cancellato_da text not null default '', cancellato_il timestamptz not null default now());
+    -- Gestione lead: setter (persone di Gestione accessi) e lead. Nomi e telefoni dei lead: mai nei KPI di vendita, nell'AI o nei log.
+    create table if not exists setter (user_id text primary key, nome text not null default '', attivo boolean not null default true);
+    create table if not exists leads (
+      id text primary key,
+      nome text not null default '',
+      cognome text not null default '',
+      telefono text not null default '',
+      info text not null default '',
+      marketing text not null default '',
+      note text not null default '',
+      esito text not null default 'DA CHIAMARE',
+      data_lead date not null default current_date,
+      data_fissato date,
+      data_app date,
+      setter_id text,
+      setter_nome text not null default '',
+      origine text not null default 'manuale',
+      import_id text,
+      creato_da text not null default '',
+      creato_il timestamptz not null default now(),
+      aggiornato_da text not null default '',
+      aggiornato_il timestamptz not null default now()
+    );
+    create index if not exists leads_tel_idx on leads(telefono);
+    create table if not exists leads_cancellati (id text primary key, dati jsonb not null, cancellato_da text not null default '', cancellato_il timestamptz not null default now());
   `);
   // elenchi iniziali, una volta sola
   const { rows: [n] } = await q('select count(*)::int as n from liste');
@@ -99,6 +130,9 @@ async function migrate() {
   // come nella vecchia dashboard: ORALPRO e ORAL PRO sono lo stesso canale (una volta sola; poi si cambia in Liste)
   if ((await q(`insert into impostazioni (k, v) values ('_seme_canali', 'true') on conflict do nothing`)).rowCount)
     await q(`update liste set canale = 'Oral Pro' where tipo = 'marketing' and valore in ('ORALPRO', 'ORAL PRO') and canale = ''`);
+  // canali CONVENZIONI ed EVENTO nel modulo (una volta sola): con questi canali il nome del partner / dell'evento è obbligatorio
+  if ((await q(`insert into impostazioni (k, v) values ('_seme_convenzioni_eventi', 'true') on conflict do nothing`)).rowCount)
+    for (const v of ['CONVENZIONI', 'EVENTO']) await q(`insert into liste (tipo, valore, attivo) values ('marketing', $1, true) on conflict (tipo, valore) do update set attivo = true`, [v]);
 }
 
 module.exports = { q, pool, newId, migrate, SCHEMA };
