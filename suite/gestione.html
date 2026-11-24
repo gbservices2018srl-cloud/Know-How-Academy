@@ -77,6 +77,10 @@ function disegna() {
   $('#scheda').innerHTML = `<div class="row" style="justify-content:space-between"><h2 style="margin:0">${esc(c.nome)}</h2>${stato(c)}</div>
     <p class="small" style="margin:4px 0 0"><a href="${esc(c.indirizzo)}" target="_blank" rel="noopener">${esc(c.indirizzo)}</a> · motore ${esc(c.motore)} · amministratore ${esc(c.admin_email)}</p>
     ${pw && pw.slug === c.slug ? `<div class="pw"><b>Password iniziale dell'amministratore</b> (si vede solo ora: mandala al cliente, poi la cambia lui):<br><code>${esc(pw.password)}</code><div class="small">Entra da appgestione.it con ${esc(c.admin_email)} e questa password.</div></div>` : ''}
+    <h3>Logo del cliente</h3>
+    <div class="row"><span class="small">${c.logo ? 'Caricato: compare in tutte le sue app, con «powered by To Smile».' : 'Non ancora caricato: per ora compare il nome dello studio.'}</span>
+      <label class="btn gh" style="display:inline-block">Carica logo<input type="file" id="logo" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden></label>
+      ${c.logo ? '<button class="btn gh" type="button" id="logo-via">Togli</button>' : ''}</div>
     <h3>App comprese</h3><div class="apps" id="apps">${app}</div>
     <h3>Utenti</h3><div class="row"><span>Posti richiesti</span><input type="number" id="posti" min="1" max="999" value="${c.posti}" style="width:90px"><span class="small">attivi ora: <b>${c.attivi}</b></span></div>
     <h3>Stato e contatti</h3>
@@ -107,13 +111,22 @@ function formNuovo() {
     <div class="row" style="margin-top:10px"><button class="btn pri" id="crea" type="button">Crea cliente (in prova)</button><button class="btn gh" id="annulla" type="button">Annulla</button></div>`;
   calc();
 }
-document.addEventListener('change', e => { if (e.target.dataset.app !== undefined || e.target.id === 'posti') calc(); });
+document.addEventListener('change', async e => {
+  if (e.target.dataset.app !== undefined || e.target.id === 'posti') calc();
+  if (e.target.id === 'logo') {
+    const f = e.target.files[0]; if (!f) return;
+    if (f.size > 500 * 1024) return toast('Il logo è troppo grande: al massimo 500 KB.');
+    const data = await new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(f); });
+    try { await api('PATCH', '/api/gestione/clienti/' + encodeURIComponent(sel), { logo: data }); await carica(); toast('Logo caricato.'); } catch (x) { toast(x.message); }
+  }
+});
 document.addEventListener('input', e => { if (e.target.id === 'posti') calc(); if (e.target.id === 'n-slug') e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''); });
 document.addEventListener('click', async e => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.cl) { sel = b.dataset.cl; nuovo = false; disegna(); }
   if (b.id === 'nuovo') { nuovo = true; sel = null; disegna(); }
   if (b.id === 'annulla') { nuovo = false; disegna(); }
+  if (b.id === 'logo-via') { try { await api('PATCH', '/api/gestione/clienti/' + encodeURIComponent(sel), { logo: '' }); await carica(); toast('Logo tolto.'); } catch (x) { toast(x.message); } }
   const apps = () => [...document.querySelectorAll('[data-app]:checked')].map(x => x.dataset.app);
   if (b.id === 'crea') {
     b.disabled = true;

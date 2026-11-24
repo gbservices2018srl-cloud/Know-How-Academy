@@ -10,6 +10,8 @@
 //   tutto il resto (protocolli.…, onrender) → Protocolli
 // Altri indirizzi si possono aggiungere con ACCESSI_HOSTS e CALENDARIO_HOSTS (separati da virgola).
 const http = require('http');
+const path = require('path');
+const fs = require('fs');
 const accessi = require('./accessi/server');
 const protocolli = require('./server');
 const calendario = require('./calendario/server');
@@ -66,6 +68,14 @@ function route(req) {
   return protocolli.app;
 }
 
+// pagine del cliente: il suo nome nel titolo e, sempre visibile, «powered by» con il logo To Smile
+let ultimoMarchio = null;
+const BADGE = '<a href="https://appgestione.it" target="_blank" rel="noopener" aria-label="powered by To Smile" style="position:fixed;right:max(10px,env(safe-area-inset-right,0px));bottom:max(8px,env(safe-area-inset-bottom,0px));z-index:2147483000;display:flex;align-items:center;gap:6px;padding:3px 8px;border-radius:999px;background:rgba(255,255,255,.92);box-shadow:0 1px 4px rgba(0,0,0,.12);font:600 10px/1 system-ui,sans-serif;color:#6b7276;text-decoration:none">powered by <img src="/_suite/tosmile.png" alt="To Smile" style="height:14px;width:auto;display:block"></a>';
+function marchiaPagina(html) {
+  const nome = String(ultimoMarchio?.nome || process.env.SUITE_NOME || '').replace(/[<>&"]/g, '');
+  if (nome) html = html.replace(/(<title>[^<]*?)To Smile([^<]*<\/title>)/i, `$1${nome}$2`);
+  return /<\/body>/i.test(html) ? html.replace(/<\/body>(?![\s\S]*<\/body>)/i, BADGE + '</body>') : html + BADGE;
+}
 // motore di un cliente: entrata dall'accesso centrale, app non comprese spente, indirizzi di To Smile → indirizzi del cliente
 function motoreCliente(req, res) {
   const h = hostOf(req), u = req.url || '/';
@@ -76,6 +86,23 @@ function motoreCliente(req, res) {
       res.writeHead(302, { Location: '/', 'Set-Cookie': `${process.env.ACCESSI_COOKIE}=${token}; Domain=.${SUITE.BASE}; Path=/; Max-Age=${30 * 86400}; HttpOnly;${process.env.NODE_ENV === 'production' ? ' Secure;' : ''} SameSite=Lax`, 'Cache-Control': 'no-store' });
       res.end();
     }, () => { res.writeHead(302, { Location: '/accedi' }); res.end(); });
+    return false;
+  }
+  // marchio del cliente: il suo logo al posto di quello di To Smile; il logo To Smile resta per «powered by»
+  suite.marchioCliente().then(m => { ultimoMarchio = m; }).catch(() => {});
+  const percorso = u.split('?')[0];
+  if (percorso === '/_suite/tosmile.png') {
+    res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
+    return fs.createReadStream(path.join(__dirname, 'accessi', 'public', 'static', 'logo-tosmile.png')).pipe(res), false;
+  }
+  if (/(^|\/)(logo|logo-tosmile)\.png$/.test(percorso)) {
+    suite.marchioCliente().then(m => {
+      const l = /^data:(image\/[a-z+]+);base64,(.+)$/.exec(m?.logo || '');
+      if (l) { res.writeHead(200, { 'Content-Type': l[1], 'Cache-Control': 'no-cache' }); return res.end(Buffer.from(l[2], 'base64')); }
+      const nome = String(m?.nome || process.env.SUITE_NOME || '').replace(/[&<>"]/g, '');
+      res.writeHead(200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'no-cache' });
+      res.end(`<svg xmlns="http://www.w3.org/2000/svg" width="543" height="162" viewBox="0 0 543 162"><text x="0" y="104" font-family="Figtree,Arial,sans-serif" font-size="64" font-weight="800" fill="#2b8a83">${nome}</text></svg>`);
+    }, () => { res.writeHead(404); res.end(); });
     return false;
   }
   const off = SUITE.spenta(h, u);
@@ -96,7 +123,9 @@ function motoreCliente(req, res) {
     if (buf === null) buf = testo();
     if (!buf) return e(ch, enc, cb);
     if (ch && typeof ch !== 'function') parti.push(Buffer.isBuffer(ch) ? ch : Buffer.from(ch, typeof enc === 'string' ? enc : 'utf8'));
-    const out = Buffer.from(SUITE.riscrivi(Buffer.concat(parti).toString('utf8')), 'utf8');
+    let txt = SUITE.riscrivi(Buffer.concat(parti).toString('utf8'));
+    if (/text\/html/i.test(String(res.getHeader('content-type') || ''))) txt = marchiaPagina(txt);
+    const out = Buffer.from(txt, 'utf8');
     if (!res.headersSent) { res.removeHeader('content-length'); res.removeHeader('etag'); res.setHeader('content-length', out.length); }
     return e(out, typeof ch === 'function' ? ch : typeof enc === 'function' ? enc : cb);
   };

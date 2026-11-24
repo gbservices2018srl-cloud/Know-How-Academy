@@ -34,6 +34,7 @@ async function migrate() {
       creato_il timestamptz not null default now(), aggiornato_il timestamptz not null default now()
     );
     create table if not exists suite.entrate (codice text primary key, slug text not null, token text not null, scade timestamptz not null);
+    alter table suite.clienti add column if not exists logo text not null default '';
   `);
 }
 const clienti = async () => (await q('select * from suite.clienti order by creato_il')).rows;
@@ -144,7 +145,7 @@ async function utentiAttivi(slug) {
 async function elencoPannello() {
   const L = await clienti();
   return Promise.all(L.map(async c => ({ slug: c.slug, nome: c.nome, stato: c.stato, apps: c.apps, posti: c.posti, attivi: await utentiAttivi(c.slug),
-    admin_email: c.admin_email, referente: c.referente, telefono: c.telefono, note: c.note, privacy_ok: c.privacy_ok, alfadocs: c.alfadocs,
+    admin_email: c.admin_email, logo: !!c.logo, referente: c.referente, telefono: c.telefono, note: c.note, privacy_ok: c.privacy_ok, alfadocs: c.alfadocs,
     prezzo: prezzo(c), indirizzo: indirizzo(c.slug), motore: motori.get(c.slug)?.pronto ? 'acceso' : motori.get(c.slug)?.proc ? 'in avvio' : 'spento',
     creato_il: c.creato_il })));
 }
@@ -170,6 +171,12 @@ async function aggiornaCliente(slug, b) {
   const apps = Array.isArray(b.apps) ? b.apps.filter(a => idApps().includes(a)) : c.apps;
   const posti = b.posti != null ? Math.max(1, Math.min(999, parseInt(b.posti, 10) || c.posti)) : c.posti;
   const stato = ['prova', 'attivo', 'sospeso'].includes(b.stato) ? b.stato : c.stato;
+  // logo del cliente: immagine PNG, JPG o SVG, al massimo circa 500 KB ('' = toglie il logo)
+  if (b.logo !== undefined) {
+    const l = String(b.logo || '');
+    if (l && (l.length > 700000 || !/^data:image\/(png|jpeg|svg\+xml|webp);base64,[A-Za-z0-9+/=]+$/.test(l))) throw Object.assign(new Error('Logo non valido: immagine PNG, JPG o SVG, al massimo 500 KB.'), { status: 400 });
+    await q('update suite.clienti set logo = $2, aggiornato_il = now() where slug = $1', [slug, l]);
+  }
   await q(`update suite.clienti set apps = $2, posti = $3, stato = $4, referente = $5, telefono = $6, note = $7, aggiornato_il = now() where slug = $1`,
     [slug, JSON.stringify(apps), posti, stato, b.referente != null ? String(b.referente).slice(0, 80) : c.referente,
       b.telefono != null ? String(b.telefono).slice(0, 40) : c.telefono, b.note != null ? String(b.note).slice(0, 1000) : c.note]);
@@ -188,4 +195,14 @@ async function start() {
   const chiudi = () => { for (const [, m] of motori) if (m.proc) { m.fermato = true; m.proc.kill('SIGTERM'); } };
   process.on('SIGTERM', () => { chiudi(); setTimeout(() => process.exit(0), 300); }); process.on('exit', chiudi);
 }
-module.exports = { ATTIVA, start, inoltra, accediCliente, ritiraEntrata, elencoPannello, creaCliente, aggiornaCliente, catalogo: () => S.CATALOGO, prezzo };
+// nel motore del cliente: nome e logo (letti dall'elenco clienti, rinfrescati ogni minuto)
+let marchio = null, marchioT = 0;
+async function marchioCliente() {
+  if (!S.TENANT) return null;
+  if (!marchio || Date.now() - marchioT > 60000) {
+    const c = await cliente(S.TENANT).catch(() => null);
+    marchio = { nome: c?.nome || process.env.SUITE_NOME || '', logo: c?.logo || '' }; marchioT = Date.now();
+  }
+  return marchio;
+}
+module.exports = { marchioCliente, ATTIVA, start, inoltra, accediCliente, ritiraEntrata, elencoPannello, creaCliente, aggiornaCliente, catalogo: () => S.CATALOGO, prezzo };
