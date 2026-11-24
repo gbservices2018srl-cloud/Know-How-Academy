@@ -1427,7 +1427,7 @@ app.get('/alfadocs/prova', wrap(async (req, res) => {
   res.set('Cache-Control', 'no-store').type('html').send(`<!doctype html><html lang="it"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prova AlfaDocs</title>
 <body style="margin:0;font-family:system-ui,sans-serif;background:#FBFBF8;color:#2B3033"><div style="max-width:820px;margin:0 auto;padding:18px 16px 60px">
 <a href="/" style="color:#2b8a83;font-weight:700">← Le mie app</a><h1 style="font-size:22px">Prova AlfaDocs</h1>
-${!r.configurato ? '<p>Mancano le chiavi: su Render, servizio appgestione-eu → Environment, aggiungi una chiave per sede, per esempio <b>ALFADOCS_KEY_CABRAS</b>, <b>ALFADOCS_KEY_DOLIANOVA</b>…</p>' :
+${!r.configurato ? '<p>Mancano le chiavi: inseriscile in <a href="/collegamenti" style="color:#2b8a83;font-weight:700">Collegamenti</a> (una per sede), poi torna qui.</p>' :
   (r.sedi || []).map(x => `<h2 style="font-size:17px;margin:22px 0 0">Sede: ${esc(x.sede)}</h2>` + (x.passi || []).map(p => `<div style="background:#fff;border:1px solid #e1e7e5;border-radius:12px;padding:12px;margin-top:10px"><b>${p.ok ? '✅' : '❌'} ${esc(p.nome)}</b>
   ${p.ok ? `${p.archivio ? ` · ${esc(p.archivio)}` : ''}${p.quanti != null ? ` · ${p.quanti} trovati` : ''}${p.nomi?.length ? `<div style="font-size:13px;color:#6B7276;margin-top:4px">${p.nomi.map(esc).join(' · ')}</div>` : ''}
   <details style="margin-top:6px"><summary style="font-size:12.5px;color:#6B7276">campi che arrivano (senza valori)</summary><pre style="font-size:11.5px;white-space:pre-wrap">${esc(JSON.stringify(p.forma, null, 1))}</pre></details>` : `<div style="color:#b42318">${esc(p.errore)}</div>`}</div>`).join('') + (x.nota ? `<p>${esc(x.nota)}</p>` : '')).join('')}
