@@ -1001,11 +1001,11 @@ function controlloVendHtml() {
     return `<details class="fd"><summary>${esc(sede)} · ${cl.map(r => `${esc(r.venditore)} ${r.n}`).join(' · ') || 'nessun preventivo nel ' + va.anno}</summary>
       <p class="muted" style="margin:0 0 6px;font-size:13px">Classifica venditori ${va.anno} di questa sede (come in Dashboard dati): ${cl.map(r => `<b>${esc(r.venditore)}</b> ${r.n}`).join(', ') || '—'}.</p>
       <div class="tw"><table class="t"><thead><tr><th>Nome scritto nei preventivi</th><th class="n">Preventivi</th><th>Risulta come</th><th>Collega solo in ${esc(sede)}</th></tr></thead><tbody>
-      ${rs.map(r => `<tr><td><b>${esc(r.nome)}</b></td><td class="n">${r.n}</td><td>${esc(r.risulta)}</td>
-        <td><input data-asede="${esc(r.sede_id)}|${esc(r.nome)}" list="dl-pers" value="${esc(r.sedeAlias ? persLab(pers(r.sedeAlias)) || r.risulta : '')}" placeholder="(collegamento generale)" style="min-width:220px;border:1px solid var(--line);border-radius:9px;padding:6px 9px;min-height:36px"></td></tr>`).join('')}</tbody></table></div></details>`;
+      ${rs.map(r => `<tr><td><b>${esc(r.nome)}</b> <span class="muted" style="font-size:12px">${r.origine === 'app' ? 'inseriti nell\'app' : 'vecchio foglio'}</span></td><td class="n">${r.n}</td><td>${esc(r.risulta)}</td>
+        <td>${r.origine === 'app' ? '<span class="muted" style="font-size:12.5px">Vale il commerciale scelto nel modulo</span>' : `<input data-asede="${esc(r.sede_id)}|${esc(r.nome)}" list="dl-pers" value="${esc(r.sedeAlias ? persLab(pers(r.sedeAlias)) || r.risulta : '')}" placeholder="(collegamento generale)" style="min-width:220px;border:1px solid var(--line);border-radius:9px;padding:6px 9px;min-height:36px">`}</td></tr>`).join('')}</tbody></table></div></details>`;
   };
   return `<div class="card sez" style="margin-top:12px"><h3>Controllo venditori per sede</h3>
-    <p class="muted" style="margin-top:0;font-size:13px">Per ogni sede: i nomi dei commerciali scritti nei preventivi, quanti sono e a chi vanno nella classifica. Se un nome è della persona sbagliata (es. «LUCA» a Cabras è Luca Annunziata, non Luca Concas), collegalo qui: vale solo in quella sede e i preventivi non si modificano. Da gennaio a luglio 2026 conta comunque il commerciale unico dello studio.</p>
+    <p class="muted" style="margin-top:0;font-size:13px">Per ogni sede: i nomi dei commerciali scritti nei preventivi, quanti sono e a chi vanno nella classifica. I preventivi inseriti nell'app vanno sempre al commerciale scelto nel modulo. Per i nomi del vecchio foglio, se un nome è della persona sbagliata collegalo qui: vale solo in quella sede. Per le righe del vecchio foglio da gennaio a luglio 2026 conta il commerciale unico dello studio.</p>
     ${sedi.map(blocco).join('') || '<p class="muted">Nessun preventivo.</p>'}</div>`;
 }
 // Commerciali e medici per sede: in quali sedi compaiono nel modulo e nei Richiami. Vale solo nel CRM.

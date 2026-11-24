@@ -23,6 +23,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 40 
 
 const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const bad = (res, code, msg) => res.status(code).json({ error: msg });
+const fail = (status, msg) => Object.assign(new Error(msg), { status });
 const str = (v, max = 200) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 const isDate = s => /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s + 'T00:00:00Z'));
 const oggi = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
@@ -94,6 +95,14 @@ async function canaleDi() {
   const { rows } = await db.q(`select valore, canale from liste where tipo = 'marketing' and canale <> ''`);
   const m = new Map(rows.map(r => [r.valore, r.canale]));
   return mk => m.get(mk) || null;
+}
+// Commerciale di una riga. Righe inserite nell'app: SEMPRE la persona scelta nel modulo (commerciale_id), mai collegamenti o regole del vecchio foglio.
+// Righe del vecchio foglio: il nome scritto, con i collegamenti di Liste.
+async function commercialeDi() {
+  const al = await aliasComm();
+  const { rows } = await store.q('select id, first_name, last_name, email from users');
+  const nomi = new Map(rows.map(u => [u.id, nomeDi(u).toUpperCase()]));
+  return r => (r.origine === 'app' && r.commerciale_id && nomi.get(r.commerciale_id)) || (r.origine === 'app' ? r.commerciale : al(r.commerciale, r.sede_id));
 }
 // nomi del vecchio foglio collegati a una persona (Liste): così nei KPI e nei filtri la stessa persona è una riga sola.
 // Il collegamento di una sede vince su quello generale: "LUCA" a Cabras è Luca Annunziata, anche se altrove "LUCA" è un'altra persona.
@@ -183,11 +192,11 @@ app.get('/api/richiami', needUser, need('richiami'), wrap(async (req, res) => {
   const sedi = sediDi(req, 'richiami').map(s => s.id);
   const anno = parseInt(req.query.anno, 10) || Number(oggi().slice(0, 4));
   const { rows } = await db.q(`select id, sede_id, sede_nome, to_char(data, 'YYYY-MM-DD') as data, anno, mese, paziente, ambassador, canale_info, tipo_ov, marketing, pdc::float, esito,
-      pagato::float, anno_nascita, tipo_pdc, note, commerciale, medico, aggiornato_il
+      pagato::float, anno_nascita, tipo_pdc, note, commerciale, commerciale_id, origine, medico, aggiornato_il
     from preventivi where sede_id = any($1) and anno = $2 order by data desc nulls last, creato_il desc`, [sedi, anno]);
-  const annoOra = Number(oggi().slice(0, 4)), al = await aliasComm();
+  const annoOra = Number(oggi().slice(0, 4)), cd = await commercialeDi();
   res.set('Cache-Control', 'no-store');
-  res.json({ righe: rows.map(r => ({ ...r, commerciale: al(r.commerciale, r.sede_id), eta: r.anno_nascita ? annoOra - r.anno_nascita : null, anno_nascita: undefined })) });
+  res.json({ righe: rows.map(r => ({ ...r, commerciale: cd(r), commerciale_id: undefined, eta: r.anno_nascita ? annoOra - r.anno_nascita : null, anno_nascita: undefined })) });
 }));
 // Richiami: ogni campo della riga si può modificare. Ogni cambio finisce nello storico (chi, campo, prima, dopo).
 app.patch('/api/richiami/:id', needUser, need('richiami'), wrap(async (req, res) => {
@@ -278,10 +287,10 @@ app.delete('/api/richiami/:id', needUser, need('richiami'), wrap(async (req, res
 
 /* ============ DATI PER KPI (senza dati personali) ============ */
 async function datiKpi(sediIds, anno) {
-  const { rows } = await db.q(`select sede_id, sede_nome, to_char(data, 'YYYY-MM-DD') as data, anno, mese, tipo_ov, marketing, canale_info, pdc::float, esito, pagato::float, tipo_pdc, commerciale, medico, medici_ids
+  const { rows } = await db.q(`select sede_id, sede_nome, to_char(data, 'YYYY-MM-DD') as data, anno, mese, tipo_ov, marketing, canale_info, pdc::float, esito, pagato::float, tipo_pdc, commerciale, commerciale_id, origine, medico, medici_ids
     from preventivi where sede_id = any($1) ${anno ? 'and anno = $2' : ''}`, anno ? [sediIds, anno] : [sediIds]);
-  const al = await aliasComm();
-  for (const r of rows) r.commerciale = al(r.commerciale, r.sede_id);
+  const al = await aliasComm(), cd = await commercialeDi();
+  for (const r of rows) r.commerciale = cd(r);
   return K.dataset(rows, await canaleDi(), al, await nomiMedici());
 }
 // medici registrati nell'app (anagrafica, figura Medico, anche non più attivi) con le sedi del CRM (Liste) o di Gestione accessi.
@@ -408,14 +417,14 @@ app.get('/api/liste', needUser, need('liste'), wrap(async (req, res) => {
   const { rows: alias } = await db.q('select nome, user_id from alias_commerciali');
   const { rows: pers } = await store.q(`select id, first_name, last_name, figura from users where status = 'active' and not owner and coalesce(figura, '') <> 'Medico' order by (figura in ('RAP', 'RUL')) desc, last_name, first_name`);
   // controllo venditori: per sede, i nomi scritti nei preventivi, la persona a cui vanno e la classifica dell'anno che ne esce
-  const { rows: commSede } = await db.q(`select sede_id, sede_nome, commerciale as nome, count(*)::int as n from preventivi where commerciale <> '' group by 1, 2, 3 order by 2, 4 desc`);
+  const { rows: commSede } = await db.q(`select sede_id, sede_nome, commerciale as nome, origine, count(*)::int as n from preventivi where commerciale <> '' group by 1, 2, 3, 4 order by 2, 5 desc`);
   const al = await aliasComm();
   const { rows: aliasSede } = await db.q('select nome, sede_id, user_id, user_nome from alias_commerciali_sede');
   const annoOra = Number(oggi().slice(0, 4));
   const vend = new Map();
   for (const r of (await datiKpi(sediDi(req, 'liste').map(x => x.id), annoOra)).preventivi) { const k = r.sede + '|' + r.venditore; vend.set(k, (vend.get(k) || 0) + 1); }
   res.json({ liste: await liste(), usi, importazioni: imps, commGrezzi: grezzi, alias: Object.fromEntries(alias.map(a => [a.nome, a.user_id])),
-    commSede: commSede.map(r => ({ ...r, risulta: al(r.nome, r.sede_id), sedeAlias: aliasSede.find(a => a.sede_id === r.sede_id && a.nome === r.nome.trim().toUpperCase())?.user_id || null })),
+    commSede: commSede.map(r => ({ ...r, risulta: r.origine === 'app' ? r.nome : al(r.nome, r.sede_id), sedeAlias: aliasSede.find(a => a.sede_id === r.sede_id && a.nome === r.nome.trim().toUpperCase())?.user_id || null })),
     vendAnno: { anno: annoOra, righe: [...vend].map(([k, n]) => { const [sede, venditore] = k.split('|'); return { sede, venditore, n }; }).sort((a, b) => a.sede.localeCompare(b.sede, 'it') || b.n - a.n) },
     setter: await setterList(),
     persone: pers.map(u => ({ id: u.id, nome: nomeDi(u), figura: u.figura || '' })), totali: Object.fromEntries(tot.map(r => [r.origine, r.n])),
