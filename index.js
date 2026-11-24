@@ -22,6 +22,9 @@ const crm = require('./crm/server');
 const cassa = require('./cassa/server');
 const compensi = require('./compensi/server');
 const classifiche = require('./classifiche/server');
+// suite per più clienti: To Smile è il cliente zero (questo processo); ogni altro cliente gira in un motore suo
+const SUITE = require('./lib/suite');
+const suite = require('./suite/manager');
 // Gestione ASO vive su appgestione.it/aso/ (stesso dominio dell'accesso unico: niente nuovi domini da collegare)
 const asoMontata = require('express')();
 asoMontata.use((req, res, next) => req.url === '/aso' || req.url.startsWith('/aso?') ? res.redirect(301, '/aso/' + req.url.slice(4)) : next());
@@ -63,6 +66,43 @@ function route(req) {
   return protocolli.app;
 }
 
+// motore di un cliente: entrata dall'accesso centrale, app non comprese spente, indirizzi di To Smile → indirizzi del cliente
+function motoreCliente(req, res) {
+  const h = hostOf(req), u = req.url || '/';
+  if (u.startsWith('/_suite/entra')) {
+    const c = new URL(u, 'https://x').searchParams.get('c');
+    suite.ritiraEntrata(c).then(token => {
+      if (!token) { res.writeHead(302, { Location: '/accedi' }); return res.end(); }
+      res.writeHead(302, { Location: '/', 'Set-Cookie': `${process.env.ACCESSI_COOKIE}=${token}; Domain=.${SUITE.BASE}; Path=/; Max-Age=${30 * 86400}; HttpOnly;${process.env.NODE_ENV === 'production' ? ' Secure;' : ''} SameSite=Lax`, 'Cache-Control': 'no-store' });
+      res.end();
+    }, () => { res.writeHead(302, { Location: '/accedi' }); res.end(); });
+    return false;
+  }
+  const off = SUITE.spenta(h, u);
+  if (off) {
+    res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end(`<!doctype html><html lang="it"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>App non attiva</title><body style="margin:0;font-family:system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;padding:24px;text-align:center"><div><h1 style="font-size:20px">${off.nome}: app non attiva</h1><p style="color:#6B7276">Non è compresa nella tua suite. Chiedi al tuo amministratore.</p><p><a href="https://${SUITE.host('')}/">Torna alle tue app</a></p></div></body></html>`);
+    return false;
+  }
+  // indirizzi nelle risposte: https://turni.appgestione.it → https://turni-<cliente>.appgestione.it (pagine, script, dati, rinvii)
+  const sh = res.setHeader.bind(res), wh = res.writeHead.bind(res);
+  res.setHeader = (k, v) => sh(k, /^location$/i.test(k) ? SUITE.riscrivi(v) : v);
+  res.writeHead = (code, ...a) => { const hd = a.find(x => x && typeof x === 'object'); if (hd) for (const k of Object.keys(hd)) if (/^location$/i.test(k)) hd[k] = SUITE.riscrivi(hd[k]); return wh(code, ...a); };
+  const testo = () => /text\/html|javascript|json|text\/css|manifest/i.test(String(res.getHeader('content-type') || ''));
+  const parti = []; let buf = null;
+  const w = res.write.bind(res), e = res.end.bind(res);
+  res.write = (ch, enc, cb) => { if (buf === null) buf = testo(); if (!buf) return w(ch, enc, cb); if (ch) parti.push(Buffer.isBuffer(ch) ? ch : Buffer.from(ch, typeof enc === 'string' ? enc : 'utf8')); if (typeof cb === 'function') cb(); else if (typeof enc === 'function') enc(); return true; };
+  res.end = (ch, enc, cb) => {
+    if (buf === null) buf = testo();
+    if (!buf) return e(ch, enc, cb);
+    if (ch && typeof ch !== 'function') parti.push(Buffer.isBuffer(ch) ? ch : Buffer.from(ch, typeof enc === 'string' ? enc : 'utf8'));
+    const out = Buffer.from(SUITE.riscrivi(Buffer.concat(parti).toString('utf8')), 'utf8');
+    if (!res.headersSent) { res.removeHeader('content-length'); res.removeHeader('etag'); res.setHeader('content-length', out.length); }
+    return e(out, typeof ch === 'function' ? ch : typeof enc === 'function' ? enc : cb);
+  };
+  return true;
+}
+
 (async () => {
   await accessi.start();
   await protocolli.start();
@@ -76,6 +116,7 @@ function route(req) {
   await cassa.start();
   await compensi.start();
   await classifiche.start();
+  await suite.start();
   { // quali fornitori esterni sono attivi (solo i nomi, mai le chiavi): serve per l'elenco dei fornitori nella privacy
     const ai = require('./lib/ai'), p = ai.providerInfo(), e = ai.embedInfo();
     console.log(`Fornitori esterni attivi: assistente Protocolli = ${p.ok ? p.provider + ' (' + p.model + ')' : 'nessuno'}, ricerca per significato = ${e.ok ? e.provider : 'nessuna'}, `
@@ -83,8 +124,11 @@ function route(req) {
   }
   // Trasloco del database (solo sul servizio nuovo, con COPIA_DA): copia tutto e poi riparte con i dati copiati
   if (await require('./lib/trasloco').eseguiSeServe()) { console.log('Trasloco completato: riavvio per caricare i dati copiati.'); process.exit(1); }
-  http.createServer((req, res) => {
+  http.createServer(async (req, res) => {
     if (req.url === '/healthz') { res.writeHead(200); return res.end('ok'); }
+    // richieste per un cliente della suite (rossi.appgestione.it…): vanno al suo motore
+    if (await suite.inoltra(req, res).catch(e => { console.error('Suite:', e.message); return false; })) return;
+    if (SUITE.TENANT && !motoreCliente(req, res)) return;
     // caratteri tipografici dai nostri server (niente Google Fonts), per tutte le app e i sottodomini
     if (require('./lib/caratteri').gestisci(req, res)) return;
     // MANUTENZIONE=true: durante il trasloco nessuno può scrivere nel vecchio server (così non si perde niente)

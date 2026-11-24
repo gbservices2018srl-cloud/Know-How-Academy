@@ -8,7 +8,8 @@ const store = require('../../accessi/lib/store');
 const finanza = require('../../lib/finanza');
 
 const url = process.env.DATABASE_URL || '';
-const pool = new Pool({ connectionString: url, ssl: process.env.PGSSL === 'true' || /\.render\.com/.test(url) ? { rejectUnauthorized: false } : false, options: '-c search_path=classifiche,public', max: 3 });
+const SCHEMA_CL = (process.env.CLASSIFICHE_DB_SCHEMA || 'classifiche').replace(/[^a-z0-9_]/gi, '').toLowerCase() || 'classifiche';
+const pool = new Pool({ connectionString: url, ssl: process.env.PGSSL === 'true' || /\.render\.com/.test(url) ? { rejectUnauthorized: false } : false, options: `-c search_path=${SCHEMA_CL},public`, max: 3 });
 const q = (t, p) => pool.query(t, p);
 const S = {
   crm: (process.env.CRM_DB_SCHEMA || 'crm').replace(/[^a-z0-9_]/gi, '').toLowerCase() || 'crm',
@@ -17,7 +18,7 @@ const S = {
 };
 
 async function migrate() {
-  await q('create schema if not exists classifiche');
+  await q(`create schema if not exists ${SCHEMA_CL}`);
   await q(`
     create table if not exists gradi (categoria text not null, user_id text not null, periodo text not null, grado smallint not null, nome text not null default '', il timestamptz not null default now(), primary key (categoria, user_id, periodo));
     create table if not exists medaglie (id bigserial primary key, categoria text not null, periodo text not null, tipo text not null, user_id text not null, nome text not null default '', valore text not null default '', il timestamptz not null default now(), unique (categoria, periodo, tipo, user_id));

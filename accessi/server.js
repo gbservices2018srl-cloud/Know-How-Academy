@@ -10,7 +10,8 @@ const profilo = require('./lib/profilo');
 const crescita = require('../lib/crescita');
 
 const PROD = process.env.NODE_ENV === 'production';
-const COOKIE = 'ag_sso';
+// ogni cliente della suite ha il suo cookie (ag_<cliente>): To Smile resta ag_sso
+const COOKIE = (process.env.ACCESSI_COOKIE || 'ag_sso').replace(/[^a-z0-9_]/gi, '') || 'ag_sso';
 const BASE_DOMAIN = (process.env.ACCESSI_DOMAIN || 'appgestione.it').toLowerCase();
 const PUBLIC_URL = () => (process.env.ACCESSI_URL || `https://${BASE_DOMAIN}`).replace(/\/$/, '');
 const NOTIFY = () => (process.env.NOTIFY_EMAIL || 'consultingsardegna@gmail.com').split(',').map(s => s.trim()).filter(Boolean);
@@ -77,6 +78,10 @@ app.use(wrap(async (req, res, next) => {
   next();
 }));
 const isAdmin = req => !!req.user && (req.user.owner || req.apps?.accessi === 'admin');
+// suite: un cliente non può avere più utenti attivi dei posti che ha richiesto (SUITE_POSTI)
+const POSTI = parseInt(process.env.SUITE_POSTI, 10) || 0;
+const postiFiniti = async () => POSTI > 0 && (await store.q(`select count(*)::int as n from users where status = 'active'`)).rows[0].n >= POSTI;
+const postiMsg = () => `Hai già ${POSTI} utenti attivi su ${POSTI} posti: per attivare una persona disattivane un'altra oppure chiedi più posti.`;
 const needUser = (req, res, next) => req.user ? next() : bad(res, 401, 'Accesso richiesto');
 const needAdmin = (req, res, next) => isAdmin(req) ? next() : bad(res, 403, 'Solo amministratori');
 // Le richieste che cambiano dati devono essere JSON: un modulo di un altro sito non può inviarle.
@@ -244,7 +249,8 @@ const fullName = u => `${u.first_name} ${u.last_name}`.trim() || u.email;
 
 /* ---------- accesso ---------- */
 app.get('/api/me', needUser, wrap(async (req, res) => {
-  res.json({ user: store.publicUser(req.user), apps: appsForUser(req.apps, await store.appSpente()), admin: isAdmin(req), mail: mail.enabled() });
+  res.json({ user: store.publicUser(req.user), apps: appsForUser(req.apps, await store.appSpente()), admin: isAdmin(req), mail: mail.enabled(),
+    classifiche: require('../lib/suite').accesa('classifiche') });
 }));
 
 app.post('/api/login', wrap(async (req, res) => {
@@ -253,6 +259,12 @@ app.post('/api/login', wrap(async (req, res) => {
   const u = await store.findByEmail(email);
   const bcrypt = require('bcryptjs');
   const ok = u && u.password_hash && await bcrypt.compare(password, u.password_hash);
+  // suite: chi non è di To Smile ma di un cliente entra da qui e viene portato sul suo indirizzo (es. rossi.appgestione.it)
+  if (!u) {
+    const r = await require('../suite/manager').accediCliente(email, password, req.get('user-agent')).catch(e => { console.error('Suite accesso:', e.message); return null; });
+    if (r?.errore) return bad(res, r.errore, r.msg);
+    if (r?.next) { hits.delete('login|' + req.ip + '|' + email); return res.json({ ok: true, next: r.next }); }
+  }
   if (!ok) return bad(res, 401, 'Email o password non corretti.');
   if (u.status === 'pending') return bad(res, 403, "La tua registrazione è in attesa di approvazione. Riceverai un'email quando l'accesso sarà attivo.");
   if (u.status === 'disabled') return bad(res, 403, "Il tuo accesso è stato disattivato. Contatta l'amministratore.");
@@ -573,6 +585,7 @@ app.post('/api/admin/users', needAdmin, wrap(async (req, res) => {
   if (albo.errore) return bad(res, 400, albo.errore);
   const figura = b.figura ? store.cleanFigura(b.figura) : null;
   if (b.figura && !figura) return bad(res, 400, 'Figura non valida.');
+  if (await postiFiniti()) return bad(res, 403, postiMsg());
   const u = await store.createUser({ firstName, lastName, birthDate, email, password: password || null, status: 'active', createdBy: req.user.id, cf, figura, ...albo.dati });
   const avvisi = [];
   for (const [k, v] of Object.entries(b.apps || {})) {
@@ -639,6 +652,7 @@ app.patch('/api/admin/users/:id', needAdmin, wrap(async (req, res) => {
   if (b.status !== undefined) {
     if (!['active', 'disabled'].includes(b.status)) return bad(res, 400, 'Stato non valido');
     if (u.owner || u.id === req.user.id) return bad(res, 400, 'Non puoi disattivare questo account.');
+    if (b.status === 'active' && u.status !== 'active' && await postiFiniti()) return bad(res, 403, postiMsg());
   }
   // approvazione: la scheda deve essere completa (le sedi le sceglie l'amministratore; ai medici arrivano da Nuovalab)
   if (b.status === 'active' && u.status === 'pending' && u.figura !== 'Medico' && !(b.sedi || u.sedi || []).length)
@@ -1310,6 +1324,27 @@ for (const p of ['/accedi', '/registrati', '/password-dimenticata', '/reimposta'
   app.get(p, (req, res) => (req.user && p !== '/reimposta')
     ? res.redirect(safeNext(req.query.next)) : sendPage('accesso.html')(req, res));
 }
+// Pannello /gestione della suite: solo il proprietario di To Smile (mai nei motori dei clienti)
+const SUITE_M = require('../suite/manager');
+const needSuite = (req, res, next) => (SUITE_M.ATTIVA && req.user?.owner) ? next() : bad(res, 403, 'Solo il proprietario della suite.');
+app.get('/gestione', (req, res) => {
+  if (!SUITE_M.ATTIVA) return res.redirect('/');
+  if (!req.user) return res.redirect('/accedi?next=/gestione');
+  if (!req.user.owner) return res.redirect('/');
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, '..', 'suite', 'gestione.html'));
+});
+app.get('/api/gestione/clienti', needSuite, wrap(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ clienti: await SUITE_M.elencoPannello(), catalogo: SUITE_M.catalogo().map(c => ({ id: c.id, nome: c.nome, esterna: !!c.esterna })) });
+}));
+app.post('/api/gestione/clienti', needSuite, wrap(async (req, res) => {
+  try { res.json(await SUITE_M.creaCliente(req.body || {})); } catch (e) { if (e.status) return bad(res, e.status, e.message); throw e; }
+}));
+app.patch('/api/gestione/clienti/:slug', needSuite, wrap(async (req, res) => {
+  try { res.json(await SUITE_M.aggiornaCliente(String(req.params.slug), req.body || {})); } catch (e) { if (e.status) return bad(res, e.status, e.message); throw e; }
+}));
+
 app.get('/admin', (req, res) => {
   if (!req.user) return res.redirect('/accedi?next=/admin');
   if (!isAdmin(req)) return res.redirect('/');

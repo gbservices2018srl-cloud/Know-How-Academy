@@ -6,7 +6,7 @@
 // livelli: i ruoli interni dell'app; il pannello accessi li assegna (con laboratorio/studio/medico/azienda)
 // multi: la persona può lavorare in più studi (il primo è quello principale; nell'app sceglie lo studio in alto)
 // e la funzione "sso" crea o aggiorna il profilo nell'app, così la persona non deve avere un'altra password.
-module.exports = [
+module.exports = require('../lib/suite').filtraApps([
   // Gestione amministrativa (prima "Controllo di gestione"): Gestione finanziaria, App di bilancio e Raffronto prezzi
   { key: 'controllo', name: 'Gestione amministrativa', url: 'https://appgestione.it/c/controllo', color: 'teal', virtuale: true,
     gruppo: ['finanza', 'bilancio', 'prezzi', 'compensi'],
@@ -194,4 +194,4 @@ module.exports = [
     desc: 'Elenchi delle scelte del CRM (tipi di opportunità, marketing, tipi PDC) e importazione dal vecchio foglio Google.' },
   { key: 'accessi', name: 'Gestione accessi', url: '/admin', color: 'grey', adminOnly: true,
     desc: 'Approva le registrazioni e decide chi entra in quali app.' },
-];
+]);

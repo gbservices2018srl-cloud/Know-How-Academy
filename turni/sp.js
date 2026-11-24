@@ -42,8 +42,14 @@ module.exports = function sp(app, ctx) {
   const q = db.q;
 
   let pronto = null;
+  // le tabelle prima, poi le aggiunte (alter/index): così la migrazione funziona anche su un database nuovo (clienti della suite)
+  const inOrdine = async sql => {
+    const st = sql.split('\n').filter(r => !/^\s*--/.test(r)).join('\n').split(/;\s*\n/).map(x => x.trim().replace(/;$/, '')).filter(Boolean);
+    for (const x of st.filter(x => /^create table/i.test(x))) await q(x);
+    for (const x of st.filter(x => !/^create table/i.test(x))) await q(x);
+  };
   const migrate = () => pronto || (pronto = (async () => {
-    await q(`
+    await inOrdine(`
       create table if not exists sp_persone (user_id text primary key, tipo text, tipo_ok boolean not null default false, ore_sett numeric,
         senza_nfc boolean not null default false, sedi jsonb, onb timestamptz, aggiornato timestamptz not null default now());
       create table if not exists sp_tag (cod text primary key, sede_id text, uid text, protetto boolean not null default false, ctr int not null default -1,
@@ -55,6 +61,22 @@ module.exports = function sp(app, ctx) {
       alter table sp_timbrature add column if not exists lat numeric(7,3);
       alter table sp_timbrature add column if not exists lon numeric(7,3);
       alter table sp_timbrature add column if not exists prec int;
+      create table if not exists sp_turni (id text primary key, user_id text not null, giorno date not null, sede_id text, da text not null, a text not null,
+        pausa int not null default 0, nota text not null default '', aggiornato timestamptz not null default now());
+      create index if not exists sp_turni_g on sp_turni (giorno, user_id);
+      create table if not exists sp_preset (id text primary key, nome text not null, da text not null, a text not null, pausa int not null default 0, ordine int not null default 0);
+      create table if not exists sp_richieste (id text primary key, user_id text not null, tipo text not null, dal date not null, al date not null,
+        ora_da text, ora_a text, quanti numeric, sost_id text, sost_ok boolean, stato text not null, nota text not null default '', prot text not null default '',
+        creata timestamptz not null default now(), decisa_il timestamptz, decisa_da text, nota_admin text not null default '');
+      create table if not exists sp_movimenti (id text primary key, user_id text not null, voce text not null, tipo text not null, valore numeric not null,
+        data date not null, causale text not null default '', rif text, il timestamptz not null default now(), da text, annullato boolean not null default false);
+      create table if not exists sp_mancate (user_id text not null, giorno date not null, esito text not null, valore numeric, mov_id text,
+        annullata boolean not null default false, il timestamptz not null default now(), primary key (user_id, giorno));
+      create table if not exists sp_docs (id text primary key, user_id text, tipo text not null, periodo text not null default '', titolo text not null default '',
+        file bytea, iv bytea, tag bytea, impronta text, pagine int, stato text not null default 'bozza', saldi jsonb, origine text not null default '',
+        pagina int, suggerito text, caricato timestamptz not null default now(), pubblicato timestamptz, visto timestamptz, ricevuto timestamptz,
+        ricevuto_disp text, da text);
+      -- (aggiunte alle tabelle qui sopra: dopo la loro creazione, così funziona anche su un database nuovo)
       -- lutto (certificato di morte) e malattia (protocollo): approvate subito, ma restano da completare fino alla scadenza
       alter table sp_richieste add column if not exists doc_stato text not null default '';
       alter table sp_richieste add column if not exists scadenza date;
@@ -75,21 +97,6 @@ module.exports = function sp(app, ctx) {
       alter table sp_docs add column if not exists firmato timestamptz;
       alter table sp_docs add column if not exists firma_disp text;
       alter table sp_docs add column if not exists firma_impronta text;
-      create table if not exists sp_turni (id text primary key, user_id text not null, giorno date not null, sede_id text, da text not null, a text not null,
-        pausa int not null default 0, nota text not null default '', aggiornato timestamptz not null default now());
-      create index if not exists sp_turni_g on sp_turni (giorno, user_id);
-      create table if not exists sp_preset (id text primary key, nome text not null, da text not null, a text not null, pausa int not null default 0, ordine int not null default 0);
-      create table if not exists sp_richieste (id text primary key, user_id text not null, tipo text not null, dal date not null, al date not null,
-        ora_da text, ora_a text, quanti numeric, sost_id text, sost_ok boolean, stato text not null, nota text not null default '', prot text not null default '',
-        creata timestamptz not null default now(), decisa_il timestamptz, decisa_da text, nota_admin text not null default '');
-      create table if not exists sp_movimenti (id text primary key, user_id text not null, voce text not null, tipo text not null, valore numeric not null,
-        data date not null, causale text not null default '', rif text, il timestamptz not null default now(), da text, annullato boolean not null default false);
-      create table if not exists sp_mancate (user_id text not null, giorno date not null, esito text not null, valore numeric, mov_id text,
-        annullata boolean not null default false, il timestamptz not null default now(), primary key (user_id, giorno));
-      create table if not exists sp_docs (id text primary key, user_id text, tipo text not null, periodo text not null default '', titolo text not null default '',
-        file bytea, iv bytea, tag bytea, impronta text, pagine int, stato text not null default 'bozza', saldi jsonb, origine text not null default '',
-        pagina int, suggerito text, caricato timestamptz not null default now(), pubblicato timestamptz, visto timestamptz, ricevuto timestamptz,
-        ricevuto_disp text, da text);
       create table if not exists sp_piani (id text primary key, nome text not null, ordine int not null default 0, archiviato boolean not null default false);
       create table if not exists sp_livelli (id text primary key, piano_id text not null, n int not null, ruolo text not null, bonus text not null default '', archiviato boolean not null default false);
       alter table sp_livelli add column if not exists fisso text not null default '';
