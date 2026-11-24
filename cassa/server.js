@@ -395,23 +395,14 @@ async function adminProduzione() {
 const avvisa = (ids, payload) => require('../accessi/lib/notifiche').notifica(ids, KEY_P, payload).catch(e => console.warn('REC notifica:', e.message));
 const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
 const euroTxt = n => (Math.round(n * 100) / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
-// manda il valore nel Consuntivo (Produzione della sede, quel mese)
-async function sincronizza(r) {
-  const az = await finanza.aziendaToSmile();
-  if (!az) throw new Error('Non trovo l\'azienda To Smile in Gestione finanziaria.');
-  const cons = await finanza.chiama(`/api/_appgestione/consuntivo?azienda=${encodeURIComponent(az)}&anno=${r.anno}&mese=${r.mese}`);
-  if (cons.annoNelGestionale !== r.anno) throw new Error(`In Gestione finanziaria il consuntivo aperto è del ${cons.annoNelGestionale}, non del ${r.anno}.`);
-  const f = sedeFin(cons, r.sede_nome);
-  if (!f) throw new Error(`La sede ${r.sede_nome} non c'è in Gestione finanziaria (controlla che abbia lo stesso nome).`);
-  return finanza.scrivi('/api/_appgestione/produzione', { azienda: az, sedeId: f.id, anno: r.anno, mese: r.mese, valore: num(r.valore) });
-}
+// approvazione: la produzione resta nella tabella riepilogativa (serve anche alle classifiche).
+// Nel Consuntivo della Gestione finanziaria la produzione arriva ormai da AlfaDocs, non più da qui.
 async function approva(r, chi) {
   try {
-    const x = await sincronizza(r);
-    await db.q(`update produzione set stato = 'approvata', deciso_da = $4, deciso_nome = $5, deciso_il = now(), sincronizzato_il = now(), errore = '', valore_prima = $6
-      where sede_id = $1 and anno = $2 and mese = $3`, [r.sede_id, r.anno, r.mese, chi.id, chi.nome, x.prima ?? null]);
-    log('produzione approvata', `${r.sede_id}|${r.anno}-${r.mese}`, chi.nome, { valore: x.prima }, { valore: num(r.valore) });
-    return { ok: true, prima: x.prima };
+    await db.q(`update produzione set stato = 'approvata', deciso_da = $4, deciso_nome = $5, deciso_il = now(), errore = ''
+      where sede_id = $1 and anno = $2 and mese = $3`, [r.sede_id, r.anno, r.mese, chi.id, chi.nome]);
+    log('produzione approvata', `${r.sede_id}|${r.anno}-${r.mese}`, chi.nome, null, { valore: num(r.valore) });
+    return { ok: true };
   } catch (e) {
     const msg = finanza.messaggio(e);
     await db.q(`update produzione set errore = $4 where sede_id = $1 and anno = $2 and mese = $3`, [r.sede_id, r.anno, r.mese, msg]);
