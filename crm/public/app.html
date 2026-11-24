@@ -958,6 +958,7 @@ const NOMI_L = { tipo_ov: 'Tipi di opportunità', marketing: 'Canali marketing',
 async function vListe() {
   $('#main').innerHTML = '<div class="empty">Caricamento…</div>';
   try { LI.d = await api('GET', 'api/liste'); } catch (x) { $('#main').innerHTML = `<div class="err">${esc(x.message)}</div>`; return; }
+  LI.meta = await api('GET', 'api/meta/stato').catch(() => null);
   drawListe();
 }
 function drawListe() {
@@ -973,7 +974,7 @@ function drawListe() {
     <form class="bar" data-add="${t}"><input name="v" placeholder="Nuova voce" style="flex:1;border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:40px"><button class="btn sm primary">Aggiungi</button></form>
     ${lista(t) || '<p class="muted">Nessuna voce.</p>'}
     ${(n => n ? `<button class="btn sm" type="button" data-nasc="${t}" style="margin-top:10px;border:0;background:none;color:var(--muted);text-decoration:underline">${LI.nascoste === t ? 'Chiudi le voci nascoste' : 'Voci nascoste: ' + n}</button>` : '')(d.liste[t].filter(x => !x.attivo).length)}</div>`).join('')}</div>
-  ${personeSediHtml()}${setterHtml()}${controlloVendHtml()}
+  ${personeSediHtml()}${setterHtml()}${metaHtml()}${controlloVendHtml()}
   <datalist id="dl-pers">${(d.persone || []).map(u => `<option value="${esc(persLab(u))}">`).join('')}</datalist>`;
 }
 // persona dell'anagrafica dal testo scritto: nome esatto, oppure l'unica che contiene tutte le parole
@@ -991,6 +992,31 @@ function setterHtml() {
     ${st.map(x => `<div class="lrow"><span class="nm">${esc(x.nome)}</span><button class="btn sm" type="button" data-settogli="${esc(x.user_id)}">Togli</button></div>`).join('') || '<p class="muted">Nessun setter.</p>'}
     <div class="bar" style="margin-top:10px"><input id="set-add" list="dl-pers" placeholder="Scrivi il nome e scegli dall'elenco" style="flex:1;border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:40px"><button class="btn sm primary" type="button" id="set-ok">Aggiungi setter</button></div></div>`;
 }
+// Lead da Meta: stato del collegamento, setter per sede, recupero degli ultimi giorni
+function metaHtml() {
+  const m = LI.meta; if (!m) return '';
+  const n = k => (m.conteggi.find(x => x.esito === k) || {}).n || 0;
+  const ult = m.conteggi.map(x => x.ultimo).filter(Boolean).sort().pop();
+  return `<div class="card sez" style="margin-top:12px"><h3>Lead da Meta (Facebook / Instagram)</h3>
+    <p class="muted" style="margin-top:0;font-size:13px">${m.configurato
+      ? `Collegato (${m.pagine} ${m.pagine === 1 ? 'pagina' : 'pagine'}). Ricevuti: ${n('inserito')} nuovi, ${n('doppione')} già presenti${ult ? ' · ultimo il ' + new Date(ult).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : ''}.`
+      : 'Non ancora collegato: si configura insieme con l\'accesso Meta.'}
+      I lead entrano da soli in Gestione lead con canale META; la sede si prende dal modulo o dal nome della campagna.</p>
+    <p class="muted" style="font-size:13px;margin:0 0 6px"><b>Setter per sede</b>: a chi va subito il lead di quella sede.</p>
+    ${m.sedi.map(s => `<div class="lrow"><span class="nm">${esc(s.nome)}</span><select data-msede="${esc(s.id)}" aria-label="Setter di ${esc(s.nome)}"><option value="">Da assegnare</option>${m.setter.map(x => `<option value="${esc(x.user_id)}" ${m.setterSede[s.id] === x.user_id ? 'selected' : ''}>${esc(x.nome)}</option>`).join('')}</select></div>`).join('')}
+    ${m.configurato ? '<div class="bar" style="margin-top:10px"><button class="btn sm" type="button" id="meta-rec">Recupera i lead degli ultimi 7 giorni</button></div>' : ''}
+  </div>`;
+}
+document.addEventListener('change', async e => {
+  const s = e.target.closest('[data-msede]'); if (!s) return;
+  try { LI.meta.setterSede = (await api('PUT', 'api/meta/setter-sede', { sedeId: s.dataset.msede, userId: s.value })).setterSede; toast('Setter della sede salvato.'); } catch (y) { toast(y.message); }
+});
+document.addEventListener('click', async e => {
+  if (e.target.id !== 'meta-rec') return;
+  e.target.disabled = true;
+  try { const o = await api('POST', 'api/meta/recupera', { giorni: 7 }); toast(`Recuperati: ${o.inserito} nuovi, ${o.doppione} già presenti${o.errori ? ', ' + o.errori + ' non letti' : ''}.`, 5000); LI.meta = await api('GET', 'api/meta/stato'); drawListe(); }
+  catch (y) { toast(y.message); e.target.disabled = false; }
+});
 // Controllo venditori: per sede, i nomi scritti nei preventivi e a chi vanno nella classifica. Il collegamento vale solo in quella sede.
 function controlloVendHtml() {
   const d = LI.d, cs = d.commSede || [], va = d.vendAnno || { righe: [] };

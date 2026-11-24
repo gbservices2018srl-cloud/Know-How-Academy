@@ -10,6 +10,7 @@ const db = require('./lib/db');
 const K = require('./lib/kpi');
 const importa = require('./lib/importa');
 const LD = require('./lib/lead');
+const META = require('./lib/meta');
 const accessi = require('../accessi/server');
 const store = accessi.store;
 const consumo = require('../lib/consumo');
@@ -18,7 +19,8 @@ const app = express();
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 app.use((req, res, next) => { res.set({ 'X-Frame-Options': 'DENY', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin' }); next(); });
-app.use(express.json({ limit: '1mb' }));
+// il corpo grezzo serve per controllare la firma di Meta sui lead in arrivo
+app.use(express.json({ limit: '1mb', verify: (req, res, buf) => { if (req.originalUrl.includes('/api/meta/webhook')) req.rawBody = Buffer.from(buf); } }));
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 40 * 1024 * 1024, files: 1 } });
 
 const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -692,6 +694,91 @@ app.get('/api/lead/dashboard', needUser, need('lead'), wrap(async (req, res) => 
   const visite = new Map(LD.confronta(fiss, prev, oggi()).map(v => [v.id, v]));
   res.set('Cache-Control', 'no-store');
   res.json({ oggi: oggi(), setter: await setterList(), righe: leads.map(l => ({ ...l, visita: visite.get(l.id) || null })) });
+}));
+
+/* ============ LEAD DA META (Facebook / Instagram) ============ */
+// Meta chiama questo indirizzo: https://appgestione.it/crm/api/meta/webhook (verifica con META_VERIFY_TOKEN, firma con META_APP_SECRET).
+// Il lead entra in Gestione lead: canale META, sede dal modulo o dalla campagna (scritta nelle info), setter scelto per quella sede in Liste.
+app.get('/api/meta/webhook', (req, res) => {
+  const ok = req.query['hub.mode'] === 'subscribe' && process.env.META_VERIFY_TOKEN && req.query['hub.verify_token'] === process.env.META_VERIFY_TOKEN;
+  return ok ? res.type('text/plain').send(String(req.query['hub.challenge'] || '')) : res.sendStatus(403);
+});
+app.post('/api/meta/webhook', (req, res) => {
+  if (!META.firmaOk(req.rawBody, req.get('x-hub-signature-256'))) return res.sendStatus(403);
+  res.sendStatus(200); // si risponde subito, il lead si legge dopo
+  for (const e of req.body?.entry || []) for (const c of e.changes || []) {
+    if (c.field !== 'leadgen' || !c.value?.leadgen_id) continue;
+    metaLead(String(c.value.leadgen_id), String(c.value.page_id || e.id || ''), c.value.form_id).catch(x => console.error('CRM Meta:', x.message));
+  }
+});
+async function metaLead(leadgenId, pageId, formId, dato = null) {
+  // una volta sola per lead di Meta
+  const { rowCount } = await db.q(`insert into meta_lead (leadgen_id, pagina, esito) values ($1, $2, 'in corso') on conflict do nothing`, [leadgenId, pageId]);
+  if (!rowCount) return 'già ricevuto';
+  try {
+    const token = META.chiavePagina(pageId);
+    if (!token) throw new Error('manca la chiave della pagina ' + pageId);
+    const L = dato || await META.leggiLead(leadgenId, token);
+    const f = META.campi(L.field_data);
+    const modulo = await META.nomeModulo(L.form_id || formId, token);
+    const { sede, come } = META.sedeDa(await tutteLeSedi(), f.sede, [L.campaign_name, L.adset_name, L.ad_name, modulo]);
+    const tel = LD.normTel(f.telefono);
+    // stesso telefono già in Gestione lead: non si crea un doppione
+    if (tel.length >= 6) {
+      const { rows } = await db.q(`select id, telefono from leads where right(regexp_replace(telefono, '\\D', '', 'g'), 9) = right($1, 9)`, [tel]);
+      const d = rows.find(x => LD.normTel(x.telefono) === tel);
+      if (d) { await db.q(`update meta_lead set lead_id = $2, esito = 'doppione' where leadgen_id = $1`, [leadgenId, d.id]); return 'doppione'; }
+    }
+    const perSede = (await imp('meta_setter_sede')) || {};
+    const setter = sede && perSede[sede.id] ? (await setterList()).find(x => x.user_id === perSede[sede.id]) : null;
+    const info = [
+      sede ? `Sede: ${sede.nome} (${come})` : 'Sede: da scegliere',
+      L.campaign_name && `Campagna: ${L.campaign_name}`, modulo && `Modulo: ${modulo}`, f.email && `Email: ${f.email}`, ...f.altre,
+    ].filter(Boolean).join(' · ').slice(0, 2000);
+    const data = L.created_time ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date(L.created_time)) : oggi();
+    const id = db.newId();
+    await db.q(`insert into leads (id, nome, cognome, telefono, info, marketing, esito, data_lead, setter_id, setter_nome, origine, creato_da, aggiornato_da)
+      values ($1,$2,$3,$4,$5,'META','DA CHIAMARE',$6,$7,$8,'meta','meta','meta')`,
+      [id, str(f.nome, 80).toUpperCase(), str(f.cognome, 80).toUpperCase(), str(f.telefono, 40), info, data, setter?.user_id || null, setter?.nome || '']);
+    await db.q(`update meta_lead set lead_id = $2, esito = 'inserito' where leadgen_id = $1`, [leadgenId, id]);
+    console.log('CRM Meta: nuovo lead inserito' + (sede ? ` (${sede.nome})` : ' (sede da scegliere)'));
+    return 'inserito';
+  } catch (e) {
+    await db.q(`update meta_lead set esito = $2 where leadgen_id = $1`, [leadgenId, ('errore: ' + e.message).slice(0, 300)]);
+    throw e;
+  }
+}
+// Liste: stato del collegamento, setter per sede, recupero dei lead degli ultimi giorni (se un avviso di Meta si fosse perso)
+app.get('/api/meta/stato', needUser, need('liste'), wrap(async (req, res) => {
+  const { rows } = await db.q(`select esito, count(*)::int as n, max(ricevuto_il) as ultimo from meta_lead group by 1`);
+  res.json({ configurato: META.configurato(), pagine: META.pagine().length || (process.env.META_PAGE_TOKEN ? 1 : 0), conteggi: rows,
+    setterSede: (await imp('meta_setter_sede')) || {}, sedi: await tutteLeSedi(), setter: await setterList() });
+}));
+app.put('/api/meta/setter-sede', needUser, need('liste'), wrap(async (req, res) => {
+  const sede = (await tutteLeSedi()).find(s => s.id === str(req.body.sedeId, 60)); if (!sede) return bad(res, 400, 'Sede non valida.');
+  const uid = str(req.body.userId, 60), m = (await imp('meta_setter_sede')) || {};
+  if (uid && !(await setterList()).some(x => x.user_id === uid)) return bad(res, 400, 'Scegli un setter dell\'elenco.');
+  if (uid) m[sede.id] = uid; else delete m[sede.id];
+  await impSet('meta_setter_sede', m);
+  res.json({ ok: true, setterSede: m });
+}));
+app.post('/api/meta/recupera', needUser, need('liste'), wrap(async (req, res) => {
+  if (!META.configurato()) return bad(res, 400, 'Collegamento con Meta non ancora configurato.');
+  const giorni = Math.min(30, Math.max(1, parseInt(req.body.giorni, 10) || 7)), da = Math.floor(Date.now() / 1000) - giorni * 86400;
+  const conta = { inserito: 0, doppione: 0, 'già ricevuto': 0, errori: 0 };
+  for (const pageId of META.pagine().length ? META.pagine() : ['']) {
+    const token = META.chiavePagina(pageId);
+    const pid = pageId || (await META.graph('me?fields=id', token)).id;
+    const forms = (await META.graph(`${pid}/leadgen_forms?fields=id&limit=100`, token)).data || [];
+    for (const fm of forms) {
+      const filtro = encodeURIComponent(JSON.stringify([{ field: 'time_created', operator: 'GREATER_THAN', value: da }]));
+      const lst = (await META.graph(`${fm.id}/leads?fields=id,created_time,field_data,ad_name,adset_name,campaign_name,form_id&limit=200&filtering=${filtro}`, token)).data || [];
+      for (const l of lst) {
+        try { conta[await metaLead(String(l.id), pid, fm.id, l)]++; } catch { conta.errori++; }
+      }
+    }
+  }
+  res.json({ ok: true, ...conta });
 }));
 
 /* ---------- pagine ---------- */
