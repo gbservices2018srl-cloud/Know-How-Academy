@@ -92,7 +92,8 @@ const views = {
     document.title = 'Registrati · To Smile';
     $('#wrap').classList.add('wide');
     setHead('Crea il tuo <span>accesso</span>', "Compila i dati: l'amministratore riceve la richiesta e ti abilita alle app di cui hai bisogno. Ti avvisiamo via email.");
-    $('#card').innerHTML = `<form id="f" novalidate>
+    const sedeCentrale = /^(www\.)?appgestione\.it$/.test(location.hostname);
+    $('#card').innerHTML = `${sedeCentrale ? '<a class="btn" href="/iscriviti" style="display:block;text-align:center;text-decoration:none;margin-bottom:16px;border:1.5px solid var(--teal,#2b8a83);color:var(--teal,#2b8a83);background:transparent">🏢 Voglio iscrivermi come nuova azienda</a>' : ''}<form id="f" novalidate>
       <div class="two">
         <label class="field" for="fn">Nome<input id="fn" autocomplete="given-name" required maxlength="80"></label>
         <label class="field" for="ln">Cognome<input id="ln" autocomplete="family-name" required maxlength="80"></label>
