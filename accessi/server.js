@@ -250,7 +250,7 @@ const fullName = u => `${u.first_name} ${u.last_name}`.trim() || u.email;
 /* ---------- accesso ---------- */
 app.get('/api/me', needUser, wrap(async (req, res) => {
   res.json({ user: store.publicUser(req.user), apps: appsForUser(req.apps, await store.appSpente()), admin: isAdmin(req), mail: mail.enabled(),
-    classifiche: require('../lib/suite').accesa('classifiche'), collegamenti: !!require('../lib/suite').TENANT && (!!req.user.owner || req.apps?.accessi === 'admin') });
+    classifiche: require('../lib/suite').accesa('classifiche'), collegamenti: !!req.user.owner || (!!require('../lib/suite').TENANT && req.apps?.accessi === 'admin') });
 }));
 
 app.post('/api/login', wrap(async (req, res) => {
@@ -1333,7 +1333,7 @@ const needSuite = (req, res, next) => {
 };
 const PANNELLO = require('../suite/pannello');
 PANNELLO.monta(app, { wrap, bad });
-require('../suite/collegamenti').monta(app, { wrap, bad });
+require('../suite/collegamenti').monta(app, { wrap, bad, sedi: () => store.listSedi() });
 app.get('/gestione', (req, res) => {
   if (!SUITE_M.ATTIVA) return res.redirect('/');
   if (!req.user) return res.redirect('/accedi?next=/gestione');

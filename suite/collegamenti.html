@@ -55,12 +55,14 @@ code{background:var(--teal-soft);padding:2px 6px;border-radius:6px;font-size:12.
     </div>
   </div>
 
-  <div class="card">
-    <div class="head"><h2>AlfaDocs</h2><span class="chip off">in preparazione</span></div>
-    <p class="small">Il collegamento con il gestionale AlfaDocs (pazienti e appuntamenti nel tuo CRM) è in preparazione: quando è pronto qui potrai inserire la tua chiave.</p>
+  <div class="card" id="alfa">
+    <div class="head"><h2>AlfaDocs</h2><span class="chip off" id="a-stato">…</span></div>
+    <p class="small">Una chiave per ogni sede: in AlfaDocs, entrando nella sede, <b>Impostazioni → Studio → Chiavi</b>. Servirà per fatturato e produzione di ogni sede ed eseguito di ogni medico.</p>
+    <div id="a-sedi"></div>
+    <div class="msg" id="a-msg" role="status"></div>
   </div>
 
-  <div class="card">
+  <div class="card" id="nl">
     <div class="head"><h2>Nuovalab</h2><span class="chip off">non attivo</span></div>
     <p class="small">Prescrizioni e lavori con i tuoi laboratori e i tuoi medici, in un archivio solo tuo, separato da tutti gli altri. Per attivarlo contatta To Smile.</p>
   </div>
@@ -78,13 +80,42 @@ function disegna(s) {
   $('#m-nocrm').hidden = s.crm; $('#m-form').hidden = !s.crm;
   $('#m-stato').textContent = m.pronto ? 'collegato ✓' : (m.secret || m.pagine.length ? 'da completare' : 'non collegato');
   $('#m-stato').className = 'chip ' + (m.pronto ? 'ok' : m.secret || m.pagine.length ? 'warn' : 'off');
+  if (m.daRender) $('#m-stato').textContent = 'collegato (chiavi su Render)';
   $('#m-url').textContent = m.webhook; $('#m-ver').textContent = m.verify; $('#m-sec-ok').hidden = !m.secret;
   $('#m-pagine').innerHTML = m.pagine.length ? m.pagine.map(id => `<div class="pg"><span>Pagina <b>${esc(id)}</b> <span class="small">(token salvato)</span></span><button class="btn sm" type="button" data-togli="${esc(id)}">Togli</button></div>`).join('') : '<p class="small" style="margin:4px 0">Nessuna pagina ancora: aggiungila qui sotto.</p>';
 }
-const carica = () => api('GET', '/api/collegamenti').then(disegna).catch(e => msg(e.message));
+const amsg = (t, ok) => { const m = $('#a-msg'); m.textContent = t; m.className = 'msg ' + (ok ? 'ok' : 'err'); };
+function alfa(s) {
+  const L = s.alfadocs.sedi, n = L.filter(x => x.collegata).length;
+  $('#nl').hidden = s.tosmile;
+  $('#a-stato').textContent = n ? `${n} su ${L.length} sedi collegate` : 'non collegato';
+  $('#a-stato').className = 'chip ' + (n && n === L.length ? 'ok' : n ? 'warn' : 'off');
+  $('#a-sedi').innerHTML = L.length ? L.map((x, i) => `<div class="pg" style="flex-wrap:wrap"><span style="min-width:140px"><b>${esc(x.nome)}</b> ${x.collegata ? '<span class="chip ok">chiave salvata ✓</span>' : '<span class="chip off">manca</span>'}</span>
+    <span class="row" style="margin:0;flex:1;justify-content:flex-end"><input type="password" autocomplete="off" id="ak-${i}" placeholder="${x.collegata ? 'nuova chiave (per sostituirla)' : 'incolla la chiave'}" style="max-width:260px">
+    <button class="btn sm pri" type="button" data-asalva="${i}">Salva</button>${x.collegata ? `<button class="btn sm" type="button" data-aprova="${i}">Prova</button><button class="btn sm" type="button" data-atogli="${i}">Togli</button>` : ''}</span></div>`).join('')
+    : '<p class="small">Nessuna sede: prima crea le sedi in Gestione accessi.</p>';
+  ALFA = L;
+}
+let ALFA = [];
+const carica = () => api('GET', '/api/collegamenti').then(s => { disegna(s); alfa(s); }).catch(e => msg(e.message));
 document.addEventListener('click', async e => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.copia) { try { await navigator.clipboard.writeText($('#' + b.dataset.copia).textContent); b.textContent = 'Copiato ✓'; } catch { b.textContent = 'Selezionalo e copialo'; } return; }
+  if (b.dataset.asalva != null) {
+    const i = +b.dataset.asalva; b.disabled = true;
+    try { const s = await api('PUT', '/api/collegamenti/alfadocs', { sede: ALFA[i].nome, chiave: $('#ak-' + i).value }); alfa(s); amsg(`Chiave di ${ALFA[i].nome} salvata: premi «Prova».`, true); }
+    catch (x) { amsg(x.message); b.disabled = false; }
+  }
+  if (b.dataset.aprova != null) {
+    const i = +b.dataset.aprova; b.disabled = true; amsg('Provo…', true);
+    try { const r = await api('POST', '/api/collegamenti/alfadocs/prova', { sede: ALFA[i].nome }); amsg(r.ok ? `${ALFA[i].nome}: collegata ✓${r.archivio ? ' (archivio «' + r.archivio + '»)' : ''}` : `${ALFA[i].nome}: ${r.errore}`, r.ok); }
+    catch (x) { amsg(x.message); } b.disabled = false;
+  }
+  if (b.dataset.atogli != null) {
+    const i = +b.dataset.atogli;
+    if (b.dataset.ok !== '1') { b.dataset.ok = '1'; b.textContent = 'Confermi?'; return; }
+    try { alfa(await api('PUT', '/api/collegamenti/alfadocs', { sede: ALFA[i].nome, togli: true })); amsg(`Chiave di ${ALFA[i].nome} tolta.`, true); } catch (x) { amsg(x.message); }
+  }
   if (b.id === 'm-salva') {
     b.disabled = true;
     try { disegna(await api('PUT', '/api/collegamenti/meta', { secret: $('#m-sec').value, pagine: [{ id: $('#m-pid').value, token: $('#m-tok').value }] }));
