@@ -114,6 +114,9 @@ async function migrate() {
     );
     create index if not exists leads_tel_idx on leads(telefono);
     create table if not exists leads_cancellati (id text primary key, dati jsonb not null, cancellato_da text not null default '', cancellato_il timestamptz not null default now());
+    -- lead arrivati da Meta: uno per id di Meta (niente doppioni se Meta avvisa due volte); esito = inserito / doppione / errore
+    create table if not exists meta_lead (leadgen_id text primary key, lead_id text, pagina text not null default '', esito text not null default '',
+      ricevuto_il timestamptz not null default now());
   `);
   // elenchi iniziali, una volta sola
   const { rows: [n] } = await q('select count(*)::int as n from liste');
@@ -130,6 +133,9 @@ async function migrate() {
   // come nella vecchia dashboard: ORALPRO e ORAL PRO sono lo stesso canale (una volta sola; poi si cambia in Liste)
   if ((await q(`insert into impostazioni (k, v) values ('_seme_canali', 'true') on conflict do nothing`)).rowCount)
     await q(`update liste set canale = 'Oral Pro' where tipo = 'marketing' and valore in ('ORALPRO', 'ORAL PRO') and canale = ''`);
+  // canale META per i lead che arrivano dalle inserzioni Facebook / Instagram (una volta sola; si aggiunge soltanto)
+  if ((await q(`insert into impostazioni (k, v) values ('_seme_meta', 'true') on conflict do nothing`)).rowCount)
+    await q(`insert into liste (tipo, valore, attivo) values ('marketing', 'META', true) on conflict do nothing`);
   // canali CONVENZIONI ed EVENTO nel modulo (una volta sola): con questi canali il nome del partner / dell'evento è obbligatorio
   if ((await q(`insert into impostazioni (k, v) values ('_seme_convenzioni_eventi', 'true') on conflict do nothing`)).rowCount)
     for (const v of ['CONVENZIONI', 'EVENTO']) await q(`insert into liste (tipo, valore, attivo) values ('marketing', $1, true) on conflict (tipo, valore) do update set attivo = true`, [v]);
