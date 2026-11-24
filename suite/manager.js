@@ -346,7 +346,6 @@ async function portaNellaSuite(cid, b) {
   if (await cliente(slug)) throw errore('Questo indirizzo è già usato da un altro cliente.', 409);
   const a = (await aziendeFinanza()).find(x => x.id === cid); if (!a) throw errore('Azienda non trovata in Gestione finanziaria.', 404);
   if (a.cliente) throw errore('Questa azienda è già nella suite.', 409);
-  if (a.gruppo) throw errore('Questa azienda è del gruppo To Smile: resta dentro To Smile.', 400);
   const scad = /^\d{4}-\d{2}-\d{2}$/.test(String(b.scadenza || '')) ? String(b.scadenza) : (a.scadenza && a.scadenza >= oggi() ? a.scadenza : new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10));
   await q(`insert into suite.clienti (slug, nome, stato, apps, posti, admin_email, admin_nome, referente, telefono, note, scadenza, finanza_id)
     values ($1,$2,$3,'["finanza"]',1,$4,'',$5,$6,$7,$8,$9)`, [slug, a.nome, a.sospesa ? 'sospeso' : 'attivo', String(a.email || '').toLowerCase(), '', String(a.telefono || ''),

@@ -170,15 +170,15 @@ async function finanza() {
     if (!FIN.aziende) FIN.aziende = (await api('GET', '/api/gestione/finanza/aziende')).aziende;
     const A = FIN.aziende, C = $('#fin-c');
     if (FIN.vista === 'aziende') {
-      const fuori = A.filter(a => !a.gruppo && !a.cliente), dentro = A.filter(a => a.cliente), gruppo = A.filter(a => a.gruppo && !a.cliente);
+      const fuori = A.filter(a => !a.cliente), dentro = A.filter(a => a.cliente);
       const def = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
       const sug = n => String(n || '').toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g, '').replace(/^[^a-z]+/, '').slice(0, 30);
-      C.innerHTML = `<h3>Clienti esterni da portare nella suite</h3>${fuori.length ? fuori.map(a => `<div class="req"><span><b>${esc(a.nome)}</b> · ${esc(a.email || 'senza email')}${a.sospesa ? ' · <span class="chip bad">sospesa</span>' : ''}${a.approvata ? '' : ' · <span class="chip warn">in attesa di approvazione</span>'}${a.scadenza ? ' · scade ' + data(a.scadenza) : ''}</span>
+      C.innerHTML = `<h3>Aziende non ancora nella suite</h3><p class="small" style="margin-top:0">Porta nella suite i clienti (es. Urise, Medigo, Nuova Lab). Le aziende di To Smile lasciale qui: restano come sono.</p>${fuori.length ? fuori.map(a => `<div class="req"><span><b>${esc(a.nome)}</b> · ${esc(a.email || 'senza email')}${a.sospesa ? ' · <span class="chip bad">sospesa</span>' : ''}${a.approvata ? '' : ' · <span class="chip warn">in attesa di approvazione</span>'}${a.scadenza ? ' · scade ' + data(a.scadenza) : ''}${a.gruppo ? ' · <span class="small">la vedono anche persone di To Smile</span>' : ''}</span>
         <span class="row"><input id="ps-${esc(a.id)}" value="${esc(sug(a.nome))}" style="width:130px" aria-label="indirizzo"><span class="small">scadenza</span><input type="date" id="pd-${esc(a.id)}" value="${esc(a.scadenza && a.scadenza >= new Date().toISOString().slice(0, 10) ? a.scadenza : def)}"><button class="btn pri sm" type="button" data-porta="${esc(a.id)}">Porta nella suite</button></span></div>`).join('')
-        : '<p class="small">Nessuna: tutte le aziende esterne sono già nella suite.</p>'}
+        : '<p class="small">Nessuna: sono già tutte nella suite.</p>'}
         <p class="small">Portandola nella suite l'azienda continua a entrare come oggi (nome azienda e password): da qui la rinnovi, la sospendi e le dai una nuova password. Riceve il piano completo. I suoi dati non si toccano.</p>
         <h3>Già nella suite</h3>${dentro.map(a => `<div class="req"><span><b>${esc(a.nome)}</b></span><button class="btn gh sm" type="button" data-cl="${esc(a.cliente)}">Apri</button></div>`).join('') || '<p class="small">Nessuna.</p>'}
-        <h3>Aziende del gruppo To Smile</h3><p class="small">${gruppo.map(a => esc(a.nome)).join(' · ') || 'Nessuna.'}</p><p class="small">Restano dentro To Smile: chi le vede si sceglie in «Persone del gruppo To Smile».</p>`;
+        <p class="small">Chi di To Smile vede ogni azienda si sceglie in «Persone del gruppo To Smile»: portare un'azienda nella suite non cambia questi accessi.</p>`;
     } else if (FIN.vista === 'persone') {
       if (!FIN.persone) FIN.persone = (await api('GET', '/api/gestione/finanza/persone')).persone;
       C.innerHTML = FIN.persone.length ? `<p class="small" style="margin-top:0">Persone di To Smile abilitate a Gestione finanziaria (in Gestione accessi) e le aziende che possono aprire.</p>` + FIN.persone.map(p => `<div class="req" style="align-items:flex-start"><span style="min-width:180px"><b>${esc(p.nome || p.email)}</b><br><span class="small">${esc(p.email || '')}</span></span>
