@@ -27,6 +27,7 @@ const classifiche = require('./classifiche/server');
 // suite per più clienti: To Smile è il cliente zero (questo processo); ogni altro cliente gira in un motore suo
 const SUITE = require('./lib/suite');
 const suite = require('./suite/manager');
+const suitePrivacy = SUITE.TENANT ? require('./suite/privacy') : null;
 // Gestione ASO vive su appgestione.it/aso/ (stesso dominio dell'accesso unico: niente nuovi domini da collegare)
 const asoMontata = require('express')();
 asoMontata.use((req, res, next) => req.url === '/aso' || req.url.startsWith('/aso?') ? res.redirect(301, '/aso/' + req.url.slice(4)) : next());
@@ -74,6 +75,7 @@ const BADGE = '<a href="https://appgestione.it" target="_blank" rel="noopener" a
 function marchiaPagina(html) {
   const nome = String(ultimoMarchio?.nome || process.env.SUITE_NOME || '').replace(/[<>&"]/g, '');
   if (nome) html = html.replace(/(<title>[^<]*?)To Smile([^<]*<\/title>)/i, `$1${nome}$2`);
+  if (suitePrivacy) html = suitePrivacy.conAvviso(html);
   return /<\/body>/i.test(html) ? html.replace(/<\/body>(?![\s\S]*<\/body>)/i, BADGE + '</body>') : html + BADGE;
 }
 // motore di un cliente: entrata dall'accesso centrale, app non comprese spente, indirizzi di To Smile → indirizzi del cliente
@@ -91,6 +93,12 @@ function motoreCliente(req, res) {
   // marchio del cliente: il suo logo al posto di quello di To Smile; il logo To Smile resta per «powered by»
   suite.marchioCliente().then(m => { ultimoMarchio = m; }).catch(() => {});
   const percorso = u.split('?')[0];
+  // documenti privacy del cliente: i testi di To Smile non valgono per lui
+  suitePrivacy.mancanti().catch(() => {});
+  const paginaPrivacy = percorso.startsWith('/_suite/privacy');
+  if (/^\/(privacy|privacy-policy|cookie|cookie-policy|termini|termini-condizioni|termini-e-condizioni)\/?$/.test(percorso)) {
+    res.writeHead(302, { Location: '/_suite/privacy' }); res.end(); return false;
+  }
   if (percorso === '/_suite/tosmile.png') {
     res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
     return fs.createReadStream(path.join(__dirname, 'accessi', 'public', 'static', 'logo-tosmile.png')).pipe(res), false;
@@ -129,6 +137,7 @@ function motoreCliente(req, res) {
     if (!res.headersSent) { res.removeHeader('content-length'); res.removeHeader('etag'); res.setHeader('content-length', out.length); }
     return e(out, typeof ch === 'function' ? ch : typeof enc === 'function' ? enc : cb);
   };
+  if (paginaPrivacy) { suitePrivacy.app(req, res); return false; }
   return true;
 }
 
