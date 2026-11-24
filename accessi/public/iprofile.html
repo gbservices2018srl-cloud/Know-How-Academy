@@ -452,7 +452,7 @@ async function pick(f){
   st.className="status";st.textContent="Apro il PDF…";
   try{
     if(!pdfjs){pdfjs=await import("/hr/vendor/pdf.min.mjs");pdfjs.GlobalWorkerOptions.workerSrc="/hr/vendor/pdf.worker.min.mjs"}
-    const pdf=await pdfjs.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;
+    const pdf=await pdfjs.getDocument({data:new Uint8Array(await f.arrayBuffer()), isEvalSupported:false}).promise;
     const n=Math.min(pdf.numPages,60);
     for(let i=1;i<=n;i++){
       st.textContent=`Preparo le pagine… ${i}/${n}`;

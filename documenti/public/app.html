@@ -598,7 +598,7 @@ async function mostraPdf() {
   if (S.cur?.originale?.word) return mostraWord(box);
   try {
     if (!pdfjs) { pdfjs = await import('/vendor/pdf.min.mjs'); pdfjs.GlobalWorkerOptions.workerSrc = '/vendor/pdf.worker.min.mjs'; }
-    const doc = await pdfjs.getDocument({ url: `/api/documenti/${S.cur.id}/originale`, withCredentials: true }).promise;
+    const doc = await pdfjs.getDocument({ url: `/api/documenti/${S.cur.id}/originale`, withCredentials: true, isEvalSupported: false }).promise;
     box.innerHTML = ''; PDFPAG = []; COMP = null;
     const w = Math.min(box.clientWidth || 700, 900), dpr = Math.min(window.devicePixelRatio || 1, 2);
     for (let i = 1; i <= doc.numPages; i++) {

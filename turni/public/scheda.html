@@ -298,7 +298,7 @@ async function renderPdf(url, host){
   host.innerHTML = '<p class="muted">Apro il documento…</p>';
   try {
     const [lib, buf] = await Promise.all([loadPdfJs(), fetch(url, {credentials: 'same-origin'}).then(r => { if (!r.ok) throw new Error('Documento non disponibile'); return r.arrayBuffer(); })]);
-    const pdf = await lib.getDocument({data: buf}).promise;
+    const pdf = await lib.getDocument({data: buf, isEvalSupported: false}).promise;
     host.innerHTML = '';
     const width = Math.min(host.clientWidth || 700, 900), ratio = Math.min(devicePixelRatio || 1, 2);
     for (let i = 1; i <= pdf.numPages; i++) {
