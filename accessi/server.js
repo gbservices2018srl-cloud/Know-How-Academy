@@ -290,7 +290,7 @@ app.get('/esci', wrap(async (req, res) => {
 // Chi ha dati mancanti, aprendo qualsiasi app viene mandato prima a «Completa il tuo profilo».
 const gateCache = new Map(); // token → { t, manca }
 const gateAzzera = userId => { for (const [k, v] of gateCache) if (!userId || v.id === userId) gateCache.delete(k); };
-const LIBERE = /^\/(completa-profilo|api\/|static\/|fonts\/|esci|accedi|registrati|privacy|termini|cookie|conferma-email|reimposta|password-dimenticata|sw\.js|manifest)/;
+const LIBERE = /^\/(completa-profilo|iscriviti|api\/|static\/|fonts\/|esci|accedi|registrati|privacy|termini|cookie|conferma-email|reimposta|password-dimenticata|sw\.js|manifest)/;
 async function cancello(req, res, interna) {
   if (req.method !== 'GET' || !String(req.headers.accept || '').includes('text/html')) return false;
   const url = req.url || '/';
@@ -1345,6 +1345,63 @@ app.post('/api/gestione/clienti', needSuite, PANNELLO.serveSblocco, wrap(async (
 }));
 app.patch('/api/gestione/clienti/:slug', needSuite, PANNELLO.serveSblocco, wrap(async (req, res) => {
   try { res.json(await SUITE_M.aggiornaCliente(String(req.params.slug), req.body || {})); } catch (e) { if (e.status) return bad(res, e.status, e.message); throw e; }
+}));
+
+const conErr = fn => wrap(async (req, res) => { try { await fn(req, res); } catch (e) { if (e.status) return bad(res, e.status, e.message); throw e; } });
+const SLUGP = req => String(req.params.slug || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+app.post('/api/gestione/clienti/:slug/rinnova', needSuite, PANNELLO.serveSblocco, conErr(async (req, res) => {
+  res.json(await SUITE_M.rinnova(SLUGP(req), { mesi: req.body?.mesi === 12 ? 12 : 1, data: req.body?.data || null }));
+}));
+app.patch('/api/gestione/clienti/:slug/dati', needSuite, PANNELLO.serveSblocco, conErr(async (req, res) => {
+  res.json(await SUITE_M.aggiornaDati(SLUGP(req), { nome: req.body?.nome, admin_email: req.body?.admin_email }));
+}));
+app.get('/api/gestione/clienti/:slug/utenti', needSuite, PANNELLO.serveSblocco, conErr(async (req, res) => {
+  res.set('Cache-Control', 'no-store').json({ utenti: await SUITE_M.utenti(SLUGP(req)) });
+}));
+app.post('/api/gestione/clienti/:slug/password', needSuite, PANNELLO.serveSblocco, conErr(async (req, res) => {
+  res.set('Cache-Control', 'no-store').json(await SUITE_M.nuovaPassword(SLUGP(req), req.body?.utente ? String(req.body.utente) : null));
+}));
+app.get('/api/gestione/clienti/:slug/backup', needSuite, PANNELLO.serveSblocco, conErr(async (req, res) => {
+  const slug = SLUGP(req); if (!(await SUITE_M.elencoPannello()).some(c => c.slug === slug)) return bad(res, 404, 'Cliente non trovato.');
+  const g = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
+  res.set({ 'Content-Type': 'application/gzip', 'Content-Disposition': `attachment; filename="backup-${slug}-${g}.tar.gz"`, 'Cache-Control': 'no-store' });
+  await require('../lib/esporta').esporta(slug, res, { etichetta: 'scaricato dal pannello' });
+}));
+app.get('/api/gestione/clienti/:slug/copia', needSuite, PANNELLO.serveSblocco, conErr(async (req, res) => {
+  const slug = SLUGP(req); let st = null;
+  try { const r = await fetch(`${(process.env.BACKUP_URL || 'https://finanza.appgestione.it').replace(/\/$/, '')}/api/_backup/stato?cliente=${slug}`, { headers: { Authorization: 'Bearer ' + (process.env.SSO_API_KEY || '') }, signal: AbortSignal.timeout(10000) }); if (r.ok) st = await r.json(); } catch {}
+  res.set('Cache-Control', 'no-store').json({ copia: st ? { ultimo: st.ultimo || null, ok: !!st.ok, errori: st.errori || [] } : null });
+}));
+app.get('/api/gestione/richieste', needSuite, PANNELLO.serveSblocco, conErr(async (req, res) => {
+  res.set('Cache-Control', 'no-store').json({ richieste: await SUITE_M.richieste() });
+}));
+app.post('/api/gestione/richieste/:id', needSuite, PANNELLO.serveSblocco, conErr(async (req, res) => {
+  res.set('Cache-Control', 'no-store').json(await SUITE_M.decidi(String(req.params.id), req.body?.approva === true));
+}));
+// modulo pubblico di iscrizione alla suite (la richiesta arriva nel pannello; il cliente nasce solo se approvi)
+app.get('/iscriviti', (req, res) => {
+  if (!SUITE_M.ATTIVA) return res.redirect('/');
+  res.set('Cache-Control', 'no-store').sendFile(path.join(__dirname, '..', 'suite', 'iscriviti.html'));
+});
+app.get('/api/iscrizione/catalogo', (req, res) => {
+  if (!SUITE_M.ATTIVA) return bad(res, 404, 'Non disponibile.');
+  res.json({ catalogo: SUITE_M.catalogo().filter(c => !c.esterna).map(c => ({ id: c.id, nome: c.nome })) });
+});
+app.post('/api/iscrizione', conErr(async (req, res) => {
+  if (!SUITE_M.ATTIVA) return bad(res, 404, 'Non disponibile.');
+  if (limited('iscr|' + req.ip, 3, 60)) return bad(res, 429, 'Troppe richieste. Riprova tra un\'ora.');
+  const b = req.body || {}, t = (v, n) => String(v || '').trim().slice(0, n);
+  const d = { nome: t(b.nome, 80), slug: t(b.slug, 30).toLowerCase(), admin_nome: t(b.admin_nome, 80), admin_email: t(b.admin_email, 160).toLowerCase(),
+    telefono: t(b.telefono, 40), referente: t(b.admin_nome, 80), apps: Array.isArray(b.apps) ? b.apps.map(String).slice(0, 30) : [], posti: Math.max(1, Math.min(999, parseInt(b.posti, 10) || 1)),
+    note: t(b.note, 1000) };
+  if (d.nome.length < 2) return bad(res, 400, 'Scrivi il nome dello studio.');
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.admin_email)) return bad(res, 400, 'Scrivi un’email valida.');
+  if (d.admin_nome.length < 3) return bad(res, 400, 'Scrivi nome e cognome del titolare.');
+  if (!(await SUITE_M.slugLibero(d.slug))) return bad(res, 400, 'Indirizzo non valido o già usato: solo lettere minuscole e numeri, che inizi con una lettera.');
+  if (b.termini !== true) return bad(res, 400, 'Per continuare accetta i termini e l’informativa privacy.');
+  await SUITE_M.nuovaRichiesta('iscrizione', d);
+  console.log('Suite: nuova richiesta di iscrizione');
+  res.json({ ok: true });
 }));
 
 // ---- Backup unico della suite: ogni notte Gestione finanziaria salva una copia completa; qui si scarica ----

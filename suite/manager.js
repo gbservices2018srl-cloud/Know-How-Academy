@@ -36,6 +36,12 @@ async function migrate() {
     create table if not exists suite.entrate (codice text primary key, slug text not null, token text not null, scade timestamptz not null);
     alter table suite.clienti add column if not exists logo text not null default '';
     create table if not exists suite.backup_scarichi (slug text not null, il timestamptz not null default now(), da text not null default '');
+    alter table suite.clienti add column if not exists scadenza date;
+    alter table suite.clienti add column if not exists sospeso_il timestamptz;
+    alter table suite.clienti add column if not exists sospeso_auto boolean not null default false;
+    update suite.clienti set scadenza = (creato_il at time zone 'Europe/Rome')::date + 30 where scadenza is null;
+    create table if not exists suite.richieste (id text primary key, tipo text not null, dati jsonb not null default '{}', stato text not null default 'aperta',
+      il timestamptz not null default now(), gestita_il timestamptz, nota text not null default '');
   `);
 }
 const clienti = async () => (await q('select * from suite.clienti order by creato_il')).rows;
@@ -98,7 +104,7 @@ async function inoltra(req, res) {
   const h = String(req.headers.host || '').split(':')[0].toLowerCase();
   if (h === S.BASE || !h.endsWith('.' + S.BASE)) return false;
   const c = await slugDaHost(h).catch(() => null); if (!c) return false;
-  if (c.stato === 'sospeso') { pagina(res, 403, 'Accesso sospeso', 'L’accesso a questa suite è sospeso. I dati sono conservati: contatta To Smile per riattivarlo.'); return true; }
+  if (c.stato === 'sospeso') { pagina(res, 403, c.sospeso_auto ? 'Abbonamento scaduto' : 'Accesso sospeso', (c.sospeso_auto ? 'L’abbonamento a questa suite è scaduto' : 'L’accesso a questa suite è sospeso') + '. I dati sono conservati: contatta To Smile per riattivarlo.'); return true; }
   const m = motori.get(c.slug);
   if (!m?.proc || !m.pronto) { if (!m?.proc) avvia(c); pagina(res, 503, 'Un momento…', 'La suite si sta avviando. Ricarica la pagina tra qualche secondo.'); return true; }
   const p = http.request({ host: '127.0.0.1', port: m.porta, method: req.method, path: req.url,
@@ -148,7 +154,8 @@ async function elencoPannello() {
   return Promise.all(L.map(async c => ({ slug: c.slug, nome: c.nome, stato: c.stato, apps: c.apps, posti: c.posti, attivi: await utentiAttivi(c.slug),
     admin_email: c.admin_email, logo: !!c.logo, referente: c.referente, telefono: c.telefono, note: c.note, privacy_ok: c.privacy_ok, alfadocs: c.alfadocs,
     prezzo: prezzo(c), indirizzo: indirizzo(c.slug), motore: motori.get(c.slug)?.pronto ? 'acceso' : motori.get(c.slug)?.proc ? 'in avvio' : 'spento',
-    creato_il: c.creato_il })));
+    creato_il: c.creato_il, admin_nome: c.admin_nome, scadenza: c.scadenza ? giorno(c.scadenza) : null, giorni: giorniA(c.scadenza),
+    sospeso_il: c.sospeso_il, sospeso_auto: c.sospeso_auto })));
 }
 const idApps = () => S.CATALOGO.filter(x => !x.esterna).map(x => x.id);
 async function creaCliente(b) {
@@ -160,8 +167,8 @@ async function creaCliente(b) {
   const apps = (b.apps || []).filter(a => idApps().includes(a));
   const posti = Math.max(1, Math.min(999, parseInt(b.posti, 10) || 5));
   const password = crypto.randomBytes(9).toString('base64url');
-  await q(`insert into suite.clienti (slug, nome, stato, apps, posti, admin_email, admin_nome, admin_password, referente, telefono, note)
-    values ($1,$2,'prova',$3,$4,$5,$6,$7,$8,$9,$10)`, [slug, nome, JSON.stringify(apps), posti, email, String(b.admin_nome || '').slice(0, 80), password,
+  await q(`insert into suite.clienti (slug, nome, stato, apps, posti, admin_email, admin_nome, admin_password, referente, telefono, note, scadenza)
+    values ($1,$2,'prova',$3,$4,$5,$6,$7,$8,$9,$10, (now() at time zone 'Europe/Rome')::date + 30)`, [slug, nome, JSON.stringify(apps), posti, email, String(b.admin_nome || '').slice(0, 80), password,
     String(b.referente || '').slice(0, 80), String(b.telefono || '').slice(0, 40), String(b.note || '').slice(0, 1000)]);
   elencoT = 0;
   avvia(await cliente(slug));
@@ -172,6 +179,7 @@ async function aggiornaCliente(slug, b) {
   const apps = Array.isArray(b.apps) ? b.apps.filter(a => idApps().includes(a)) : c.apps;
   const posti = b.posti != null ? Math.max(1, Math.min(999, parseInt(b.posti, 10) || c.posti)) : c.posti;
   const stato = ['prova', 'attivo', 'sospeso'].includes(b.stato) ? b.stato : c.stato;
+  if (c.stato === 'sospeso' && stato !== 'sospeso' && c.scadenza && giorniA(c.scadenza) < 0) throw Object.assign(new Error('L’abbonamento è scaduto: prima rinnova (o scegli una nuova data di scadenza).'), { status: 400 });
   // logo del cliente: immagine PNG, JPG o SVG, al massimo circa 500 KB ('' = toglie il logo)
   if (b.logo !== undefined) {
     const l = String(b.logo || '');
@@ -183,14 +191,99 @@ async function aggiornaCliente(slug, b) {
       b.telefono != null ? String(b.telefono).slice(0, 40) : c.telefono, b.note != null ? String(b.note).slice(0, 1000) : c.note]);
   elencoT = 0;
   // app o posti cambiati: il motore riparte con le impostazioni nuove (pochi secondi)
+  if (stato !== c.stato) await q(`update suite.clienti set sospeso_il = $2, sospeso_auto = false where slug = $1`, [slug, stato === 'sospeso' ? new Date() : null]);
   if (stato === 'sospeso') ferma(slug);
   else if (JSON.stringify(apps) !== JSON.stringify(c.apps) || posti !== c.posti || c.stato === 'sospeso') riavvia(slug);
   return { ok: true };
 }
 
+
+/* ---------- abbonamento, utenti, richieste (pannello /gestione) ---------- */
+const errore = (msg, status = 400) => Object.assign(new Error(msg), { status });
+const oggi = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
+const giorno = d => typeof d === 'string' ? d.slice(0, 10) : new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(d);
+const giorniA = d => d ? Math.round((Date.parse(giorno(d)) - Date.parse(oggi())) / 86400000) : null;
+async function serve(slug) { const c = await cliente(slug); if (!c) throw errore('Cliente non trovato.', 404); return c; }
+// rinnovo: da oggi o dalla scadenza (la più lontana) per 1 mese / 1 anno, oppure una data scelta; se era sospeso per scadenza, riparte
+async function rinnova(slug, b) {
+  const c = await serve(slug);
+  let nuova;
+  if (b.data) { if (!/^\d{4}-\d{2}-\d{2}$/.test(String(b.data))) throw errore('Data non valida.'); nuova = String(b.data); }
+  else {
+    const mesi = b.mesi === 12 ? 12 : 1;
+    const base = new Date(Math.max(Date.parse(oggi()), c.scadenza ? Date.parse(giorno(c.scadenza)) : 0));
+    base.setUTCMonth(base.getUTCMonth() + mesi); nuova = base.toISOString().slice(0, 10);
+  }
+  const riattiva = c.stato === 'sospeso' && c.sospeso_auto && nuova >= oggi();
+  await q(`update suite.clienti set scadenza = $2, ${riattiva ? `stato = 'attivo', sospeso_il = null, sospeso_auto = false,` : ''} aggiornato_il = now() where slug = $1`, [slug, nuova]);
+  elencoT = 0; marchio = null;
+  if (riattiva) riavvia(slug);
+  return { ok: true, scadenza: nuova, riattivato: riattiva };
+}
+// ogni ora: chi ha passato la scadenza viene sospeso (i dati restano)
+async function controllaScadenze() {
+  const { rows } = await q(`update suite.clienti set stato = 'sospeso', sospeso_il = now(), sospeso_auto = true, aggiornato_il = now()
+    where stato <> 'sospeso' and scadenza is not null and scadenza < (now() at time zone 'Europe/Rome')::date returning slug`);
+  for (const r of rows) { console.log('Suite: abbonamento scaduto, sospeso', r.slug); ferma(r.slug); }
+  if (rows.length) elencoT = 0;
+}
+async function aggiornaDati(slug, b) {
+  const c = await serve(slug);
+  if (b.nome != null) { const n = String(b.nome).trim().slice(0, 80); if (n.length < 2) throw errore('Scrivi il nome del cliente.'); await q('update suite.clienti set nome = $2, aggiornato_il = now() where slug = $1', [slug, n]); marchio = null; }
+  if (b.admin_email != null) {
+    const e = String(b.admin_email).trim().toLowerCase(); if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) throw errore('Email non valida.');
+    const altro = (await q(`select 1 from ${slug}_accessi.users where email = $1 and not owner`, [e])).rows[0];
+    if (altro) throw errore('Questa email è già di un altro utente del cliente.', 409);
+    await q(`update ${slug}_accessi.users set email = $1 where owner`, [e]);
+    await q('update suite.clienti set admin_email = $2, aggiornato_il = now() where slug = $1', [slug, e]);
+  }
+  elencoT = 0;
+  return { ok: true, nome: c.nome };
+}
+const pwNuova = () => crypto.randomBytes(9).toString('base64url');
+async function utenti(slug) {
+  await serve(slug);
+  const { rows } = await q(`select id, first_name, last_name, email, status, owner, last_login from ${slug}_accessi.users order by owner desc, status, last_name, first_name`).catch(() => ({ rows: [] }));
+  return rows.map(u => ({ id: u.id, nome: `${u.first_name} ${u.last_name}`.trim(), email: u.email, stato: u.status, admin: u.owner, ultimo: u.last_login }));
+}
+// nuova password per un utente del cliente (o per l'amministratore): si vede una volta sola; le sue sessioni aperte si chiudono
+async function nuovaPassword(slug, uid) {
+  await serve(slug);
+  const { rows: [u] } = await q(`select id, email from ${slug}_accessi.users where ${uid ? 'id = $1' : 'owner'} limit 1`, uid ? [uid] : []);
+  if (!u) throw errore('Utente non trovato.', 404);
+  const pw = pwNuova();
+  await q(`update ${slug}_accessi.users set password_hash = $2 where id = $1`, [u.id, await bcrypt.hash(pw, 12)]);
+  await q(`delete from ${slug}_accessi.sessions where user_id = $1`, [u.id]);
+  console.log(`Suite: nuova password generata per un utente di ${slug}`);
+  return { email: u.email, password: pw };
+}
+// richieste: iscrizioni dal modulo pubblico
+async function nuovaRichiesta(tipo, dati) {
+  await migrate();
+  const id = crypto.randomBytes(9).toString('hex');
+  await q('insert into suite.richieste (id, tipo, dati) values ($1,$2,$3)', [id, tipo, JSON.stringify(dati)]);
+  return id;
+}
+async function richieste() {
+  const { rows } = await q(`select id, tipo, dati, il from suite.richieste where stato = 'aperta' order by il`);
+  const scad = (await clienti()).filter(c => c.stato !== 'sospeso' && giorniA(c.scadenza) !== null && giorniA(c.scadenza) <= 15)
+    .map(c => ({ id: 'scad-' + c.slug, tipo: 'scadenza', dati: { slug: c.slug, nome: c.nome, scadenza: giorno(c.scadenza), giorni: giorniA(c.scadenza) } }));
+  return [...rows, ...scad];
+}
+async function decidi(id, approva) {
+  const { rows: [r] } = await q(`select * from suite.richieste where id = $1 and stato = 'aperta'`, [id]);
+  if (!r) throw errore('Richiesta non trovata o già gestita.', 404);
+  let esito = { ok: true };
+  if (approva && r.tipo === 'iscrizione') esito = await creaCliente(r.dati);
+  await q(`update suite.richieste set stato = $2, gestita_il = now() where id = $1`, [id, approva ? 'approvata' : 'rifiutata']);
+  return esito;
+}
+
 async function start() {
   if (!ATTIVA) return;
   await migrate();
+  await controllaScadenze().catch(e => console.error('Suite scadenze:', e.message));
+  setInterval(() => controllaScadenze().catch(e => console.error('Suite scadenze:', e.message)), 3600000);
   for (const c of await clienti()) if (c.stato !== 'sospeso') avvia(c);
   console.log(`Suite: ${motori.size} clienti avviati`);
   const chiudi = () => { for (const [, m] of motori) if (m.proc) { m.fermato = true; m.proc.kill('SIGTERM'); } };
@@ -202,8 +295,9 @@ async function marchioCliente() {
   if (!S.TENANT) return null;
   if (!marchio || Date.now() - marchioT > 60000) {
     const c = await cliente(S.TENANT).catch(() => null);
-    marchio = { nome: c?.nome || process.env.SUITE_NOME || '', logo: c?.logo || '' }; marchioT = Date.now();
+    marchio = { nome: c?.nome || process.env.SUITE_NOME || '', logo: c?.logo || '', scadenza: c?.scadenza ? giorno(c.scadenza) : null, giorni: giorniA(c?.scadenza) }; marchioT = Date.now();
   }
   return marchio;
 }
-module.exports = { marchioCliente, ATTIVA, start, inoltra, accediCliente, ritiraEntrata, elencoPannello, creaCliente, aggiornaCliente, catalogo: () => S.CATALOGO, prezzo };
+module.exports = { rinnova, aggiornaDati, utenti, nuovaPassword, nuovaRichiesta, richieste, decidi, slugLibero: async s => S.slugValido(s) && !(await cliente(s)),
+  marchioCliente, ATTIVA, start, inoltra, accediCliente, ritiraEntrata, elencoPannello, creaCliente, aggiornaCliente, catalogo: () => S.CATALOGO, prezzo };

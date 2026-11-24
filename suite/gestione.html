@@ -39,6 +39,12 @@ input,select,textarea{font:inherit;padding:7px 9px;border:1px solid var(--line);
 .lk{max-width:420px;margin:30px auto}.lk h2{font-size:17px}.lk .f{margin-top:10px}.lk input{width:100%;box-sizing:border-box}
 .lk .qr{display:flex;justify-content:center;margin:10px 0}.lk .qr svg{width:200px;height:200px}.lk code{font-weight:800;letter-spacing:.06em;user-select:all;word-break:break-all}
 .lk .err{color:var(--bad);font-weight:700;min-height:18px;margin-top:8px}
+a.btn{text-decoration:none;color:var(--fg);display:inline-block}
+.sec{border-top:1px solid var(--line);margin-top:14px;padding-top:2px}
+.req{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px;border:1px solid var(--line);border-radius:8px;margin-top:6px;flex-wrap:wrap}
+.nr{background:var(--warn);color:#fff;border-radius:999px;font-size:11px;padding:1px 7px;font-weight:800}
+table.ut{width:100%;border-collapse:collapse;font-size:13px}table.ut td,table.ut th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}table.ut th{font-size:11.5px;color:var(--muted)}
+.tw{overflow-x:auto}.btn.sm{padding:5px 9px;font-size:12.5px}.btn.red{color:var(--bad);border:1px solid var(--bad-soft);background:transparent}
 .pw code{font-size:16px;font-weight:800;user-select:all}
 </style>
 </head>
@@ -46,7 +52,9 @@ input,select,textarea{font:inherit;padding:7px 9px;border:1px solid var(--line);
 <div class="wrap">
   <div class="top"><h1>Gestione suite</h1><div class="row"><button class="btn gh" id="chiudi" type="button" hidden>🔒 Blocca</button><a class="back" href="/">← Le mie app</a></div></div>
   <div class="card lk" id="lucchetto" hidden></div>
-  <div class="grid" id="pannello" hidden>
+  <div id="pannello" hidden>
+  <div class="card" id="rich" style="margin-bottom:14px" hidden></div>
+  <div class="grid">
     <div class="card">
       <div class="row" style="justify-content:space-between"><h2 style="margin:0">Clienti</h2><button class="btn pri" id="nuovo" type="button">＋ Nuovo cliente</button></div>
       <p class="small" style="margin:6px 0 0">To Smile è il cliente zero e non compare qui: i suoi dati restano dove sono.</p>
@@ -54,6 +62,7 @@ input,select,textarea{font:inherit;padding:7px 9px;border:1px solid var(--line);
       <div class="conto" id="totale"></div>
     </div>
     <div class="card" id="scheda"><p class="small">Scegli un cliente o creane uno nuovo.</p></div>
+  </div>
   </div>
 </div>
 <div class="toast" id="toast" hidden></div>
@@ -67,12 +76,24 @@ async function api(m, u, b) {
   const r = await fetch(u, { method: m, headers: b ? { 'Content-Type': 'application/json' } : {}, body: b ? JSON.stringify(b) : undefined, credentials: 'include' });
   const j = await r.json().catch(() => ({})); if (r.status === 423 && j.lucchetto) { lucchetto(); throw new Error(j.error); } if (!r.ok) throw new Error(j.error || 'Errore, riprova.'); return j;
 }
-const stato = c => c.stato === 'attivo' ? '<span class="chip ok">attivo</span>' : c.stato === 'prova' ? '<span class="chip warn">in prova</span>' : '<span class="chip bad">sospeso</span>';
+const stato = c => c.stato === 'sospeso' ? `<span class="chip bad">${c.sospeso_auto ? 'scaduto' : 'sospeso'}</span>` : c.giorni != null && c.giorni <= 15 ? '<span class="chip warn">in scadenza</span>' : c.stato === 'attivo' ? '<span class="chip ok">attivo</span>' : '<span class="chip warn">in prova</span>';
+const data = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—';
+let R = [], U = { slug: null, utenti: null }, PU = null, COPIA = {};
 const prezzo = (apps, posti) => 20 + 32 * apps.length + 6 * posti;
-async function carica() { D = await api('GET', '/api/gestione/clienti'); disegna(); }
+async function carica() { [D, { richieste: R }] = await Promise.all([api('GET', '/api/gestione/clienti'), api('GET', '/api/gestione/richieste')]); disegna(); richiesteHtml(); }
+function richiesteHtml() {
+  const el = $('#rich'); el.hidden = !R.length; if (!R.length) return;
+  el.innerHTML = `<h3 style="margin:0">Richieste da gestire <span class="nr">${R.length}</span></h3>` + R.map(r => {
+    const d = r.dati || {};
+    if (r.tipo === 'iscrizione') return `<div class="req"><span><b>Nuova iscrizione</b> · ${esc(d.nome)} (${esc(d.slug)}.appgestione.it) · ${esc(d.admin_nome)} · ${esc(d.admin_email)}${d.telefono ? ' · ' + esc(d.telefono) : ''} · ${(d.apps || []).length} app, ${esc(d.posti)} utenti · ${euro(prezzo(d.apps || [], d.posti || 0))}/mese${d.note ? `<br><span class="small">${esc(d.note)}</span>` : ''}</span>
+      <span class="row"><button class="btn pri sm" type="button" data-rq="${esc(r.id)}" data-ok="1">Approva</button><button class="btn gh sm" type="button" data-rq="${esc(r.id)}" data-ok="0">Rifiuta</button></span></div>`;
+    if (r.tipo === 'scadenza') return `<div class="req"><span><b>Abbonamento in scadenza</b> · ${esc(d.nome)} · ${d.giorni < 0 ? 'scaduto' : d.giorni === 0 ? 'scade oggi' : `scade il ${data(d.scadenza)} (tra ${d.giorni} giorni)`}</span><span class="row"><button class="btn pri sm" type="button" data-cl="${esc(d.slug)}">Apri e rinnova</button></span></div>`;
+    return '';
+  }).join('');
+}
 function disegna() {
   $('#lista').innerHTML = D.clienti.map(c => `<button class="cl" type="button" data-cl="${esc(c.slug)}" aria-current="${c.slug === sel && !nuovo}">
-    <span><b>${esc(c.nome)}</b><span class="small" style="display:block">${esc(c.slug)}.appgestione.it · ${c.apps.length} app · ${c.attivi}/${c.posti} utenti${c.privacy_ok ? '' : ' · privacy da caricare'}</span></span>
+    <span><b>${esc(c.nome)}</b><span class="small" style="display:block">${esc(c.slug)}.appgestione.it · ${c.apps.length} app · ${c.attivi}/${c.posti} utenti · ${c.stato === 'sospeso' ? 'sospeso il ' + data(c.sospeso_il) : 'scade ' + data(c.scadenza)}${c.privacy_ok ? '' : ' · privacy da caricare'}</span></span>
     <span style="text-align:right">${stato(c)}<div style="font-weight:800">${euro(c.prezzo)}/mese</div></span></button>`).join('') || '<p class="small">Nessun cliente ancora.</p>';
   const tot = D.clienti.filter(c => c.stato === 'attivo').reduce((s, c) => s + c.prezzo, 0);
   $('#totale').innerHTML = `<div class="small">Incasso mensile dai clienti attivi</div><div class="tot">${euro(tot)}</div><div class="small">20 € apertura + 32 € per app + 6 € per utente (posti richiesti)</div>`;
@@ -82,6 +103,23 @@ function disegna() {
   $('#scheda').innerHTML = `<div class="row" style="justify-content:space-between"><h2 style="margin:0">${esc(c.nome)}</h2>${stato(c)}</div>
     <p class="small" style="margin:4px 0 0"><a href="${esc(c.indirizzo)}" target="_blank" rel="noopener">${esc(c.indirizzo)}</a> · motore ${esc(c.motore)} · amministratore ${esc(c.admin_email)}</p>
     ${pw && pw.slug === c.slug ? `<div class="pw"><b>Password iniziale dell'amministratore</b> (si vede solo ora: mandala al cliente, poi la cambia lui):<br><code>${esc(pw.password)}</code><div class="small">Entra da appgestione.it con ${esc(c.admin_email)} e questa password.</div></div>` : ''}
+    <div class="sec fg">
+      <div><h3>Abbonamento</h3><div class="small">Scadenza: <b style="color:var(--fg)">${data(c.scadenza)}</b>${c.giorni != null ? (c.giorni < 0 ? ' · scaduto' : ` · tra ${c.giorni} giorni`) : ''}${c.stato === 'sospeso' ? ` · sospeso il ${data(c.sospeso_il)}${c.sospeso_auto ? ' (per scadenza)' : ''}` : ''}</div>
+        <div class="row" style="margin-top:8px"><button class="btn pri sm" type="button" data-rinnova="1">Rinnova 1 mese</button><button class="btn gh sm" type="button" data-rinnova="12">Rinnova 1 anno</button></div>
+        <div class="row" style="margin-top:6px"><input type="date" id="r-data" value="${esc(c.scadenza || '')}"><button class="btn gh sm" type="button" id="r-imposta">Imposta data</button></div>
+        <div class="row" style="margin-top:6px">${c.stato === 'sospeso' ? '<button class="btn pri sm" type="button" id="riattiva">Riattiva</button>' : '<button class="btn red sm" type="button" id="sospendi">Sospendi</button>'}<span class="small">i dati restano sempre</span></div>
+        <p class="small" style="margin:6px 0 0">15 giorni prima il cliente vede un avviso fisso; alla scadenza viene sospeso da solo.</p></div>
+      <div><h3>Amministratore del cliente</h3><div class="small">${esc(c.admin_nome || '')}</div>
+        <div class="row" style="margin-top:6px"><input id="a-email" type="email" value="${esc(c.admin_email)}" style="min-width:0;flex:1"><button class="btn gh sm" type="button" id="a-salva">Cambia email</button></div>
+        <div class="row" style="margin-top:6px"><button class="btn gh sm" type="button" data-pw="">Genera nuova password</button></div>
+        ${PU && PU.slug === c.slug && !PU.utente ? `<div class="pw">Nuova password per ${esc(PU.email)}: <code>${esc(PU.password)}</code><div class="small">Si vede solo ora: mandala al cliente.</div></div>` : ''}
+        <h3>Nome</h3><div class="row"><input id="a-nome" value="${esc(c.nome)}" style="min-width:0;flex:1"><button class="btn gh sm" type="button" id="a-rinomina">Rinomina</button></div></div>
+    </div>
+    <div class="sec"><h3>Utenti · ${c.attivi} attivi su ${c.posti} posti</h3><div id="utenti" class="tw"><p class="small">Carico…</p></div>
+      <p class="small" style="margin:6px 0 0">Gli utenti li crea e li disattiva il cliente; da qui puoi solo dare una nuova password.</p></div>
+    <div class="sec"><h3>Dati e sicurezza</h3><div class="small" id="copia">Copia di stanotte: …</div>
+      <div class="row" style="margin-top:6px"><a class="btn gh sm" href="/api/gestione/clienti/${encodeURIComponent(c.slug)}/backup" download>Scarica backup adesso</a></div></div>
+    <div class="sec"></div>
     <h3>Logo del cliente</h3>
     <div class="row"><span class="small">${c.logo ? 'Caricato: compare in tutte le sue app, con «powered by To Smile».' : 'Non ancora caricato: per ora compare il nome dello studio.'}</span>
       <label class="btn gh" style="display:inline-block">Carica logo<input type="file" id="logo" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden></label>
@@ -95,7 +133,19 @@ function disegna() {
       <div class="f" style="grid-column:1/-1"><label for="note">Note</label><textarea id="note" rows="2">${esc(c.note)}</textarea></div></div>
     <div class="conto"><div class="small">Conto mensile</div><div id="calc"></div></div>
     <div class="row" style="margin-top:10px"><button class="btn pri" id="salva" type="button">Salva</button><span class="small">Cambiando app o posti, la suite del cliente si riavvia in pochi secondi.</span></div>`;
-  $('#st').value = c.stato; calc();
+  $('#st').value = c.stato; calc(); utenti(c.slug); copia(c.slug);
+}
+async function utenti(slug) {
+  { U = { slug, utenti: null }; try { U.utenti = (await api('GET', `/api/gestione/clienti/${encodeURIComponent(slug)}/utenti`)).utenti; } catch (x) { if ($('#utenti')) $('#utenti').innerHTML = `<p class="small">${esc(x.message)}</p>`; return; } }
+  if (sel !== slug || !$('#utenti')) return;
+  const st = u => u.stato === 'active' ? '<span class="chip ok">attivo</span>' : u.stato === 'pending' ? '<span class="chip warn">in attesa</span>' : '<span class="chip bad">disattivato</span>';
+  $('#utenti').innerHTML = U.utenti.length ? `<table class="ut"><thead><tr><th>Nome</th><th>Email</th><th>Ruolo</th><th>Stato</th><th></th></tr></thead><tbody>${U.utenti.map(u => `<tr><td>${esc(u.nome)}</td><td>${esc(u.email)}</td><td>${u.admin ? 'Amministratore' : 'Utente'}</td><td>${st(u)}</td>
+    <td><button class="btn gh sm" type="button" data-pw="${esc(u.id)}">Reset password</button>${PU && PU.slug === slug && PU.utente === u.id ? `<div class="pw" style="margin-top:4px"><code>${esc(PU.password)}</code><div class="small">si vede solo ora</div></div>` : ''}</td></tr>`).join('')}</tbody></table>` : '<p class="small">Nessun utente ancora (se il cliente è appena stato creato, la sua suite si sta avviando: riapri tra qualche secondo).</p>';
+}
+async function copia(slug) {
+  if (!(slug in COPIA)) { try { COPIA[slug] = (await api('GET', `/api/gestione/clienti/${encodeURIComponent(slug)}/copia`)).copia; } catch { COPIA[slug] = null; } }
+  const k = COPIA[slug]; if (sel !== slug || !$('#copia')) return;
+  $('#copia').textContent = k && k.ultimo ? `Copia di stanotte: ${k.ok ? 'OK' : 'con errori'} (${new Date(k.ultimo).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })})` : 'Copia di stanotte: non ancora fatta (la prima arriva la prossima notte alle 3).';
 }
 function calc() {
   const apps = [...document.querySelectorAll('[data-app]:checked')].map(x => x.dataset.app), posti = parseInt($('#posti')?.value, 10) || 0;
@@ -128,7 +178,29 @@ document.addEventListener('change', async e => {
 document.addEventListener('input', e => { if (e.target.id === 'posti') calc(); if (e.target.id === 'n-slug') e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''); });
 document.addEventListener('click', async e => {
   const b = e.target.closest('button'); if (!b) return;
-  if (b.dataset.cl) { sel = b.dataset.cl; nuovo = false; disegna(); }
+  if (b.dataset.cl) { sel = b.dataset.cl; nuovo = false; PU = null; disegna(); window.scrollTo({ top: $('#scheda').offsetTop - 10, behavior: 'smooth' }); }
+  const slugU = () => '/api/gestione/clienti/' + encodeURIComponent(sel);
+  const fai = async (fn, msg) => { b.disabled = true; try { await fn(); await carica(); if (msg) toast(msg); } catch (x) { toast(x.message); } b.disabled = false; };
+  if (b.dataset.rinnova) fai(async () => { const r = await api('POST', slugU() + '/rinnova', { mesi: +b.dataset.rinnova }); toast(`Rinnovato fino al ${data(r.scadenza)}${r.riattivato ? ': cliente riattivato' : ''}.`); });
+  if (b.id === 'r-imposta') fai(() => api('POST', slugU() + '/rinnova', { data: $('#r-data').value }), 'Scadenza aggiornata.');
+  if (b.id === 'sospendi') { if (b.dataset.ok !== '1') { b.dataset.ok = '1'; b.textContent = 'Confermi la sospensione?'; return; } fai(() => api('PATCH', slugU(), { stato: 'sospeso' }), 'Cliente sospeso: i dati restano.'); }
+  if (b.id === 'riattiva') fai(() => api('PATCH', slugU(), { stato: 'attivo' }), 'Cliente riattivato.');
+  if (b.id === 'a-salva') fai(() => api('PATCH', slugU() + '/dati', { admin_email: $('#a-email').value }), 'Email dell’amministratore cambiata.');
+  if (b.id === 'a-rinomina') fai(() => api('PATCH', slugU() + '/dati', { nome: $('#a-nome').value }), 'Nome cambiato.');
+  if (b.dataset.pw !== undefined) {
+    if (b.dataset.ok !== '1') { b.dataset.ok = '1'; b.textContent = 'Confermi? La vecchia password non varrà più'; return; }
+    b.disabled = true;
+    try { const r = await api('POST', slugU() + '/password', { utente: b.dataset.pw || null }); PU = { slug: sel, utente: b.dataset.pw || null, email: r.email, password: r.password }; U.utenti = null; disegna(); }
+    catch (x) { toast(x.message); b.disabled = false; }
+  }
+  if (b.dataset.rq) {
+    const ok = b.dataset.ok === '1';
+    if (!ok && b.dataset.conf !== '1') { b.dataset.conf = '1'; b.textContent = 'Confermi il rifiuto?'; return; }
+    b.disabled = true;
+    try { const r = await api('POST', '/api/gestione/richieste/' + encodeURIComponent(b.dataset.rq), { approva: ok });
+      if (ok && r.slug) { pw = { slug: r.slug, password: r.password }; sel = r.slug; nuovo = false; toast('Cliente creato: la sua suite si sta avviando.'); } else toast('Richiesta rifiutata.');
+      await carica(); } catch (x) { toast(x.message); b.disabled = false; }
+  }
   if (b.id === 'nuovo') { nuovo = true; sel = null; disegna(); }
   if (b.id === 'annulla') { nuovo = false; disegna(); }
   if (b.id === 'logo-via') { try { await api('PATCH', '/api/gestione/clienti/' + encodeURIComponent(sel), { logo: '' }); await carica(); toast('Logo tolto.'); } catch (x) { toast(x.message); } }

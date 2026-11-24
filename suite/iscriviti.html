@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Iscriviti alla suite · To Smile</title>
+<link rel="stylesheet" href="/fonts/tosmile.css?f=figtree:400,600,700,800">
+<style>
+:root{--bg:#FBFBF8;--card:#fff;--fg:#2B3033;--muted:#6B7276;--line:#e1e7e5;--teal:#2b8a83;--yellow-soft:#fbf3d6;--bad:#b42318}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:Figtree,system-ui,sans-serif;font-size:15px}
+.w{max-width:640px;margin:0 auto;padding:24px max(16px,env(safe-area-inset-left,0px)) 60px}
+.logo{height:40px;width:auto}
+h1{font-size:24px;margin:16px 0 4px}.m{color:var(--muted);font-size:13.5px}
+.c{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:14px}
+.f{display:grid;gap:4px;margin-top:10px}.f label{font-size:12.5px;font-weight:700;color:var(--muted)}
+input,textarea{font:inherit;padding:9px 10px;border:1px solid #d8dedc;border-radius:8px;width:100%;background:#fff;color:var(--fg)}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media (max-width:560px){.g{grid-template-columns:1fr}}
+.apps{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;margin-top:8px}
+.app{display:flex;gap:8px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:14px}
+.app input{width:16px;height:16px;accent-color:var(--teal)}
+.conto{background:var(--yellow-soft);border-radius:10px;padding:10px 12px;margin-top:12px}
+.tot{font-size:20px;font-weight:800}
+.ok{display:flex;gap:8px;align-items:flex-start;margin-top:12px;font-size:13.5px}.ok input{width:18px;height:18px;margin-top:2px;accent-color:var(--teal)}
+a{color:var(--teal);font-weight:700}
+button{margin-top:14px;background:var(--teal);color:#fff;border:0;border-radius:10px;padding:12px 18px;font:inherit;font-weight:800;cursor:pointer;width:100%}
+.err{color:var(--bad);font-weight:700;margin-top:8px;min-height:18px}
+.row{display:flex;gap:6px;align-items:center}
+</style>
+</head>
+<body>
+<div class="w">
+  <img class="logo" src="/static/logo-tosmile.png" alt="To Smile">
+  <h1>Iscriviti alla suite</h1>
+  <p class="m">Scegli le app e quanti utenti ti servono. Ti ricontattiamo noi per attivare la suite: l’iscrizione non comporta nessun pagamento automatico.</p>
+  <form id="f">
+    <div class="c">
+      <b>Il tuo studio</b>
+      <div class="f"><label for="nome">Nome dello studio</label><input id="nome" required maxlength="80" placeholder="Studio Dentistico Rossi"></div>
+      <div class="f"><label for="slug">Indirizzo che vuoi</label><div class="row"><input id="slug" required maxlength="30" placeholder="rossi" style="max-width:200px"><span class="m">.appgestione.it</span></div></div>
+      <div class="g"><div class="f"><label for="anome">Nome e cognome del titolare</label><input id="anome" required maxlength="80" autocomplete="name"></div>
+        <div class="f"><label for="email">Email</label><input id="email" type="email" required maxlength="160" autocomplete="email"></div></div>
+      <div class="f"><label for="tel">Telefono</label><input id="tel" maxlength="40" autocomplete="tel"></div>
+    </div>
+    <div class="c">
+      <b>App che vuoi</b>
+      <div class="apps" id="apps"></div>
+      <div class="f"><label for="posti">Quanti utenti (persone che useranno la suite)</label><input id="posti" type="number" min="1" max="999" value="5" style="max-width:120px"></div>
+      <div class="conto"><div class="m">Costo mensile</div><div class="tot" id="tot"></div><div class="m" id="det"></div></div>
+      <div class="f"><label for="note">Note (facoltative)</label><textarea id="note" rows="2" maxlength="1000"></textarea></div>
+    </div>
+    <label class="ok"><input type="checkbox" id="termini"><span>Ho letto e accetto i <a href="/termini" target="_blank" rel="noopener">termini di servizio</a> e l’<a href="/privacy" target="_blank" rel="noopener">informativa privacy</a>.</span></label>
+    <button type="submit" id="invia">Invia la richiesta</button>
+    <div class="err" id="err" role="alert"></div>
+  </form>
+  <div class="c" id="fatto" hidden><b>Richiesta inviata ✓</b><p class="m">Grazie! Ti contatteremo a breve all’email che hai indicato per attivare la tua suite.</p></div>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const euro = v => v.toLocaleString('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+function calc() {
+  const n = document.querySelectorAll('#apps input:checked').length, p = Math.max(1, parseInt($('#posti').value, 10) || 1);
+  $('#tot').textContent = euro(20 + 32 * n + 6 * p) + ' al mese';
+  $('#det').textContent = `20 € suite + ${n} app × 32 € + ${p} utenti × 6 €`;
+}
+fetch('/api/iscrizione/catalogo').then(r => r.json()).then(j => {
+  $('#apps').innerHTML = (j.catalogo || []).map(a => `<label class="app"><input type="checkbox" value="${a.id}">${a.nome.replace(/[<>&]/g, '')}</label>`).join('');
+  calc();
+});
+document.addEventListener('change', calc); $('#posti').addEventListener('input', calc);
+$('#slug').addEventListener('input', e => { e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''); });
+$('#f').addEventListener('submit', async e => {
+  e.preventDefault(); $('#err').textContent = '';
+  const b = { nome: $('#nome').value, slug: $('#slug').value, admin_nome: $('#anome').value, admin_email: $('#email').value, telefono: $('#tel').value,
+    apps: [...document.querySelectorAll('#apps input:checked')].map(x => x.value), posti: $('#posti').value, note: $('#note').value, termini: $('#termini').checked };
+  if (!b.apps.length) { $('#err').textContent = 'Scegli almeno un’app.'; return; }
+  $('#invia').disabled = true;
+  const r = await fetch('/api/iscrizione', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { $('#invia').disabled = false; $('#err').textContent = j.error || 'Errore, riprova.'; return; }
+  $('#f').hidden = true; $('#fatto').hidden = false;
+});
+</script>
+</body>
+</html>

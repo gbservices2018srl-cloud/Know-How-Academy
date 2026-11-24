@@ -71,11 +71,22 @@ function route(req) {
 
 // pagine del cliente: il suo nome nel titolo e, sempre visibile, «powered by» con il logo To Smile
 let ultimoMarchio = null;
+if (process.env.TENANT_SLUG) { const leggiMarchio = () => suite.marchioCliente().then(m => { ultimoMarchio = m; }).catch(() => {}); setTimeout(leggiMarchio, 3000); setInterval(leggiMarchio, 60000).unref(); }
 const BADGE = '<a href="https://appgestione.it" target="_blank" rel="noopener" aria-label="powered by To Smile" style="position:fixed;right:max(10px,env(safe-area-inset-right,0px));bottom:max(8px,env(safe-area-inset-bottom,0px));z-index:2147483000;display:flex;align-items:center;gap:6px;padding:3px 8px;border-radius:999px;background:rgba(255,255,255,.92);box-shadow:0 1px 4px rgba(0,0,0,.12);font:600 10px/1 system-ui,sans-serif;color:#6b7276;text-decoration:none">powered by <img src="/_suite/tosmile.png" alt="To Smile" style="height:14px;width:auto;display:block"></a>';
+// abbonamento in scadenza (ultimi 15 giorni): avviso fisso in cima a tutte le pagine del cliente
+function conScadenza(html) {
+  const g = ultimoMarchio?.giorni;
+  if (g == null || g > 15 || g < 0) return html;
+  const d = String(ultimoMarchio.scadenza || '').split('-').reverse().join('/');
+  const quando = g === 0 ? 'scade oggi' : g === 1 ? 'scade domani' : `scade il ${d} (tra ${g} giorni)`;
+  const b = `<div role="status" style="position:sticky;top:0;z-index:2147483002;background:#fde4e1;color:#8f1d14;border-bottom:2px solid #b42318;padding:10px max(16px,env(safe-area-inset-left,0px));font:700 14px/1.35 system-ui,sans-serif;text-align:center">⏰ L'abbonamento alla suite ${quando}. Rinnova per non perdere l'accesso: alla scadenza gli utenti non potranno più entrare (i dati restano conservati). Contatta To Smile.</div>`;
+  return /<body[^>]*>/i.test(html) ? html.replace(/<body[^>]*>/i, m => m + b) : b + html;
+}
 function marchiaPagina(html) {
   const nome = String(ultimoMarchio?.nome || process.env.SUITE_NOME || '').replace(/[<>&"]/g, '');
   if (nome) html = html.replace(/(<title>[^<]*?)To Smile([^<]*<\/title>)/i, `$1${nome}$2`);
   if (suitePrivacy) html = suitePrivacy.conAvviso(html);
+  html = conScadenza(html);
   return /<\/body>/i.test(html) ? html.replace(/<\/body>(?![\s\S]*<\/body>)/i, BADGE + '</body>') : html + BADGE;
 }
 // motore di un cliente: entrata dall'accesso centrale, app non comprese spente, indirizzi di To Smile → indirizzi del cliente
