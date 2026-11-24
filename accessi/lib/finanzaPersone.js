@@ -25,7 +25,10 @@ async function manda(persone, prova) {
   return finanza.scrivi('/api/_appgestione/persone', { azienda: az, prova: !!prova, persone });
 }
 // una persona (dopo approvazione o modifica): in background, un errore non blocca niente
+// SOSPESO (24/11/2026): l'allineamento automatico creava righe doppie in Gestione finanziaria
+// («Silvia Murtas» accanto a «MURTAS SILVIA (RAP)»). Non scrive più nulla finché Giancarlo non approva la correzione.
 function allineaUno(userId) {
+  if (!process.env.FINANZA_ALLINEA_AUTO) return;
   setTimeout(async () => {
     try {
       const u = await store.getUser(userId);
