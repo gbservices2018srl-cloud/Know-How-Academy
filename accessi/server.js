@@ -1310,6 +1310,23 @@ for (const p of ['/accedi', '/registrati', '/password-dimenticata', '/reimposta'
   app.get(p, (req, res) => (req.user && p !== '/reimposta')
     ? res.redirect(safeNext(req.query.next)) : sendPage('accesso.html')(req, res));
 }
+// ---- Backup: ogni notte Gestione finanziaria chiede qui una copia completa dei dati (solo lettura) ----
+const ESP = require('../lib/esporta');
+const nodeCrypto = require('crypto');
+const chiaveOk = (req, slug) => { const h = String(req.get('authorization') || ''), k = process.env.SSO_API_KEY;
+  const ok = x => x && h.length === ('Bearer ' + x).length && nodeCrypto.timingSafeEqual(Buffer.from(h), Buffer.from('Bearer ' + x));
+  return ok(k) || ok(ESP.chiaveCliente(slug)); };
+app.get('/api/_backup/clienti', wrap(async (req, res) => {
+  if (!chiaveOk(req, '__')) return bad(res, 401, 'Non autorizzato');
+  res.json({ clienti: ['tosmile'] });
+}));
+app.get('/api/_backup/esporta', wrap(async (req, res) => {
+  const slug = String(req.query.cliente || 'tosmile').toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (slug !== 'tosmile' || !chiaveOk(req, slug)) return bad(res, 401, 'Non autorizzato');
+  res.set({ 'Content-Type': 'application/gzip', 'Cache-Control': 'no-store' });
+  await ESP.esporta('', res, { etichetta: 'notturno' });
+}));
+
 app.get('/admin', (req, res) => {
   if (!req.user) return res.redirect('/accedi?next=/admin');
   if (!isAdmin(req)) return res.redirect('/');
