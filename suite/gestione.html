@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gestione suite · To Smile</title>
+<link rel="stylesheet" href="/fonts/tosmile.css?f=figtree:400,600,700,800">
+<style>
+:root{--bg:#f4f6f5;--card:#fff;--fg:#1d2a2a;--muted:#677775;--line:#e1e7e5;--teal:#2b8a83;--teal-soft:#e2f2f0;--yellow-soft:#fbf3d6;
+  --ok:#1e8a5a;--ok-soft:#e3f4ec;--warn:#b45309;--warn-soft:#fdecd3;--bad:#b42318;--bad-soft:#fde4e1}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:Figtree,system-ui,sans-serif;font-size:14px}
+.wrap{max-width:1140px;margin:0 auto;padding:16px max(16px,env(safe-area-inset-left,0px)) 48px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+h1{margin:0;font-size:20px}
+a.back{color:var(--teal);font-weight:700;text-decoration:none}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:14px;align-items:start}
+@media (max-width:860px){.grid{grid-template-columns:1fr}}
+h2{font-size:15px;margin:0 0 10px} h3{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:14px 0 6px}
+.cl{display:flex;justify-content:space-between;gap:8px;padding:10px;border-radius:10px;border:1px solid transparent;cursor:pointer;width:100%;background:none;color:inherit;font:inherit;text-align:left}
+.cl:hover{background:var(--teal-soft)} .cl[aria-current="true"]{border-color:var(--teal);background:var(--teal-soft)}
+.small{font-size:12px;color:var(--muted)}
+.chip{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:700}
+.ok{background:var(--ok-soft);color:var(--ok)} .warn{background:var(--warn-soft);color:var(--warn)} .bad{background:var(--bad-soft);color:var(--bad)} .info{background:var(--teal-soft);color:var(--teal)}
+.apps{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px}
+.app{display:flex;gap:8px;align-items:center;padding:7px 9px;border:1px solid var(--line);border-radius:8px}
+.app input{accent-color:var(--teal);width:16px;height:16px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+input,select,textarea{font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--fg)}
+.btn{border:none;border-radius:8px;padding:8px 12px;font:inherit;font-weight:700;cursor:pointer}
+.btn.pri{background:var(--teal);color:#fff} .btn.gh{background:transparent;border:1px solid var(--line)}
+.conto{background:var(--yellow-soft);border-radius:10px;padding:10px 12px;margin-top:10px;font-variant-numeric:tabular-nums}
+.tot{font-size:20px;font-weight:800}
+.f{display:grid;gap:4px} .f label{font-size:12px;font-weight:700;color:var(--muted)}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:10px} @media (max-width:600px){.fg{grid-template-columns:1fr}}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;background:var(--fg);color:#fff;padding:10px 16px;border-radius:8px;font-weight:700;max-width:calc(100% - 32px)}
+.pw{background:var(--warn-soft);border:1px solid var(--warn);border-radius:10px;padding:12px;margin-top:10px}
+.pw code{font-size:16px;font-weight:800;user-select:all}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><h1>Gestione suite</h1><a class="back" href="/">← Le mie app</a></div>
+  <div class="grid">
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><h2 style="margin:0">Clienti</h2><button class="btn pri" id="nuovo" type="button">＋ Nuovo cliente</button></div>
+      <p class="small" style="margin:6px 0 0">To Smile è il cliente zero e non compare qui: i suoi dati restano dove sono.</p>
+      <div id="lista" style="margin-top:8px;display:grid;gap:4px"></div>
+      <div class="conto" id="totale"></div>
+    </div>
+    <div class="card" id="scheda"><p class="small">Scegli un cliente o creane uno nuovo.</p></div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const euro = v => v.toLocaleString('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+let D = { clienti: [], catalogo: [] }, sel = null, nuovo = false, pw = null;
+function toast(t) { const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 3000); }
+async function api(m, u, b) {
+  const r = await fetch(u, { method: m, headers: b ? { 'Content-Type': 'application/json' } : {}, body: b ? JSON.stringify(b) : undefined, credentials: 'include' });
+  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Errore, riprova.'); return j;
+}
+const stato = c => c.stato === 'attivo' ? '<span class="chip ok">attivo</span>' : c.stato === 'prova' ? '<span class="chip warn">in prova</span>' : '<span class="chip bad">sospeso</span>';
+const prezzo = (apps, posti) => 20 + 32 * apps.length + 6 * posti;
+async function carica() { D = await api('GET', '/api/gestione/clienti'); disegna(); }
+function disegna() {
+  $('#lista').innerHTML = D.clienti.map(c => `<button class="cl" type="button" data-cl="${esc(c.slug)}" aria-current="${c.slug === sel && !nuovo}">
+    <span><b>${esc(c.nome)}</b><span class="small" style="display:block">${esc(c.slug)}.appgestione.it · ${c.apps.length} app · ${c.attivi}/${c.posti} utenti${c.privacy_ok ? '' : ' · privacy da caricare'}</span></span>
+    <span style="text-align:right">${stato(c)}<div style="font-weight:800">${euro(c.prezzo)}/mese</div></span></button>`).join('') || '<p class="small">Nessun cliente ancora.</p>';
+  const tot = D.clienti.filter(c => c.stato === 'attivo').reduce((s, c) => s + c.prezzo, 0);
+  $('#totale').innerHTML = `<div class="small">Incasso mensile dai clienti attivi</div><div class="tot">${euro(tot)}</div><div class="small">20 € apertura + 32 € per app + 6 € per utente (posti richiesti)</div>`;
+  if (nuovo) return formNuovo();
+  const c = D.clienti.find(x => x.slug === sel); if (!c) return;
+  const app = D.catalogo.map(a => `<label class="app"><input type="checkbox" data-app="${a.id}" ${c.apps.includes(a.id) ? 'checked' : ''} ${a.esterna ? 'disabled' : ''}> ${esc(a.nome)}${a.esterna ? ' <span class="small">(prossimamente)</span>' : ''}</label>`).join('');
+  $('#scheda').innerHTML = `<div class="row" style="justify-content:space-between"><h2 style="margin:0">${esc(c.nome)}</h2>${stato(c)}</div>
+    <p class="small" style="margin:4px 0 0"><a href="${esc(c.indirizzo)}" target="_blank" rel="noopener">${esc(c.indirizzo)}</a> · motore ${esc(c.motore)} · amministratore ${esc(c.admin_email)}</p>
+    ${pw && pw.slug === c.slug ? `<div class="pw"><b>Password iniziale dell'amministratore</b> (si vede solo ora: mandala al cliente, poi la cambia lui):<br><code>${esc(pw.password)}</code><div class="small">Entra da appgestione.it con ${esc(c.admin_email)} e questa password.</div></div>` : ''}
+    <h3>Logo del cliente</h3>
+    <div class="row"><span class="small">${c.logo ? 'Caricato: compare in tutte le sue app, con «powered by To Smile».' : 'Non ancora caricato: per ora compare il nome dello studio.'}</span>
+      <label class="btn gh" style="display:inline-block">Carica logo<input type="file" id="logo" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden></label>
+      ${c.logo ? '<button class="btn gh" type="button" id="logo-via">Togli</button>' : ''}</div>
+    <h3>App comprese</h3><div class="apps" id="apps">${app}</div>
+    <h3>Utenti</h3><div class="row"><span>Posti richiesti</span><input type="number" id="posti" min="1" max="999" value="${c.posti}" style="width:90px"><span class="small">attivi ora: <b>${c.attivi}</b></span></div>
+    <h3>Stato e contatti</h3>
+    <div class="fg"><div class="f"><label for="st">Stato</label><select id="st"><option value="prova">In prova</option><option value="attivo">Attivo</option><option value="sospeso">Sospeso</option></select></div>
+      <div class="f"><label for="ref">Referente</label><input id="ref" value="${esc(c.referente)}"></div>
+      <div class="f"><label for="tel">Telefono</label><input id="tel" value="${esc(c.telefono)}"></div>
+      <div class="f" style="grid-column:1/-1"><label for="note">Note</label><textarea id="note" rows="2">${esc(c.note)}</textarea></div></div>
+    <div class="conto"><div class="small">Conto mensile</div><div id="calc"></div></div>
+    <div class="row" style="margin-top:10px"><button class="btn pri" id="salva" type="button">Salva</button><span class="small">Cambiando app o posti, la suite del cliente si riavvia in pochi secondi.</span></div>`;
+  $('#st').value = c.stato; calc();
+}
+function calc() {
+  const apps = [...document.querySelectorAll('[data-app]:checked')].map(x => x.dataset.app), posti = parseInt($('#posti')?.value, 10) || 0;
+  if ($('#calc')) $('#calc').innerHTML = `20 € + ${apps.length} app × 32 € + ${posti} utenti × 6 €<div class="tot">${euro(prezzo(apps, posti))} / mese</div>`;
+}
+function formNuovo() {
+  const app = D.catalogo.map(a => `<label class="app"><input type="checkbox" data-app="${a.id}" ${a.esterna ? 'disabled' : ''}> ${esc(a.nome)}${a.esterna ? ' <span class="small">(prossimamente)</span>' : ''}</label>`).join('');
+  $('#scheda').innerHTML = `<h2>Nuovo cliente</h2>
+    <div class="fg"><div class="f"><label for="n-nome">Nome dello studio</label><input id="n-nome" placeholder="Studio Dentistico Rossi"></div>
+      <div class="f"><label for="n-slug">Indirizzo</label><div class="row" style="gap:4px"><input id="n-slug" placeholder="rossi" style="width:140px"><span class="small">.appgestione.it</span></div></div>
+      <div class="f"><label for="n-email">Email dell'amministratore</label><input id="n-email" type="email" placeholder="titolare@studiorossi.it"></div>
+      <div class="f"><label for="n-anome">Nome e cognome dell'amministratore</label><input id="n-anome"></div>
+      <div class="f"><label for="n-ref">Referente</label><input id="n-ref"></div>
+      <div class="f"><label for="n-tel">Telefono</label><input id="n-tel"></div></div>
+    <h3>App comprese</h3><div class="apps">${app}</div>
+    <h3>Utenti</h3><div class="row"><span>Posti richiesti</span><input type="number" id="posti" min="1" max="999" value="5" style="width:90px"></div>
+    <div class="conto"><div class="small">Conto mensile</div><div id="calc"></div></div>
+    <div class="row" style="margin-top:10px"><button class="btn pri" id="crea" type="button">Crea cliente (in prova)</button><button class="btn gh" id="annulla" type="button">Annulla</button></div>`;
+  calc();
+}
+document.addEventListener('change', async e => {
+  if (e.target.dataset.app !== undefined || e.target.id === 'posti') calc();
+  if (e.target.id === 'logo') {
+    const f = e.target.files[0]; if (!f) return;
+    if (f.size > 500 * 1024) return toast('Il logo è troppo grande: al massimo 500 KB.');
+    const data = await new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(f); });
+    try { await api('PATCH', '/api/gestione/clienti/' + encodeURIComponent(sel), { logo: data }); await carica(); toast('Logo caricato.'); } catch (x) { toast(x.message); }
+  }
+});
+document.addEventListener('input', e => { if (e.target.id === 'posti') calc(); if (e.target.id === 'n-slug') e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''); });
+document.addEventListener('click', async e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.cl) { sel = b.dataset.cl; nuovo = false; disegna(); }
+  if (b.id === 'nuovo') { nuovo = true; sel = null; disegna(); }
+  if (b.id === 'annulla') { nuovo = false; disegna(); }
+  if (b.id === 'logo-via') { try { await api('PATCH', '/api/gestione/clienti/' + encodeURIComponent(sel), { logo: '' }); await carica(); toast('Logo tolto.'); } catch (x) { toast(x.message); } }
+  const apps = () => [...document.querySelectorAll('[data-app]:checked')].map(x => x.dataset.app);
+  if (b.id === 'crea') {
+    b.disabled = true;
+    try {
+      const r = await api('POST', '/api/gestione/clienti', { nome: $('#n-nome').value, slug: $('#n-slug').value, admin_email: $('#n-email').value, admin_nome: $('#n-anome').value,
+        referente: $('#n-ref').value, telefono: $('#n-tel').value, apps: apps(), posti: $('#posti').value });
+      pw = { slug: r.slug, password: r.password }; sel = r.slug; nuovo = false; await carica(); toast('Cliente creato: la sua suite si sta avviando.');
+    } catch (x) { toast(x.message); b.disabled = false; }
+  }
+  if (b.id === 'salva') {
+    b.disabled = true;
+    try { await api('PATCH', '/api/gestione/clienti/' + encodeURIComponent(sel), { apps: apps(), posti: $('#posti').value, stato: $('#st').value, referente: $('#ref').value, telefono: $('#tel').value, note: $('#note').value });
+      await carica(); toast('Salvato.'); } catch (x) { toast(x.message); b.disabled = false; }
+  }
+});
+carica().catch(x => { $('#lista').innerHTML = `<p class="small">${esc(x.message)}</p>`; });
+</script>
+</body>
+</html>

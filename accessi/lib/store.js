@@ -185,6 +185,8 @@ async function ensureOwner() {
     return;
   }
   const u = rows[0];
+  // cliente della suite: la password iniziale serve solo a creare l'amministratore; poi la cambia lui e non si rimette
+  if (process.env.TENANT_SLUG) { await q(`update users set owner = true, status = 'active' where id = $1`, [u.id]); await q('update users set owner = false where owner and id <> $1', [u.id]); return; }
   const same = u.password_hash && await bcrypt.compare(password, u.password_hash);
   await q(`update users set owner = true, status = 'active', password_hash = $2 where id = $1`,
     [u.id, same ? u.password_hash : await bcrypt.hash(password, 12)]);

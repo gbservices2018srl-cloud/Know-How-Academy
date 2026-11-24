@@ -10,7 +10,8 @@ const profilo = require('./lib/profilo');
 const crescita = require('../lib/crescita');
 
 const PROD = process.env.NODE_ENV === 'production';
-const COOKIE = 'ag_sso';
+// ogni cliente della suite ha il suo cookie (ag_<cliente>): To Smile resta ag_sso
+const COOKIE = (process.env.ACCESSI_COOKIE || 'ag_sso').replace(/[^a-z0-9_]/gi, '') || 'ag_sso';
 const BASE_DOMAIN = (process.env.ACCESSI_DOMAIN || 'appgestione.it').toLowerCase();
 const PUBLIC_URL = () => (process.env.ACCESSI_URL || `https://${BASE_DOMAIN}`).replace(/\/$/, '');
 const NOTIFY = () => (process.env.NOTIFY_EMAIL || 'consultingsardegna@gmail.com').split(',').map(s => s.trim()).filter(Boolean);
@@ -77,6 +78,10 @@ app.use(wrap(async (req, res, next) => {
   next();
 }));
 const isAdmin = req => !!req.user && (req.user.owner || req.apps?.accessi === 'admin');
+// suite: un cliente non può avere più utenti attivi dei posti che ha richiesto (SUITE_POSTI)
+const POSTI = parseInt(process.env.SUITE_POSTI, 10) || 0;
+const postiFiniti = async () => POSTI > 0 && (await store.q(`select count(*)::int as n from users where status = 'active'`)).rows[0].n >= POSTI;
+const postiMsg = () => `Hai già ${POSTI} utenti attivi su ${POSTI} posti: per attivare una persona disattivane un'altra oppure chiedi più posti.`;
 const needUser = (req, res, next) => req.user ? next() : bad(res, 401, 'Accesso richiesto');
 const needAdmin = (req, res, next) => isAdmin(req) ? next() : bad(res, 403, 'Solo amministratori');
 // Le richieste che cambiano dati devono essere JSON: un modulo di un altro sito non può inviarle.
@@ -244,7 +249,8 @@ const fullName = u => `${u.first_name} ${u.last_name}`.trim() || u.email;
 
 /* ---------- accesso ---------- */
 app.get('/api/me', needUser, wrap(async (req, res) => {
-  res.json({ user: store.publicUser(req.user), apps: appsForUser(req.apps, await store.appSpente()), admin: isAdmin(req), mail: mail.enabled() });
+  res.json({ user: store.publicUser(req.user), apps: appsForUser(req.apps, await store.appSpente()), admin: isAdmin(req), mail: mail.enabled(),
+    classifiche: require('../lib/suite').accesa('classifiche') });
 }));
 
 app.post('/api/login', wrap(async (req, res) => {
@@ -253,6 +259,12 @@ app.post('/api/login', wrap(async (req, res) => {
   const u = await store.findByEmail(email);
   const bcrypt = require('bcryptjs');
   const ok = u && u.password_hash && await bcrypt.compare(password, u.password_hash);
+  // suite: chi non è di To Smile ma di un cliente entra da qui e viene portato sul suo indirizzo (es. rossi.appgestione.it)
+  if (!u) {
+    const r = await require('../suite/manager').accediCliente(email, password, req.get('user-agent')).catch(e => { console.error('Suite accesso:', e.message); return null; });
+    if (r?.errore) return bad(res, r.errore, r.msg);
+    if (r?.next) { hits.delete('login|' + req.ip + '|' + email); return res.json({ ok: true, next: r.next }); }
+  }
   if (!ok) return bad(res, 401, 'Email o password non corretti.');
   if (u.status === 'pending') return bad(res, 403, "La tua registrazione è in attesa di approvazione. Riceverai un'email quando l'accesso sarà attivo.");
   if (u.status === 'disabled') return bad(res, 403, "Il tuo accesso è stato disattivato. Contatta l'amministratore.");
@@ -573,6 +585,7 @@ app.post('/api/admin/users', needAdmin, wrap(async (req, res) => {
   if (albo.errore) return bad(res, 400, albo.errore);
   const figura = b.figura ? store.cleanFigura(b.figura) : null;
   if (b.figura && !figura) return bad(res, 400, 'Figura non valida.');
+  if (await postiFiniti()) return bad(res, 403, postiMsg());
   const u = await store.createUser({ firstName, lastName, birthDate, email, password: password || null, status: 'active', createdBy: req.user.id, cf, figura, ...albo.dati });
   const avvisi = [];
   for (const [k, v] of Object.entries(b.apps || {})) {
@@ -639,6 +652,7 @@ app.patch('/api/admin/users/:id', needAdmin, wrap(async (req, res) => {
   if (b.status !== undefined) {
     if (!['active', 'disabled'].includes(b.status)) return bad(res, 400, 'Stato non valido');
     if (u.owner || u.id === req.user.id) return bad(res, 400, 'Non puoi disattivare questo account.');
+    if (b.status === 'active' && u.status !== 'active' && await postiFiniti()) return bad(res, 403, postiMsg());
   }
   // approvazione: la scheda deve essere completa (le sedi le sceglie l'amministratore; ai medici arrivano da Nuovalab)
   if (b.status === 'active' && u.status === 'pending' && u.figura !== 'Medico' && !(b.sedi || u.sedi || []).length)
@@ -1310,21 +1324,75 @@ for (const p of ['/accedi', '/registrati', '/password-dimenticata', '/reimposta'
   app.get(p, (req, res) => (req.user && p !== '/reimposta')
     ? res.redirect(safeNext(req.query.next)) : sendPage('accesso.html')(req, res));
 }
-// ---- Backup: ogni notte Gestione finanziaria chiede qui una copia completa dei dati (solo lettura) ----
+// Pannello /gestione della suite: solo il proprietario di To Smile (mai nei motori dei clienti)
+const SUITE_M = require('../suite/manager');
+const needSuite = (req, res, next) => (SUITE_M.ATTIVA && req.user?.owner) ? next() : bad(res, 403, 'Solo il proprietario della suite.');
+app.get('/gestione', (req, res) => {
+  if (!SUITE_M.ATTIVA) return res.redirect('/');
+  if (!req.user) return res.redirect('/accedi?next=/gestione');
+  if (!req.user.owner) return res.redirect('/');
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, '..', 'suite', 'gestione.html'));
+});
+app.get('/api/gestione/clienti', needSuite, wrap(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ clienti: await SUITE_M.elencoPannello(), catalogo: SUITE_M.catalogo().map(c => ({ id: c.id, nome: c.nome, esterna: !!c.esterna })) });
+}));
+app.post('/api/gestione/clienti', needSuite, wrap(async (req, res) => {
+  try { res.json(await SUITE_M.creaCliente(req.body || {})); } catch (e) { if (e.status) return bad(res, e.status, e.message); throw e; }
+}));
+app.patch('/api/gestione/clienti/:slug', needSuite, wrap(async (req, res) => {
+  try { res.json(await SUITE_M.aggiornaCliente(String(req.params.slug), req.body || {})); } catch (e) { if (e.status) return bad(res, e.status, e.message); throw e; }
+}));
+
+// ---- Backup unico della suite: ogni notte Gestione finanziaria salva una copia completa; qui si scarica ----
 const ESP = require('../lib/esporta');
 const nodeCrypto = require('crypto');
+const BACKUP_URL = (process.env.BACKUP_URL || 'https://finanza.appgestione.it').replace(/\/$/, '');
+const MIO = () => require('../lib/suite').TENANT || 'tosmile';
+const tokenMio = () => process.env.BACKUP_TOKEN || ESP.chiaveCliente(MIO());
 const chiaveOk = (req, slug) => { const h = String(req.get('authorization') || ''), k = process.env.SSO_API_KEY;
   const ok = x => x && h.length === ('Bearer ' + x).length && nodeCrypto.timingSafeEqual(Buffer.from(h), Buffer.from('Bearer ' + x));
   return ok(k) || ok(ESP.chiaveCliente(slug)); };
+// per Gestione finanziaria (solo il servizio principale): elenco dei clienti e loro esportazione
 app.get('/api/_backup/clienti', wrap(async (req, res) => {
-  if (!chiaveOk(req, '__')) return bad(res, 401, 'Non autorizzato');
-  res.json({ clienti: ['tosmile'] });
+  if (require('../lib/suite').TENANT || !chiaveOk(req, '__')) return bad(res, 401, 'Non autorizzato');
+  const { rows } = await store.q(`select slug from suite.clienti where stato <> 'sospeso' order by slug`).catch(() => ({ rows: [] }));
+  res.json({ clienti: ['tosmile', ...rows.map(r => r.slug)] });
 }));
 app.get('/api/_backup/esporta', wrap(async (req, res) => {
   const slug = String(req.query.cliente || 'tosmile').toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (slug !== 'tosmile' || !chiaveOk(req, slug)) return bad(res, 401, 'Non autorizzato');
+  if (require('../lib/suite').TENANT || !chiaveOk(req, slug)) return bad(res, 401, 'Non autorizzato');
   res.set({ 'Content-Type': 'application/gzip', 'Cache-Control': 'no-store' });
-  await ESP.esporta('', res, { etichetta: 'notturno' });
+  await ESP.esporta(slug, res, { etichetta: 'notturno' });
+}));
+// per l'amministratore: stato della copia di stanotte e download (solo il proprietario dell'azienda)
+const needOwner = (req, res, next) => req.user?.owner ? next() : bad(res, 403, 'Solo il titolare può scaricare il backup completo.');
+async function chiediBackup(percorso) {
+  return fetch(`${BACKUP_URL}${percorso}${percorso.includes('?') ? '&' : '?'}cliente=${encodeURIComponent(MIO())}`, { headers: { Authorization: 'Bearer ' + tokenMio() }, signal: AbortSignal.timeout(20000) });
+}
+app.get('/api/backup/stato', needUser, wrap(async (req, res) => {
+  if (!req.user.owner) return res.json({ visibile: false });
+  let notte = null; try { const r = await chiediBackup('/api/_backup/stato'); if (r.ok) notte = await r.json(); } catch {}
+  const { rows: [d] } = await store.q(`select max(il) as il from suite.backup_scarichi where slug = $1`, [MIO()]).catch(() => ({ rows: [{}] }));
+  const giorni = d?.il ? Math.floor((Date.now() - new Date(d.il)) / 86400000) : null;
+  res.set('Cache-Control', 'no-store').json({ visibile: true, notte, scaricato: d?.il || null, avviso: giorni === null || giorni > 7 });
+}));
+app.get('/api/backup/scarica', needUser, needOwner, wrap(async (req, res) => {
+  const parte = ['dati', 'finanza', 'nuovalab', 'ticket', 'file'].includes(req.query.parte) ? req.query.parte : 'dati';
+  const giorno = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
+  await store.q(`insert into suite.backup_scarichi (slug, da) values ($1, $2)`, [MIO(), req.user.email]).catch(() => {});
+  // prima la copia di stanotte (da Gestione finanziaria); se non c'è, i dati si esportano adesso
+  try {
+    const r = await chiediBackup(`/api/_backup/ultimo?parte=${parte}`);
+    if (r.ok && r.body) {
+      res.set({ 'Content-Type': r.headers.get('content-type') || 'application/gzip', 'Content-Disposition': r.headers.get('content-disposition') || `attachment; filename="backup-${MIO()}-${parte}-${giorno}.tar.gz"`, 'Cache-Control': 'no-store' });
+      const { Readable } = require('stream'); return Readable.fromWeb(r.body).pipe(res);
+    }
+  } catch {}
+  if (parte !== 'dati') return bad(res, 404, 'Copia non ancora disponibile: riprova domani mattina.');
+  res.set({ 'Content-Type': 'application/gzip', 'Content-Disposition': `attachment; filename="backup-${MIO()}-dati-${giorno}.tar.gz"`, 'Cache-Control': 'no-store' });
+  await ESP.esporta(MIO() === 'tosmile' ? '' : MIO(), res, { etichetta: 'scaricato adesso' });
 }));
 
 app.get('/admin', (req, res) => {

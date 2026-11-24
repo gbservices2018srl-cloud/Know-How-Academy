@@ -15,10 +15,11 @@ const store = accessi.store;
 
 /* ---------- database (stesso database, schema «compensi») ---------- */
 const url = process.env.DATABASE_URL || '';
-const pool = new Pool({ connectionString: url, ssl: process.env.PGSSL === 'true' || /\.render\.com/.test(url) ? { rejectUnauthorized: false } : false, options: '-c search_path=compensi,public', max: 3 });
+const SCHEMA = (process.env.COMPENSI_DB_SCHEMA || 'compensi').replace(/[^a-z0-9_]/gi, '').toLowerCase() || 'compensi';
+const pool = new Pool({ connectionString: url, ssl: process.env.PGSSL === 'true' || /\.render\.com/.test(url) ? { rejectUnauthorized: false } : false, options: `-c search_path=${SCHEMA},public`, max: 3 });
 const q = (t, p) => pool.query(t, p);
 async function migrate() {
-  await q('create schema if not exists compensi');
+  await q(`create schema if not exists ${SCHEMA}`);
   await q(`
     create table if not exists compensi (
       id text primary key,
