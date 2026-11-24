@@ -21,7 +21,7 @@ const roma = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' })
 const fineMese = (anno, mese) => new Date(Date.UTC(anno, mese, 0)).toISOString().slice(0, 10);
 
 let corsa = null; // aggiornamento in corso (uno alla volta)
-const stato = { inCorso: false, sedeInCorso: '', iniziato: null, finito: null };
+const stato = { inCorso: false, sedeInCorso: '', fase: '', iniziato: null, finito: null, errore: '' };
 
 async function sediFinanza(anno, mese) {
   const az = await FIN.aziendaToSmile(); if (!az) throw new Error('Non trovo l’azienda To Smile in Gestione finanziaria.');
@@ -41,9 +41,12 @@ async function aggiornaMese(anno, mese, finoA) {
     const site = M[sede] ? fin.sedi.find(s => s.id === M[sede]) : FIN.trova(fin.sedi, sede);
     try {
       if (!site) throw new Error('scegli a quale sede del consuntivo va');
-      const r = await AD.calcola(AD.chiaveDi(sede), da, a);
+      const t0 = Date.now(); console.log(`AlfaDocs → Consuntivo: ${chiaveMese} · ${sede} · inizio`);
+      const r = await AD.calcola(AD.chiaveDi(sede), da, a, f => { stato.fase = f; });
+      console.log(`AlfaDocs → Consuntivo: ${chiaveMese} · ${sede} · fatto in ${Math.round((Date.now() - t0) / 1000)} s (${r.pazienti} pazienti, ${r.piani} piani di cura, ${r.prestazioni} prestazioni eseguite)`);
       daScrivere.push({ sede, siteId: site.id, incassato: r.incassato, produzione: r.produzione, prestazioni: r.prestazioni });
     } catch (e) {
+      console.warn(`AlfaDocs → Consuntivo: ${chiaveMese} · ${sede} · errore: ${e.message}`);
       await q(`insert into suite.alfadocs_esiti (slug, mese, sede, stato, errore) values ($1,$2,$3,'errore',$4)
         on conflict (slug, mese, sede) do update set stato = 'errore', errore = excluded.errore, aggiornato = now()`, [SLUG, chiaveMese, sede, String(e.message).slice(0, 300)]);
     }
@@ -65,14 +68,14 @@ async function aggiornaMese(anno, mese, finoA) {
 }
 function aggiorna() {
   if (corsa) return corsa;
-  stato.inCorso = true; stato.iniziato = new Date().toISOString();
+  stato.inCorso = true; stato.errore = ''; stato.iniziato = new Date().toISOString();
   corsa = (async () => {
     await migrate();
     const oggi = roma(), anno = +oggi.slice(0, 4), mese = +oggi.slice(5, 7);
     // il giorno 1 (e il 2, se la notte prima non è andata) si chiude il mese appena finito
     if (+oggi.slice(8, 10) <= 2) { const pa = mese === 1 ? anno - 1 : anno, pm = mese === 1 ? 12 : mese - 1; await aggiornaMese(pa, pm).catch(e => console.error('AlfaDocs → Consuntivo (mese finito):', e.message)); }
     await aggiornaMese(anno, mese, oggi);
-  })().catch(e => console.error('AlfaDocs → Consuntivo:', e.message)).finally(() => { corsa = null; stato.inCorso = false; stato.sedeInCorso = ''; stato.finito = new Date().toISOString(); });
+  })().catch(e => { stato.errore = e.message; console.error('AlfaDocs → Consuntivo:', e.message); }).finally(() => { corsa = null; stato.inCorso = false; stato.sedeInCorso = ''; stato.fase = ''; stato.finito = new Date().toISOString(); });
   return corsa;
 }
 

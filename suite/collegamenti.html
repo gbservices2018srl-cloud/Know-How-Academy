@@ -120,7 +120,9 @@ async function consuntivo() {
     <div class="row" style="margin-top:6px"><button class="btn sm" type="button" data-cdiff="${d.id}" data-az="visto">Ok, visto</button><button class="btn sm" type="button" data-cdiff="${d.id}" data-az="ripristina">Rimetti il mio valore</button></div></div>`).join('');
   if (C.errFin) cmsg(C.errFin);
   $('#c-agg').disabled = C.stato.inCorso;
-  if (C.stato.inCorso) { cmsg(`Aggiornamento in corso${C.stato.sedeInCorso ? ' · ' + C.stato.sedeInCorso : ''}… (qualche minuto per sede)`, true); clearTimeout(giro); giro = setTimeout(consuntivo, 8000); }
+  if (C.stato.inCorso) { cmsg(`Aggiornamento in corso${C.stato.sedeInCorso ? ' · ' + C.stato.sedeInCorso : ''}${C.stato.fase ? ' · ' + C.stato.fase : ''}… (qualche minuto per sede: puoi lasciare la pagina, continua da solo)`, true); clearTimeout(giro); giro = setTimeout(consuntivo, 5000); }
+  else if (C.stato.errore) cmsg('Aggiornamento non riuscito: ' + C.stato.errore);
+  else if (C.stato.finito) cmsg('Ultimo aggiornamento finito alle ' + new Date(C.stato.finito).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) + '.', true);
 }
 document.addEventListener('change', async e => {
   const i = e.target.dataset?.cmap; if (i == null) return;
