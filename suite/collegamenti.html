@@ -143,7 +143,7 @@ document.addEventListener('click', async e => {
   }
   if (b.dataset.aprova != null) {
     const i = +b.dataset.aprova; b.disabled = true; amsg('Provo…', true);
-    try { const r = await api('POST', '/api/collegamenti/alfadocs/prova', { sede: ALFA[i].nome }); amsg(r.ok ? `${ALFA[i].nome}: collegata ✓${r.archivio ? ' (archivio «' + r.archivio + '»)' : ''}` : `${ALFA[i].nome}: ${r.errore}`, r.ok); }
+    try { const r = await api('POST', '/api/collegamenti/alfadocs/prova', { sede: ALFA[i].nome }); amsg(r.ok ? `${ALFA[i].nome}: collegata ✓` : `${ALFA[i].nome}: ${r.errore}`, r.ok); }
     catch (x) { amsg(x.message); } b.disabled = false;
   }
   if (b.dataset.atogli != null) {
