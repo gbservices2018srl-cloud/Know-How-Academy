@@ -93,7 +93,7 @@ footer b{color:var(--fg);font-weight:600}
   </header>
   <section class="card notif" id="notif" hidden aria-labelledby="notif-t"></section>
   <main class="grid" id="grid" aria-live="polite"></main>
-  <footer><span><b>To Smile</b> · Persone, salute, sorrisi</span><span><a href="/privacy">Privacy Policy</a> · <a href="/cookie">Cookie Policy</a> · <a href="/termini">Termini e condizioni</a></span><span>Problemi di accesso? Apri un ticket di assistenza.</span></footer>
+  <footer><span><b>To Smile</b> · Persone, salute, sorrisi</span><span><a href="/privacy">Privacy Policy</a> · <a href="/cookie">Cookie Policy</a> · <a href="/termini">Termini e condizioni</a></span><span>Problemi di accesso? Apri un ticket di assistenza.</span><span id="bk" hidden></span></footer>
 </div>
 
 <dialog id="pwd"><form method="dialog" id="pwf">
@@ -272,6 +272,19 @@ $('#pwf').addEventListener('submit', async e => {
   if (!r.ok) return $('#pw-err').textContent = j.error || 'Non riuscito.';
   $('#pwd').close(); toast('Password aggiornata');
 });
+</script>
+<script>
+// backup completo della suite (solo il titolare): stato della copia di stanotte e download, in piccolo nel piè di pagina
+fetch('/api/backup/stato', { credentials: 'include' }).then(r => r.ok ? r.json() : null).then(b => {
+  if (!b || !b.visibile) return;
+  const el = document.getElementById('bk'), n = b.notte;
+  const stato = n && n.ultimo ? (n.ok ? 'Backup di stanotte <b>OK</b>' : 'Backup di stanotte <b style="color:#b45309">non riuscito</b>') : 'Backup notturno <b>in preparazione</b>';
+  const P = (n && n.parti) || {}, extra = [['finanza', 'Gestione finanziaria'], ['nuovalab', 'Nuovalab'], ['ticket', 'Ticket'], ['file', 'file allegati']]
+    .filter(([k]) => k === 'file' ? (P['file-nuovalab'] || P['file-ticket']) : P[k] && typeof P[k] === 'object')
+    .map(([k, t]) => `<a href="/api/backup/scarica?parte=${k}">${t}</a>`).join(' · ');
+  el.innerHTML = `${stato} · <a href="/api/backup/scarica?parte=dati">scarica</a>${extra ? ' (' + extra + ')' : ''}${b.avviso ? ' · <span style="color:#b45309">non scarichi una copia da più di 7 giorni</span>' : ''}`;
+  el.hidden = false;
+}).catch(() => {});
 </script>
 </body>
 </html>

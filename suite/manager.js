@@ -35,6 +35,7 @@ async function migrate() {
     );
     create table if not exists suite.entrate (codice text primary key, slug text not null, token text not null, scade timestamptz not null);
     alter table suite.clienti add column if not exists logo text not null default '';
+    create table if not exists suite.backup_scarichi (slug text not null, il timestamptz not null default now(), da text not null default '');
   `);
 }
 const clienti = async () => (await q('select * from suite.clienti order by creato_il')).rows;
@@ -46,7 +47,7 @@ let prossimaPorta = PORTA0;
 function avvia(c) {
   if (motori.get(c.slug)?.proc) return;
   const porta = motori.get(c.slug)?.porta || prossimaPorta++;
-  const env = { ...process.env, SUITE_ATTIVA: '', ...S.envCliente(c, porta) };
+  const env = { ...process.env, SUITE_ATTIVA: '', ...S.envCliente(c, porta), BACKUP_TOKEN: require('../lib/esporta').chiaveCliente(c.slug) };
   const proc = fork(path.join(__dirname, '..', 'index.js'), [], { env, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
   const m = { proc, porta, pronto: false, riavvii: motori.get(c.slug)?.riavvii || 0 };
   motori.set(c.slug, m);

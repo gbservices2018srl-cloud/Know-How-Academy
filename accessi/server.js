@@ -1345,6 +1345,56 @@ app.patch('/api/gestione/clienti/:slug', needSuite, wrap(async (req, res) => {
   try { res.json(await SUITE_M.aggiornaCliente(String(req.params.slug), req.body || {})); } catch (e) { if (e.status) return bad(res, e.status, e.message); throw e; }
 }));
 
+// ---- Backup unico della suite: ogni notte Gestione finanziaria salva una copia completa; qui si scarica ----
+const ESP = require('../lib/esporta');
+const nodeCrypto = require('crypto');
+const BACKUP_URL = (process.env.BACKUP_URL || 'https://finanza.appgestione.it').replace(/\/$/, '');
+const MIO = () => require('../lib/suite').TENANT || 'tosmile';
+const tokenMio = () => process.env.BACKUP_TOKEN || ESP.chiaveCliente(MIO());
+const chiaveOk = (req, slug) => { const h = String(req.get('authorization') || ''), k = process.env.SSO_API_KEY;
+  const ok = x => x && h.length === ('Bearer ' + x).length && nodeCrypto.timingSafeEqual(Buffer.from(h), Buffer.from('Bearer ' + x));
+  return ok(k) || ok(ESP.chiaveCliente(slug)); };
+// per Gestione finanziaria (solo il servizio principale): elenco dei clienti e loro esportazione
+app.get('/api/_backup/clienti', wrap(async (req, res) => {
+  if (require('../lib/suite').TENANT || !chiaveOk(req, '__')) return bad(res, 401, 'Non autorizzato');
+  const { rows } = await store.q(`select slug from suite.clienti where stato <> 'sospeso' order by slug`).catch(() => ({ rows: [] }));
+  res.json({ clienti: ['tosmile', ...rows.map(r => r.slug)] });
+}));
+app.get('/api/_backup/esporta', wrap(async (req, res) => {
+  const slug = String(req.query.cliente || 'tosmile').toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (require('../lib/suite').TENANT || !chiaveOk(req, slug)) return bad(res, 401, 'Non autorizzato');
+  res.set({ 'Content-Type': 'application/gzip', 'Cache-Control': 'no-store' });
+  await ESP.esporta(slug, res, { etichetta: 'notturno' });
+}));
+// per l'amministratore: stato della copia di stanotte e download (solo il proprietario dell'azienda)
+const needOwner = (req, res, next) => req.user?.owner ? next() : bad(res, 403, 'Solo il titolare può scaricare il backup completo.');
+async function chiediBackup(percorso) {
+  return fetch(`${BACKUP_URL}${percorso}${percorso.includes('?') ? '&' : '?'}cliente=${encodeURIComponent(MIO())}`, { headers: { Authorization: 'Bearer ' + tokenMio() }, signal: AbortSignal.timeout(20000) });
+}
+app.get('/api/backup/stato', needUser, wrap(async (req, res) => {
+  if (!req.user.owner) return res.json({ visibile: false });
+  let notte = null; try { const r = await chiediBackup('/api/_backup/stato'); if (r.ok) notte = await r.json(); } catch {}
+  const { rows: [d] } = await store.q(`select max(il) as il from suite.backup_scarichi where slug = $1`, [MIO()]).catch(() => ({ rows: [{}] }));
+  const giorni = d?.il ? Math.floor((Date.now() - new Date(d.il)) / 86400000) : null;
+  res.set('Cache-Control', 'no-store').json({ visibile: true, notte, scaricato: d?.il || null, avviso: giorni === null || giorni > 7 });
+}));
+app.get('/api/backup/scarica', needUser, needOwner, wrap(async (req, res) => {
+  const parte = ['dati', 'finanza', 'nuovalab', 'ticket', 'file'].includes(req.query.parte) ? req.query.parte : 'dati';
+  const giorno = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
+  await store.q(`insert into suite.backup_scarichi (slug, da) values ($1, $2)`, [MIO(), req.user.email]).catch(() => {});
+  // prima la copia di stanotte (da Gestione finanziaria); se non c'è, i dati si esportano adesso
+  try {
+    const r = await chiediBackup(`/api/_backup/ultimo?parte=${parte}`);
+    if (r.ok && r.body) {
+      res.set({ 'Content-Type': r.headers.get('content-type') || 'application/gzip', 'Content-Disposition': r.headers.get('content-disposition') || `attachment; filename="backup-${MIO()}-${parte}-${giorno}.tar.gz"`, 'Cache-Control': 'no-store' });
+      const { Readable } = require('stream'); return Readable.fromWeb(r.body).pipe(res);
+    }
+  } catch {}
+  if (parte !== 'dati') return bad(res, 404, 'Copia non ancora disponibile: riprova domani mattina.');
+  res.set({ 'Content-Type': 'application/gzip', 'Content-Disposition': `attachment; filename="backup-${MIO()}-dati-${giorno}.tar.gz"`, 'Cache-Control': 'no-store' });
+  await ESP.esporta(MIO() === 'tosmile' ? '' : MIO(), res, { etichetta: 'scaricato adesso' });
+}));
+
 app.get('/admin', (req, res) => {
   if (!req.user) return res.redirect('/accedi?next=/admin');
   if (!isAdmin(req)) return res.redirect('/');
