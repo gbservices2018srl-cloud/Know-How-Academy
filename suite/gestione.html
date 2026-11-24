@@ -50,8 +50,15 @@ table.ut{width:100%;border-collapse:collapse;font-size:13px}table.ut td,table.ut
 </head>
 <body>
 <div class="wrap">
-  <div class="top"><h1>Gestione suite</h1><div class="row"><button class="btn gh" id="chiudi" type="button" hidden>🔒 Blocca</button><a class="back" href="/">← Le mie app</a></div></div>
+  <div class="top"><h1>Gestione suite</h1><div class="row"><button class="btn gh" id="cambia-pp" type="button" hidden>🔑 Password del pannello</button><button class="btn gh" id="chiudi" type="button" hidden>🔒 Blocca</button><a class="back" href="/">← Le mie app</a></div></div>
   <div class="card lk" id="lucchetto" hidden></div>
+  <div class="card" id="pp" hidden style="max-width:460px;margin:0 0 14px auto"><h2>Cambia la password del pannello</h2>
+    <form id="f-pp"><div class="f"><label for="pp-v">Password attuale</label><input id="pp-v" type="password" autocomplete="current-password" required></div>
+    <div class="f" style="margin-top:8px"><label for="pp-n">Nuova password (almeno 10 caratteri)</label><input id="pp-n" type="password" autocomplete="new-password" minlength="10" required></div>
+    <div class="f" style="margin-top:8px"><label for="pp-n2">Ripeti la nuova password</label><input id="pp-n2" type="password" autocomplete="new-password" required></div>
+    <div class="f" style="margin-top:8px"><label for="pp-c">Codice a 6 cifre dell'app sul telefono</label><input id="pp-c" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required></div>
+    <div class="row" style="margin-top:10px"><button class="btn pri" type="submit">Cambia password</button><button class="btn gh" type="button" id="pp-annulla">Annulla</button></div>
+    <p class="small">Se hai perso il telefono o la password: su Render metti PANNELLO_RESET = true, reimposta la protezione, poi togli quella riga.</p></form></div>
   <div id="pannello" hidden>
   <div class="card" id="rich" style="margin-bottom:14px" hidden></div>
   <div class="grid">
@@ -104,12 +111,14 @@ function disegna() {
   const c = D.clienti.find(x => x.slug === sel); if (!c) return;
   const app = D.catalogo.map(a => `<label class="app"><input type="checkbox" data-app="${a.id}" ${c.apps.includes(a.id) ? 'checked' : ''} ${a.esterna ? 'disabled' : ''}> ${esc(a.nome)}${a.esterna ? ' <span class="small">(prossimamente)</span>' : ''}</label>`).join('');
   $('#scheda').innerHTML = `<div class="row" style="justify-content:space-between"><h2 style="margin:0">${esc(c.nome)}</h2>${stato(c)}</div>
-    <p class="small" style="margin:4px 0 0"><a href="${esc(c.indirizzo)}" target="_blank" rel="noopener">${esc(c.indirizzo)}</a> · motore ${esc(c.motore)} · amministratore ${esc(c.admin_email)}</p>
+    <p class="small" style="margin:4px 0 0">${c.motoreServe ? `<a href="${esc(c.indirizzo)}" target="_blank" rel="noopener">${esc(c.indirizzo)}</a> · suite ${c.motore === 'acceso' ? 'accesa' : c.motore === 'in avvio' ? 'in avvio' : 'spenta'}` : 'solo Gestione finanziaria'} · email ${esc(c.admin_email || '—')}</p>
     ${pw && pw.slug === c.slug && pw.password ? `<div class="pw"><b>Password iniziale dell'amministratore</b> (si vede solo ora: mandala al cliente, poi la cambia lui):<br><code>${esc(pw.password)}</code><div class="small">Entra da appgestione.it con ${esc(c.admin_email)} e questa password.</div></div>` : ''}
     ${pw && pw.slug === c.slug && pw.finanza ? `<div class="pw"><b>Gestione finanziaria</b> (si vede solo ora): entra su <a href="${esc(D.finanzaUrl)}" target="_blank" rel="noopener">${esc(D.finanzaUrl)}</a> con nome azienda <b>${esc(pw.finanza.nome)}</b> e password <code>${esc(pw.finanza.password)}</code></div>` : ''}
     ${c.finanza_id ? `<div class="sec"><h3>Gestione finanziaria</h3><div class="small">Il cliente entra su <a href="${esc(D.finanzaUrl)}" target="_blank" rel="noopener">${esc(D.finanzaUrl)}</a> con il nome azienda <b>${esc(c.nome)}</b> e la sua password. Sospensione e scadenza valgono anche lì.</div>
-      <div class="row" style="margin-top:6px"><button class="btn gh sm" type="button" id="f-pw">Nuova password Gestione finanziaria</button><button class="btn gh sm" type="button" data-vf="${esc(c.finanza_id)}">Storico versioni dei dati</button></div>
-      ${PF && PF.slug === c.slug ? `<div class="pw">Nuova password di Gestione finanziaria: <code>${esc(PF.password)}</code><div class="small">Si vede solo ora: mandala al cliente.</div></div>` : ''}
+      <div class="small" style="margin-top:8px;font-weight:700">Password di Gestione finanziaria</div>
+      <div class="row" style="margin-top:4px"><input id="fpw-scelta" type="text" autocomplete="off" placeholder="scrivila tu, oppure lascia vuoto" style="min-width:0;flex:1"><button class="btn gh sm" type="button" id="f-pw">Imposta / genera</button></div>
+      <div class="row" style="margin-top:6px"><button class="btn gh sm" type="button" data-vf="${esc(c.finanza_id)}">Storico versioni dei dati</button></div>
+      ${PF && PF.slug === c.slug ? `<div class="pw">Password di Gestione finanziaria impostata: <code>${esc(PF.password)}</code><div class="small">Si vede solo ora: mandala al cliente.</div></div>` : ''}
       <div id="vf-${esc(c.finanza_id)}"></div></div>` : ''}
     <div class="sec fg">
       <div><h3>Abbonamento</h3><div class="small">Scadenza: <b style="color:var(--fg)">${data(c.scadenza)}</b>${c.giorni != null ? (c.giorni < 0 ? ' · scaduto' : ` · tra ${c.giorni} giorni`) : ''}${c.stato === 'sospeso' ? ` · sospeso il ${data(c.sospeso_il)}${c.sospeso_auto ? ' (per scadenza)' : ''}` : ''}</div>
@@ -119,8 +128,8 @@ function disegna() {
         <p class="small" style="margin:6px 0 0">15 giorni prima il cliente vede un avviso fisso; alla scadenza viene sospeso da solo.</p></div>
       <div><h3>Amministratore del cliente</h3><div class="small">${esc(c.admin_nome || '')}</div>
         <div class="row" style="margin-top:6px"><input id="a-email" type="email" value="${esc(c.admin_email)}" style="min-width:0;flex:1"><button class="btn gh sm" type="button" id="a-salva">Cambia email</button></div>
-        ${c.motoreServe ? '<div class="row" style="margin-top:6px"><button class="btn gh sm" type="button" data-pw="">Genera nuova password</button></div>' : ''}
-        ${PU && PU.slug === c.slug && !PU.utente ? `<div class="pw">Nuova password per ${esc(PU.email)}: <code>${esc(PU.password)}</code><div class="small">Si vede solo ora: mandala al cliente.</div></div>` : ''}
+        ${c.motoreServe ? '<h3>Password dell\'amministratore</h3><div class="row"><input id="pw-scelta" type="text" autocomplete="off" placeholder="scrivila tu, oppure lascia vuoto" style="min-width:0;flex:1"><button class="btn gh sm" type="button" data-pw="">Imposta / genera</button></div>' : ''}
+        ${PU && PU.slug === c.slug && !PU.utente ? `<div class="pw">Password impostata per ${esc(PU.email)}: <code>${esc(PU.password)}</code><div class="small">Si vede solo ora: mandala al cliente.</div></div>` : ''}
         <h3>Nome</h3><div class="row"><input id="a-nome" value="${esc(c.nome)}" style="min-width:0;flex:1"><button class="btn gh sm" type="button" id="a-rinomina">Rinomina</button></div></div>
     </div>
     <div class="sec" ${c.motoreServe ? '' : 'hidden'}><h3>Utenti · ${c.attivi} attivi su ${c.posti} posti</h3><div id="utenti" class="tw"><p class="small">Carico…</p></div>
@@ -239,12 +248,12 @@ document.addEventListener('click', async e => {
   if (b.dataset.pw !== undefined) {
     if (b.dataset.ok !== '1') { b.dataset.ok = '1'; b.textContent = 'Confermi? La vecchia password non varrà più'; return; }
     b.disabled = true;
-    try { const r = await api('POST', slugU() + '/password', { utente: b.dataset.pw || null }); PU = { slug: sel, utente: b.dataset.pw || null, email: r.email, password: r.password }; U.utenti = null; disegna(); }
-    catch (x) { toast(x.message); b.disabled = false; }
+    try { const r = await api('POST', slugU() + '/password', { utente: b.dataset.pw || null, password: b.dataset.pw ? '' : ($('#pw-scelta')?.value || '') }); PU = { slug: sel, utente: b.dataset.pw || null, email: r.email, password: r.password }; U.utenti = null; disegna(); }
+    catch (x) { toast(x.message); b.disabled = false; b.dataset.ok = ''; b.textContent = b.dataset.pw ? 'Reset password' : 'Imposta / genera'; }
   }
   if (b.id === 'f-pw') {
     if (b.dataset.ok !== '1') { b.dataset.ok = '1'; b.textContent = 'Confermi? La vecchia password non varrà più'; return; }
-    b.disabled = true; try { const r = await api('POST', slugU() + '/password-finanza', {}); PF = { slug: sel, password: r.password }; disegna(); } catch (x) { toast(x.message); b.disabled = false; }
+    b.disabled = true; try { const r = await api('POST', slugU() + '/password-finanza', { password: $('#fpw-scelta')?.value || '' }); PF = { slug: sel, password: r.password }; disegna(); } catch (x) { toast(x.message); b.disabled = false; b.dataset.ok = ''; b.textContent = 'Imposta / genera'; }
   }
   if (b.dataset.finpw) { b.disabled = true; try { await api('POST', '/api/gestione/finanza/richieste-password/' + encodeURIComponent(b.dataset.finpw), {}); await carica(); toast('Segnata come gestita.'); } catch (x) { toast(x.message); b.disabled = false; } }
   if (b.dataset.vf) versioni(b.dataset.vf, b.dataset.dove || ('vf-' + b.dataset.vf));
@@ -294,9 +303,9 @@ document.addEventListener('click', async e => {
 });
 // ---- lucchetto: password che sai solo tu + codice dall'app sul telefono ----
 async function lucchetto() {
-  $('#pannello').hidden = true; $('#chiudi').hidden = true; const L = $('#lucchetto'); L.hidden = false;
+  $('#pannello').hidden = true; $('#chiudi').hidden = true; $('#cambia-pp').hidden = true; $('#pp').hidden = true; const L = $('#lucchetto'); L.hidden = false;
   let s; try { s = await api('GET', '/api/gestione/lucchetto'); } catch (x) { L.innerHTML = `<p class="small">${esc(x.message)}</p>`; return; }
-  if (s.sbloccato) { L.hidden = true; $('#pannello').hidden = false; $('#chiudi').hidden = false; return carica().then(finanza).catch(x => { $('#lista').innerHTML = `<p class="small">${esc(x.message)}</p>`; }); }
+  if (s.sbloccato) { L.hidden = true; $('#pannello').hidden = false; $('#chiudi').hidden = false; $('#cambia-pp').hidden = false; return carica().then(finanza).catch(x => { $('#lista').innerHTML = `<p class="small">${esc(x.message)}</p>`; }); }
   if (s.impostato) {
     L.innerHTML = `<h2>🔒 Pannello bloccato</h2><p class="small">Inserisci la password del pannello e il codice a 6 cifre dell'app sul telefono.</p>
       <form id="f-sblocca"><div class="f"><label for="l-pw">Password del pannello</label><input id="l-pw" type="password" autocomplete="current-password" required></div>
@@ -320,6 +329,15 @@ document.addEventListener('submit', async e => {
   b.disabled = true;
   try { await api('POST', '/api/gestione/lucchetto/' + (e.target.id === 'f-imposta' ? 'imposta' : 'sblocca'), { password: $('#l-pw').value, codice: $('#l-cod').value }); await lucchetto(); }
   catch (x) { err.textContent = x.message; b.disabled = false; }
+});
+$('#cambia-pp').addEventListener('click', () => { $('#pp').hidden = !$('#pp').hidden; if (!$('#pp').hidden) $('#pp-v').focus(); });
+$('#pp-annulla').addEventListener('click', () => { $('#f-pp').reset(); $('#pp').hidden = true; });
+$('#f-pp').addEventListener('submit', async e => {
+  e.preventDefault();
+  if ($('#pp-n').value !== $('#pp-n2').value) return toast('Le due password nuove non sono uguali.');
+  const b = e.target.querySelector('button[type=submit]'); b.disabled = true;
+  try { await api('POST', '/api/gestione/lucchetto/cambia', { vecchia: $('#pp-v').value, nuova: $('#pp-n').value, codice: $('#pp-c').value }); e.target.reset(); $('#pp').hidden = true; toast('Password del pannello cambiata.'); }
+  catch (x) { toast(x.message); } b.disabled = false;
 });
 $('#chiudi').addEventListener('click', async () => { await api('POST', '/api/gestione/lucchetto/chiudi', {}).catch(() => {}); lucchetto(); });
 lucchetto();

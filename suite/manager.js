@@ -288,11 +288,12 @@ async function utenti(slug) {
   return rows.map(u => ({ id: u.id, nome: `${u.first_name} ${u.last_name}`.trim(), email: u.email, stato: u.status, admin: u.owner, ultimo: u.last_login }));
 }
 // nuova password per un utente del cliente (o per l'amministratore): si vede una volta sola; le sue sessioni aperte si chiudono
-async function nuovaPassword(slug, uid) {
+async function nuovaPassword(slug, uid, scelta) {
   const c0 = await serve(slug); if (!haMotore(c0)) throw errore('Questo cliente ha solo Gestione finanziaria: usa «Nuova password Gestione finanziaria».');
   const { rows: [u] } = await q(`select id, email from ${slug}_accessi.users where ${uid ? 'id = $1' : 'owner'} limit 1`, uid ? [uid] : []);
   if (!u) throw errore('Utente non trovato.', 404);
-  const pw = pwNuova();
+  const pw = String(scelta || '').trim() || pwNuova();
+  if (pw.length < 8) throw errore('La password deve avere almeno 8 caratteri.');
   await q(`update ${slug}_accessi.users set password_hash = $2 where id = $1`, [u.id, await bcrypt.hash(pw, 12)]);
   await q(`delete from ${slug}_accessi.sessions where user_id = $1`, [u.id]);
   console.log(`Suite: nuova password generata per un utente di ${slug}`);
@@ -327,9 +328,9 @@ async function decidi(id, approva) {
 }
 
 // Gestione finanziaria dal pannello: nuova password dell'azienda, aziende da portare nella suite, storico, persone del gruppo
-async function nuovaPasswordFinanza(slug) {
+async function nuovaPasswordFinanza(slug, scelta) {
   const c = await serve(slug); if (!c.finanza_id) throw errore('Questo cliente non ha Gestione finanziaria.');
-  const r = await fin('PATCH', '/api/_suite/aziende/' + encodeURIComponent(c.finanza_id), { nuova_password: true });
+  const r = await fin('PATCH', '/api/_suite/aziende/' + encodeURIComponent(c.finanza_id), { nuova_password: true, password: scelta || '' });
   console.log(`Suite: nuova password di Gestione finanziaria per ${slug}`);
   return { nome: c.nome, password: r.password };
 }

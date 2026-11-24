@@ -1359,7 +1359,7 @@ app.get('/api/gestione/clienti/:slug/utenti', needSuite, PANNELLO.serveSblocco, 
   res.set('Cache-Control', 'no-store').json({ utenti: await SUITE_M.utenti(SLUGP(req)) });
 }));
 app.post('/api/gestione/clienti/:slug/password', needSuite, PANNELLO.serveSblocco, conErr(async (req, res) => {
-  res.set('Cache-Control', 'no-store').json(await SUITE_M.nuovaPassword(SLUGP(req), req.body?.utente ? String(req.body.utente) : null));
+  res.set('Cache-Control', 'no-store').json(await SUITE_M.nuovaPassword(SLUGP(req), req.body?.utente ? String(req.body.utente) : null, req.body?.password ? String(req.body.password) : ''));
 }));
 app.get('/api/gestione/clienti/:slug/backup', needSuite, PANNELLO.serveSblocco, conErr(async (req, res) => {
   const slug = SLUGP(req); if (!(await SUITE_M.elencoPannello()).some(c => c.slug === slug)) return bad(res, 404, 'Cliente non trovato.');
@@ -1380,7 +1380,7 @@ app.post('/api/gestione/richieste/:id', needSuite, PANNELLO.serveSblocco, conErr
 }));
 // Gestione finanziaria dal pannello (sostituisce il vecchio pannello di finanza.appgestione.it)
 const G = [needSuite, PANNELLO.serveSblocco];
-app.post('/api/gestione/clienti/:slug/password-finanza', ...G, conErr(async (req, res) => { res.set('Cache-Control', 'no-store').json(await SUITE_M.nuovaPasswordFinanza(SLUGP(req))); }));
+app.post('/api/gestione/clienti/:slug/password-finanza', ...G, conErr(async (req, res) => { res.set('Cache-Control', 'no-store').json(await SUITE_M.nuovaPasswordFinanza(SLUGP(req), req.body?.password ? String(req.body.password) : '')); }));
 app.get('/api/gestione/finanza/aziende', ...G, conErr(async (req, res) => { res.set('Cache-Control', 'no-store').json({ aziende: await SUITE_M.aziendeFinanza() }); }));
 app.post('/api/gestione/finanza/aziende/:cid/porta', ...G, conErr(async (req, res) => { res.json(await SUITE_M.portaNellaSuite(String(req.params.cid), req.body || {})); }));
 app.get('/api/gestione/finanza/aziende/:cid/versioni', ...G, conErr(async (req, res) => { res.set('Cache-Control', 'no-store').json(await SUITE_M.versioniFinanza(String(req.params.cid))); }));

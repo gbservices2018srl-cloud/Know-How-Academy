@@ -104,6 +104,19 @@ function monta(app, { wrap, bad }) {
     if (!okPw || !okCod) { sbagliato(uid); console.log('Gestione suite: sblocco non riuscito per', req.user.email || uid); return bad(res, 401, 'Password o codice non corretti.'); }
     errori.delete(uid); scrivi(res, uid); res.json({ ok: true });
   }));
+  // cambio della password del pannello: servono la password di adesso e il codice del telefono
+  app.post('/api/gestione/lucchetto/cambia', soloTitolare, wrap(async (req, res) => {
+    const uid = req.user.id, att = bloccato(uid);
+    if (att) return bad(res, 429, `Troppi tentativi sbagliati: riprova tra ${att} minuti.`);
+    const c = await config(); if (!c) return bad(res, 409, 'Il lucchetto non è ancora impostato.');
+    const nuova = String(req.body?.nuova || '');
+    if (nuova.length < 10) return bad(res, 400, 'La nuova password deve avere almeno 10 caratteri.');
+    const okPw = await bcrypt.compare(String(req.body?.vecchia || ''), c.pw_hash);
+    if (!okPw || !totpOk(c.totp, req.body?.codice)) { sbagliato(uid); return bad(res, 401, 'Password attuale o codice non corretti.'); }
+    await q('update suite.pannello set pw_hash = $1, impostato_il = now(), da = $2 where id = 1', [await bcrypt.hash(nuova, 12), req.user.email || uid]);
+    errori.delete(uid); console.log('Gestione suite: password del pannello cambiata da', req.user.email || uid);
+    scrivi(res, uid); res.json({ ok: true });
+  }));
   app.post('/api/gestione/lucchetto/chiudi', soloTitolare, (req, res) => { togli(res); res.json({ ok: true }); });
 }
 // per le API del pannello: serve lo sblocco (e lo rinnova)
