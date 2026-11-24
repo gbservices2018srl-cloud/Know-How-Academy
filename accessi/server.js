@@ -1338,7 +1338,7 @@ app.get('/gestione', (req, res) => {
 });
 app.get('/api/gestione/clienti', needSuite, PANNELLO.serveSblocco, wrap(async (req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json({ clienti: await SUITE_M.elencoPannello(), catalogo: SUITE_M.catalogo().map(c => ({ id: c.id, nome: c.nome, esterna: !!c.esterna })) });
+  res.json({ clienti: await SUITE_M.elencoPannello(), catalogo: SUITE_M.catalogo().map(c => ({ id: c.id, nome: c.nome, esterna: !!c.esterna && !c.vendibile })), finanzaUrl: SUITE_M.FIN_URL() });
 }));
 app.post('/api/gestione/clienti', needSuite, PANNELLO.serveSblocco, wrap(async (req, res) => {
   try { res.json(await SUITE_M.creaCliente(req.body || {})); } catch (e) { if (e.status) return bad(res, e.status, e.message); throw e; }
@@ -1378,6 +1378,20 @@ app.get('/api/gestione/richieste', needSuite, PANNELLO.serveSblocco, conErr(asyn
 app.post('/api/gestione/richieste/:id', needSuite, PANNELLO.serveSblocco, conErr(async (req, res) => {
   res.set('Cache-Control', 'no-store').json(await SUITE_M.decidi(String(req.params.id), req.body?.approva === true));
 }));
+// Gestione finanziaria dal pannello (sostituisce il vecchio pannello di finanza.appgestione.it)
+const G = [needSuite, PANNELLO.serveSblocco];
+app.post('/api/gestione/clienti/:slug/password-finanza', ...G, conErr(async (req, res) => { res.set('Cache-Control', 'no-store').json(await SUITE_M.nuovaPasswordFinanza(SLUGP(req))); }));
+app.get('/api/gestione/finanza/aziende', ...G, conErr(async (req, res) => { res.set('Cache-Control', 'no-store').json({ aziende: await SUITE_M.aziendeFinanza() }); }));
+app.post('/api/gestione/finanza/aziende/:cid/porta', ...G, conErr(async (req, res) => { res.json(await SUITE_M.portaNellaSuite(String(req.params.cid), req.body || {})); }));
+app.get('/api/gestione/finanza/aziende/:cid/versioni', ...G, conErr(async (req, res) => { res.set('Cache-Control', 'no-store').json(await SUITE_M.versioniFinanza(String(req.params.cid))); }));
+app.get('/api/gestione/finanza/aziende/:cid/versioni/:vid', ...G, conErr(async (req, res) => { await SUITE_M.scaricaVersioneFinanza(String(req.params.cid), req.params.vid, res); }));
+app.post('/api/gestione/finanza/aziende/:cid/versioni/:vid/ripristina', ...G, conErr(async (req, res) => {
+  console.log('Gestione suite: ripristino di una versione di Gestione finanziaria da', req.user.email);
+  res.json(await SUITE_M.ripristinaFinanza(String(req.params.cid), req.params.vid));
+}));
+app.get('/api/gestione/finanza/persone', ...G, conErr(async (req, res) => { res.set('Cache-Control', 'no-store').json(await SUITE_M.personeFinanza()); }));
+app.put('/api/gestione/finanza/persone/:uid', ...G, conErr(async (req, res) => { res.json(await SUITE_M.assegnaFinanza(String(req.params.uid), Array.isArray(req.body?.aziende) ? req.body.aziende : [])); }));
+app.post('/api/gestione/finanza/richieste-password/:rid', ...G, conErr(async (req, res) => { res.json(await SUITE_M.passwordGestita(String(req.params.rid))); }));
 // modulo pubblico di iscrizione alla suite (la richiesta arriva nel pannello; il cliente nasce solo se approvi)
 app.get('/iscriviti', (req, res) => {
   if (!SUITE_M.ATTIVA) return res.redirect('/');
@@ -1385,7 +1399,7 @@ app.get('/iscriviti', (req, res) => {
 });
 app.get('/api/iscrizione/catalogo', (req, res) => {
   if (!SUITE_M.ATTIVA) return bad(res, 404, 'Non disponibile.');
-  res.json({ catalogo: SUITE_M.catalogo().filter(c => !c.esterna).map(c => ({ id: c.id, nome: c.nome })) });
+  res.json({ catalogo: SUITE_M.catalogo().filter(c => !c.esterna || c.vendibile).map(c => ({ id: c.id, nome: c.nome })) });
 });
 app.post('/api/iscrizione', conErr(async (req, res) => {
   if (!SUITE_M.ATTIVA) return bad(res, 404, 'Non disponibile.');

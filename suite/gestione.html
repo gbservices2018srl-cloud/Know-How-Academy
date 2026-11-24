@@ -63,6 +63,7 @@ table.ut{width:100%;border-collapse:collapse;font-size:13px}table.ut td,table.ut
     </div>
     <div class="card" id="scheda"><p class="small">Scegli un cliente o creane uno nuovo.</p></div>
   </div>
+  <div class="card" id="fin" style="margin-top:14px"></div>
   </div>
 </div>
 <div class="toast" id="toast" hidden></div>
@@ -78,7 +79,7 @@ async function api(m, u, b) {
 }
 const stato = c => c.stato === 'sospeso' ? `<span class="chip bad">${c.sospeso_auto ? 'scaduto' : 'sospeso'}</span>` : c.giorni != null && c.giorni <= 15 ? '<span class="chip warn">in scadenza</span>' : c.stato === 'attivo' ? '<span class="chip ok">attivo</span>' : '<span class="chip warn">in prova</span>';
 const data = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—';
-let R = [], U = { slug: null, utenti: null }, PU = null, COPIA = {};
+let R = [], U = { slug: null, utenti: null }, PU = null, COPIA = {}, PF = null, VF = {}, FIN = { aziende: null, persone: null, vista: 'aziende', cid: '' };
 const prezzo = (apps, posti) => 20 + 32 * apps.length + 6 * posti;
 async function carica() { [D, { richieste: R }] = await Promise.all([api('GET', '/api/gestione/clienti'), api('GET', '/api/gestione/richieste')]); disegna(); richiesteHtml(); }
 function richiesteHtml() {
@@ -87,6 +88,8 @@ function richiesteHtml() {
     const d = r.dati || {};
     if (r.tipo === 'iscrizione') return `<div class="req"><span><b>Nuova iscrizione</b> · ${esc(d.nome)} (${esc(d.slug)}.appgestione.it) · ${esc(d.admin_nome)} · ${esc(d.admin_email)}${d.telefono ? ' · ' + esc(d.telefono) : ''} · ${(d.apps || []).length} app, ${esc(d.posti)} utenti · ${euro(prezzo(d.apps || [], d.posti || 0))}/mese${d.note ? `<br><span class="small">${esc(d.note)}</span>` : ''}</span>
       <span class="row"><button class="btn pri sm" type="button" data-rq="${esc(r.id)}" data-ok="1">Approva</button><button class="btn gh sm" type="button" data-rq="${esc(r.id)}" data-ok="0">Rifiuta</button></span></div>`;
+    if (r.tipo === 'password_finanza') return `<div class="req"><span><b>Password dimenticata · Gestione finanziaria</b> · ${esc(d.azienda)} · ${new Date(d.quando).toLocaleDateString('it-IT')}</span>
+      <span class="row">${d.slug ? `<button class="btn pri sm" type="button" data-cl="${esc(d.slug)}">Apri e genera password</button>` : '<span class="small">azienda non ancora nella suite</span>'}<button class="btn gh sm" type="button" data-finpw="${esc(d.rid)}">Segna come gestita</button></span></div>`;
     if (r.tipo === 'scadenza') return `<div class="req"><span><b>Abbonamento in scadenza</b> · ${esc(d.nome)} · ${d.giorni < 0 ? 'scaduto' : d.giorni === 0 ? 'scade oggi' : `scade il ${data(d.scadenza)} (tra ${d.giorni} giorni)`}</span><span class="row"><button class="btn pri sm" type="button" data-cl="${esc(d.slug)}">Apri e rinnova</button></span></div>`;
     return '';
   }).join('');
@@ -102,7 +105,12 @@ function disegna() {
   const app = D.catalogo.map(a => `<label class="app"><input type="checkbox" data-app="${a.id}" ${c.apps.includes(a.id) ? 'checked' : ''} ${a.esterna ? 'disabled' : ''}> ${esc(a.nome)}${a.esterna ? ' <span class="small">(prossimamente)</span>' : ''}</label>`).join('');
   $('#scheda').innerHTML = `<div class="row" style="justify-content:space-between"><h2 style="margin:0">${esc(c.nome)}</h2>${stato(c)}</div>
     <p class="small" style="margin:4px 0 0"><a href="${esc(c.indirizzo)}" target="_blank" rel="noopener">${esc(c.indirizzo)}</a> · motore ${esc(c.motore)} · amministratore ${esc(c.admin_email)}</p>
-    ${pw && pw.slug === c.slug ? `<div class="pw"><b>Password iniziale dell'amministratore</b> (si vede solo ora: mandala al cliente, poi la cambia lui):<br><code>${esc(pw.password)}</code><div class="small">Entra da appgestione.it con ${esc(c.admin_email)} e questa password.</div></div>` : ''}
+    ${pw && pw.slug === c.slug && pw.password ? `<div class="pw"><b>Password iniziale dell'amministratore</b> (si vede solo ora: mandala al cliente, poi la cambia lui):<br><code>${esc(pw.password)}</code><div class="small">Entra da appgestione.it con ${esc(c.admin_email)} e questa password.</div></div>` : ''}
+    ${pw && pw.slug === c.slug && pw.finanza ? `<div class="pw"><b>Gestione finanziaria</b> (si vede solo ora): entra su <a href="${esc(D.finanzaUrl)}" target="_blank" rel="noopener">${esc(D.finanzaUrl)}</a> con nome azienda <b>${esc(pw.finanza.nome)}</b> e password <code>${esc(pw.finanza.password)}</code></div>` : ''}
+    ${c.finanza_id ? `<div class="sec"><h3>Gestione finanziaria</h3><div class="small">Il cliente entra su <a href="${esc(D.finanzaUrl)}" target="_blank" rel="noopener">${esc(D.finanzaUrl)}</a> con il nome azienda <b>${esc(c.nome)}</b> e la sua password. Sospensione e scadenza valgono anche lì.</div>
+      <div class="row" style="margin-top:6px"><button class="btn gh sm" type="button" id="f-pw">Nuova password Gestione finanziaria</button><button class="btn gh sm" type="button" data-vf="${esc(c.finanza_id)}">Storico versioni dei dati</button></div>
+      ${PF && PF.slug === c.slug ? `<div class="pw">Nuova password di Gestione finanziaria: <code>${esc(PF.password)}</code><div class="small">Si vede solo ora: mandala al cliente.</div></div>` : ''}
+      <div id="vf-${esc(c.finanza_id)}"></div></div>` : ''}
     <div class="sec fg">
       <div><h3>Abbonamento</h3><div class="small">Scadenza: <b style="color:var(--fg)">${data(c.scadenza)}</b>${c.giorni != null ? (c.giorni < 0 ? ' · scaduto' : ` · tra ${c.giorni} giorni`) : ''}${c.stato === 'sospeso' ? ` · sospeso il ${data(c.sospeso_il)}${c.sospeso_auto ? ' (per scadenza)' : ''}` : ''}</div>
         <div class="row" style="margin-top:8px"><button class="btn pri sm" type="button" data-rinnova="1">Rinnova 1 mese</button><button class="btn gh sm" type="button" data-rinnova="12">Rinnova 1 anno</button></div>
@@ -111,11 +119,11 @@ function disegna() {
         <p class="small" style="margin:6px 0 0">15 giorni prima il cliente vede un avviso fisso; alla scadenza viene sospeso da solo.</p></div>
       <div><h3>Amministratore del cliente</h3><div class="small">${esc(c.admin_nome || '')}</div>
         <div class="row" style="margin-top:6px"><input id="a-email" type="email" value="${esc(c.admin_email)}" style="min-width:0;flex:1"><button class="btn gh sm" type="button" id="a-salva">Cambia email</button></div>
-        <div class="row" style="margin-top:6px"><button class="btn gh sm" type="button" data-pw="">Genera nuova password</button></div>
+        ${c.motoreServe ? '<div class="row" style="margin-top:6px"><button class="btn gh sm" type="button" data-pw="">Genera nuova password</button></div>' : ''}
         ${PU && PU.slug === c.slug && !PU.utente ? `<div class="pw">Nuova password per ${esc(PU.email)}: <code>${esc(PU.password)}</code><div class="small">Si vede solo ora: mandala al cliente.</div></div>` : ''}
         <h3>Nome</h3><div class="row"><input id="a-nome" value="${esc(c.nome)}" style="min-width:0;flex:1"><button class="btn gh sm" type="button" id="a-rinomina">Rinomina</button></div></div>
     </div>
-    <div class="sec"><h3>Utenti · ${c.attivi} attivi su ${c.posti} posti</h3><div id="utenti" class="tw"><p class="small">Carico…</p></div>
+    <div class="sec" ${c.motoreServe ? '' : 'hidden'}><h3>Utenti · ${c.attivi} attivi su ${c.posti} posti</h3><div id="utenti" class="tw"><p class="small">Carico…</p></div>
       <p class="small" style="margin:6px 0 0">Gli utenti li crea e li disattiva il cliente; da qui puoi solo dare una nuova password.</p></div>
     <div class="sec"><h3>Dati e sicurezza</h3><div class="small" id="copia">Copia di stanotte: …</div>
       <div class="row" style="margin-top:6px"><a class="btn gh sm" href="/api/gestione/clienti/${encodeURIComponent(c.slug)}/backup" download>Scarica backup adesso</a></div></div>
@@ -142,6 +150,47 @@ async function utenti(slug) {
   $('#utenti').innerHTML = U.utenti.length ? `<table class="ut"><thead><tr><th>Nome</th><th>Email</th><th>Ruolo</th><th>Stato</th><th></th></tr></thead><tbody>${U.utenti.map(u => `<tr><td>${esc(u.nome)}</td><td>${esc(u.email)}</td><td>${u.admin ? 'Amministratore' : 'Utente'}</td><td>${st(u)}</td>
     <td><button class="btn gh sm" type="button" data-pw="${esc(u.id)}">Reset password</button>${PU && PU.slug === slug && PU.utente === u.id ? `<div class="pw" style="margin-top:4px"><code>${esc(PU.password)}</code><div class="small">si vede solo ora</div></div>` : ''}</td></tr>`).join('')}</tbody></table>` : '<p class="small">Nessun utente ancora (se il cliente è appena stato creato, la sua suite si sta avviando: riapri tra qualche secondo).</p>';
 }
+async function versioni(cid, dove) {
+  const el = document.getElementById(dove); if (!el) return;
+  el.innerHTML = '<p class="small">Carico…</p>';
+  try { VF[cid] = (await api('GET', `/api/gestione/finanza/aziende/${encodeURIComponent(cid)}/versioni`)).versioni; } catch (x) { el.innerHTML = `<p class="small">${esc(x.message)}</p>`; return; }
+  const L = VF[cid];
+  el.innerHTML = L.length ? `<div class="tw" style="max-height:260px;overflow:auto;margin-top:6px"><table class="ut"><thead><tr><th>Salvata il</th><th>Motivo</th><th></th></tr></thead><tbody>${L.map(v => `<tr><td>${new Date(v.saved_at.replace(/Z?$/, 'Z')).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })}</td><td class="small">${esc(v.motivo || '')} (${Math.round(v.dim / 1024)} KB)</td>
+    <td class="row" style="justify-content:flex-end"><a class="btn gh sm" href="/api/gestione/finanza/aziende/${encodeURIComponent(cid)}/versioni/${v.id}" download>Scarica</a><button class="btn gh sm" type="button" data-ripr="${v.id}" data-cid="${esc(cid)}" data-dove="${esc(dove)}">Ripristina</button></td></tr>`).join('')}</tbody></table></div>
+    <p class="small" style="margin:4px 0 0">Ripristinando, i dati di adesso restano nello storico: si può sempre tornare indietro.</p>` : '<p class="small">Nessuna versione salvata.</p>';
+}
+// ---- Gestione finanziaria: aziende da portare nella suite, persone del gruppo, storico ----
+async function finanza() {
+  const el = $('#fin'); if (!el) return;
+  const tab = (id, t) => `<button class="btn ${FIN.vista === id ? 'pri' : 'gh'} sm" type="button" data-fv="${id}">${t}</button>`;
+  let corpo = '<p class="small">Carico…</p>';
+  el.innerHTML = `<div class="row" style="justify-content:space-between"><h2 style="margin:0">Gestione finanziaria</h2><a class="small" href="${esc(D.finanzaUrl || '#')}" target="_blank" rel="noopener">apri ${esc((D.finanzaUrl || '').replace(/^https?:\/\//, ''))}</a></div>
+    <div class="row" style="margin-top:8px">${tab('aziende', 'Aziende')}${tab('persone', 'Persone del gruppo To Smile')}${tab('storico', 'Storico versioni')}</div><div id="fin-c" style="margin-top:10px">${corpo}</div>`;
+  try {
+    if (!FIN.aziende) FIN.aziende = (await api('GET', '/api/gestione/finanza/aziende')).aziende;
+    const A = FIN.aziende, C = $('#fin-c');
+    if (FIN.vista === 'aziende') {
+      const fuori = A.filter(a => !a.gruppo && !a.cliente), dentro = A.filter(a => a.cliente), gruppo = A.filter(a => a.gruppo && !a.cliente);
+      const def = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+      const sug = n => String(n || '').toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g, '').replace(/^[^a-z]+/, '').slice(0, 30);
+      C.innerHTML = `<h3>Clienti esterni da portare nella suite</h3>${fuori.length ? fuori.map(a => `<div class="req"><span><b>${esc(a.nome)}</b> · ${esc(a.email || 'senza email')}${a.sospesa ? ' · <span class="chip bad">sospesa</span>' : ''}${a.approvata ? '' : ' · <span class="chip warn">in attesa di approvazione</span>'}${a.scadenza ? ' · scade ' + data(a.scadenza) : ''}</span>
+        <span class="row"><input id="ps-${esc(a.id)}" value="${esc(sug(a.nome))}" style="width:130px" aria-label="indirizzo"><span class="small">scadenza</span><input type="date" id="pd-${esc(a.id)}" value="${esc(a.scadenza && a.scadenza >= new Date().toISOString().slice(0, 10) ? a.scadenza : def)}"><button class="btn pri sm" type="button" data-porta="${esc(a.id)}">Porta nella suite</button></span></div>`).join('')
+        : '<p class="small">Nessuna: tutte le aziende esterne sono già nella suite.</p>'}
+        <p class="small">Portandola nella suite l'azienda continua a entrare come oggi (nome azienda e password): da qui la rinnovi, la sospendi e le dai una nuova password. Riceve il piano completo. I suoi dati non si toccano.</p>
+        <h3>Già nella suite</h3>${dentro.map(a => `<div class="req"><span><b>${esc(a.nome)}</b></span><button class="btn gh sm" type="button" data-cl="${esc(a.cliente)}">Apri</button></div>`).join('') || '<p class="small">Nessuna.</p>'}
+        <h3>Aziende del gruppo To Smile</h3><p class="small">${gruppo.map(a => esc(a.nome)).join(' · ') || 'Nessuna.'}</p><p class="small">Restano dentro To Smile: chi le vede si sceglie in «Persone del gruppo To Smile».</p>`;
+    } else if (FIN.vista === 'persone') {
+      if (!FIN.persone) FIN.persone = (await api('GET', '/api/gestione/finanza/persone')).persone;
+      C.innerHTML = FIN.persone.length ? `<p class="small" style="margin-top:0">Persone di To Smile abilitate a Gestione finanziaria (in Gestione accessi) e le aziende che possono aprire.</p>` + FIN.persone.map(p => `<div class="req" style="align-items:flex-start"><span style="min-width:180px"><b>${esc(p.nome || p.email)}</b><br><span class="small">${esc(p.email || '')}</span></span>
+        <span style="flex:1;display:flex;flex-wrap:wrap;gap:4px 12px">${A.map(a => `<label class="small" style="display:flex;gap:4px;align-items:center"><input type="checkbox" data-pa="${esc(p.id)}" value="${esc(a.id)}" ${p.aziende.includes(a.id) ? 'checked' : ''}>${esc(a.nome)}</label>`).join('')}</span>
+        <button class="btn gh sm" type="button" data-pers="${esc(p.id)}">Salva</button></div>`).join('') : '<p class="small">Nessuna persona abilitata a Gestione finanziaria.</p>';
+    } else {
+      C.innerHTML = `<div class="row"><select id="fin-cid"><option value="">Scegli l'azienda…</option>${A.map(a => `<option value="${esc(a.id)}" ${FIN.cid === a.id ? 'selected' : ''}>${esc(a.nome)}</option>`).join('')}</select></div><div id="fin-v"></div>`;
+      if (FIN.cid) versioni(FIN.cid, 'fin-v');
+    }
+  } catch (x) { if ($('#fin-c')) $('#fin-c').innerHTML = `<p class="small">${esc(x.message)}</p>`; }
+}
+document.addEventListener('change', e => { if (e.target.id === 'fin-cid') { FIN.cid = e.target.value; if (FIN.cid) versioni(FIN.cid, 'fin-v'); else $('#fin-v').innerHTML = ''; } });
 async function copia(slug) {
   if (!(slug in COPIA)) { try { COPIA[slug] = (await api('GET', `/api/gestione/clienti/${encodeURIComponent(slug)}/copia`)).copia; } catch { COPIA[slug] = null; } }
   const k = COPIA[slug]; if (sel !== slug || !$('#copia')) return;
@@ -193,12 +242,35 @@ document.addEventListener('click', async e => {
     try { const r = await api('POST', slugU() + '/password', { utente: b.dataset.pw || null }); PU = { slug: sel, utente: b.dataset.pw || null, email: r.email, password: r.password }; U.utenti = null; disegna(); }
     catch (x) { toast(x.message); b.disabled = false; }
   }
+  if (b.id === 'f-pw') {
+    if (b.dataset.ok !== '1') { b.dataset.ok = '1'; b.textContent = 'Confermi? La vecchia password non varrà più'; return; }
+    b.disabled = true; try { const r = await api('POST', slugU() + '/password-finanza', {}); PF = { slug: sel, password: r.password }; disegna(); } catch (x) { toast(x.message); b.disabled = false; }
+  }
+  if (b.dataset.finpw) { b.disabled = true; try { await api('POST', '/api/gestione/finanza/richieste-password/' + encodeURIComponent(b.dataset.finpw), {}); await carica(); toast('Segnata come gestita.'); } catch (x) { toast(x.message); b.disabled = false; } }
+  if (b.dataset.vf) versioni(b.dataset.vf, b.dataset.dove || ('vf-' + b.dataset.vf));
+  if (b.dataset.ripr) {
+    if (b.dataset.ok !== '1') { b.dataset.ok = '1'; b.textContent = 'Confermi il ripristino?'; return; }
+    b.disabled = true;
+    try { await api('POST', `/api/gestione/finanza/aziende/${encodeURIComponent(b.dataset.cid)}/versioni/${b.dataset.ripr}/ripristina`, {}); toast('Ripristinato. I dati di prima restano nello storico.'); versioni(b.dataset.cid, b.dataset.dove); }
+    catch (x) { toast(x.message); b.disabled = false; }
+  }
+  if (b.dataset.fv) { FIN.vista = b.dataset.fv; finanza(); }
+  if (b.dataset.porta) {
+    b.disabled = true;
+    try { const r = await api('POST', `/api/gestione/finanza/aziende/${encodeURIComponent(b.dataset.porta)}/porta`, { slug: $('#ps-' + b.dataset.porta).value, scadenza: $('#pd-' + b.dataset.porta).value });
+      FIN.aziende = null; sel = r.slug; nuovo = false; await carica(); finanza(); toast('Azienda portata nella suite: i suoi dati restano dove sono.'); }
+    catch (x) { toast(x.message); b.disabled = false; }
+  }
+  if (b.dataset.pers) {
+    b.disabled = true; const ids = [...document.querySelectorAll(`[data-pa="${b.dataset.pers}"]:checked`)].map(x => x.value);
+    try { await api('PUT', '/api/gestione/finanza/persone/' + encodeURIComponent(b.dataset.pers), { aziende: ids }); FIN.persone = null; await finanza(); toast('Salvato.'); } catch (x) { toast(x.message); b.disabled = false; }
+  }
   if (b.dataset.rq) {
     const ok = b.dataset.ok === '1';
     if (!ok && b.dataset.conf !== '1') { b.dataset.conf = '1'; b.textContent = 'Confermi il rifiuto?'; return; }
     b.disabled = true;
     try { const r = await api('POST', '/api/gestione/richieste/' + encodeURIComponent(b.dataset.rq), { approva: ok });
-      if (ok && r.slug) { pw = { slug: r.slug, password: r.password }; sel = r.slug; nuovo = false; toast('Cliente creato: la sua suite si sta avviando.'); } else toast('Richiesta rifiutata.');
+      if (ok && r.slug) { pw = { slug: r.slug, password: r.password, finanza: r.finanza }; sel = r.slug; nuovo = false; toast('Cliente creato.'); } else toast('Richiesta rifiutata.');
       await carica(); } catch (x) { toast(x.message); b.disabled = false; }
   }
   if (b.id === 'nuovo') { nuovo = true; sel = null; disegna(); }
@@ -210,20 +282,21 @@ document.addEventListener('click', async e => {
     try {
       const r = await api('POST', '/api/gestione/clienti', { nome: $('#n-nome').value, slug: $('#n-slug').value, admin_email: $('#n-email').value, admin_nome: $('#n-anome').value,
         referente: $('#n-ref').value, telefono: $('#n-tel').value, apps: apps(), posti: $('#posti').value });
-      pw = { slug: r.slug, password: r.password }; sel = r.slug; nuovo = false; await carica(); toast('Cliente creato: la sua suite si sta avviando.');
+      pw = { slug: r.slug, password: r.password, finanza: r.finanza }; sel = r.slug; nuovo = false; await carica(); toast('Cliente creato.');
     } catch (x) { toast(x.message); b.disabled = false; }
   }
   if (b.id === 'salva') {
     b.disabled = true;
-    try { await api('PATCH', '/api/gestione/clienti/' + encodeURIComponent(sel), { apps: apps(), posti: $('#posti').value, stato: $('#st').value, referente: $('#ref').value, telefono: $('#tel').value, note: $('#note').value });
-      await carica(); toast('Salvato.'); } catch (x) { toast(x.message); b.disabled = false; }
+    try { const r = await api('PATCH', '/api/gestione/clienti/' + encodeURIComponent(sel), { apps: apps(), posti: $('#posti').value, stato: $('#st').value, referente: $('#ref').value, telefono: $('#tel').value, note: $('#note').value });
+      if (r.finanza) pw = { slug: sel, password: null, finanza: r.finanza };
+      FIN.aziende = null; await carica(); finanza(); toast('Salvato.'); } catch (x) { toast(x.message); b.disabled = false; }
   }
 });
 // ---- lucchetto: password che sai solo tu + codice dall'app sul telefono ----
 async function lucchetto() {
   $('#pannello').hidden = true; $('#chiudi').hidden = true; const L = $('#lucchetto'); L.hidden = false;
   let s; try { s = await api('GET', '/api/gestione/lucchetto'); } catch (x) { L.innerHTML = `<p class="small">${esc(x.message)}</p>`; return; }
-  if (s.sbloccato) { L.hidden = true; $('#pannello').hidden = false; $('#chiudi').hidden = false; return carica().catch(x => { $('#lista').innerHTML = `<p class="small">${esc(x.message)}</p>`; }); }
+  if (s.sbloccato) { L.hidden = true; $('#pannello').hidden = false; $('#chiudi').hidden = false; return carica().then(finanza).catch(x => { $('#lista').innerHTML = `<p class="small">${esc(x.message)}</p>`; }); }
   if (s.impostato) {
     L.innerHTML = `<h2>🔒 Pannello bloccato</h2><p class="small">Inserisci la password del pannello e il codice a 6 cifre dell'app sul telefono.</p>
       <form id="f-sblocca"><div class="f"><label for="l-pw">Password del pannello</label><input id="l-pw" type="password" autocomplete="current-password" required></div>

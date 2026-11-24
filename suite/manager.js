@@ -39,6 +39,7 @@ async function migrate() {
     alter table suite.clienti add column if not exists scadenza date;
     alter table suite.clienti add column if not exists sospeso_il timestamptz;
     alter table suite.clienti add column if not exists sospeso_auto boolean not null default false;
+    alter table suite.clienti add column if not exists finanza_id text;
     update suite.clienti set scadenza = (creato_il at time zone 'Europe/Rome')::date + 30 where scadenza is null;
     create table if not exists suite.richieste (id text primary key, tipo text not null, dati jsonb not null default '{}', stato text not null default 'aperta',
       il timestamptz not null default now(), gestita_il timestamptz, nota text not null default '');
@@ -50,8 +51,9 @@ const cliente = async slug => (await q('select * from suite.clienti where slug =
 /* ---------- motori dei clienti ---------- */
 const motori = new Map(); // slug → { proc, porta, pronto, riavvii }
 let prossimaPorta = PORTA0;
+const haMotore = c => (c.apps || []).some(a => !(S.CATALOGO.find(x => x.id === a) || {}).esterna);
 function avvia(c) {
-  if (motori.get(c.slug)?.proc) return;
+  if (motori.get(c.slug)?.proc || !haMotore(c)) return;
   const porta = motori.get(c.slug)?.porta || prossimaPorta++;
   const env = { ...process.env, SUITE_ATTIVA: '', ...S.envCliente(c, porta), BACKUP_TOKEN: require('../lib/esporta').chiaveCliente(c.slug) };
   const proc = fork(path.join(__dirname, '..', 'index.js'), [], { env, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
@@ -105,6 +107,7 @@ async function inoltra(req, res) {
   if (h === S.BASE || !h.endsWith('.' + S.BASE)) return false;
   const c = await slugDaHost(h).catch(() => null); if (!c) return false;
   if (c.stato === 'sospeso') { pagina(res, 403, c.sospeso_auto ? 'Abbonamento scaduto' : 'Accesso sospeso', (c.sospeso_auto ? 'L’abbonamento a questa suite è scaduto' : 'L’accesso a questa suite è sospeso') + '. I dati sono conservati: contatta To Smile per riattivarlo.'); return true; }
+  if (!haMotore(c)) { res.writeHead(302, { Location: FIN_URL() + '/' }); res.end(); return true; }
   const m = motori.get(c.slug);
   if (!m?.proc || !m.pronto) { if (!m?.proc) avvia(c); pagina(res, 503, 'Un momento…', 'La suite si sta avviando. Ricarica la pagina tra qualche secondo.'); return true; }
   const p = http.request({ host: '127.0.0.1', port: m.porta, method: req.method, path: req.url,
@@ -155,9 +158,22 @@ async function elencoPannello() {
     admin_email: c.admin_email, logo: !!c.logo, referente: c.referente, telefono: c.telefono, note: c.note, privacy_ok: c.privacy_ok, alfadocs: c.alfadocs,
     prezzo: prezzo(c), indirizzo: indirizzo(c.slug), motore: motori.get(c.slug)?.pronto ? 'acceso' : motori.get(c.slug)?.proc ? 'in avvio' : 'spento',
     creato_il: c.creato_il, admin_nome: c.admin_nome, scadenza: c.scadenza ? giorno(c.scadenza) : null, giorni: giorniA(c.scadenza),
-    sospeso_il: c.sospeso_il, sospeso_auto: c.sospeso_auto })));
+    sospeso_il: c.sospeso_il, sospeso_auto: c.sospeso_auto, finanza_id: c.finanza_id || null, motoreServe: haMotore(c) })));
 }
-const idApps = () => S.CATALOGO.filter(x => !x.esterna).map(x => x.id);
+const idApps = () => S.CATALOGO.filter(x => !x.esterna || x.vendibile).map(x => x.id);
+/* ---------- Gestione finanziaria (servizio a parte): le aziende si comandano da qui ---------- */
+const FIN_URL = () => (process.env.FINANZA_URL || 'https://finanza.appgestione.it').replace(/\/$/, '');
+async function fin(metodo, percorso, corpo) {
+  let r;
+  try {
+    r = await fetch(FIN_URL() + percorso, { method: metodo, headers: { Authorization: 'Bearer ' + (process.env.SSO_API_KEY || ''), ...(corpo ? { 'Content-Type': 'application/json' } : {}) },
+      body: corpo ? JSON.stringify(corpo) : undefined, signal: AbortSignal.timeout(20000) });
+  } catch { throw Object.assign(new Error('Gestione finanziaria non risponde: riprova tra poco.'), { status: 502 }); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(j.error || 'Errore di Gestione finanziaria.'), { status: r.status >= 500 ? 502 : 400 });
+  return j;
+}
+const finScade = d => d ? String(d).slice(0, 10) + 'T23:59:59' : null;
 async function creaCliente(b) {
   const slug = String(b.slug || '').toLowerCase().trim();
   if (!S.slugValido(slug)) throw Object.assign(new Error('Indirizzo non valido: solo lettere minuscole e numeri, da 2 a 30, che inizi con una lettera.'), { status: 400 });
@@ -167,12 +183,19 @@ async function creaCliente(b) {
   const apps = (b.apps || []).filter(a => idApps().includes(a));
   const posti = Math.max(1, Math.min(999, parseInt(b.posti, 10) || 5));
   const password = crypto.randomBytes(9).toString('base64url');
+  let finanza = null;
+  if (apps.includes('finanza')) {
+    const scad = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+    finanza = await fin('POST', '/api/_suite/aziende', { name: nome, email, phone: String(b.telefono || ''), expires_at: finScade(scad) });
+  }
   await q(`insert into suite.clienti (slug, nome, stato, apps, posti, admin_email, admin_nome, admin_password, referente, telefono, note, scadenza)
     values ($1,$2,'prova',$3,$4,$5,$6,$7,$8,$9,$10, (now() at time zone 'Europe/Rome')::date + 30)`, [slug, nome, JSON.stringify(apps), posti, email, String(b.admin_nome || '').slice(0, 80), password,
     String(b.referente || '').slice(0, 80), String(b.telefono || '').slice(0, 40), String(b.note || '').slice(0, 1000)]);
+  if (finanza) await q('update suite.clienti set finanza_id = $2 where slug = $1', [slug, finanza.id]);
   elencoT = 0;
-  avvia(await cliente(slug));
-  return { slug, password, indirizzo: indirizzo(slug) };
+  const c = await cliente(slug);
+  avvia(c);
+  return { slug, password: haMotore(c) ? password : null, indirizzo: indirizzo(slug), finanza: finanza ? { nome: finanza.name, password: finanza.password } : null };
 }
 async function aggiornaCliente(slug, b) {
   const c = await cliente(slug); if (!c) throw Object.assign(new Error('Cliente non trovato.'), { status: 404 });
@@ -189,12 +212,23 @@ async function aggiornaCliente(slug, b) {
   await q(`update suite.clienti set apps = $2, posti = $3, stato = $4, referente = $5, telefono = $6, note = $7, aggiornato_il = now() where slug = $1`,
     [slug, JSON.stringify(apps), posti, stato, b.referente != null ? String(b.referente).slice(0, 80) : c.referente,
       b.telefono != null ? String(b.telefono).slice(0, 40) : c.telefono, b.note != null ? String(b.note).slice(0, 1000) : c.note]);
-  elencoT = 0;
-  // app o posti cambiati: il motore riparte con le impostazioni nuove (pochi secondi)
   if (stato !== c.stato) await q(`update suite.clienti set sospeso_il = $2, sospeso_auto = false where slug = $1`, [slug, stato === 'sospeso' ? new Date() : null]);
+  elencoT = 0;
+  // Gestione finanziaria: se l'app entra si crea l'azienda (se manca); se esce o il cliente è sospeso, l'azienda si sospende (i dati restano)
+  let finanza = null;
+  const cc = await cliente(slug);
+  if (apps.includes('finanza') && !cc.finanza_id) {
+    const f = await fin('POST', '/api/_suite/aziende', { name: cc.nome, email: cc.admin_email, phone: cc.telefono, expires_at: finScade(cc.scadenza ? giorno(cc.scadenza) : null) });
+    await q('update suite.clienti set finanza_id = $2 where slug = $1', [slug, f.id]);
+    finanza = { nome: f.name, password: f.password };
+  } else if (cc.finanza_id) {
+    await fin('PATCH', '/api/_suite/aziende/' + encodeURIComponent(cc.finanza_id), { suspended: stato === 'sospeso' || !apps.includes('finanza') });
+  }
+  if (!haMotore(cc)) { ferma(slug); return { ok: true, finanza }; }
+  // app o posti cambiati: il motore riparte con le impostazioni nuove (pochi secondi)
   if (stato === 'sospeso') ferma(slug);
-  else if (JSON.stringify(apps) !== JSON.stringify(c.apps) || posti !== c.posti || c.stato === 'sospeso') riavvia(slug);
-  return { ok: true };
+  else if (JSON.stringify(apps) !== JSON.stringify(c.apps) || posti !== c.posti || c.stato === 'sospeso' || !motori.get(slug)?.proc) riavvia(slug);
+  return { ok: true, finanza };
 }
 
 
@@ -217,6 +251,7 @@ async function rinnova(slug, b) {
   const riattiva = c.stato === 'sospeso' && c.sospeso_auto && nuova >= oggi();
   await q(`update suite.clienti set scadenza = $2, ${riattiva ? `stato = 'attivo', sospeso_il = null, sospeso_auto = false,` : ''} aggiornato_il = now() where slug = $1`, [slug, nuova]);
   elencoT = 0; marchio = null;
+  if (c.finanza_id) await fin('PATCH', '/api/_suite/aziende/' + encodeURIComponent(c.finanza_id), { expires_at: finScade(nuova), ...(riattiva ? { suspended: !(c.apps || []).includes('finanza') } : {}) });
   if (riattiva) riavvia(slug);
   return { ok: true, scadenza: nuova, riattivato: riattiva };
 }
@@ -224,17 +259,23 @@ async function rinnova(slug, b) {
 async function controllaScadenze() {
   const { rows } = await q(`update suite.clienti set stato = 'sospeso', sospeso_il = now(), sospeso_auto = true, aggiornato_il = now()
     where stato <> 'sospeso' and scadenza is not null and scadenza < (now() at time zone 'Europe/Rome')::date returning slug`);
-  for (const r of rows) { console.log('Suite: abbonamento scaduto, sospeso', r.slug); ferma(r.slug); }
+  for (const r of rows) {
+    console.log('Suite: abbonamento scaduto, sospeso', r.slug); ferma(r.slug);
+    const c = await cliente(r.slug);
+    if (c?.finanza_id) await fin('PATCH', '/api/_suite/aziende/' + encodeURIComponent(c.finanza_id), { suspended: true }).catch(e => console.error('Suite scadenze (finanza):', e.message));
+  }
   if (rows.length) elencoT = 0;
 }
 async function aggiornaDati(slug, b) {
   const c = await serve(slug);
-  if (b.nome != null) { const n = String(b.nome).trim().slice(0, 80); if (n.length < 2) throw errore('Scrivi il nome del cliente.'); await q('update suite.clienti set nome = $2, aggiornato_il = now() where slug = $1', [slug, n]); marchio = null; }
+  if (b.nome != null) { const n = String(b.nome).trim().slice(0, 80); if (n.length < 2) throw errore('Scrivi il nome del cliente.'); await q('update suite.clienti set nome = $2, aggiornato_il = now() where slug = $1', [slug, n]); marchio = null;
+    if (c.finanza_id) await fin('PATCH', '/api/_suite/aziende/' + encodeURIComponent(c.finanza_id), { name: n }); }
   if (b.admin_email != null) {
     const e = String(b.admin_email).trim().toLowerCase(); if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) throw errore('Email non valida.');
-    const altro = (await q(`select 1 from ${slug}_accessi.users where email = $1 and not owner`, [e])).rows[0];
+    const altro = haMotore(c) && (await q(`select 1 from ${slug}_accessi.users where email = $1 and not owner`, [e]).catch(() => ({ rows: [] }))).rows[0];
     if (altro) throw errore('Questa email è già di un altro utente del cliente.', 409);
-    await q(`update ${slug}_accessi.users set email = $1 where owner`, [e]);
+    if (haMotore(c)) await q(`update ${slug}_accessi.users set email = $1 where owner`, [e]);
+    if (c.finanza_id) await fin('PATCH', '/api/_suite/aziende/' + encodeURIComponent(c.finanza_id), { email: e });
     await q('update suite.clienti set admin_email = $2, aggiornato_il = now() where slug = $1', [slug, e]);
   }
   elencoT = 0;
@@ -242,13 +283,13 @@ async function aggiornaDati(slug, b) {
 }
 const pwNuova = () => crypto.randomBytes(9).toString('base64url');
 async function utenti(slug) {
-  await serve(slug);
+  const c0 = await serve(slug); if (!haMotore(c0)) return [];
   const { rows } = await q(`select id, first_name, last_name, email, status, owner, last_login from ${slug}_accessi.users order by owner desc, status, last_name, first_name`).catch(() => ({ rows: [] }));
   return rows.map(u => ({ id: u.id, nome: `${u.first_name} ${u.last_name}`.trim(), email: u.email, stato: u.status, admin: u.owner, ultimo: u.last_login }));
 }
 // nuova password per un utente del cliente (o per l'amministratore): si vede una volta sola; le sue sessioni aperte si chiudono
 async function nuovaPassword(slug, uid) {
-  await serve(slug);
+  const c0 = await serve(slug); if (!haMotore(c0)) throw errore('Questo cliente ha solo Gestione finanziaria: usa «Nuova password Gestione finanziaria».');
   const { rows: [u] } = await q(`select id, email from ${slug}_accessi.users where ${uid ? 'id = $1' : 'owner'} limit 1`, uid ? [uid] : []);
   if (!u) throw errore('Utente non trovato.', 404);
   const pw = pwNuova();
@@ -268,7 +309,13 @@ async function richieste() {
   const { rows } = await q(`select id, tipo, dati, il from suite.richieste where stato = 'aperta' order by il`);
   const scad = (await clienti()).filter(c => c.stato !== 'sospeso' && giorniA(c.scadenza) !== null && giorniA(c.scadenza) <= 15)
     .map(c => ({ id: 'scad-' + c.slug, tipo: 'scadenza', dati: { slug: c.slug, nome: c.nome, scadenza: giorno(c.scadenza), giorni: giorniA(c.scadenza) } }));
-  return [...rows, ...scad];
+  let pw = [];
+  try {
+    const L = await clienti(), per = new Map(L.filter(c => c.finanza_id).map(c => [c.finanza_id, c]));
+    pw = (await fin('GET', '/api/_suite/richieste-password')).richieste.map(r => ({ id: 'finpw-' + r.id, tipo: 'password_finanza',
+      dati: { rid: r.id, azienda: r.company_name, quando: r.requested_at, slug: per.get(r.company_id)?.slug || null, company_id: r.company_id } }));
+  } catch {}
+  return [...rows, ...scad, ...pw];
 }
 async function decidi(id, approva) {
   const { rows: [r] } = await q(`select * from suite.richieste where id = $1 and stato = 'aperta'`, [id]);
@@ -278,6 +325,49 @@ async function decidi(id, approva) {
   await q(`update suite.richieste set stato = $2, gestita_il = now() where id = $1`, [id, approva ? 'approvata' : 'rifiutata']);
   return esito;
 }
+
+// Gestione finanziaria dal pannello: nuova password dell'azienda, aziende da portare nella suite, storico, persone del gruppo
+async function nuovaPasswordFinanza(slug) {
+  const c = await serve(slug); if (!c.finanza_id) throw errore('Questo cliente non ha Gestione finanziaria.');
+  const r = await fin('PATCH', '/api/_suite/aziende/' + encodeURIComponent(c.finanza_id), { nuova_password: true });
+  console.log(`Suite: nuova password di Gestione finanziaria per ${slug}`);
+  return { nome: c.nome, password: r.password };
+}
+async function aziendeFinanza() {
+  const { aziende } = await fin('GET', '/api/_suite/aziende');
+  const legate = new Map((await clienti()).filter(c => c.finanza_id).map(c => [c.finanza_id, c.slug]));
+  return aziende.map(a => ({ id: a.id, nome: a.name, email: a.email, telefono: a.phone, creata: a.created_at, sospesa: a.suspended, scadenza: a.expires_at ? String(a.expires_at).slice(0, 10) : null,
+    piano: a.plan, approvata: a.approved, gruppo: a.gruppo, cliente: legate.get(a.id) || null }));
+}
+// un'azienda esterna di Gestione finanziaria diventa cliente della suite (con la sola app Gestione finanziaria): i suoi dati restano dove sono
+async function portaNellaSuite(cid, b) {
+  const slug = String(b.slug || '').toLowerCase().trim();
+  if (!S.slugValido(slug)) throw errore('Indirizzo non valido: solo lettere minuscole e numeri, da 2 a 30, che inizi con una lettera.');
+  if (await cliente(slug)) throw errore('Questo indirizzo è già usato da un altro cliente.', 409);
+  const a = (await aziendeFinanza()).find(x => x.id === cid); if (!a) throw errore('Azienda non trovata in Gestione finanziaria.', 404);
+  if (a.cliente) throw errore('Questa azienda è già nella suite.', 409);
+  if (a.gruppo) throw errore('Questa azienda è del gruppo To Smile: resta dentro To Smile.', 400);
+  const scad = /^\d{4}-\d{2}-\d{2}$/.test(String(b.scadenza || '')) ? String(b.scadenza) : (a.scadenza && a.scadenza >= oggi() ? a.scadenza : new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10));
+  await q(`insert into suite.clienti (slug, nome, stato, apps, posti, admin_email, admin_nome, referente, telefono, note, scadenza, finanza_id)
+    values ($1,$2,$3,'["finanza"]',1,$4,'',$5,$6,$7,$8,$9)`, [slug, a.nome, a.sospesa ? 'sospeso' : 'attivo', String(a.email || '').toLowerCase(), '', String(a.telefono || ''),
+    'Portata nella suite da Gestione finanziaria il ' + oggi().split('-').reverse().join('/'), scad, cid]);
+  if (a.sospesa) await q('update suite.clienti set sospeso_il = now() where slug = $1', [slug]);
+  await fin('PATCH', '/api/_suite/aziende/' + encodeURIComponent(cid), { expires_at: finScade(scad), plan: 'pro', approva: true });
+  elencoT = 0;
+  console.log(`Suite: azienda di Gestione finanziaria portata nella suite come ${slug}`);
+  return { ok: true, slug };
+}
+const versioniFinanza = cid => fin('GET', `/api/_suite/aziende/${encodeURIComponent(cid)}/versioni`);
+const ripristinaFinanza = (cid, vid) => fin('POST', `/api/_suite/aziende/${encodeURIComponent(cid)}/versioni/${parseInt(vid, 10)}/ripristina`);
+async function scaricaVersioneFinanza(cid, vid, res) {
+  const r = await fetch(`${FIN_URL()}/api/_suite/aziende/${encodeURIComponent(cid)}/versioni/${parseInt(vid, 10)}`, { headers: { Authorization: 'Bearer ' + (process.env.SSO_API_KEY || '') }, signal: AbortSignal.timeout(30000) });
+  if (!r.ok) throw errore('Versione non trovata.', 404);
+  res.set({ 'Content-Type': 'application/json', 'Content-Disposition': r.headers.get('content-disposition') || 'attachment; filename="versione.json"', 'Cache-Control': 'no-store' });
+  res.send(Buffer.from(await r.arrayBuffer()));
+}
+const personeFinanza = () => fin('GET', '/api/_suite/persone');
+const assegnaFinanza = (uid, aziende) => fin('PUT', '/api/_suite/persone/' + encodeURIComponent(uid), { aziende });
+const passwordGestita = rid => fin('POST', '/api/_suite/richieste-password/' + encodeURIComponent(rid));
 
 async function start() {
   if (!ATTIVA) return;
@@ -299,5 +389,6 @@ async function marchioCliente() {
   }
   return marchio;
 }
-module.exports = { rinnova, aggiornaDati, utenti, nuovaPassword, nuovaRichiesta, richieste, decidi, slugLibero: async s => S.slugValido(s) && !(await cliente(s)),
+module.exports = { nuovaPasswordFinanza, aziendeFinanza, portaNellaSuite, versioniFinanza, ripristinaFinanza, scaricaVersioneFinanza, personeFinanza, assegnaFinanza, passwordGestita, FIN_URL,
+  rinnova, aggiornaDati, utenti, nuovaPassword, nuovaRichiesta, richieste, decidi, slugLibero: async s => S.slugValido(s) && !(await cliente(s)),
   marchioCliente, ATTIVA, start, inoltra, accediCliente, ritiraEntrata, elencoPannello, creaCliente, aggiornaCliente, catalogo: () => S.CATALOGO, prezzo };
