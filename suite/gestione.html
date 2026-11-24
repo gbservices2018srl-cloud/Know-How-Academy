@@ -96,7 +96,7 @@ function richiesteHtml() {
 }
 function disegna() {
   $('#lista').innerHTML = D.clienti.map(c => `<button class="cl" type="button" data-cl="${esc(c.slug)}" aria-current="${c.slug === sel && !nuovo}">
-    <span><b>${esc(c.nome)}</b><span class="small" style="display:block">${esc(c.slug)}.appgestione.it · ${c.apps.length} app · ${c.attivi}/${c.posti} utenti · ${c.stato === 'sospeso' ? 'sospeso il ' + data(c.sospeso_il) : 'scade ' + data(c.scadenza)}${c.privacy_ok ? '' : ' · privacy da caricare'}</span></span>
+    <span><b>${esc(c.nome)}</b><span class="small" style="display:block">${esc(c.slug)}.appgestione.it · ${c.apps.length} app · ${c.attivi}/${c.posti} utenti · ${c.stato === 'sospeso' ? 'sospeso il ' + data(c.sospeso_il) : 'scade ' + data(c.scadenza)}${c.privacy_ok || !c.motoreServe ? '' : ' · privacy da caricare'}${c.motoreServe ? '' : ' · solo Gestione finanziaria'}</span></span>
     <span style="text-align:right">${stato(c)}<div style="font-weight:800">${euro(c.prezzo)}/mese</div></span></button>`).join('') || '<p class="small">Nessun cliente ancora.</p>';
   const tot = D.clienti.filter(c => c.stato === 'attivo').reduce((s, c) => s + c.prezzo, 0);
   $('#totale').innerHTML = `<div class="small">Incasso mensile dai clienti attivi</div><div class="tot">${euro(tot)}</div><div class="small">20 € apertura + 32 € per app + 6 € per utente (posti richiesti)</div>`;

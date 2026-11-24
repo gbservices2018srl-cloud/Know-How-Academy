@@ -163,11 +163,11 @@ async function elencoPannello() {
 const idApps = () => S.CATALOGO.filter(x => !x.esterna || x.vendibile).map(x => x.id);
 /* ---------- Gestione finanziaria (servizio a parte): le aziende si comandano da qui ---------- */
 const FIN_URL = () => (process.env.FINANZA_URL || 'https://finanza.appgestione.it').replace(/\/$/, '');
-async function fin(metodo, percorso, corpo) {
+async function fin(metodo, percorso, corpo, attesa = 20000) {
   let r;
   try {
     r = await fetch(FIN_URL() + percorso, { method: metodo, headers: { Authorization: 'Bearer ' + (process.env.SSO_API_KEY || ''), ...(corpo ? { 'Content-Type': 'application/json' } : {}) },
-      body: corpo ? JSON.stringify(corpo) : undefined, signal: AbortSignal.timeout(20000) });
+      body: corpo ? JSON.stringify(corpo) : undefined, signal: AbortSignal.timeout(attesa) });
   } catch { throw Object.assign(new Error('Gestione finanziaria non risponde: riprova tra poco.'), { status: 502 }); }
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw Object.assign(new Error(j.error || 'Errore di Gestione finanziaria.'), { status: r.status >= 500 ? 502 : 400 });
@@ -312,7 +312,7 @@ async function richieste() {
   let pw = [];
   try {
     const L = await clienti(), per = new Map(L.filter(c => c.finanza_id).map(c => [c.finanza_id, c]));
-    pw = (await fin('GET', '/api/_suite/richieste-password')).richieste.map(r => ({ id: 'finpw-' + r.id, tipo: 'password_finanza',
+    pw = (await fin('GET', '/api/_suite/richieste-password', null, 5000)).richieste.map(r => ({ id: 'finpw-' + r.id, tipo: 'password_finanza',
       dati: { rid: r.id, azienda: r.company_name, quando: r.requested_at, slug: per.get(r.company_id)?.slug || null, company_id: r.company_id } }));
   } catch {}
   return [...rows, ...scad, ...pw];
