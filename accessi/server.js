@@ -1392,6 +1392,24 @@ app.post('/api/gestione/finanza/aziende/:cid/versioni/:vid/ripristina', ...G, co
 app.get('/api/gestione/finanza/persone', ...G, conErr(async (req, res) => { res.set('Cache-Control', 'no-store').json(await SUITE_M.personeFinanza()); }));
 app.put('/api/gestione/finanza/persone/:uid', ...G, conErr(async (req, res) => { res.json(await SUITE_M.assegnaFinanza(String(req.params.uid), Array.isArray(req.body?.aziende) ? req.body.aziende : [])); }));
 app.post('/api/gestione/finanza/richieste-password/:rid', ...G, conErr(async (req, res) => { res.json(await SUITE_M.passwordGestita(String(req.params.rid))); }));
+app.post('/api/gestione/clienti/:slug/attiva-accesso', ...G, conErr(async (req, res) => { res.set('Cache-Control', 'no-store').json(await SUITE_M.attivaAccesso(SLUGP(req))); }));
+// cliente della suite → Gestione finanziaria senza seconda password (codice monouso di 2 minuti)
+app.get('/_suite/finanza', wrap(async (req, res) => {
+  const slug = require('../lib/suite').TENANT;
+  if (!slug) return res.redirect('/');
+  if (!req.user) return res.redirect('/accedi?next=' + encodeURIComponent(req.originalUrl));
+  const pagina = req.query.p === 'bilancio' ? 'bilancio' : '';
+  if (!req.apps?.[pagina || 'finanza'] && !req.apps?.finanza) return res.status(403).type('html').send('<!doctype html><meta charset="utf-8"><title>Non abilitato</title><p style="font-family:system-ui;padding:24px">Non sei abilitato a Gestione finanziaria: chiedi al tuo amministratore. <a href="/">Le mie app</a></p>');
+  const codice = await SUITE_M.ticketFinanza(slug, req.user, pagina);
+  res.redirect(`${(process.env.SUITE_FINANZA_URL || 'https://finanza.appgestione.it').replace(/\/$/, '')}/_suite/entra?c=${encodeURIComponent(codice)}`);
+}));
+// Gestione finanziaria ritira il codice (solo il servizio principale, con la chiave condivisa)
+app.post('/api/_suite/finanza-ticket', wrap(async (req, res) => {
+  if (require('../lib/suite').TENANT || !chiaveOk(req, '__')) return bad(res, 401, 'Non autorizzato');
+  const t = await SUITE_M.ritiraTicketFinanza(req.body?.codice);
+  if (!t) return bad(res, 404, 'Codice non valido o scaduto: rientra dalla tua suite.');
+  res.json(t);
+}));
 // modulo pubblico di iscrizione alla suite (la richiesta arriva nel pannello; il cliente nasce solo se approvi)
 app.get('/iscriviti', (req, res) => {
   if (!SUITE_M.ATTIVA) return res.redirect('/');

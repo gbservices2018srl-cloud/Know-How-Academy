@@ -40,6 +40,9 @@ async function migrate() {
     alter table suite.clienti add column if not exists sospeso_il timestamptz;
     alter table suite.clienti add column if not exists sospeso_auto boolean not null default false;
     alter table suite.clienti add column if not exists finanza_id text;
+    alter table suite.clienti add column if not exists accesso_suite boolean not null default false;
+    update suite.clienti set accesso_suite = true where not accesso_suite and exists (select 1 from jsonb_array_elements_text(apps) a where a <> 'finanza');
+    create table if not exists suite.entrate_finanza (codice text primary key, slug text not null, utente text not null, nome text not null default '', email text not null default '', pagina text not null default '', scade timestamptz not null);
     update suite.clienti set scadenza = (creato_il at time zone 'Europe/Rome')::date + 30 where scadenza is null;
     create table if not exists suite.richieste (id text primary key, tipo text not null, dati jsonb not null default '{}', stato text not null default 'aperta',
       il timestamptz not null default now(), gestita_il timestamptz, nota text not null default '');
@@ -51,13 +54,16 @@ const cliente = async slug => (await q('select * from suite.clienti where slug =
 /* ---------- motori dei clienti ---------- */
 const motori = new Map(); // slug → { proc, porta, pronto, riavvii }
 let prossimaPorta = PORTA0;
-const haMotore = c => (c.apps || []).some(a => !(S.CATALOGO.find(x => x.id === a) || {}).esterna);
+// app della suite (che girano nel motore del cliente); Gestione finanziaria è un servizio a parte
+const conAppSuite = c => (c.apps || []).some(a => !(S.CATALOGO.find(x => x.id === a) || {}).esterna);
+// il motore serve se il cliente entra da appgestione.it; con la sola Gestione finanziaria è una «suite leggera» (accesso + Le mie app)
+const haMotore = c => !!c.accesso_suite || conAppSuite(c);
 function avvia(c) {
   if (motori.get(c.slug)?.proc || !haMotore(c)) return;
   const porta = motori.get(c.slug)?.porta || prossimaPorta++;
-  const env = { ...process.env, SUITE_ATTIVA: '', ...S.envCliente(c, porta), BACKUP_TOKEN: require('../lib/esporta').chiaveCliente(c.slug) };
+  const env = { ...process.env, SUITE_ATTIVA: '', ...S.envCliente({ ...c, leggera: !conAppSuite(c) }, porta), SUITE_FINANZA_URL: FIN_URL(), BACKUP_TOKEN: require('../lib/esporta').chiaveCliente(c.slug) };
   const proc = fork(path.join(__dirname, '..', 'index.js'), [], { env, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
-  const m = { proc, porta, pronto: false, riavvii: motori.get(c.slug)?.riavvii || 0 };
+  const m = { proc, porta, pronto: false, riavvii: motori.get(c.slug)?.riavvii || 0, avviato: Date.now(), ultimo: Date.now() };
   motori.set(c.slug, m);
   const log = d => String(d).split('\n').filter(Boolean).forEach(r => {
     if (/attivi sulla porta/.test(r)) m.pronto = true;
@@ -108,8 +114,15 @@ async function inoltra(req, res) {
   const c = await slugDaHost(h).catch(() => null); if (!c) return false;
   if (c.stato === 'sospeso') { pagina(res, 403, c.sospeso_auto ? 'Abbonamento scaduto' : 'Accesso sospeso', (c.sospeso_auto ? 'L’abbonamento a questa suite è scaduto' : 'L’accesso a questa suite è sospeso') + '. I dati sono conservati: contatta To Smile per riattivarlo.'); return true; }
   if (!haMotore(c)) { res.writeHead(302, { Location: FIN_URL() + '/' }); res.end(); return true; }
-  const m = motori.get(c.slug);
-  if (!m?.proc || !m.pronto) { if (!m?.proc) avvia(c); pagina(res, 503, 'Un momento…', 'La suite si sta avviando. Ricarica la pagina tra qualche secondo.'); return true; }
+  let m = motori.get(c.slug);
+  if (!m?.proc || !m.pronto) {
+    if (!m?.proc) avvia(c);
+    // suite leggera: si accende alla prima richiesta, si aspetta qualche secondo che sia pronta
+    for (let i = 0; i < 40 && !(motori.get(c.slug)?.pronto); i++) await new Promise(ok => setTimeout(ok, 500));
+    m = motori.get(c.slug);
+    if (!m?.proc || !m.pronto) { pagina(res, 503, 'Un momento…', 'La suite si sta avviando. Ricarica la pagina tra qualche secondo.'); return true; }
+  }
+  m.ultimo = Date.now();
   const p = http.request({ host: '127.0.0.1', port: m.porta, method: req.method, path: req.url,
     headers: { ...req.headers, 'x-forwarded-for': req.socket.remoteAddress || '', 'x-forwarded-proto': 'https' } }, r => {
     res.writeHead(r.statusCode, r.headers); r.pipe(res);
@@ -158,7 +171,7 @@ async function elencoPannello() {
     admin_email: c.admin_email, logo: !!c.logo, referente: c.referente, telefono: c.telefono, note: c.note, privacy_ok: c.privacy_ok, alfadocs: c.alfadocs,
     prezzo: prezzo(c), indirizzo: indirizzo(c.slug), motore: motori.get(c.slug)?.pronto ? 'acceso' : motori.get(c.slug)?.proc ? 'in avvio' : 'spento',
     creato_il: c.creato_il, admin_nome: c.admin_nome, scadenza: c.scadenza ? giorno(c.scadenza) : null, giorni: giorniA(c.scadenza),
-    sospeso_il: c.sospeso_il, sospeso_auto: c.sospeso_auto, finanza_id: c.finanza_id || null, motoreServe: haMotore(c) })));
+    sospeso_il: c.sospeso_il, sospeso_auto: c.sospeso_auto, finanza_id: c.finanza_id || null, motoreServe: haMotore(c), leggera: haMotore(c) && !conAppSuite(c), accesso_suite: !!c.accesso_suite })));
 }
 const idApps = () => S.CATALOGO.filter(x => !x.esterna || x.vendibile).map(x => x.id);
 /* ---------- Gestione finanziaria (servizio a parte): le aziende si comandano da qui ---------- */
@@ -191,7 +204,7 @@ async function creaCliente(b) {
   await q(`insert into suite.clienti (slug, nome, stato, apps, posti, admin_email, admin_nome, admin_password, referente, telefono, note, scadenza)
     values ($1,$2,'prova',$3,$4,$5,$6,$7,$8,$9,$10, (now() at time zone 'Europe/Rome')::date + 30)`, [slug, nome, JSON.stringify(apps), posti, email, String(b.admin_nome || '').slice(0, 80), password,
     String(b.referente || '').slice(0, 80), String(b.telefono || '').slice(0, 40), String(b.note || '').slice(0, 1000)]);
-  if (finanza) await q('update suite.clienti set finanza_id = $2 where slug = $1', [slug, finanza.id]);
+  await q('update suite.clienti set accesso_suite = true, finanza_id = $2 where slug = $1', [slug, finanza ? finanza.id : null]);
   elencoT = 0;
   const c = await cliente(slug);
   avvia(c);
@@ -369,13 +382,50 @@ const personeFinanza = () => fin('GET', '/api/_suite/persone');
 const assegnaFinanza = (uid, aziende) => fin('PUT', '/api/_suite/persone/' + encodeURIComponent(uid), { aziende });
 const passwordGestita = rid => fin('POST', '/api/_suite/richieste-password/' + encodeURIComponent(rid));
 
+// cliente portato da Gestione finanziaria: da ora entra anche da appgestione.it (si crea il suo amministratore)
+async function attivaAccesso(slug) {
+  const c = await serve(slug);
+  if (c.accesso_suite) throw errore('L’accesso da appgestione.it è già attivo.', 409);
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c.admin_email || '')) throw errore('Prima scrivi l’email dell’amministratore del cliente (Cambia email).');
+  const password = crypto.randomBytes(9).toString('base64url');
+  await q('update suite.clienti set accesso_suite = true, admin_password = $2, aggiornato_il = now() where slug = $1', [slug, password]);
+  elencoT = 0;
+  if (c.stato !== 'sospeso') riavvia(slug);
+  console.log(`Suite: accesso da appgestione.it attivato per ${slug}`);
+  return { ok: true, email: c.admin_email, password, indirizzo: indirizzo(slug) };
+}
+// passaggio senza seconda password: il motore del cliente crea un codice monouso, Gestione finanziaria lo ritira qui
+async function ticketFinanza(slug, u, pagina) {
+  const codice = crypto.randomBytes(24).toString('base64url');
+  await q(`delete from suite.entrate_finanza where scade < now()`);
+  await q(`insert into suite.entrate_finanza (codice, slug, utente, nome, email, pagina, scade) values ($1,$2,$3,$4,$5,$6, now() + interval '2 minutes')`,
+    [sha(codice), slug, u.id, `${u.first_name || ''} ${u.last_name || ''}`.trim(), u.email || '', pagina === 'bilancio' ? 'bilancio' : '']);
+  return codice;
+}
+async function ritiraTicketFinanza(codice) {
+  const { rows: [t] } = await q(`delete from suite.entrate_finanza where codice = $1 and scade > now() returning *`, [sha(String(codice || ''))]);
+  if (!t) return null;
+  const c = await cliente(t.slug);
+  if (!c || c.stato === 'sospeso' || !c.finanza_id || !(c.apps || []).includes('finanza')) return null;
+  return { company_id: c.finanza_id, home: indirizzo(c.slug) + '/', utente: { id: t.utente, nome: t.nome, email: t.email }, pagina: t.pagina, cliente: c.slug };
+}
+
 async function start() {
   if (!ATTIVA) return;
   await migrate();
   await controllaScadenze().catch(e => console.error('Suite scadenze:', e.message));
   setInterval(() => controllaScadenze().catch(e => console.error('Suite scadenze:', e.message)), 3600000);
-  for (const c of await clienti()) if (c.stato !== 'sospeso') avvia(c);
+  // le suite leggere (sola Gestione finanziaria) non si accendono all'avvio: si accendono quando il cliente entra
+  for (const c of await clienti()) if (c.stato !== 'sospeso' && conAppSuite(c)) avvia(c);
   console.log(`Suite: ${motori.size} clienti avviati`);
+  // ogni 5 minuti: le suite leggere non usate da 20 minuti si spengono (memoria libera); i dati restano
+  setInterval(async () => {
+    for (const [slug, m] of motori) {
+      if (!m.proc || Date.now() - (m.ultimo || m.avviato || 0) < 20 * 60000) continue;
+      const c = await cliente(slug).catch(() => null);
+      if (c && !conAppSuite(c)) { console.log(`Suite: suite leggera di ${slug} spenta (non usata da 20 minuti)`); ferma(slug); }
+    }
+  }, 5 * 60000).unref();
   const chiudi = () => { for (const [, m] of motori) if (m.proc) { m.fermato = true; m.proc.kill('SIGTERM'); } };
   process.on('SIGTERM', () => { chiudi(); setTimeout(() => process.exit(0), 300); }); process.on('exit', chiudi);
 }
@@ -389,6 +439,6 @@ async function marchioCliente() {
   }
   return marchio;
 }
-module.exports = { nuovaPasswordFinanza, aziendeFinanza, portaNellaSuite, versioniFinanza, ripristinaFinanza, scaricaVersioneFinanza, personeFinanza, assegnaFinanza, passwordGestita, FIN_URL,
+module.exports = { attivaAccesso, ticketFinanza, ritiraTicketFinanza, nuovaPasswordFinanza, aziendeFinanza, portaNellaSuite, versioniFinanza, ripristinaFinanza, scaricaVersioneFinanza, personeFinanza, assegnaFinanza, passwordGestita, FIN_URL,
   rinnova, aggiornaDati, utenti, nuovaPassword, nuovaRichiesta, richieste, decidi, slugLibero: async s => S.slugValido(s) && !(await cliente(s)),
   marchioCliente, ATTIVA, start, inoltra, accediCliente, ritiraEntrata, elencoPannello, creaCliente, aggiornaCliente, catalogo: () => S.CATALOGO, prezzo };

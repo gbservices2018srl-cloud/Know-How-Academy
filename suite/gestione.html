@@ -86,7 +86,7 @@ async function api(m, u, b) {
 }
 const stato = c => c.stato === 'sospeso' ? `<span class="chip bad">${c.sospeso_auto ? 'scaduto' : 'sospeso'}</span>` : c.giorni != null && c.giorni <= 15 ? '<span class="chip warn">in scadenza</span>' : c.stato === 'attivo' ? '<span class="chip ok">attivo</span>' : '<span class="chip warn">in prova</span>';
 const data = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—';
-let R = [], U = { slug: null, utenti: null }, PU = null, COPIA = {}, PF = null, VF = {}, FIN = { aziende: null, persone: null, vista: 'aziende', cid: '' };
+let AA = null, R = [], U = { slug: null, utenti: null }, PU = null, COPIA = {}, PF = null, VF = {}, FIN = { aziende: null, persone: null, vista: 'aziende', cid: '' };
 const prezzo = (apps, posti) => 20 + 32 * apps.length + 6 * posti;
 async function carica() { [D, { richieste: R }] = await Promise.all([api('GET', '/api/gestione/clienti'), api('GET', '/api/gestione/richieste')]); disegna(); richiesteHtml(); }
 function richiesteHtml() {
@@ -111,10 +111,14 @@ function disegna() {
   const c = D.clienti.find(x => x.slug === sel); if (!c) return;
   const app = D.catalogo.map(a => `<label class="app"><input type="checkbox" data-app="${a.id}" ${c.apps.includes(a.id) ? 'checked' : ''} ${a.esterna ? 'disabled' : ''}> ${esc(a.nome)}${a.esterna ? ' <span class="small">(prossimamente)</span>' : ''}</label>`).join('');
   $('#scheda').innerHTML = `<div class="row" style="justify-content:space-between"><h2 style="margin:0">${esc(c.nome)}</h2>${stato(c)}</div>
-    <p class="small" style="margin:4px 0 0">${c.motoreServe ? `<a href="${esc(c.indirizzo)}" target="_blank" rel="noopener">${esc(c.indirizzo)}</a> · suite ${c.motore === 'acceso' ? 'accesa' : c.motore === 'in avvio' ? 'in avvio' : 'spenta'}` : 'solo Gestione finanziaria'} · email ${esc(c.admin_email || '—')}</p>
+    <p class="small" style="margin:4px 0 0">${c.motoreServe ? `<a href="${esc(c.indirizzo)}" target="_blank" rel="noopener">${esc(c.indirizzo)}</a> · ${c.leggera ? 'suite leggera' : 'suite'} ${c.motore === 'acceso' ? 'accesa' : c.motore === 'in avvio' ? 'in avvio' : 'spenta'}` : 'solo Gestione finanziaria'} · email ${esc(c.admin_email || '—')}</p>
     ${pw && pw.slug === c.slug && pw.password ? `<div class="pw"><b>Password iniziale dell'amministratore</b> (si vede solo ora: mandala al cliente, poi la cambia lui):<br><code>${esc(pw.password)}</code><div class="small">Entra da appgestione.it con ${esc(c.admin_email)} e questa password.</div></div>` : ''}
     ${pw && pw.slug === c.slug && pw.finanza ? `<div class="pw"><b>Gestione finanziaria</b> (si vede solo ora): entra su <a href="${esc(D.finanzaUrl)}" target="_blank" rel="noopener">${esc(D.finanzaUrl)}</a> con nome azienda <b>${esc(pw.finanza.nome)}</b> e password <code>${esc(pw.finanza.password)}</code></div>` : ''}
-    ${c.finanza_id ? `<div class="sec"><h3>Gestione finanziaria</h3><div class="small">Il cliente entra su <a href="${esc(D.finanzaUrl)}" target="_blank" rel="noopener">${esc(D.finanzaUrl)}</a> con il nome azienda <b>${esc(c.nome)}</b> e la sua password. Sospensione e scadenza valgono anche lì.</div>
+    ${!c.accesso_suite ? `<div class="pw" style="background:var(--teal-soft);border-color:var(--teal)"><b>Accesso da appgestione.it non ancora attivo.</b> Oggi entra solo su Gestione finanziaria con nome azienda e password.
+      <div class="small" style="margin:4px 0 6px">Attivandolo, il cliente entra da appgestione.it con l'email dell'amministratore (${esc(c.admin_email || 'da scrivere')}) e apre Gestione finanziaria dalla sua pagina «Le mie app», senza seconda password. ${c.apps.some(a => a !== 'finanza') ? '' : 'Per chi ha solo Gestione finanziaria si accende una suite leggera.'} Il vecchio accesso resta di riserva.</div>
+      <button class="btn pri sm" type="button" id="attiva-acc">Attiva accesso da appgestione.it</button></div>` : ''}
+    ${AA && AA.slug === c.slug ? `<div class="pw"><b>Accesso attivato</b> (si vede solo ora: mandalo al cliente): entra da <b>appgestione.it</b> con <b>${esc(AA.email)}</b> e password <code>${esc(AA.password)}</code><div class="small">Al primo accesso può cambiarla. La sua suite si accende in pochi secondi.</div></div>` : ''}
+    ${c.finanza_id ? `<div class="sec"><h3>Gestione finanziaria</h3><div class="small">${c.accesso_suite ? 'Il cliente la apre dalla sua suite (Le mie app); di riserva può entrare anche' : 'Il cliente entra'} su <a href="${esc(D.finanzaUrl)}" target="_blank" rel="noopener">${esc(D.finanzaUrl)}</a> con il nome azienda <b>${esc(c.nome)}</b> e la sua password. Sospensione e scadenza valgono anche lì.</div>
       <div class="small" style="margin-top:8px;font-weight:700">Password di Gestione finanziaria</div>
       <div class="row" style="margin-top:4px"><input id="fpw-scelta" type="text" autocomplete="off" placeholder="scrivila tu, oppure lascia vuoto" style="min-width:0;flex:1"><button class="btn gh sm" type="button" id="f-pw">Imposta / genera</button></div>
       <div class="row" style="margin-top:6px"><button class="btn gh sm" type="button" data-vf="${esc(c.finanza_id)}">Storico versioni dei dati</button></div>
@@ -250,6 +254,10 @@ document.addEventListener('click', async e => {
     b.disabled = true;
     try { const r = await api('POST', slugU() + '/password', { utente: b.dataset.pw || null, password: b.dataset.pw ? '' : ($('#pw-scelta')?.value || '') }); PU = { slug: sel, utente: b.dataset.pw || null, email: r.email, password: r.password }; U.utenti = null; disegna(); }
     catch (x) { toast(x.message); b.disabled = false; b.dataset.ok = ''; b.textContent = b.dataset.pw ? 'Reset password' : 'Imposta / genera'; }
+  }
+  if (b.id === 'attiva-acc') {
+    if (b.dataset.ok !== '1') { b.dataset.ok = '1'; b.textContent = 'Confermi? Si crea il suo amministratore'; return; }
+    b.disabled = true; try { const r = await api('POST', slugU() + '/attiva-accesso', {}); AA = { slug: sel, email: r.email, password: r.password }; await carica(); } catch (x) { toast(x.message); b.disabled = false; b.dataset.ok = ''; b.textContent = 'Attiva accesso da appgestione.it'; }
   }
   if (b.id === 'f-pw') {
     if (b.dataset.ok !== '1') { b.dataset.ok = '1'; b.textContent = 'Confermi? La vecchia password non varrà più'; return; }
