@@ -35,13 +35,18 @@ input,select,textarea{font:inherit;padding:7px 9px;border:1px solid var(--line);
 .fg{display:grid;grid-template-columns:1fr 1fr;gap:10px} @media (max-width:600px){.fg{grid-template-columns:1fr}}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;background:var(--fg);color:#fff;padding:10px 16px;border-radius:8px;font-weight:700;max-width:calc(100% - 32px)}
 .pw{background:var(--warn-soft);border:1px solid var(--warn);border-radius:10px;padding:12px;margin-top:10px}
+[hidden]{display:none!important}
+.lk{max-width:420px;margin:30px auto}.lk h2{font-size:17px}.lk .f{margin-top:10px}.lk input{width:100%;box-sizing:border-box}
+.lk .qr{display:flex;justify-content:center;margin:10px 0}.lk .qr svg{width:200px;height:200px}.lk code{font-weight:800;letter-spacing:.06em;user-select:all;word-break:break-all}
+.lk .err{color:var(--bad);font-weight:700;min-height:18px;margin-top:8px}
 .pw code{font-size:16px;font-weight:800;user-select:all}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="top"><h1>Gestione suite</h1><a class="back" href="/">← Le mie app</a></div>
-  <div class="grid">
+  <div class="top"><h1>Gestione suite</h1><div class="row"><button class="btn gh" id="chiudi" type="button" hidden>🔒 Blocca</button><a class="back" href="/">← Le mie app</a></div></div>
+  <div class="card lk" id="lucchetto" hidden></div>
+  <div class="grid" id="pannello" hidden>
     <div class="card">
       <div class="row" style="justify-content:space-between"><h2 style="margin:0">Clienti</h2><button class="btn pri" id="nuovo" type="button">＋ Nuovo cliente</button></div>
       <p class="small" style="margin:6px 0 0">To Smile è il cliente zero e non compare qui: i suoi dati restano dove sono.</p>
@@ -60,7 +65,7 @@ let D = { clienti: [], catalogo: [] }, sel = null, nuovo = false, pw = null;
 function toast(t) { const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 3000); }
 async function api(m, u, b) {
   const r = await fetch(u, { method: m, headers: b ? { 'Content-Type': 'application/json' } : {}, body: b ? JSON.stringify(b) : undefined, credentials: 'include' });
-  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Errore, riprova.'); return j;
+  const j = await r.json().catch(() => ({})); if (r.status === 423 && j.lucchetto) { lucchetto(); throw new Error(j.error); } if (!r.ok) throw new Error(j.error || 'Errore, riprova.'); return j;
 }
 const stato = c => c.stato === 'attivo' ? '<span class="chip ok">attivo</span>' : c.stato === 'prova' ? '<span class="chip warn">in prova</span>' : '<span class="chip bad">sospeso</span>';
 const prezzo = (apps, posti) => 20 + 32 * apps.length + 6 * posti;
@@ -142,7 +147,37 @@ document.addEventListener('click', async e => {
       await carica(); toast('Salvato.'); } catch (x) { toast(x.message); b.disabled = false; }
   }
 });
-carica().catch(x => { $('#lista').innerHTML = `<p class="small">${esc(x.message)}</p>`; });
+// ---- lucchetto: password che sai solo tu + codice dall'app sul telefono ----
+async function lucchetto() {
+  $('#pannello').hidden = true; $('#chiudi').hidden = true; const L = $('#lucchetto'); L.hidden = false;
+  let s; try { s = await api('GET', '/api/gestione/lucchetto'); } catch (x) { L.innerHTML = `<p class="small">${esc(x.message)}</p>`; return; }
+  if (s.sbloccato) { L.hidden = true; $('#pannello').hidden = false; $('#chiudi').hidden = false; return carica().catch(x => { $('#lista').innerHTML = `<p class="small">${esc(x.message)}</p>`; }); }
+  if (s.impostato) {
+    L.innerHTML = `<h2>🔒 Pannello bloccato</h2><p class="small">Inserisci la password del pannello e il codice a 6 cifre dell'app sul telefono.</p>
+      <form id="f-sblocca"><div class="f"><label for="l-pw">Password del pannello</label><input id="l-pw" type="password" autocomplete="current-password" required></div>
+      <div class="f"><label for="l-cod">Codice a 6 cifre</label><input id="l-cod" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required></div>
+      <div class="row" style="margin-top:12px"><button class="btn pri" type="submit">Sblocca</button></div><div class="err" id="l-err">${s.attesa ? `Troppi tentativi: riprova tra ${s.attesa} minuti.` : ''}</div></form>`;
+    $('#l-pw').focus(); return;
+  }
+  L.innerHTML = `<h2>🔐 Proteggi il pannello</h2><p class="small">Prima di usare il pannello scegli una password che conosci solo tu e collega il telefono (doppia protezione).</p>
+    <p class="small"><b>1.</b> Sul telefono installa <b>Google Authenticator</b> (o Microsoft Authenticator), tocca <b>+</b> e inquadra questo codice QR:</p>
+    <div class="qr" id="l-qr">…</div><p class="small" style="text-align:center">Se non riesci a inquadrarlo, inserisci a mano questa chiave:<br><code id="l-seg"></code></p>
+    <form id="f-imposta"><div class="f"><label for="l-pw">2. Scegli la password del pannello (almeno 10 caratteri)</label><input id="l-pw" type="password" autocomplete="new-password" minlength="10" required></div>
+    <div class="f"><label for="l-pw2">Ripeti la password</label><input id="l-pw2" type="password" autocomplete="new-password" required></div>
+    <div class="f"><label for="l-cod">3. Scrivi il codice a 6 cifre che vedi ora nell'app</label><input id="l-cod" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required></div>
+    <div class="row" style="margin-top:12px"><button class="btn pri" type="submit">Attiva la protezione</button></div><div class="err" id="l-err"></div></form>`;
+  try { const n = await api('POST', '/api/gestione/lucchetto/nuovo', {}); $('#l-qr').innerHTML = n.qr; $('#l-seg').textContent = n.segreto; } catch (x) { $('#l-err').textContent = x.message; }
+}
+document.addEventListener('submit', async e => {
+  if (!['f-sblocca', 'f-imposta'].includes(e.target.id)) return; e.preventDefault();
+  const b = e.target.querySelector('button'), err = $('#l-err'); err.textContent = '';
+  if (e.target.id === 'f-imposta' && $('#l-pw').value !== $('#l-pw2').value) { err.textContent = 'Le due password non sono uguali.'; return; }
+  b.disabled = true;
+  try { await api('POST', '/api/gestione/lucchetto/' + (e.target.id === 'f-imposta' ? 'imposta' : 'sblocca'), { password: $('#l-pw').value, codice: $('#l-cod').value }); await lucchetto(); }
+  catch (x) { err.textContent = x.message; b.disabled = false; }
+});
+$('#chiudi').addEventListener('click', async () => { await api('POST', '/api/gestione/lucchetto/chiudi', {}).catch(() => {}); lucchetto(); });
+lucchetto();
 </script>
 </body>
 </html>

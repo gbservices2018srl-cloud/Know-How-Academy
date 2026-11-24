@@ -1327,6 +1327,8 @@ for (const p of ['/accedi', '/registrati', '/password-dimenticata', '/reimposta'
 // Pannello /gestione della suite: solo il proprietario di To Smile (mai nei motori dei clienti)
 const SUITE_M = require('../suite/manager');
 const needSuite = (req, res, next) => (SUITE_M.ATTIVA && req.user?.owner) ? next() : bad(res, 403, 'Solo il proprietario della suite.');
+const PANNELLO = require('../suite/pannello');
+PANNELLO.monta(app, { wrap, bad });
 app.get('/gestione', (req, res) => {
   if (!SUITE_M.ATTIVA) return res.redirect('/');
   if (!req.user) return res.redirect('/accedi?next=/gestione');
@@ -1334,14 +1336,14 @@ app.get('/gestione', (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.sendFile(path.join(__dirname, '..', 'suite', 'gestione.html'));
 });
-app.get('/api/gestione/clienti', needSuite, wrap(async (req, res) => {
+app.get('/api/gestione/clienti', needSuite, PANNELLO.serveSblocco, wrap(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.json({ clienti: await SUITE_M.elencoPannello(), catalogo: SUITE_M.catalogo().map(c => ({ id: c.id, nome: c.nome, esterna: !!c.esterna })) });
 }));
-app.post('/api/gestione/clienti', needSuite, wrap(async (req, res) => {
+app.post('/api/gestione/clienti', needSuite, PANNELLO.serveSblocco, wrap(async (req, res) => {
   try { res.json(await SUITE_M.creaCliente(req.body || {})); } catch (e) { if (e.status) return bad(res, e.status, e.message); throw e; }
 }));
-app.patch('/api/gestione/clienti/:slug', needSuite, wrap(async (req, res) => {
+app.patch('/api/gestione/clienti/:slug', needSuite, PANNELLO.serveSblocco, wrap(async (req, res) => {
   try { res.json(await SUITE_M.aggiornaCliente(String(req.params.slug), req.body || {})); } catch (e) { if (e.status) return bad(res, e.status, e.message); throw e; }
 }));
 
