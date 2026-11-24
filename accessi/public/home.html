@@ -282,7 +282,7 @@ fetch('/api/backup/stato', { credentials: 'include' }).then(r => r.ok ? r.json()
   const P = (n && n.parti) || {}, extra = [['finanza', 'Gestione finanziaria'], ['nuovalab', 'Nuovalab'], ['ticket', 'Ticket'], ['file', 'file allegati']]
     .filter(([k]) => k === 'file' ? (P['file-nuovalab'] || P['file-ticket']) : P[k] && typeof P[k] === 'object')
     .map(([k, t]) => `<a href="/api/backup/scarica?parte=${k}">${t}</a>`).join(' · ');
-  el.innerHTML = `${stato} · <a href="/api/backup/scarica?parte=dati">scarica</a>${extra ? ' (' + extra + ')' : ''}${b.avviso ? ' · <span style="color:#b45309">non scarichi una copia da più di 7 giorni</span>' : ''}`;
+  el.innerHTML = `${stato} · ${extra ? '<a href="/api/backup/scarica?parte=tutto"><b>scarica tutto</b></a> (oppure solo: <a href="/api/backup/scarica?parte=dati">dati delle app</a> · ' + extra + ')' : '<a href="/api/backup/scarica?parte=dati">scarica</a>'}${b.avviso ? ' · <span style="color:#b45309">non scarichi una copia da più di 7 giorni</span>' : ''}`;
   el.hidden = false;
 }).catch(() => {});
 </script>

@@ -50,7 +50,7 @@ table.ut{width:100%;border-collapse:collapse;font-size:13px}table.ut td,table.ut
 </head>
 <body>
 <div class="wrap">
-  <div class="top"><h1>Gestione suite</h1><div class="row"><button class="btn gh" id="cambia-pp" type="button" hidden>🔑 Password del pannello</button><button class="btn gh" id="chiudi" type="button" hidden>🔒 Blocca</button><a class="back" href="/">← Le mie app</a></div></div>
+  <div class="top"><h1>Gestione suite</h1><div class="row"><a class="btn gh" id="bk-tutto" href="/api/backup/scarica?parte=tutto" hidden title="Copia di stanotte dell'intera app: To Smile, tutti i clienti, Gestione finanziaria, Nuovalab, Ticket e file allegati">⬇ Backup completo</a><button class="btn gh" id="cambia-pp" type="button" hidden>🔑 Password del pannello</button><button class="btn gh" id="chiudi" type="button" hidden>🔒 Blocca</button><a class="back" href="/">← Le mie app</a></div></div>
   <div class="card lk" id="lucchetto" hidden></div>
   <div class="card" id="pp" hidden style="max-width:460px;margin:0 0 14px auto"><h2>Cambia la password del pannello</h2>
     <form id="f-pp"><div class="f"><label for="pp-v">Password attuale</label><input id="pp-v" type="password" autocomplete="current-password" required></div>
@@ -311,9 +311,9 @@ document.addEventListener('click', async e => {
 });
 // ---- lucchetto: password che sai solo tu + codice dall'app sul telefono ----
 async function lucchetto() {
-  $('#pannello').hidden = true; $('#chiudi').hidden = true; $('#cambia-pp').hidden = true; $('#pp').hidden = true; const L = $('#lucchetto'); L.hidden = false;
+  $('#pannello').hidden = true; $('#chiudi').hidden = true; $('#cambia-pp').hidden = true; $('#bk-tutto').hidden = true; $('#pp').hidden = true; const L = $('#lucchetto'); L.hidden = false;
   let s; try { s = await api('GET', '/api/gestione/lucchetto'); } catch (x) { L.innerHTML = `<p class="small">${esc(x.message)}</p>`; return; }
-  if (s.sbloccato) { L.hidden = true; $('#pannello').hidden = false; $('#chiudi').hidden = false; $('#cambia-pp').hidden = false; return carica().then(finanza).catch(x => { $('#lista').innerHTML = `<p class="small">${esc(x.message)}</p>`; }); }
+  if (s.sbloccato) { L.hidden = true; $('#pannello').hidden = false; $('#chiudi').hidden = false; $('#cambia-pp').hidden = false; $('#bk-tutto').hidden = false; return carica().then(finanza).catch(x => { $('#lista').innerHTML = `<p class="small">${esc(x.message)}</p>`; }); }
   if (s.impostato) {
     L.innerHTML = `<h2>🔒 Pannello bloccato</h2><p class="small">Inserisci la password del pannello e il codice a 6 cifre dell'app sul telefono.</p>
       <form id="f-sblocca"><div class="f"><label for="l-pw">Password del pannello</label><input id="l-pw" type="password" autocomplete="current-password" required></div>

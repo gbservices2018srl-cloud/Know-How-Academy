@@ -1474,7 +1474,7 @@ app.get('/api/backup/stato', needUser, wrap(async (req, res) => {
   res.set('Cache-Control', 'no-store').json({ visibile: true, notte, scaricato: d?.il || null, avviso: giorni === null || giorni > 7 });
 }));
 app.get('/api/backup/scarica', needUser, needOwner, wrap(async (req, res) => {
-  const parte = ['dati', 'finanza', 'nuovalab', 'ticket', 'file'].includes(req.query.parte) ? req.query.parte : 'dati';
+  const parte = ['dati', 'finanza', 'nuovalab', 'ticket', 'file', 'tutto'].includes(req.query.parte) && MIO() === 'tosmile' ? req.query.parte : 'dati';
   const giorno = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
   await store.q(`insert into suite.backup_scarichi (slug, da) values ($1, $2)`, [MIO(), req.user.email]).catch(() => {});
   // prima la copia di stanotte (da Gestione finanziaria); se non c'è, i dati si esportano adesso
