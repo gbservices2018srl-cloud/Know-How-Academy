@@ -1326,7 +1326,11 @@ for (const p of ['/accedi', '/registrati', '/password-dimenticata', '/reimposta'
 }
 // Pannello /gestione della suite: solo il proprietario di To Smile (mai nei motori dei clienti)
 const SUITE_M = require('../suite/manager');
-const needSuite = (req, res, next) => (SUITE_M.ATTIVA && req.user?.owner) ? next() : bad(res, 403, 'Solo il proprietario della suite.');
+const needSuite = (req, res, next) => {
+  if (SUITE_M.ATTIVA && req.user?.owner) return next();
+  if (!req.user) return res.status(401).json({ error: 'Non sei più collegato come proprietario (accesso scaduto o fatto con un altro account): rientra con il tuo account.', rientra: true });
+  return bad(res, 403, `Sei collegato come ${req.user.email}: il pannello è solo del proprietario della suite. Esci e rientra con il tuo account.`);
+};
 const PANNELLO = require('../suite/pannello');
 PANNELLO.monta(app, { wrap, bad });
 app.get('/gestione', (req, res) => {

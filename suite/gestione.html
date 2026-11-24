@@ -82,7 +82,7 @@ let D = { clienti: [], catalogo: [] }, sel = null, nuovo = false, pw = null;
 function toast(t) { const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 3000); }
 async function api(m, u, b) {
   const r = await fetch(u, { method: m, headers: b ? { 'Content-Type': 'application/json' } : {}, body: b ? JSON.stringify(b) : undefined, credentials: 'include' });
-  const j = await r.json().catch(() => ({})); if (r.status === 423 && j.lucchetto) { lucchetto(); throw new Error(j.error); } if (!r.ok) throw new Error(j.error || 'Errore, riprova.'); return j;
+  const j = await r.json().catch(() => ({})); if (r.status === 423 && j.lucchetto) { lucchetto(); throw new Error(j.error); } if (j.rientra) { location.href = '/accedi?next=/gestione'; throw new Error(j.error); } if (!r.ok) throw new Error(j.error || 'Errore, riprova.'); return j;
 }
 const stato = c => c.stato === 'sospeso' ? `<span class="chip bad">${c.sospeso_auto ? 'scaduto' : 'sospeso'}</span>` : c.giorni != null && c.giorni <= 15 ? '<span class="chip warn">in scadenza</span>' : c.stato === 'attivo' ? '<span class="chip ok">attivo</span>' : '<span class="chip warn">in prova</span>';
 const data = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—';
