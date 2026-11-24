@@ -154,7 +154,7 @@ module.exports = [
   // CRM Commerciale: preventivi dei pazienti per sede (dati solo su Render, in Europa). Riquadro unico con le sue micro app.
   // Amministratore = tutte le sedi; Operatore = le sedi scelte. Liste: solo chi ha il ruolo Amministratore.
   { key: 'crm', name: 'CRM Commerciale', url: 'https://appgestione.it/crm/', color: 'yellow', virtuale: true,
-    gruppo: ['crm_preventivi', 'crm_richiami', 'crm_dashboard', 'crm_chiedi', 'crm_liste'],
+    gruppo: ['crm_preventivi', 'crm_richiami', 'crm_dashboard', 'crm_chiedi', 'crm_lead', 'crm_liste'],
     desc: 'Inserimento preventivi, richiami commerciali, dashboard dei KPI di vendita e domande libere sui dati.' },
   { key: 'crm_preventivi', name: 'Inserimento Preventivi', url: 'https://appgestione.it/crm/?v=preventivi', color: 'yellow', dentro: 'crm',
     enti: 'sedi',
@@ -184,6 +184,12 @@ module.exports = [
       { key: 'operatore', label: 'Operatore', ente: 'sedi', enteLabel: 'Quale sede', multi: true },
     ],
     desc: "Domande libere sui numeri del CRM: all'AI arrivano solo numeri, mai nomi o dati dei pazienti." },
+  { key: 'crm_lead', name: 'Gestione lead', url: 'https://appgestione.it/crm/?v=lead', color: 'yellow', dentro: 'crm',
+    livelli: [
+      { key: 'admin', label: 'Amministratore', role: 'admin' },
+      { key: 'operatore', label: 'Operatore' },
+    ],
+    desc: 'I lead in arrivo: esito della chiamata, appuntamento e setter. Vede i lead di tutte le sedi.' },
   { key: 'crm_liste', name: 'Liste (amministratore)', url: 'https://appgestione.it/crm/?v=liste', color: 'yellow', dentro: 'crm', adminOnly: true,
     desc: 'Elenchi delle scelte del CRM (tipi di opportunità, marketing, tipi PDC) e importazione dal vecchio foglio Google.' },
   { key: 'accessi', name: 'Gestione accessi', url: '/admin', color: 'grey', adminOnly: true,
