@@ -59,6 +59,8 @@ async function aggiornaMese(anno, mese, finoA) {
     const sede = (daScrivere.find(x => x.siteId === d.sedeId) || {}).sede || '';
     await q(`insert into suite.alfadocs_differenze (slug, mese, sede, site_id, campo, prima, alfadocs) values ($1,$2,$3,$4,$5,$6,$7)`, [SLUG, chiaveMese, sede, d.sedeId, d.campo, d.prima, d.alfadocs]);
   }
+  // REC · Produzione di UL: la tabella (che serve alle classifiche) si allinea subito al Consuntivo
+  try { await require('../cassa/server').allineaProduzione(anno, true); } catch (e) { console.warn('AlfaDocs → REC produzione:', e.message); }
   console.log(`AlfaDocs → Consuntivo: ${chiaveMese} aggiornato per ${daScrivere.length} sedi${(r.differenze || []).length ? `, ${r.differenze.length} differenze da vedere` : ''}`);
 }
 function aggiorna() {

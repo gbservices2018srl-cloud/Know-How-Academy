@@ -18,7 +18,7 @@ module.exports = require('../lib/suite').filtraApps([
   // REC: Gestione Cassa UL e Produzione di UL (stessa app, su appgestione.it/cassa/)
   { key: 'rec', name: 'REC', url: 'https://appgestione.it/c/rec', color: 'teal', virtuale: true,
     gruppo: ['cassa', 'produzione'],
-    desc: 'Cassa delle sedi (uscite e chiusure) e produzione mensile delle sedi, che va nel Consuntivo della Gestione finanziaria.' },
+    desc: 'Cassa delle sedi (uscite e chiusure) e produzione mensile delle sedi (dal Consuntivo della Gestione finanziaria, cioè da AlfaDocs).' },
   // Gestione Cassa: l'operatore (le sue sedi) registra le uscite (importo, note, contanti/POS/assegno; data automatica)
   // e ogni sera la chiusura (quanto c'è in cassa in contanti, POS e assegni); l'amministratore vede il pannello di ogni sede e complessivo
   { key: 'cassa', name: 'Gestione Cassa', url: 'https://appgestione.it/cassa/', color: 'teal', dentro: 'rec',
@@ -28,15 +28,14 @@ module.exports = require('../lib/suite').filtraApps([
       { key: 'operatore', label: 'Operatore', ente: 'sedi', enteLabel: 'Quale sede', multi: true },
     ],
     desc: 'Uscite di cassa (importo, note, contanti/POS/assegno) e chiusura di cassa ogni sera; l\'amministratore vede ogni sede e il complessivo.' },
-  // Produzione di UL: ogni sede carica la produzione del mese; dopo l'approvazione dell'amministratore va nel Consuntivo
-  // della Gestione finanziaria (To Smile), sezione Produzione della sede
+  // Produzione di UL: la produzione del mese di ogni sede, presa dal Consuntivo della Gestione finanziaria (che arriva da AlfaDocs)
   { key: 'produzione', name: 'Produzione di UL', url: 'https://appgestione.it/cassa/?v=produzione', color: 'purple', dentro: 'rec',
     enti: 'sedi',
     livelli: [
-      { key: 'admin', label: 'Amministratore (approva e manda in Gestione finanziaria)', role: 'admin' },
-      { key: 'operatore', label: 'Operatore', ente: 'sedi', enteLabel: 'Quale sede', multi: true },
+      { key: 'admin', label: 'Amministratore (vede tutte le sedi)', role: 'admin' },
+      { key: 'operatore', label: 'Operatore (vede la sua sede)', ente: 'sedi', enteLabel: 'Quale sede', multi: true },
     ],
-    desc: 'La produzione del mese di ogni sede: dopo l\'approvazione dell\'amministratore va nel Consuntivo della Gestione finanziaria.' },
+    desc: 'La produzione del mese di ogni sede, presa da sola dal Consuntivo della Gestione finanziaria (AlfaDocs).' },
   // Compenso medici: l'amministrazione scrive i compensi del mese (medici × sedi); il medico li approva o li rifiuta;
   // pagati, vanno da soli nel Consuntivo della Gestione finanziaria. I medici la trovano da soli (solo i loro compensi).
   { key: 'compensi', name: 'Compenso medici', url: 'https://appgestione.it/compensi/', color: 'purple', dentro: 'controllo',

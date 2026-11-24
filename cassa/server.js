@@ -383,95 +383,40 @@ app.get('/api/pannello', needAdmin, wrap(async (req, res) => {
 const sedeFin = (cons, nome) => finanza.trova(cons.sedi, nome) || (/sestu/i.test(nome) ? (cons.sedi || []).find(x => x.id === cons.direzione?.sedeId) : null);
 
 /* ============ PRODUZIONE DI UL ============ */
-// ogni sede carica la produzione del mese (un totale in €); va nel Consuntivo della Gestione finanziaria
-// solo quando l'amministratore la approva (se la carica l'amministratore, va subito)
+// la produzione del mese di ogni sede non si carica più a mano: si allinea da sola a quella del Consuntivo
+// della Gestione finanziaria (che arriva da AlfaDocs). La tabella resta perché serve alle classifiche delle REC.
 const formaP = r => ({ sede: r.sede_id, sedeNome: r.sede_nome, anno: r.anno, mese: r.mese, valore: num(r.valore), stato: r.stato,
-  inviatoDa: r.inviato_nome, inviatoIl: r.inviato_il, decisoDa: r.deciso_nome || '', decisoIl: r.deciso_il, nota: r.nota_admin || '',
-  inviata: r.sincronizzato_il, errore: r.errore || '' });
-async function adminProduzione() {
-  const { rows } = await store.q(`select u.id from users u where u.status = 'active' and (u.owner or exists (select 1 from user_apps a where a.user_id = u.id and a.app = $1 and a.role = 'admin' and not a.sospesa))`, [KEY_P]);
-  return rows.map(r => r.id);
-}
-const avvisa = (ids, payload) => require('../accessi/lib/notifiche').notifica(ids, KEY_P, payload).catch(e => console.warn('REC notifica:', e.message));
-const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+  daConsuntivo: r.deciso_nome === 'Gestione finanziaria', nota: r.nota_admin || '' });
 const euroTxt = n => (Math.round(n * 100) / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
-// approvazione: la produzione resta nella tabella riepilogativa (serve anche alle classifiche).
-// Nel Consuntivo della Gestione finanziaria la produzione arriva ormai da AlfaDocs, non più da qui.
-async function approva(r, chi) {
-  try {
-    await db.q(`update produzione set stato = 'approvata', deciso_da = $4, deciso_nome = $5, deciso_il = now(), errore = ''
-      where sede_id = $1 and anno = $2 and mese = $3`, [r.sede_id, r.anno, r.mese, chi.id, chi.nome]);
-    log('produzione approvata', `${r.sede_id}|${r.anno}-${r.mese}`, chi.nome, null, { valore: num(r.valore) });
-    return { ok: true };
-  } catch (e) {
-    const msg = finanza.messaggio(e);
-    await db.q(`update produzione set errore = $4 where sede_id = $1 and anno = $2 and mese = $3`, [r.sede_id, r.anno, r.mese, msg]);
-    return { ok: false, errore: msg };
+// allinea la tabella al Consuntivo: per ogni sede e mese con produzione > 0 la riga diventa quel valore (approvata).
+// Non si cancella mai nulla: i mesi senza produzione nel Consuntivo restano come sono.
+const allineati = new Map();
+async function allineaProduzione(anno, forza = false) {
+  if (!forza && Date.now() - (allineati.get(anno) || 0) < 5 * 60000) return;
+  allineati.set(anno, Date.now());
+  const az = await finanza.aziendaToSmile(); if (!az) return;
+  const cons = await finanza.chiama(`/api/_appgestione/consuntivo?azienda=${encodeURIComponent(az)}&anno=${anno}&mese=1`);
+  if (!cons || cons.annoNelGestionale !== anno) return;
+  const sedi = (await store.listSedi()).filter(s => s.attiva !== false);
+  for (const s of sedi) {
+    const f = sedeFin(cons, s.nome); const mesi = f?.produzioneMesi; if (!mesi) continue;
+    for (let m = 1; m <= 12; m++) {
+      const v = Math.round(num(mesi[m - 1]) * 100) / 100; if (!(v > 0)) continue;
+      await db.q(`insert into produzione (sede_id, anno, mese, sede_nome, valore, stato, inviato_nome, deciso_nome, deciso_il, errore)
+          values ($1,$2,$3,$4,$5,'approvata','Gestione finanziaria','Gestione finanziaria',now(),'')
+        on conflict (sede_id, anno, mese) do update set valore = excluded.valore, sede_nome = excluded.sede_nome, stato = 'approvata',
+          deciso_nome = 'Gestione finanziaria', deciso_il = now(), nota_admin = null, errore = ''
+        where produzione.valore is distinct from excluded.valore or produzione.stato <> 'approvata'`, [s.id, anno, m, s.nome, v]);
+    }
   }
 }
 app.get('/api/produzione', needProd, wrap(async (req, res) => {
   const anno = parseInt(req.query.anno, 10) || Number(oggi().slice(0, 4));
+  try { await allineaProduzione(anno); } catch (e) { console.warn('REC produzione (allineamento):', finanza.messaggio(e)); }
   const sedi = req.me.prod.sedi, ids = sedi.map(s => s.id);
   const { rows } = await db.q('select * from produzione where sede_id = any($1) and anno = $2 order by sede_nome, mese', [ids, anno]);
-  let attesa = [];
-  if (req.me.prod.admin) attesa = (await db.q(`select * from produzione where stato = 'attesa' order by inviato_il`)).rows.map(formaP);
-  // all'amministratore: quanto c'è ora nel Consuntivo (per confrontare prima di approvare)
-  let nelConsuntivo = null;
-  if (req.me.prod.admin) {
-    try {
-      const az = await finanza.aziendaToSmile();
-      const cons = az && await finanza.chiama(`/api/_appgestione/consuntivo?azienda=${encodeURIComponent(az)}&anno=${anno}&mese=1`);
-      if (cons && cons.annoNelGestionale === anno) {
-        nelConsuntivo = {};
-        for (const s of sedi) { const f = finanza.trova(cons.sedi, s.nome) || (/sestu/i.test(s.nome) ? (cons.sedi || []).find(x => x.id === cons.direzione?.sedeId) : null); if (f) nelConsuntivo[s.id] = f.produzioneMesi || null; }
-      }
-    } catch { /* la Gestione finanziaria non risponde: si vede solo REC */ }
-  }
-  res.json({ anno, sedi, righe: rows.map(formaP), attesa, nelConsuntivo, oggi: oggi() });
+  res.json({ anno, sedi, righe: rows.map(formaP), oggi: oggi() });
 }));
-app.post('/api/produzione', needProd, wrap(async (req, res) => {
-  const b = req.body || {};
-  const sede = req.me.prod.sedi.find(s => s.id === str(b.sede, 60)); if (!sede) return bad(res, 400, 'Scegli la sede.');
-  const anno = parseInt(b.anno, 10), mese = parseInt(b.mese, 10);
-  const [ya, ma] = oggi().split('-').map(Number);
-  if (!(mese >= 1 && mese <= 12) || !(anno === ya || anno === ya - 1)) return bad(res, 400, 'Scegli il mese.');
-  if (anno === ya && mese > ma) return bad(res, 400, 'Non si carica la produzione di un mese che deve ancora venire.');
-  const valore = euro(b.valore); if (valore == null || String(b.valore ?? '').trim() === '') return bad(res, 400, 'Scrivi la produzione del mese in € (anche 0).');
-  if (valore > 10000000) return bad(res, 400, 'Importo troppo alto: controlla le cifre.');
-  const { rows: [prima] } = await db.q('select * from produzione where sede_id = $1 and anno = $2 and mese = $3', [sede.id, anno, mese]);
-  if (prima && prima.stato === 'approvata' && num(prima.valore) === valore) return res.json({ ok: true, stato: 'approvata', uguale: true });
-  await db.q(`insert into produzione (sede_id, anno, mese, sede_nome, valore, stato, inviato_da, inviato_nome, inviato_il, errore)
-      values ($1,$2,$3,$4,$5,'attesa',$6,$7,now(),'')
-    on conflict (sede_id, anno, mese) do update set valore = excluded.valore, sede_nome = excluded.sede_nome, stato = 'attesa',
-      inviato_da = excluded.inviato_da, inviato_nome = excluded.inviato_nome, inviato_il = now(), deciso_da = null, deciso_nome = null, deciso_il = null, nota_admin = null, errore = ''`,
-    [sede.id, anno, mese, sede.nome, valore, req.me.id, req.me.nome]);
-  log('produzione caricata', `${sede.id}|${anno}-${mese}`, req.me.nome, prima ? { valore: num(prima.valore), stato: prima.stato } : null, { valore });
-  const { rows: [r] } = await db.q('select * from produzione where sede_id = $1 and anno = $2 and mese = $3', [sede.id, anno, mese]);
-  // classifiche REC: complimenti e posizione nella classifica dell'anno (solo per le REC)
-  const festa = await require('../classifiche/lib/core').produzioneSalvata(req.me.id, anno, mese);
-  if (req.me.prod.admin) { const x = await approva(r, req.me); return res.json({ ok: true, stato: x.ok ? 'approvata' : 'attesa', errore: x.errore || null, festa }); }
-  avvisa(await adminProduzione(), { title: 'Produzione da approvare', body: `${sede.nome}: produzione di ${MESI[mese - 1]} ${anno} ${euroTxt(valore)} (da ${req.me.nome}).`, url: 'https://appgestione.it/cassa/?v=produzione' });
-  res.json({ ok: true, stato: 'attesa', festa });
-}));
-app.post('/api/produzione/decidi', needProd, wrap(async (req, res) => {
-  if (!req.me.prod.admin) return bad(res, 403, 'Solo l\'amministratore approva la produzione.');
-  const b = req.body || {};
-  const { rows: [r] } = await db.q(`select * from produzione where sede_id = $1 and anno = $2 and mese = $3 and stato = 'attesa'`, [str(b.sede, 60), parseInt(b.anno, 10), parseInt(b.mese, 10)]);
-  if (!r) return bad(res, 400, 'Questa produzione non è più da approvare.');
-  if (b.ok) {
-    const x = await approva(r, req.me);
-    if (!x.ok) return bad(res, 502, 'Non sono riuscito a mandarla in Gestione finanziaria: ' + x.errore);
-    if (r.inviato_da !== req.me.id) avvisa([r.inviato_da], { title: 'Produzione approvata', body: `${r.sede_nome}: produzione di ${MESI[r.mese - 1]} ${r.anno} ${euroTxt(num(r.valore))} approvata.`, url: 'https://appgestione.it/cassa/?v=produzione' });
-    return res.json({ ok: true, prima: x.prima });
-  }
-  const nota = str(b.nota, 300);
-  await db.q(`update produzione set stato = 'rifiutata', deciso_da = $4, deciso_nome = $5, deciso_il = now(), nota_admin = $6 where sede_id = $1 and anno = $2 and mese = $3`,
-    [r.sede_id, r.anno, r.mese, req.me.id, req.me.nome, nota]);
-  log('produzione rifiutata', `${r.sede_id}|${r.anno}-${r.mese}`, req.me.nome, null, { nota });
-  avvisa([r.inviato_da], { title: 'Produzione da ricontrollare', body: `${r.sede_nome}, ${MESI[r.mese - 1]} ${r.anno}: non approvata${nota ? ' (' + nota + ')' : ''}. Correggi e rimandala.`, url: 'https://appgestione.it/cassa/?v=produzione' });
-  res.json({ ok: true });
-}));
-
 /* ---------- pagine ---------- */
 app.get('/', (req, res) => {
   res.set('Cache-Control', 'no-store');
@@ -517,4 +462,4 @@ async function start() {
   await db.migrate();
   azzeraProve().catch(e => console.warn('REC: azzeramento non riuscito, riprovo al prossimo avvio:', e.message));
 }
-module.exports = { app, start };
+module.exports = { app, start, allineaProduzione };
