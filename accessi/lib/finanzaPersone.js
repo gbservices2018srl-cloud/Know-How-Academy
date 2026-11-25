@@ -6,8 +6,8 @@
 const finanza = require('../../lib/finanza');
 const store = require('./store');
 
-function tipoDi(u) {
-  if (!u || u.owner || u.status !== 'active') return null;
+function tipoDi(u, ancheNonAttivi) {
+  if (!u || u.owner || (!ancheNonAttivi && u.status !== 'active')) return null;
   if (u.figura === 'Medico') return u.contratto_tipo === 'dip' ? 'stipendio' : 'medico';
   return u.contratto_tipo === 'dip' || u.contratto_tipo === 'piva' ? 'stipendio' : null;   // senza contratto indicato: non si sa dove metterla
 }
@@ -58,4 +58,20 @@ async function allineaTutti(prova) {
   r.senzaSede = rows.filter(u => tipoDi(u) && !(Array.isArray(u.sedi) && u.sedi.length)).map(nome).sort();
   return r;
 }
-module.exports = { allineaUno, allineaTutti, tipoDi };
+// Per il budget dell'anno dopo (Gestione finanziaria la chiede quando prepari la bozza o chiudi l'anno):
+// le sedi di oggi di ogni persona e se è ancora attiva. Solo nome e sedi, nient'altro.
+async function situazione() {
+  const { rows } = await store.q(`select * from users where not owner`);
+  const nomi = new Map((await store.listSedi()).map(s => [s.id, s.nome]));
+  return rows.filter(u => tipoDi(u, true)).map(u => ({ ref: u.id, attivo: u.status === 'active',
+    sedi: (Array.isArray(u.sedi) ? u.sedi : []).map(id => nomi.get(id)).filter(Boolean) }));
+}
+// chiusura dell'anno: un avviso al proprietario per ogni persona tolta da una sede nel budget nuovo
+async function avvisaTolti(righe) {
+  const { rows } = await store.q(`select id from users where owner and status = 'active'`);
+  for (const body of righe.slice(0, 200).map(x => String(x).slice(0, 300))) {
+    console.log('Gestione finanziaria (chiusura anno):', body);
+    await require('./notifiche').notifica(rows.map(r => r.id), 'finanza_persone', { title: 'Gestione finanziaria: persona tolta da una sede', body, url: 'https://finanza.appgestione.it/' }).catch(() => {});
+  }
+}
+module.exports = { allineaUno, allineaTutti, tipoDi, situazione, avvisaTolti };

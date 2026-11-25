@@ -1416,6 +1416,16 @@ app.post('/api/_suite/finanza-ticket', wrap(async (req, res) => {
   if (!t) return bad(res, 404, 'Codice non valido o scaduto: rientra dalla tua suite.');
   res.json(t);
 }));
+// Gestione finanziaria, budget dell'anno dopo: sedi di oggi delle persone e avvisi delle persone tolte (solo To Smile)
+app.post('/api/_suite/finanza-persone-sedi', wrap(async (req, res) => {
+  if (require('../lib/suite').TENANT || !chiaveOk(req, '__')) return bad(res, 401, 'Non autorizzato');
+  res.json({ persone: await require('./lib/finanzaPersone').situazione() });
+}));
+app.post('/api/_suite/finanza-avviso', wrap(async (req, res) => {
+  if (require('../lib/suite').TENANT || !chiaveOk(req, '__')) return bad(res, 401, 'Non autorizzato');
+  await require('./lib/finanzaPersone').avvisaTolti(Array.isArray(req.body?.righe) ? req.body.righe : []);
+  res.json({ ok: true });
+}));
 // modulo pubblico di iscrizione alla suite (la richiesta arriva nel pannello; il cliente nasce solo se approvi)
 app.get('/iscriviti', (req, res) => {
   if (!SUITE_M.ATTIVA) return res.redirect('/');
