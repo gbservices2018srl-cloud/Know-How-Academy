@@ -24,11 +24,20 @@ async function manda(persone, prova) {
   if (!persone.length) return { esiti: [] };
   return finanza.scrivi('/api/_appgestione/persone', { azienda: az, prova: !!prova, persone });
 }
-// una persona (dopo approvazione o modifica): in background, un errore non blocca niente
-// SOSPESO (24/11/2026): l'allineamento automatico creava righe doppie in Gestione finanziaria
-// («Silvia Murtas» accanto a «MURTAS SILVIA (RAP)»). Non scrive più nulla finché Giancarlo non approva la correzione.
+// una persona (dopo approvazione o modifica): in background, un errore non blocca niente.
+// Ogni cambio (persona nuova, collegata, sede aggiunta, o qualcosa che non torna) arriva come avviso al proprietario.
+// Durante l'anno non si toglie mai niente: se la persona passa in un'altra sede, quella vecchia resta con i suoi costi.
+// (Si può spegnere su Render con FINANZA_ALLINEA_AUTO=no.)
+const TIPO = { medico: 'Costi per dottori', stipendio: 'Stipendi fissi lordi' };
+async function avvisaCambio(e) {
+  const { rows } = await store.q(`select id from users where owner and status = 'active'`);
+  const cosa = e.azione === 'nuovo' ? `aggiunto in ${TIPO[e.tipo]}` : e.azione === 'collegato' ? `collegato alla voce già presente in ${TIPO[e.tipo]}` : e.azione === 'presente' ? `in ${TIPO[e.tipo]}` : e.azione;
+  const body = `${e.nome}: ${cosa}${e.nuove?.length ? ' · nuove sedi: ' + e.nuove.join(', ') : ''}${e.senzaSede?.length ? ' · sede non trovata: ' + e.senzaSede.join(', ') : ''}`;
+  console.log('Gestione finanziaria (persone):', body);
+  await require('./notifiche').notifica(rows.map(r => r.id), 'finanza_persone', { title: 'Gestione finanziaria: persona aggiornata', body, url: 'https://finanza.appgestione.it/' }).catch(() => {});
+}
 function allineaUno(userId) {
-  if (!process.env.FINANZA_ALLINEA_AUTO) return;
+  if (process.env.FINANZA_ALLINEA_AUTO === 'no') return;
   setTimeout(async () => {
     try {
       const u = await store.getUser(userId);
@@ -36,11 +45,10 @@ function allineaUno(userId) {
       if (!p.length) return;
       const r = await manda(p, false);
       const e = r.esiti?.[0];
-      if (e && (e.azione !== 'presente' || e.nuove?.length)) console.log(`Gestione finanziaria: ${e.nome} (${e.tipo}) ${e.azione}${e.nuove?.length ? ' · sedi ' + e.nuove.join(', ') : ''}`);
+      if (e && (e.azione !== 'presente' || e.nuove?.length || e.senzaSede?.length)) await avvisaCambio(e);
     } catch (err) { console.warn('Gestione finanziaria (persone):', err.message); }
-  }, 500);
+  }, 1500);
 }
-// tutte le persone attive: prima la prova (cosa cambierebbe), poi davvero
 async function allineaTutti(prova) {
   const { rows } = await store.q(`select * from users where status = 'active' and not owner`);
   const r = await manda(await personeFin(rows), prova);
