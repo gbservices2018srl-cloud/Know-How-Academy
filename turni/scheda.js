@@ -4,7 +4,7 @@
 const store = require('../accessi/lib/store');
 const { pdfText, wordText } = require('../lib/extract');
 
-const BRANCHE = ['Conservativa', 'Intarsi', 'Endo', 'Endo avanzata', 'Chirurgia base', 'Implantologia base', 'Chirurgia avanzata',
+const BRANCHE = ['Prime visite', 'Conservativa', 'Intarsi', 'Endo', 'Endo avanzata', 'Chirurgia base', 'Implantologia base', 'Chirurgia avanzata',
   'Protesi su impianti', 'Protesi full arch', 'Protesi mobile', 'Protesi su denti naturali', 'Protesi denti naturali avanzato',
   'Ortodonzia', 'Pedodonzia', 'Parodonto', 'Sbiancamento', 'Igiene professionale'];
 const GIORNI = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
@@ -138,7 +138,7 @@ module.exports = function scheda(app, { db, needUser, needAdmin, wrap, bad, uplo
     const doc = await PDFDocument.create(), f = await doc.embedFont(StandardFonts.Helvetica), fb = await doc.embedFont(StandardFonts.HelveticaBold);
     // i font standard non hanno tutti i caratteri: si tengono le lettere accentate italiane, il resto si toglie
     const T = x => String(x || '').normalize('NFC').replace(/[^\x20-\x7E\u00A0-\u00FF]/g, '');
-    const W = 842, H = 595, M = 36, PRIMA = 190, PER = 9, RIGA = 25;
+    const W = 842, H = 595, M = 36, PRIMA = 190, PER = 9, RIGA = 24;
     const verde = rgb(0.10, 0.45, 0.45), linea = rgb(0.85, 0.85, 0.82), grigio = rgb(0.4, 0.4, 0.4);
     const oggi = new Date().toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' });
     const gruppi = []; for (let i = 0; i < Math.max(ms.length, 1); i += PER) gruppi.push(ms.slice(i, i + PER));
