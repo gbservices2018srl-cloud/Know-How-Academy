@@ -49,6 +49,7 @@ async function migrate() {
       prestazione text not null default '', elemento text not null default '', prezzo numeric(12,2) not null default 0, lab numeric(12,2) not null default 0,
       tipo text not null default '', valore numeric(12,2) not null default 0, fonte text not null default '', compenso numeric(12,2) not null default 0, primary key (compenso_id, n));
     alter table dettaglio add column if not exists lab_mano boolean not null default false;
+    alter table dettaglio add column if not exists paziente_id text not null default '';
     -- condizioni dei medici (il tariffario base è il Listino & margini di Analisi finanziaria); medico_id '' + chiave '*' = % per le prestazioni fuori listino
     create table if not exists tariffe (medico_id text not null default '', chiave text not null, nome text not null, tipo text not null, valore numeric(12,2) not null,
       aggiornato_il timestamptz not null default now(), aggiornato_da text, primary key (medico_id, chiave));
@@ -231,7 +232,7 @@ const compensoDi = (tipo, valore, prezzo, lab) => Math.round((tipo === 'euro' ? 
 
 const calcolo = { inCorso: false, sede: '', fase: '', errore: '', esito: null, iniziato: null };
 async function calcolaCompensi({ anno, mese, dal, al, medico }, chi) {
-  const [S, md, T, L] = await Promise.all([sedi(), medici(), tariffe(), listino()]);
+  const [S, md, T, L] = await Promise.all([sedi(), medici(), tariffe(), listino().catch(e => { const x = new Error('LISTINO: ' + e.message); x.listino = true; throw x; })]);
   const esito = { fatti: 0, saltati: [], senzaSede: [], errori: [], daCollegare: 0 };
   for (const sedeAD of AD.chiavi()) {
     calcolo.sede = sedeAD; calcolo.fase = '';
@@ -273,8 +274,8 @@ async function calcolaCompensi({ anno, mese, dal, al, medico }, chi) {
           : await cl.query(`insert into compensi (id, medico_id, medico_nome, sede_id, sede_nome, anno, mese, importo, origine, stato, dal, al, creato_da, aggiornato_da) values ($1,$2,$3,$4,$5,$6,$7,$8,'alfadocs','bozza',$9,$10,$11,$11) returning *`,
             [crypto.randomUUID(), mid, m.nome, sede.id, sede.nome, anno, mese, tot, dal, al, chi]);
         await cl.query('delete from dettaglio where compenso_id = $1', [c.id]); // il dettaglio si rifà dal calcolo nuovo
-        for (const x of det) await cl.query(`insert into dettaglio (compenso_id, n, entry_id, data, paziente, prestazione, elemento, prezzo, lab, lab_mano, tipo, valore, fonte, compenso) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
-          [c.id, x.n, x.id, x.data, x.paziente, x.prestazione, x.elemento, x.prezzo, x.lab, x.mano, x.tipo, x.valore, x.fonte, x.compenso]);
+        for (const x of det) await cl.query(`insert into dettaglio (compenso_id, n, entry_id, data, paziente, paziente_id, prestazione, elemento, prezzo, lab, lab_mano, tipo, valore, fonte, compenso) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+          [c.id, x.n, x.id, x.data, x.paziente, x.pazienteId || '', x.prestazione, x.elemento, x.prezzo, x.lab, x.mano, x.tipo, x.valore, x.fonte, x.compenso]);
         await cl.query('commit');
         log(p ? 'ricalcolato da AlfaDocs' : 'calcolato da AlfaDocs', c.id, chi, p ? { importo: num(p.importo) } : null, { importo: tot, dal, al, prestazioni: det.length });
         esito.fatti++;
@@ -294,7 +295,7 @@ app.post('/api/calcola', needAdmin, wrap(async (req, res) => {
   Object.assign(calcolo, { inCorso: true, sede: '', fase: '', errore: '', esito: null, iniziato: new Date().toISOString(), mese: mm });
   calcolaCompensi({ anno, mese, dal, al, medico }, req.me.nome)
     .then(e => { calcolo.esito = e; console.log(`Compensi: calcolo ${mm} (${dal} → ${al}) fatto: ${e.fatti} compensi`); })
-    .catch(e => { calcolo.errore = /finanziaria|To Smile/i.test(e.message) ? 'Non riesco a leggere il Listino & margini di Analisi finanziaria: riprova tra poco.' : 'Calcolo non riuscito: riprova.'; console.error('Compensi calcolo:', e.message); })
+    .catch(e => { calcolo.errore = e.listino ? 'Non riesco a leggere il Listino & margini di Analisi finanziaria: riprova tra poco.' : 'Calcolo non riuscito: riprova.'; console.error('Compensi calcolo:', e.message); })
     .finally(() => { calcolo.inCorso = false; calcolo.sede = ''; calcolo.fase = ''; });
   res.json({ ok: true });
 }));
@@ -322,10 +323,16 @@ async function compensoVisibile(req, id) {
 }
 app.get('/api/dettaglio/:id', needAny, wrap(async (req, res) => {
   const c = await compensoVisibile(req, req.params.id); if (!c) return bad(res, 404, 'Compenso non trovato.');
-  const { rows } = await q('select * from dettaglio where compenso_id = $1 order by n', [c.id]);
+  // stessa prestazione, stesso paziente e stesso dente già in un altro compenso del medico (accettato o pagato): si segna in rosso con il mese
+  const { rows } = await q(`select d.*, (select (c2.anno * 100 + c2.mese)::text || ':' || c2.stato from dettaglio d2 join compensi c2 on c2.id = d2.compenso_id
+      where c2.medico_id = $2 and c2.id <> $1 and c2.stato in ('approvato','da_pagare','pagato') and d2.elemento <> '' and d2.elemento = d.elemento
+        and lower(d2.prestazione) = lower(d.prestazione)
+        and (case when d.paziente_id <> '' and d2.paziente_id <> '' then d2.paziente_id = d.paziente_id else lower(d2.paziente) = lower(d.paziente) and d.paziente <> '' end)
+      order by c2.anno, c2.mese limit 1) gia
+    from dettaglio d where d.compenso_id = $1 order by d.n`, [c.id, c.medico_id]);
   const admin = !!req.me.admin;
   res.set('Cache-Control', 'no-store').json({ compenso: forma(c), righe: rows.map(d => ({ n: d.n, data: d.data, paziente: d.paziente, prestazione: d.prestazione, elemento: d.elemento,
-    compenso: num(d.compenso), ...(admin ? { prezzo: num(d.prezzo), lab: num(d.lab), tipo: d.tipo, valore: num(d.valore), fonte: d.fonte } : {}) })) });
+    compenso: num(d.compenso), gia: d.gia ? (() => { const [am, st] = d.gia.split(':'), n = +am; return `${st === 'pagato' ? 'già pagato' : 'già accettato'} · ${MESI[n % 100 - 1]} ${Math.floor(n / 100)}`; })() : '', ...(admin ? { prezzo: num(d.prezzo), lab: num(d.lab), tipo: d.tipo, valore: num(d.valore), fonte: d.fonte } : {}) })) });
 }));
 // costo di laboratorio (a mano) su una prestazione: si ricalcola il compenso della riga e il totale
 app.put('/api/dettaglio/:id/:n', needAdmin, wrap(async (req, res) => {
