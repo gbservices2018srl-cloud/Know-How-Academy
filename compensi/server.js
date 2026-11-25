@@ -48,7 +48,8 @@ async function migrate() {
     create table if not exists dettaglio (compenso_id text not null, n int not null, entry_id text not null default '', data date, paziente text not null default '',
       prestazione text not null default '', elemento text not null default '', prezzo numeric(12,2) not null default 0, lab numeric(12,2) not null default 0,
       tipo text not null default '', valore numeric(12,2) not null default 0, fonte text not null default '', compenso numeric(12,2) not null default 0, primary key (compenso_id, n));
-    -- tariffari: medico_id '' = base uguale per tutti; chiave '*' = % per le prestazioni fuori tariffario
+    alter table dettaglio add column if not exists lab_mano boolean not null default false;
+    -- condizioni dei medici (il tariffario base è il Listino & margini di Analisi finanziaria); medico_id '' + chiave '*' = % per le prestazioni fuori listino
     create table if not exists tariffe (medico_id text not null default '', chiave text not null, nome text not null, tipo text not null, valore numeric(12,2) not null,
       aggiornato_il timestamptz not null default now(), aggiornato_da text, primary key (medico_id, chiave));
     -- medici di AlfaDocs (uno per sede) ↔ medici dell'app
@@ -209,20 +210,28 @@ async function tariffe() {
   const T = {}; for (const r of rows) (T[r.medico_id] = T[r.medico_id] || {})[r.chiave] = { nome: r.nome, tipo: r.tipo, valore: num(r.valore) };
   return T;
 }
-// regola per una prestazione: condizione del medico → tariffario base → % del medico → % base
-function regola(T, medico, prestazione) {
-  const k = chiaveP(prestazione), M = T[medico] || {}, B = T[''] || {};
-  if (M[k]) return { ...M[k], fonte: 'medico' };
-  if (B[k]) return { ...B[k], fonte: 'base' };
-  if (M['*']) return { tipo: 'perc', valore: M['*'].valore, fonte: 'perc-medico' };
-  if (B['*']) return { tipo: 'perc', valore: B['*'].valore, fonte: 'perc-base' };
-  return { tipo: '', valore: 0, fonte: '' };
+// Listino & margini di Analisi finanziaria: Map(chiave → { nome, lab, tipo, valore }). percProf → % di (prezzo - lab), altrimenti costoProf in euro
+async function listino() {
+  const az = await finanza.aziendaToSmile(); if (!az) throw new Error('In Gestione finanziaria non trovo l\'azienda To Smile.');
+  const r = await finanza.chiama(`/api/_appgestione/listino?azienda=${encodeURIComponent(az)}`), L = new Map();
+  for (const x of r.listino || []) L.set(chiaveP(x.label), { nome: x.label, lab: num(x.lab), ...(num(x.percProf) > 0 ? { tipo: 'perc', valore: Math.round(num(x.percProf) * 10000) / 100 } : { tipo: 'euro', valore: num(x.costoProf) }) });
+  return L;
+}
+// regola per una prestazione: condizione del medico → Listino & margini → % fuori listino del medico → % fuori listino base
+function regola(T, L, medico, prestazione) {
+  const k = chiaveP(prestazione), M = T[medico] || {}, B = T[''] || {}, l = L.get(k);
+  const lab = l ? l.lab : 0;
+  if (M[k]) return { tipo: M[k].tipo, valore: M[k].valore, fonte: 'medico', lab };
+  if (l) return { tipo: l.tipo, valore: l.valore, fonte: 'listino', lab };
+  if (M['*']) return { tipo: 'perc', valore: M['*'].valore, fonte: 'perc-medico', lab };
+  if (B['*']) return { tipo: 'perc', valore: B['*'].valore, fonte: 'perc-base', lab };
+  return { tipo: '', valore: 0, fonte: '', lab };
 }
 const compensoDi = (tipo, valore, prezzo, lab) => Math.round((tipo === 'euro' ? valore : tipo === 'perc' ? valore / 100 * Math.max(0, prezzo - lab) : 0) * 100) / 100;
 
 const calcolo = { inCorso: false, sede: '', fase: '', errore: '', esito: null, iniziato: null };
 async function calcolaCompensi({ anno, mese, dal, al, medico }, chi) {
-  const [S, md, T] = await Promise.all([sedi(), medici(), tariffe()]);
+  const [S, md, T, L] = await Promise.all([sedi(), medici(), tariffe(), listino()]);
   const esito = { fatti: 0, saltati: [], senzaSede: [], errori: [], daCollegare: 0 };
   for (const sedeAD of AD.chiavi()) {
     calcolo.sede = sedeAD; calcolo.fase = '';
@@ -249,12 +258,12 @@ async function calcolaCompensi({ anno, mese, dal, al, medico }, chi) {
       const m = md.find(x => x.id === mid); if (!m) continue;
       const { rows: [p] } = await q('select * from compensi where medico_id = $1 and sede_id = $2 and anno = $3 and mese = $4', [mid, sede.id, anno, mese]);
       if (p && !['bozza', 'rifiutato'].includes(p.stato)) { esito.saltati.push(`${m.nome} · ${sede.nome}`); continue; }
-      // il costo di laboratorio scritto a mano resta, se si ricalcola
+      // il costo di laboratorio corretto a mano resta, se si ricalcola (gli altri vengono dal Listino)
       const lab = new Map();
-      if (p) (await q('select entry_id, lab from dettaglio where compenso_id = $1 and entry_id <> $2', [p.id, ''])).rows.forEach(d => lab.set(d.entry_id, num(d.lab)));
+      if (p) (await q('select entry_id, lab from dettaglio where compenso_id = $1 and entry_id <> $2 and lab_mano', [p.id, ''])).rows.forEach(d => lab.set(d.entry_id, num(d.lab)));
       righe.sort((a, b) => a.data.localeCompare(b.data) || a.paziente.localeCompare(b.paziente, 'it'));
-      const det = righe.map((x, i) => { const g = regola(T, mid, x.prestazione), l = lab.get(x.id) || 0;
-        return { ...x, n: i + 1, lab: l, tipo: g.tipo, valore: g.valore, fonte: g.fonte, compenso: compensoDi(g.tipo, g.valore, x.prezzo, l) }; });
+      const det = righe.map((x, i) => { const g = regola(T, L, mid, x.prestazione), mano = lab.has(x.id), l = mano ? lab.get(x.id) : g.lab;
+        return { ...x, n: i + 1, lab: l, mano, tipo: g.tipo, valore: g.valore, fonte: g.fonte, compenso: compensoDi(g.tipo, g.valore, x.prezzo, l) }; });
       const tot = Math.round(det.reduce((s, x) => s + x.compenso, 0) * 100) / 100;
       const cl = await pool.connect();
       try {
@@ -264,8 +273,8 @@ async function calcolaCompensi({ anno, mese, dal, al, medico }, chi) {
           : await cl.query(`insert into compensi (id, medico_id, medico_nome, sede_id, sede_nome, anno, mese, importo, origine, stato, dal, al, creato_da, aggiornato_da) values ($1,$2,$3,$4,$5,$6,$7,$8,'alfadocs','bozza',$9,$10,$11,$11) returning *`,
             [crypto.randomUUID(), mid, m.nome, sede.id, sede.nome, anno, mese, tot, dal, al, chi]);
         await cl.query('delete from dettaglio where compenso_id = $1', [c.id]); // il dettaglio si rifà dal calcolo nuovo
-        for (const x of det) await cl.query(`insert into dettaglio (compenso_id, n, entry_id, data, paziente, prestazione, elemento, prezzo, lab, tipo, valore, fonte, compenso) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-          [c.id, x.n, x.id, x.data, x.paziente, x.prestazione, x.elemento, x.prezzo, x.lab, x.tipo, x.valore, x.fonte, x.compenso]);
+        for (const x of det) await cl.query(`insert into dettaglio (compenso_id, n, entry_id, data, paziente, prestazione, elemento, prezzo, lab, lab_mano, tipo, valore, fonte, compenso) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+          [c.id, x.n, x.id, x.data, x.paziente, x.prestazione, x.elemento, x.prezzo, x.lab, x.mano, x.tipo, x.valore, x.fonte, x.compenso]);
         await cl.query('commit');
         log(p ? 'ricalcolato da AlfaDocs' : 'calcolato da AlfaDocs', c.id, chi, p ? { importo: num(p.importo) } : null, { importo: tot, dal, al, prestazioni: det.length });
         esito.fatti++;
@@ -285,7 +294,7 @@ app.post('/api/calcola', needAdmin, wrap(async (req, res) => {
   Object.assign(calcolo, { inCorso: true, sede: '', fase: '', errore: '', esito: null, iniziato: new Date().toISOString(), mese: mm });
   calcolaCompensi({ anno, mese, dal, al, medico }, req.me.nome)
     .then(e => { calcolo.esito = e; console.log(`Compensi: calcolo ${mm} (${dal} → ${al}) fatto: ${e.fatti} compensi`); })
-    .catch(e => { calcolo.errore = 'Calcolo non riuscito: riprova.'; console.error('Compensi calcolo:', e.message); })
+    .catch(e => { calcolo.errore = /finanziaria|To Smile/i.test(e.message) ? 'Non riesco a leggere il Listino & margini di Analisi finanziaria: riprova tra poco.' : 'Calcolo non riuscito: riprova.'; console.error('Compensi calcolo:', e.message); })
     .finally(() => { calcolo.inCorso = false; calcolo.sede = ''; calcolo.fase = ''; });
   res.json({ ok: true });
 }));
@@ -327,7 +336,7 @@ app.put('/api/dettaglio/:id/:n', needAdmin, wrap(async (req, res) => {
   const { rows: [d] } = await q('select * from dettaglio where compenso_id = $1 and n = $2', [c.id, parseInt(req.params.n, 10) || 0]);
   if (!d) return bad(res, 404, 'Prestazione non trovata.');
   const comp = compensoDi(d.tipo, num(d.valore), num(d.prezzo), lab);
-  await q('update dettaglio set lab = $3, compenso = $4 where compenso_id = $1 and n = $2', [c.id, d.n, lab, comp]);
+  await q('update dettaglio set lab = $3, compenso = $4, lab_mano = true where compenso_id = $1 and n = $2', [c.id, d.n, lab, comp]);
   const { rows: [t] } = await q(`update compensi set importo = (select coalesce(sum(compenso), 0) from dettaglio where compenso_id = $1), origine = 'alfadocs', stato = 'bozza', aggiornato_da = $2, aggiornato_il = now() where id = $1 returning *`, [c.id, req.me.id]);
   log('costo laboratorio', c.id, req.me.nome, { lab: num(d.lab) }, { lab, riga: d.n });
   res.json({ ok: true, compenso: comp, totale: num(t.importo) });
@@ -335,12 +344,13 @@ app.put('/api/dettaglio/:id/:n', needAdmin, wrap(async (req, res) => {
 
 /* ---------- tariffari ---------- */
 app.get('/api/tariffe', needAdmin, wrap(async (req, res) => {
-  const [{ rows }, md, { rows: viste }] = await Promise.all([q('select medico_id, chiave, nome, tipo, valore from tariffe order by nome'), medici(),
+  let L = null, errore = '';
+  try { L = await listino(); } catch (e) { errore = 'Non riesco a leggere il Listino & margini di Analisi finanziaria: riprova tra poco.'; }
+  const [{ rows }, md, { rows: viste }] = await Promise.all([q(`select medico_id, chiave, nome, tipo, valore from tariffe where medico_id <> '' or chiave = '*' order by nome`), medici(),
     q(`select prestazione, count(*)::int n from dettaglio where prestazione <> '' group by prestazione order by n desc limit 500`)]);
-  const base = rows.filter(r => !r.medico_id && r.chiave !== '*'), chiavi = new Set(base.map(r => r.chiave)), senza = [];
-  for (const v of viste) { const k = chiaveP(v.prestazione); if (!chiavi.has(k)) { chiavi.add(k); senza.push(v.prestazione); } }
+  const senza = L ? [...new Set(viste.map(v => v.prestazione))].filter(p => !L.has(chiaveP(p))).sort((a, b) => a.localeCompare(b, 'it')) : [];
   const fr = r => ({ nome: r.nome, chiave: r.chiave, tipo: r.tipo, valore: num(r.valore) });
-  res.set('Cache-Control', 'no-store').json({ base: base.map(fr), senza: senza.sort((a, b) => a.localeCompare(b, 'it')),
+  res.set('Cache-Control', 'no-store').json({ errore, listino: L ? [...L.entries()].map(([chiave, x]) => ({ chiave, ...x })).sort((a, b) => a.nome.localeCompare(b.nome, 'it')) : [], senza,
     perc: Object.fromEntries(rows.filter(r => r.chiave === '*').map(r => [r.medico_id, num(r.valore)])),
     medici: md.filter(m => m.attivo).map(m => ({ id: m.id, nome: m.nome, righe: rows.filter(r => r.medico_id === m.id && r.chiave !== '*').map(fr) })).sort((a, b) => a.nome.localeCompare(b.nome, 'it')) });
 }));
@@ -349,7 +359,8 @@ const leggiValore = v => { const t = String(v ?? '').trim(); if (!t) return { vu
   const perc = /%\s*$/.test(t), n = euro(t.replace(/%\s*$/, '')); if (n == null || (perc && n > 100)) return null; return { tipo: perc ? 'perc' : 'euro', valore: n }; };
 app.put('/api/tariffa', needAdmin, wrap(async (req, res) => {
   const mid = str(req.body?.medico, 60), nome = str(req.body?.nome, 200), k = chiaveP(nome);
-  if (mid && !(await medici()).some(m => m.id === mid)) return bad(res, 400, 'Medico non trovato.');
+  if (!mid) return bad(res, 400, 'Il tariffario base si cambia in Listino & margini di Analisi finanziaria.');
+  if (!(await medici()).some(m => m.id === mid)) return bad(res, 400, 'Medico non trovato.');
   if (!k) return bad(res, 400, 'Scrivi il nome della prestazione.');
   const v = leggiValore(req.body?.valore); if (!v) return bad(res, 400, 'Scrivi un importo (es. 350) o una percentuale (es. 30%).');
   if (v.vuoto) await q('delete from tariffe where medico_id = $1 and chiave = $2', [mid, k]);

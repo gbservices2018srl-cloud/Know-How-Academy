@@ -345,7 +345,7 @@ function aMano(mid, sid, imp) {
     try { await api('PUT', 'api/compenso', { anno: a, mese: m, medico: mid, sede: sid, importo: parseE($('#imp').value) }); dl.close(); toast('Salvato: clic sul rosso per mandarlo.'); vTabella(); }
     catch (x) { $('#aerr').hidden = false; $('#aerr').textContent = x.message; } };
 }
-const REG = r => r.tipo === 'euro' ? (r.fonte === 'medico' ? 'tariffa medico' : 'tariffa') : r.tipo === 'perc' ? `${String(r.valore).replace('.', ',')}%` : '<span class="tag todo">senza tariffa</span>';
+const REG = r => !r.tipo ? '<span class="tag todo">non nel listino</span>' : (r.tipo === 'perc' ? `${String(r.valore).replace('.', ',')}%` : 'fisso') + (r.fonte === 'medico' ? ' · medico' : r.fonte.startsWith('perc') ? ' · fuori listino' : '');
 async function dettaglio(id) {
   let r; try { r = await api('GET', 'api/dettaglio/' + encodeURIComponent(id)); } catch (x) { return toast(x.message); }
   const c = r.compenso, admin = S.v !== 'miei', mod = admin && (c.stato === 'bozza' || c.stato === 'rifiutato');
@@ -368,29 +368,26 @@ async function dettaglio(id) {
 async function vTariffe() {
   let t; try { t = await api('GET', 'api/tariffe'); } catch (x) { return toast(x.message); }
   S.tm = S.tm && t.medici.some(m => m.id === S.tm) ? S.tm : (t.medici[0]?.id || '');
-  const val = r => r ? (r.tipo === 'perc' ? fN(r.valore).replace(/,00$/, '') + '%' : fN(r.valore)) : '';
-  const med = t.medici.find(m => m.id === S.tm), baseDi = new Map(t.base.map(r => [r.chiave, r]));
-  const riga = (mid, nome, r, cls = '') => `<tr class="${cls}"><td class="wrap">${esc(nome)}</td><td class="n"><input class="tv" data-m="${esc(mid)}" data-nome="${esc(nome)}" value="${esc(val(r))}" placeholder="€ o %" aria-label="${esc(nome)}"></td></tr>`;
+  const pc = v => v != null ? fN(v).replace(/,00$/, '') + '%' : '';
+  const val = r => r ? (r.tipo === 'perc' ? pc(r.valore) : fN(r.valore)) : '';
+  const med = t.medici.find(m => m.id === S.tm), L = new Map(t.listino.map(r => [r.chiave, r]));
   $('#main').innerHTML = `
-    <div class="card pad"><div class="sez-t"><h3>Tariffario base</h3><label class="lbl">Fuori tariffario <input class="tv" data-perc="" value="${t.perc[''] != null ? fN(t.perc['']).replace(/,00$/, '') + '%' : ''}" placeholder="%" style="width:70px"></label></div>
-      <div class="tw"><table class="t"><thead><tr><th>Prestazione</th><th class="n">Compenso</th></tr></thead><tbody>
-        ${t.senza.map(n => riga('', n, null, 'nuova')).join('')}${t.base.map(r => riga('', r.nome, r)).join('')}
-        <tr><td><input id="nb" class="tv" style="width:100%;text-align:left" placeholder="Nuova prestazione"></td><td class="n"><input id="nbv" class="tv" placeholder="€ o %"></td></tr>
-      </tbody></table></div>
-      <p class="muted" style="margin:8px 0 0;font-size:13px">350 = euro · 30% = del prezzo scontato meno il laboratorio${t.senza.length ? ' · in arancio: eseguite ma senza tariffa' : ''}</p></div>
+    <div class="card pad"><div class="sez-t"><h3>Listino & margini</h3><label class="lbl">Fuori listino <input class="tv" data-perc="" value="${pc(t.perc[''])}" placeholder="%" style="width:70px"></label></div>
+      ${t.errore ? `<div class="err">${esc(t.errore)}</div>` : `<p class="muted" style="margin:0 0 8px;font-size:13.5px">Compensi e laboratorio arrivano da Analisi finanziaria: si cambiano lì.</p>`}
+      ${t.senza.length ? `<div class="avviso giallo" style="margin-bottom:8px">Eseguite ma non nel listino: ${t.senza.map(esc).join(' · ')}</div>` : ''}
+      ${t.listino.length ? `<details><summary class="link" style="cursor:pointer">Vedi il listino (${t.listino.length})</summary><div class="tw" style="max-height:50vh;overflow:auto"><table class="t"><thead><tr><th>Prestazione</th><th class="n">Lab.</th><th class="n">Compenso</th></tr></thead><tbody>
+        ${t.listino.map(r => `<tr><td class="wrap">${esc(r.nome)}</td><td class="n">${r.lab ? fN(r.lab) : ''}</td><td class="n">${val(r)}</td></tr>`).join('')}</tbody></table></div></details>` : ''}</div>
     ${t.medici.length ? `<div class="card pad blocco"><div class="sez-t"><h3>Condizioni diverse</h3><select class="es" id="tm" style="font-weight:600">${t.medici.map(m => `<option value="${esc(m.id)}" ${m.id === S.tm ? 'selected' : ''}>${esc(m.nome)}${m.righe.length || t.perc[m.id] != null ? ' •' : ''}</option>`).join('')}</select></div>
-      <div class="tw"><table class="t"><thead><tr><th>Prestazione</th><th class="n">Base</th><th class="n">Per ${esc(med.nome)}</th></tr></thead><tbody>
-        <tr><td>Fuori tariffario</td><td class="n">${t.perc[''] != null ? fN(t.perc['']).replace(/,00$/, '') + '%' : ''}</td><td class="n"><input class="tv" data-perc="${esc(med.id)}" value="${t.perc[med.id] != null ? fN(t.perc[med.id]).replace(/,00$/, '') + '%' : ''}" placeholder="%"></td></tr>
-        ${med.righe.map(r => `<tr><td class="wrap">${esc(r.nome)}</td><td class="n">${esc(val(baseDi.get(r.chiave)))}</td><td class="n"><input class="tv" data-m="${esc(med.id)}" data-nome="${esc(r.nome)}" value="${esc(val(r))}"></td></tr>`).join('')}
-        <tr><td><select id="nm" class="es" style="width:100%;font-weight:500"><option value="">+ Aggiungi condizione…</option>${t.base.filter(r => !med.righe.some(x => x.chiave === r.chiave)).map(r => `<option>${esc(r.nome)}</option>`).join('')}</select></td><td></td><td class="n"><input id="nmv" class="tv" placeholder="€ o %"></td></tr>
-      </tbody></table></div></div>` : ''}`;
+      <div class="tw"><table class="t"><thead><tr><th>Prestazione</th><th class="n">Listino</th><th class="n">Per ${esc(med.nome)}</th></tr></thead><tbody>
+        <tr><td>Fuori listino</td><td class="n">${pc(t.perc[''])}</td><td class="n"><input class="tv" data-perc="${esc(med.id)}" value="${pc(t.perc[med.id])}" placeholder="%"></td></tr>
+        ${med.righe.map(r => `<tr><td class="wrap">${esc(r.nome)}</td><td class="n">${esc(val(L.get(r.chiave)))}</td><td class="n"><input class="tv" data-m="${esc(med.id)}" data-nome="${esc(r.nome)}" value="${esc(val(r))}"></td></tr>`).join('')}
+        <tr><td><select id="nm" class="es" style="width:100%;font-weight:500"><option value="">+ Aggiungi condizione…</option>${[...t.listino.map(r => r.nome), ...t.senza].filter(n => !med.righe.some(x => x.nome.toLowerCase() === n.toLowerCase())).map(n => `<option>${esc(n)}</option>`).join('')}</select></td><td></td><td class="n"><input id="nmv" class="tv" placeholder="€ o %"></td></tr>
+      </tbody></table></div><p class="muted" style="margin:8px 0 0;font-size:13px">350 = euro · 30% = del prezzo scontato meno il laboratorio · vuoto = torna al listino</p></div>` : ''}`;
   const salva = async (medico, nome, valore) => { try { await api('PUT', 'api/tariffa', { medico, nome, valore }); toast(valore ? 'Salvato.' : 'Tolto.'); vTariffe(); } catch (x) { toast(x.message); } };
   $('#main').querySelectorAll('input[data-nome]').forEach(i => i.onchange = () => salva(i.dataset.m, i.dataset.nome, i.value.trim()));
   $('#main').querySelectorAll('input[data-perc]').forEach(i => i.onchange = async () => { try { await api('PUT', 'api/percentuale', { medico: i.dataset.perc, valore: i.value.trim() }); toast('Salvato.'); vTariffe(); } catch (x) { toast(x.message); } });
-  const nuova = (n, v, mid) => { const nome = n.value.trim(), valore = v.value.trim(); if (nome && valore) salva(mid, nome, valore); };
-  $('#nb').onchange = $('#nbv').onchange = () => nuova($('#nb'), $('#nbv'), '');
   $('#tm') && ($('#tm').onchange = e => { S.tm = e.target.value; vTariffe(); });
-  $('#nm') && ($('#nm').onchange = $('#nmv').onchange = () => nuova($('#nm'), $('#nmv'), S.tm));
+  $('#nm') && ($('#nm').onchange = $('#nmv').onchange = () => { const n = $('#nm').value, v = $('#nmv').value.trim(); if (n && v) salva(S.tm, n, v); });
 }
 
 /* ---------- medico ---------- */
