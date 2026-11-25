@@ -39,6 +39,20 @@ async function migrate() {
       unique (medico_id, sede_id, anno, mese)
     );
     create index if not exists compensi_mese_idx on compensi(anno, mese);
+    -- calcolo da AlfaDocs: «bozza» = calcolato, non ancora mandato al medico (anche 0 €, per vedere chi non ha tariffe)
+    alter table compensi add column if not exists dal date;
+    alter table compensi add column if not exists al date;
+    alter table compensi drop constraint if exists compensi_importo_check;
+    alter table compensi add constraint compensi_importo_check check (importo >= 0) not valid;
+    -- dettaglio delle prestazioni eseguite (dati dei pazienti: solo qui, li vedono l'amministrazione e quel medico)
+    create table if not exists dettaglio (compenso_id text not null, n int not null, entry_id text not null default '', data date, paziente text not null default '',
+      prestazione text not null default '', elemento text not null default '', prezzo numeric(12,2) not null default 0, lab numeric(12,2) not null default 0,
+      tipo text not null default '', valore numeric(12,2) not null default 0, fonte text not null default '', compenso numeric(12,2) not null default 0, primary key (compenso_id, n));
+    -- tariffari: medico_id '' = base uguale per tutti; chiave '*' = % per le prestazioni fuori tariffario
+    create table if not exists tariffe (medico_id text not null default '', chiave text not null, nome text not null, tipo text not null, valore numeric(12,2) not null,
+      aggiornato_il timestamptz not null default now(), aggiornato_da text, primary key (medico_id, chiave));
+    -- medici di AlfaDocs (uno per sede) ↔ medici dell'app
+    create table if not exists operatori (sede text not null, operatore text not null, nome text not null default '', medico_id text, primary key (sede, operatore));
     create table if not exists storico (id bigserial primary key, il timestamptz not null default now(), cosa text, rif text, chi text, prima jsonb, dopo jsonb);
   `);
 }
@@ -79,7 +93,7 @@ app.use('/api', (req, res, next) => (['GET', 'HEAD'].includes(req.method) || req
 
 const forma = r => ({ id: r.id, medico: r.medico_id, medicoNome: r.medico_nome, sede: r.sede_id, sedeNome: r.sede_nome, anno: r.anno, mese: r.mese,
   importo: num(r.importo), origine: r.origine, stato: r.stato, motivo: r.motivo || '', decisoIl: r.deciso_il, daPagareIl: r.da_pagare_il,
-  pagatoIl: r.pagato_il, finOk: !!r.fin_inviato_il, finErrore: r.fin_errore || '' });
+  pagatoIl: r.pagato_il, finOk: !!r.fin_inviato_il, finErrore: r.fin_errore || '', dal: r.dal, al: r.al });
 
 // medici della tabella: le persone attive con figura Medico (più chi ha già un compenso, anche se poi è stato disattivato)
 async function medici() {
@@ -98,40 +112,39 @@ app.get('/api/mese', needAdmin, wrap(async (req, res) => {
   const md = await medici(), ids = new Set(rows.map(r => r.medico_id));
   res.json({ anno, mese, sedi: await sedi(), medici: md.filter(m => m.attivo || ids.has(m.id)).sort((a, b) => a.nome.localeCompare(b.nome, 'it')), compensi: rows.map(forma) });
 }));
-// scrivere o correggere un compenso (cella): si può finché non è «da pagare»; se cambia torna da approvare
-const avvisiInAttesa = new Map();
-function avvisaPiuTardi(medicoId, anno, mese) {
-  clearTimeout(avvisiInAttesa.get(medicoId));
-  avvisiInAttesa.set(medicoId, setTimeout(() => { avvisiInAttesa.delete(medicoId);
-    avvisa([medicoId], { title: 'Compenso da approvare', body: `Il tuo compenso di ${MESI[mese - 1]} ${anno} è pronto: controllalo e approvalo.`, url: 'https://appgestione.it/compensi/' }); }, 3 * 60e3));
-}
+// scrivere o correggere a mano un compenso (cella): diventa una bozza (rossa) che l'amministrazione manda al medico con un clic
 app.put('/api/compenso', needAdmin, wrap(async (req, res) => {
   const b = req.body || {};
   const anno = parseInt(b.anno, 10), mese = parseInt(b.mese, 10);
   if (!(anno > 2000 && mese >= 1 && mese <= 12)) return bad(res, 400, 'Mese non valido.');
   const m = (await medici()).find(x => x.id === str(b.medico, 60)); if (!m) return bad(res, 400, 'Medico non trovato.');
   const s = (await sedi()).find(x => x.id === str(b.sede, 60)); if (!s) return bad(res, 400, 'Sede non trovata.');
-  if (!m.sedi.includes(s.id)) return bad(res, 403, `${s.nome} non è tra le sedi di ${m.nome} (anagrafica in Gestione accessi).`);
-  const imp = euro(b.importo); if (imp == null) return bad(res, 400, 'Importo non valido.');
+  const imp = euro(b.importo); if (imp == null || !imp) return bad(res, 400, 'Importo non valido.');
   if (imp > 1000000) return bad(res, 400, 'Importo troppo alto: controlla le cifre.');
   const { rows: [p] } = await q('select * from compensi where medico_id = $1 and sede_id = $2 and anno = $3 and mese = $4', [m.id, s.id, anno, mese]);
-  if (p && ['da_pagare', 'pagato'].includes(p.stato)) return bad(res, 409, 'Questo compenso è già da pagare o pagato: non si cambia più.');
-  if (!imp) {   // cella svuotata: si toglie solo se il medico non l'aveva ancora approvato (resta nello storico)
-    if (!p) return res.json({ ok: true });
-    if (p.stato === 'approvato') return bad(res, 409, 'Il medico l\'ha già approvato: correggi l\'importo invece di toglierlo.');
-    await q('delete from compensi where id = $1', [p.id]);
-    log('compenso tolto', p.id, req.me.nome, forma(p), null);
-    return res.json({ ok: true, tolto: true });
-  }
-  if (p && num(p.importo) === imp && p.stato !== 'rifiutato') return res.json({ ok: true, compenso: forma(p) });
+  if (p && !['bozza', 'rifiutato'].includes(p.stato)) return bad(res, 409, 'Questo compenso è già dal medico: non si cambia più.');
+  if (!p && !m.sedi.includes(s.id)) return bad(res, 403, `${s.nome} non è tra le sedi di ${m.nome} (anagrafica in Gestione accessi).`);
   const { rows: [r] } = p
-    ? await q(`update compensi set importo = $2, medico_nome = $3, sede_nome = $4, stato = 'attesa', motivo = null, deciso_il = null, aggiornato_da = $5, aggiornato_il = now() where id = $1 returning *`, [p.id, imp, m.nome, s.nome, req.me.id])
-    : await q(`insert into compensi (id, medico_id, medico_nome, sede_id, sede_nome, anno, mese, importo, origine, creato_da, aggiornato_da) values ($1,$2,$3,$4,$5,$6,$7,$8,'manuale',$9,$9) returning *`,
+    ? await q(`update compensi set importo = $2, medico_nome = $3, sede_nome = $4, origine = 'manuale', stato = 'bozza', aggiornato_da = $5, aggiornato_il = now() where id = $1 returning *`, [p.id, imp, m.nome, s.nome, req.me.id])
+    : await q(`insert into compensi (id, medico_id, medico_nome, sede_id, sede_nome, anno, mese, importo, origine, stato, creato_da, aggiornato_da) values ($1,$2,$3,$4,$5,$6,$7,$8,'manuale','bozza',$9,$9) returning *`,
       [crypto.randomUUID(), m.id, m.nome, s.id, s.nome, anno, mese, imp, req.me.id]);
-  log(p ? 'compenso corretto' : 'compenso inserito', r.id, req.me.nome, p ? forma(p) : null, forma(r));
-  avvisaPiuTardi(m.id, anno, mese);
+  log(p ? 'compenso corretto a mano' : 'compenso inserito a mano', r.id, req.me.nome, p ? forma(p) : null, forma(r));
   res.json({ ok: true, compenso: forma(r) });
 }));
+// manda al medico (bozza o rifiutato → da approvare)
+app.post('/api/manda', needAdmin, wrap(async (req, res) => {
+  const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).map(x => str(x, 60)).slice(0, 500);
+  const { rows } = await q(`update compensi set stato = 'attesa', motivo = null, deciso_il = null, aggiornato_da = $2, aggiornato_il = now()
+    where id = any($1) and stato in ('bozza','rifiutato') and importo > 0 returning *`, [ids, req.me.id]);
+  rows.forEach(r => { log('mandato al medico', r.id, req.me.nome, null, { importo: num(r.importo) }); avvisaPiuTardi(r.medico_id, r.anno, r.mese); });
+  res.json({ ok: true, n: rows.length });
+}));
+const avvisiInAttesa = new Map();
+function avvisaPiuTardi(medicoId, anno, mese) {
+  clearTimeout(avvisiInAttesa.get(medicoId));
+  avvisiInAttesa.set(medicoId, setTimeout(() => { avvisiInAttesa.delete(medicoId);
+    avvisa([medicoId], { title: 'Compenso da approvare', body: `Il tuo compenso di ${MESI[mese - 1]} ${anno} è pronto: controllalo e approvalo.`, url: 'https://appgestione.it/compensi/' }); }, 60e3));
+}
 // approvati → da pagare
 app.post('/api/da-pagare', needAdmin, wrap(async (req, res) => {
   const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).map(x => str(x, 60)).slice(0, 500);
@@ -144,7 +157,7 @@ app.post('/api/pagato', needAdmin, wrap(async (req, res) => {
   const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).map(x => str(x, 60)).slice(0, 500);
   const data = str(req.body?.data, 10);
   if (!isDate(data) || data > oggi()) return bad(res, 400, 'Scegli la data del pagamento (non nel futuro).');
-  const { rows } = await q(`update compensi set stato = 'pagato', pagato_il = $2, pagato_da = $3, pagato_segnato_il = now() where id = any($1) and stato = 'da_pagare' returning *`, [ids, data, req.me.id]);
+  const { rows } = await q(`update compensi set stato = 'pagato', pagato_il = $2, pagato_da = $3, pagato_segnato_il = now() where id = any($1) and stato in ('approvato','da_pagare') returning *`, [ids, data, req.me.id]);
   rows.forEach(r => log('pagato', r.id, req.me.nome, null, { importo: num(r.importo), data }));
   const fin = await inviaFinanza(rows.map(r => r.id));
   const perMedico = new Map(); rows.forEach(r => perMedico.set(r.medico_id, (perMedico.get(r.medico_id) || 0) + num(r.importo)));
@@ -179,9 +192,186 @@ async function inviaFinanza(ids) {
   }
 }
 
+/* ---------- calcolo da AlfaDocs ---------- */
+const AD = require('../lib/alfadocs');
+const chiaveP = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9%+]+/g, ' ').trim();
+const normS = x => String(x || '').toLowerCase().replace(/to\s*smile|studio|sede|ambulatorio/g, '').replace(/[^a-z0-9]/g, '');
+const TITOLI = new Set(['dott', 'dottssa', 'dottoressa', 'dottore', 'dr', 'dssa', 'drssa', 'prof', 'odt', 'rap']);
+const parole = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\([^)]*\)/g, ' ').replace(/[^a-z ]/g, '').split(/\s+/).filter(w => w.length > 1 && !TITOLI.has(w));
+// il medico dell'app con lo stesso nome e cognome (in qualsiasi ordine); se ce n'è più di uno non si sceglie
+function stessoMedico(nomeOp, md) {
+  const p = new Set(parole(nomeOp)); if (!p.size) return null;
+  const c = md.filter(m => { const w = parole(m.nome); return w.length >= 2 && w.every(x => p.has(x)); });
+  return c.length === 1 ? c[0] : null;
+}
+async function tariffe() {
+  const { rows } = await q('select medico_id, chiave, nome, tipo, valore from tariffe');
+  const T = {}; for (const r of rows) (T[r.medico_id] = T[r.medico_id] || {})[r.chiave] = { nome: r.nome, tipo: r.tipo, valore: num(r.valore) };
+  return T;
+}
+// regola per una prestazione: condizione del medico → tariffario base → % del medico → % base
+function regola(T, medico, prestazione) {
+  const k = chiaveP(prestazione), M = T[medico] || {}, B = T[''] || {};
+  if (M[k]) return { ...M[k], fonte: 'medico' };
+  if (B[k]) return { ...B[k], fonte: 'base' };
+  if (M['*']) return { tipo: 'perc', valore: M['*'].valore, fonte: 'perc-medico' };
+  if (B['*']) return { tipo: 'perc', valore: B['*'].valore, fonte: 'perc-base' };
+  return { tipo: '', valore: 0, fonte: '' };
+}
+const compensoDi = (tipo, valore, prezzo, lab) => Math.round((tipo === 'euro' ? valore : tipo === 'perc' ? valore / 100 * Math.max(0, prezzo - lab) : 0) * 100) / 100;
+
+const calcolo = { inCorso: false, sede: '', fase: '', errore: '', esito: null, iniziato: null };
+async function calcolaCompensi({ anno, mese, dal, al, medico }, chi) {
+  const [S, md, T] = await Promise.all([sedi(), medici(), tariffe()]);
+  const esito = { fatti: 0, saltati: [], senzaSede: [], errori: [], daCollegare: 0 };
+  for (const sedeAD of AD.chiavi()) {
+    calcolo.sede = sedeAD; calcolo.fase = '';
+    const sede = S.find(x => normS(x.nome) === normS(sedeAD));
+    if (!sede) { esito.senzaSede.push(sedeAD); continue; }
+    let r;
+    try { r = await AD.eseguite(AD.chiaveDi(sedeAD), dal, al, f => { calcolo.fase = f; }); }
+    catch (e) { esito.errori.push(`${sede.nome}: ${e.message}`); console.warn(`Compensi · AlfaDocs ${sede.nome}: ${e.message}`); continue; }
+    // medici di AlfaDocs ↔ medici dell'app (per nome, oppure scelti a mano una volta)
+    const { rows: ops } = await q('select operatore, medico_id from operatori where sede = $1', [sede.id]);
+    const giaScelto = new Map(ops.map(o => [o.operatore, o.medico_id]));
+    for (const [op, nome] of Object.entries(r.operatori)) {
+      if (!giaScelto.has(op)) { const m = stessoMedico(nome, md); giaScelto.set(op, m ? m.id : null); }
+      await q(`insert into operatori (sede, operatore, nome, medico_id) values ($1,$2,$3,$4) on conflict (sede, operatore) do update set nome = excluded.nome`, [sede.id, op, nome, giaScelto.get(op)]);
+    }
+    const perMedico = new Map();
+    for (const x of r.righe) {
+      const mid = giaScelto.get(x.operatore);
+      if (!mid || mid === '-') { if (!mid && x.operatore) esito.daCollegare++; continue; }
+      if (medico && mid !== medico) continue;
+      (perMedico.get(mid) || perMedico.set(mid, []).get(mid)).push(x);
+    }
+    for (const [mid, righe] of perMedico) {
+      const m = md.find(x => x.id === mid); if (!m) continue;
+      const { rows: [p] } = await q('select * from compensi where medico_id = $1 and sede_id = $2 and anno = $3 and mese = $4', [mid, sede.id, anno, mese]);
+      if (p && !['bozza', 'rifiutato'].includes(p.stato)) { esito.saltati.push(`${m.nome} · ${sede.nome}`); continue; }
+      // il costo di laboratorio scritto a mano resta, se si ricalcola
+      const lab = new Map();
+      if (p) (await q('select entry_id, lab from dettaglio where compenso_id = $1 and entry_id <> $2', [p.id, ''])).rows.forEach(d => lab.set(d.entry_id, num(d.lab)));
+      righe.sort((a, b) => a.data.localeCompare(b.data) || a.paziente.localeCompare(b.paziente, 'it'));
+      const det = righe.map((x, i) => { const g = regola(T, mid, x.prestazione), l = lab.get(x.id) || 0;
+        return { ...x, n: i + 1, lab: l, tipo: g.tipo, valore: g.valore, fonte: g.fonte, compenso: compensoDi(g.tipo, g.valore, x.prezzo, l) }; });
+      const tot = Math.round(det.reduce((s, x) => s + x.compenso, 0) * 100) / 100;
+      const cl = await pool.connect();
+      try {
+        await cl.query('begin');
+        const { rows: [c] } = p
+          ? await cl.query(`update compensi set importo = $2, medico_nome = $3, sede_nome = $4, origine = 'alfadocs', stato = 'bozza', dal = $5, al = $6, aggiornato_da = $7, aggiornato_il = now() where id = $1 returning *`, [p.id, tot, m.nome, sede.nome, dal, al, chi])
+          : await cl.query(`insert into compensi (id, medico_id, medico_nome, sede_id, sede_nome, anno, mese, importo, origine, stato, dal, al, creato_da, aggiornato_da) values ($1,$2,$3,$4,$5,$6,$7,$8,'alfadocs','bozza',$9,$10,$11,$11) returning *`,
+            [crypto.randomUUID(), mid, m.nome, sede.id, sede.nome, anno, mese, tot, dal, al, chi]);
+        await cl.query('delete from dettaglio where compenso_id = $1', [c.id]); // il dettaglio si rifà dal calcolo nuovo
+        for (const x of det) await cl.query(`insert into dettaglio (compenso_id, n, entry_id, data, paziente, prestazione, elemento, prezzo, lab, tipo, valore, fonte, compenso) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+          [c.id, x.n, x.id, x.data, x.paziente, x.prestazione, x.elemento, x.prezzo, x.lab, x.tipo, x.valore, x.fonte, x.compenso]);
+        await cl.query('commit');
+        log(p ? 'ricalcolato da AlfaDocs' : 'calcolato da AlfaDocs', c.id, chi, p ? { importo: num(p.importo) } : null, { importo: tot, dal, al, prestazioni: det.length });
+        esito.fatti++;
+      } catch (e) { await cl.query('rollback').catch(() => {}); throw e; } finally { cl.release(); }
+    }
+  }
+  return esito;
+}
+app.get('/api/calcola', needAdmin, (req, res) => res.set('Cache-Control', 'no-store').json({ ...calcolo, alfadocs: AD.configurato() }));
+app.post('/api/calcola', needAdmin, wrap(async (req, res) => {
+  const b = req.body || {}, anno = parseInt(b.anno, 10), mese = parseInt(b.mese, 10), dal = str(b.dal, 10), al = str(b.al, 10), medico = str(b.medico, 60);
+  if (!(anno > 2000 && mese >= 1 && mese <= 12)) return bad(res, 400, 'Mese non valido.');
+  const mm = `${anno}-${String(mese).padStart(2, '0')}`;
+  if (!isDate(dal) || !isDate(al) || dal > al || dal.slice(0, 7) !== mm || al.slice(0, 7) !== mm) return bad(res, 400, 'Scegli dal e al dentro il mese.');
+  if (!AD.configurato()) return bad(res, 400, 'AlfaDocs non è collegato: aggiungi le chiavi in Collegamenti.');
+  if (calcolo.inCorso) return bad(res, 409, 'C\'è già un calcolo in corso.');
+  Object.assign(calcolo, { inCorso: true, sede: '', fase: '', errore: '', esito: null, iniziato: new Date().toISOString(), mese: mm });
+  calcolaCompensi({ anno, mese, dal, al, medico }, req.me.nome)
+    .then(e => { calcolo.esito = e; console.log(`Compensi: calcolo ${mm} (${dal} → ${al}) fatto: ${e.fatti} compensi`); })
+    .catch(e => { calcolo.errore = 'Calcolo non riuscito: riprova.'; console.error('Compensi calcolo:', e.message); })
+    .finally(() => { calcolo.inCorso = false; calcolo.sede = ''; calcolo.fase = ''; });
+  res.json({ ok: true });
+}));
+// medici di AlfaDocs da collegare
+app.get('/api/operatori', needAdmin, wrap(async (req, res) => {
+  const [{ rows }, S, md] = await Promise.all([q('select * from operatori order by sede, nome'), sedi(), medici()]);
+  res.json({ operatori: rows.map(o => ({ sede: o.sede, sedeNome: (S.find(s => s.id === o.sede) || {}).nome || '', operatore: o.operatore, nome: o.nome, medico: o.medico_id || '' })),
+    medici: md.filter(m => m.attivo).map(m => ({ id: m.id, nome: m.nome })).sort((a, b) => a.nome.localeCompare(b.nome, 'it')) });
+}));
+app.put('/api/operatore', needAdmin, wrap(async (req, res) => {
+  const sede = str(req.body?.sede, 60), op = str(req.body?.operatore, 60), mid = str(req.body?.medico, 60) || null;
+  if (mid && mid !== '-' && !(await medici()).some(m => m.id === mid)) return bad(res, 400, 'Medico non trovato.');   // «-» = non è un medico
+  const { rowCount } = await q('update operatori set medico_id = $3 where sede = $1 and operatore = $2', [sede, op, mid]);
+  if (!rowCount) return bad(res, 404, 'Medico di AlfaDocs non trovato.');
+  res.json({ ok: true });
+}));
+
+/* ---------- dettaglio delle prestazioni (amministrazione, oppure il medico per i suoi compensi già mandati) ---------- */
+async function compensoVisibile(req, id) {
+  const { rows: [c] } = await q('select * from compensi where id = $1', [str(id, 60)]);
+  if (!c) return null;
+  if (req.me?.admin) return c;
+  if (req.me?.medico && c.medico_id === req.me.id && c.stato !== 'bozza') return c;
+  return null;
+}
+app.get('/api/dettaglio/:id', needAny, wrap(async (req, res) => {
+  const c = await compensoVisibile(req, req.params.id); if (!c) return bad(res, 404, 'Compenso non trovato.');
+  const { rows } = await q('select * from dettaglio where compenso_id = $1 order by n', [c.id]);
+  const admin = !!req.me.admin;
+  res.set('Cache-Control', 'no-store').json({ compenso: forma(c), righe: rows.map(d => ({ n: d.n, data: d.data, paziente: d.paziente, prestazione: d.prestazione, elemento: d.elemento,
+    compenso: num(d.compenso), ...(admin ? { prezzo: num(d.prezzo), lab: num(d.lab), tipo: d.tipo, valore: num(d.valore), fonte: d.fonte } : {}) })) });
+}));
+// costo di laboratorio (a mano) su una prestazione: si ricalcola il compenso della riga e il totale
+app.put('/api/dettaglio/:id/:n', needAdmin, wrap(async (req, res) => {
+  const { rows: [c] } = await q('select * from compensi where id = $1', [str(req.params.id, 60)]);
+  if (!c) return bad(res, 404, 'Compenso non trovato.');
+  if (!['bozza', 'rifiutato'].includes(c.stato)) return bad(res, 409, 'Il compenso è già dal medico: non si cambia più.');
+  const lab = euro(req.body?.lab); if (lab == null) return bad(res, 400, 'Importo non valido.');
+  const { rows: [d] } = await q('select * from dettaglio where compenso_id = $1 and n = $2', [c.id, parseInt(req.params.n, 10) || 0]);
+  if (!d) return bad(res, 404, 'Prestazione non trovata.');
+  const comp = compensoDi(d.tipo, num(d.valore), num(d.prezzo), lab);
+  await q('update dettaglio set lab = $3, compenso = $4 where compenso_id = $1 and n = $2', [c.id, d.n, lab, comp]);
+  const { rows: [t] } = await q(`update compensi set importo = (select coalesce(sum(compenso), 0) from dettaglio where compenso_id = $1), origine = 'alfadocs', stato = 'bozza', aggiornato_da = $2, aggiornato_il = now() where id = $1 returning *`, [c.id, req.me.id]);
+  log('costo laboratorio', c.id, req.me.nome, { lab: num(d.lab) }, { lab, riga: d.n });
+  res.json({ ok: true, compenso: comp, totale: num(t.importo) });
+}));
+
+/* ---------- tariffari ---------- */
+app.get('/api/tariffe', needAdmin, wrap(async (req, res) => {
+  const [{ rows }, md, { rows: viste }] = await Promise.all([q('select medico_id, chiave, nome, tipo, valore from tariffe order by nome'), medici(),
+    q(`select prestazione, count(*)::int n from dettaglio where prestazione <> '' group by prestazione order by n desc limit 500`)]);
+  const base = rows.filter(r => !r.medico_id && r.chiave !== '*'), chiavi = new Set(base.map(r => r.chiave)), senza = [];
+  for (const v of viste) { const k = chiaveP(v.prestazione); if (!chiavi.has(k)) { chiavi.add(k); senza.push(v.prestazione); } }
+  const fr = r => ({ nome: r.nome, chiave: r.chiave, tipo: r.tipo, valore: num(r.valore) });
+  res.set('Cache-Control', 'no-store').json({ base: base.map(fr), senza: senza.sort((a, b) => a.localeCompare(b, 'it')),
+    perc: Object.fromEntries(rows.filter(r => r.chiave === '*').map(r => [r.medico_id, num(r.valore)])),
+    medici: md.filter(m => m.attivo).map(m => ({ id: m.id, nome: m.nome, righe: rows.filter(r => r.medico_id === m.id && r.chiave !== '*').map(fr) })).sort((a, b) => a.nome.localeCompare(b.nome, 'it')) });
+}));
+// valore: «350» (euro) oppure «30%» (percentuale del prezzo scontato meno il laboratorio); vuoto = togli la riga
+const leggiValore = v => { const t = String(v ?? '').trim(); if (!t) return { vuoto: true };
+  const perc = /%\s*$/.test(t), n = euro(t.replace(/%\s*$/, '')); if (n == null || (perc && n > 100)) return null; return { tipo: perc ? 'perc' : 'euro', valore: n }; };
+app.put('/api/tariffa', needAdmin, wrap(async (req, res) => {
+  const mid = str(req.body?.medico, 60), nome = str(req.body?.nome, 200), k = chiaveP(nome);
+  if (mid && !(await medici()).some(m => m.id === mid)) return bad(res, 400, 'Medico non trovato.');
+  if (!k) return bad(res, 400, 'Scrivi il nome della prestazione.');
+  const v = leggiValore(req.body?.valore); if (!v) return bad(res, 400, 'Scrivi un importo (es. 350) o una percentuale (es. 30%).');
+  if (v.vuoto) await q('delete from tariffe where medico_id = $1 and chiave = $2', [mid, k]);
+  else await q(`insert into tariffe (medico_id, chiave, nome, tipo, valore, aggiornato_da) values ($1,$2,$3,$4,$5,$6)
+    on conflict (medico_id, chiave) do update set nome = excluded.nome, tipo = excluded.tipo, valore = excluded.valore, aggiornato_il = now(), aggiornato_da = excluded.aggiornato_da`, [mid, k, nome, v.tipo, v.valore, req.me.id]);
+  log('tariffa', `${mid || 'base'}:${k}`, req.me.nome, null, v.vuoto ? { tolta: nome } : { nome, ...v });
+  res.json({ ok: true });
+}));
+app.put('/api/percentuale', needAdmin, wrap(async (req, res) => {
+  const mid = str(req.body?.medico, 60), t = String(req.body?.valore ?? '').trim();
+  if (mid && !(await medici()).some(m => m.id === mid)) return bad(res, 400, 'Medico non trovato.');
+  if (!t) await q(`delete from tariffe where medico_id = $1 and chiave = '*'`, [mid]);
+  else { const n = euro(t.replace('%', '')); if (n == null || n > 100) return bad(res, 400, 'Percentuale non valida.');
+    await q(`insert into tariffe (medico_id, chiave, nome, tipo, valore, aggiornato_da) values ($1,'*','Fuori tariffario','perc',$2,$3)
+      on conflict (medico_id, chiave) do update set valore = excluded.valore, aggiornato_il = now(), aggiornato_da = excluded.aggiornato_da`, [mid, n, req.me.id]); }
+  log('percentuale', mid || 'base', req.me.nome, null, { valore: t });
+  res.json({ ok: true });
+}));
+
 /* ---------- medico: i suoi compensi ---------- */
 app.get('/api/miei', needMedico, wrap(async (req, res) => {
-  const { rows } = await q(`select * from compensi where medico_id = $1 order by anno desc, mese desc, sede_nome`, [req.me.id]);
+  const { rows } = await q(`select * from compensi where medico_id = $1 and stato <> 'bozza' order by anno desc, mese desc, sede_nome`, [req.me.id]);
   res.json({ compensi: rows.map(forma) });
 }));
 app.post('/api/decidi', needMedico, wrap(async (req, res) => {

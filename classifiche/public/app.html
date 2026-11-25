@@ -296,6 +296,8 @@ async function vMed() {
     <div class="cl">${d.righe.length ? d.righe.map(x => `<div class="pos ${x.io ? 'io' : ''}">${posto(x.pos, x.inGara)}<span class="${x.inGara ? '' : 'fuori'}">${esc(x.nome)}${x.io ? ' (tu)' : ''}
       <small>${x.visite != null ? `${x.acc} ${x.acc === 1 ? "accettato" : "accettati"} su ${x.visite} visite ${stelle(x.s)}` : ''}${x.inGara ? '' : `${x.visite != null ? ' · ' : ''}in gara da ${R().minVisite} visite`}</small></span><b class="r">${x.conc != null ? pc(x.conc) : ''}</b></div>`).join('') : '<p class="muted">Ancora nessuna visita nel mese.</p>'}</div>
     <p class="muted" style="font-size:13px;margin:8px 0 0">L'ultimo giorno del mese oro, argento e bronzo ai primi tre (almeno ${R().minVisite} visite).</p>${notaVista(d)}</div>
+    <div class="card pad"><h3 style="margin:0 0 10px">Classifica ${d.anno} · dall'1 gennaio a oggi</h3>
+    <div class="cl">${(d.righeAnno || []).length ? d.righeAnno.map(x => `<div class="pos ${x.io ? 'io' : ''}">${posto(x.pos, x.inGara)}<span class="${x.inGara ? '' : 'fuori'}">${esc(x.nome)}${x.io ? ' (tu)' : ''}</span><b class="r">${x.conc != null ? pc(x.conc) : ''}</b></div>`).join('') : '<p class="muted">Ancora nessuna visita quest\'anno.</p>'}</div></div>
     <div class="card pad"><h3 style="margin:0 0 10px">Medagliere ${d.anno} · a fine anno vince chi ha più medaglie</h3><div class="cl">${medagliere(d.medagliere)}</div>
     <p class="muted" style="font-size:13px;margin:8px 0 0">A parità di medaglie vince chi ha più ori. Tocca un nome per vedere i mesi vinti.</p></div></div>`;
   legaClic(d, 'medici');

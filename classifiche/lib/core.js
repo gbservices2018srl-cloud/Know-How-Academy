@@ -107,9 +107,10 @@ async function commerciali(anno, mesi) {
   return [...per.values()].map(x => conPunteggio({ ...x, fatt: Math.round(x.fatt * 100) / 100 })).sort(ordineComm);
 }
 // medici: ogni preventivo col medico è una visita; % = accettati / visite. In gara per l'oro solo con almeno 10 visite.
+// mese: un mese oppure un elenco di mesi (classifica dell'anno: da gennaio a oggi)
 async function medici(anno, mese) {
   const U = await utenti();
-  const { rows } = await q(`select medici_ids, medico, esito from ${S.crm}.preventivi where anno = $1 and mese = $2`, [anno, mese]);
+  const { rows } = await q(`select medici_ids, medico, esito from ${S.crm}.preventivi where anno = $1 and mese = any($2::int[])`, [anno, Array.isArray(mese) ? mese : [mese]]);
   // preventivi importati dal vecchio foglio: solo il cognome del medico nel testo → si collega se c'è un solo medico con quel cognome
   const perCognome = new Map();
   for (const u of U.values()) if (u.figura === 'Medico') { const c = String(u.cognome || '').toUpperCase().trim(); if (c) perCognome.set(c, perCognome.has(c) ? null : u.id); }

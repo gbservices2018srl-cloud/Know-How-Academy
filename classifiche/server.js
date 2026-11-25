@@ -62,7 +62,11 @@ app.get('/api/classifica', needUser, wrap(async (req, res) => {
     const righe = L.map((x, i) => adm || mia(x) ? { ...x, id: undefined, pos: i + 1, s: C.stelleConc(x.conc), io: mia(x) } : { nome: x.nome, pos: i + 1, inGara: x.inGara });
     const M = (await C.medagliere('medici', anno)).map(r => { const io = r.user_id === req.me.id;
       return { nome: r.nome, oro: r.oro, argento: r.argento, bronzo: r.bronzo, totale: r.totale, io, mesi: (r.lista || []).map(x => ({ periodo: x.periodo, tipo: x.tipo, valore: adm || io ? x.valore : '' })) }; });
-    return res.json({ cat, anno, mese, righe, medagliere: M, completo: adm });
+    // classifica dell'anno (da gennaio a oggi): tutti vedono posizione e nome; la % solo la propria e quelle di chi sta subito prima e subito dopo
+    const finoA = anno < +o.slice(0, 4) ? 12 : +o.slice(5, 7), LA = await C.medici(anno, Array.from({ length: finoA }, (_, i) => i + 1));
+    const iMio = LA.findIndex(mia);
+    const righeAnno = LA.map((x, i) => ({ nome: x.nome, pos: i + 1, inGara: x.inGara, io: mia(x), ...(adm || (iMio >= 0 && Math.abs(i - iMio) <= 1) ? { conc: x.conc } : {}) }));
+    return res.json({ cat, anno, mese, righe, righeAnno, medagliere: M, completo: adm });
   }
   if (cat === 'rec') {
     const { lista, senzaFinanza } = await C.rec(anno, mese), L = lista.filter(x => x.perc != null);
