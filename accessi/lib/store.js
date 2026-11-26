@@ -129,6 +129,13 @@ async function migrate() {
     for (const x of APPS.filter(x => x.autoFigura && x.key !== 'clinica'))
       await q(`insert into app_auto (user_id, app) select id, $1 from users where status <> 'pending' and figura = any($2) on conflict do nothing`, [x.key, [].concat(x.autoFigura)]);
   }
+  // Compenso medici a tutti i medici e gli igienisti attivi (solo i loro compensi). Una volta sola: dopo vale la regola automatica.
+  if (!process.env.TENANT_SLUG && (await q(`insert into migrazioni (k) values ('compensi-medici-igienisti') on conflict do nothing`)).rowCount) {   // solo To Smile
+    const { rowCount } = await q(`insert into user_apps (user_id, app, role, livello) select id, 'compensi', 'user', 'medico' from users
+      where status = 'active' and not owner and figura in ('Medico', 'Igienista') on conflict (user_id, app) do nothing`);
+    await q(`insert into app_auto (user_id, app) select id, 'compensi' from users where status <> 'pending' and figura in ('Medico', 'Igienista') on conflict do nothing`);
+    console.log(`Compenso medici acceso a ${rowCount} medici e igienisti`);
+  }
   // Sedi del gruppo: si gestiscono qui e vengono copiate in Turni, Calendario, Ticket e Nuovalab
   await q(`create table if not exists sedi (
       id text primary key,

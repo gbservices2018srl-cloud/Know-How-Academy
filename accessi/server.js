@@ -119,7 +119,9 @@ setInterval(() => { const now = Date.now(); for (const [k, a] of hits) if (!a.so
 
 // un'app "dentro" un'altra (Calendario dentro Comunicazioni ed eventi) non ha un suo riquadro se la persona ha anche l'altra
 // spente: app spente dal pannello (la persona vede il riquadro grigio, l'amministratore dell'app la usa normalmente)
-const appsForUser = (apps, spente = new Set()) => APPS.filter(a => apps[a.key] && !(a.dentro && apps[a.dentro])).map(a => ({ key: a.key, name: a.name, url: a.url, link: a.sso ? `/sso/${a.key}` : a.url,
+// una «micro app» (I miei compensi) non ha un suo riquadro per chi non la amministra: sta dentro Comunicazioni ed eventi
+const inMicro = (a, apps) => apps[a.key] !== 'admin' && APPS.some(v => v.micro?.some(m => m.key === a.key) && v.gruppo.some(k => apps[k]));
+const appsForUser = (apps, spente = new Set()) => APPS.filter(a => apps[a.key] && !(a.dentro && apps[a.dentro]) && !inMicro(a, apps)).map(a => ({ key: a.key, name: a.name, url: a.url, link: a.sso ? `/sso/${a.key}` : a.url,
   color: a.color, desc: a.desc, role: apps[a.key],
   // un riquadro "contenitore" (Gestione ASO) è spento quando sono spente tutte le app che la persona ha lì dentro
   ...((a.virtuale ? (a.gruppo || []).filter(k => apps[k]).every(k => spente.has(k)) : spente.has(a.key)) ? { spenta: true } : {}) }));
@@ -1318,7 +1320,9 @@ app.get('/api/contenitore/:key', needUser, wrap(async (req, res) => {
   if (!v) return bad(res, 404, 'Non trovato');
   const spente = await store.appSpente();
   res.json({ key: v.key, name: v.name, desc: v.desc, apps: v.gruppo.map(k => APPS.find(a => a.key === k)).filter(a => a && req.apps[a.key])
-    .map(a => ({ key: a.key, name: a.name, desc: a.desc, url: a.url, color: a.color, role: req.apps[a.key], spenta: spente.has(a.key) })) });
+    .map(a => ({ key: a.key, name: a.name, desc: a.desc, url: a.url, color: a.color, role: req.apps[a.key], spenta: spente.has(a.key) })),
+    micro: (v.micro || []).filter(m => req.apps[m.key] && req.apps[m.key] !== 'admin').map(m => { const a = APPS.find(x => x.key === m.key);
+      return { key: m.key, name: m.name, desc: m.desc, url: a.url, color: a.color, role: req.apps[m.key], spenta: spente.has(m.key) }; }) });
 }));
 for (const p of ['/accedi', '/registrati', '/password-dimenticata', '/reimposta']) {
   app.get(p, (req, res) => (req.user && p !== '/reimposta')

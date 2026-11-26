@@ -39,7 +39,7 @@ module.exports = require('../lib/suite').filtraApps([
   // Compenso medici: l'amministrazione scrive i compensi del mese (medici × sedi); il medico li approva o li rifiuta;
   // pagati, vanno da soli nel Consuntivo della Gestione finanziaria. I medici la trovano da soli (solo i loro compensi).
   { key: 'compensi', name: 'Compenso medici', url: 'https://appgestione.it/compensi/', color: 'purple', dentro: 'controllo',
-    autoFigura: 'Medico', autoLivello: 'medico',
+    autoFigura: ['Medico', 'Igienista'], autoLivello: 'medico',   // medici e igienisti la trovano già (solo i loro compensi), dentro Comunicazioni ed eventi
     livelli: [
       { key: 'admin', label: 'Amministrazione (scrive, segna da pagare e pagato)', role: 'admin' },
       { key: 'medico', label: 'Medico (vede e approva i suoi compensi)' },
@@ -82,6 +82,8 @@ module.exports = require('../lib/suite').filtraApps([
   // È "virtuale": compare a chi ha almeno una delle tre.
   { key: 'area_comunicazioni', name: 'Comunicazioni ed eventi', url: 'https://appgestione.it/c/area_comunicazioni', color: 'purple', virtuale: true,
     gruppo: ['comunicazioni', 'clinica', 'calendario'],
+    // «Micro app»: per chi non le amministra stanno qui dentro, senza un riquadro proprio (I miei compensi per medici e igienisti)
+    micro: [{ key: 'compensi', name: 'I miei compensi', desc: 'I tuoi compensi del mese: li controlli e li accetti.' }],
     desc: 'Comunicazioni aziendali, calendario eventi e, per i medici, le comunicazioni cliniche con le ASO.' },
   { key: 'calendario', name: 'Calendario eventi', url: 'https://calendario.appgestione.it', color: 'yellow',
     dentro: 'area_comunicazioni', // si apre dal riquadro Comunicazioni (e dal pulsante "Eventi" di Comunicazioni aziendali)

@@ -15,6 +15,7 @@
 header{display:flex;flex-direction:column;gap:14px}
 header p{margin:0;color:var(--muted);font-size:17px;max-width:62ch}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
+.micro-t{font-size:15px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted,#6b7276);margin:30px 0 12px}
 .app{--c:var(--teal);--ink:var(--teal-ink);position:relative;display:flex;flex-direction:column;gap:14px;text-decoration:none;color:inherit;overflow:hidden;
   background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:28px 26px 22px;min-height:230px;transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease}
 .app::before{content:"";position:absolute;left:0;top:0;right:0;height:6px;background:var(--c)}
@@ -62,6 +63,7 @@ const ICONS = {
   calendario: '<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M8 14.5h3M8 17.5h6"/>',
   clinica: '<path d="M4 5h16v11H9l-5 4z"/><path d="M12 8v5M9.5 10.5h5"/>',
   finanza: '<path d="M4 19V5M4 19h16"/><path d="M8 15l3.5-4 3 2.5L20 7"/>',
+  compensi: '<rect x="3" y="6" width="18" height="13" rx="2"/><circle cx="12" cy="12.5" r="2.6"/><path d="M6.5 9.5h1M16.5 15.5h1"/>',
   bilancio: '<path d="M12 3v18M5 7h14"/><path d="M5 7l-3 7a3.5 3.5 0 0 0 6 0zM19 7l-3 7a3.5 3.5 0 0 0 6 0z"/><path d="M8 21h8"/>',
 };
 (async () => {
@@ -74,11 +76,13 @@ const ICONS = {
   $('#tit').innerHTML = `${esc(a)} <span>${esc(b.join(' '))}</span>`;
   $('#desc').textContent = 'Scegli l\'app: entri direttamente, senza un\'altra password.';
   const off = x => x.spenta && x.role !== 'admin';
-  $('#grid').innerHTML = d.apps.map(x => off(x) ? `<div class="app off ${esc(x.color)}" aria-disabled="true"><span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[x.key] || ''}</svg></span>
+  const tile = x => off(x) ? `<div class="app off ${esc(x.color)}" aria-disabled="true"><span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[x.key] || ''}</svg></span>
       <h2>${esc(x.name.replace(/^Controllo di gestione · /, ''))}</h2><p>${esc(x.desc)}</p><div class="go"><span class="role">Temporaneamente non disponibile</span><span></span></div></div>`
     : `<a class="app ${esc(x.color)}" href="${esc(x.url)}"><span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[x.key] || ''}</svg></span>
       <h2>${esc(x.name.replace(/^Controllo di gestione · /, ''))}</h2><p>${esc(x.desc)}</p>
-      <div class="go"><span>${x.role === 'admin' ? '<span class="role">Amministratore</span>' : ''}</span><span>Apri →</span></div></a>`).join('');
+      <div class="go"><span>${x.role === 'admin' ? '<span class="role">Amministratore</span>' : ''}</span><span>Apri →</span></div></a>`;
+  $('#grid').innerHTML = d.apps.map(tile).join('');
+  if ((d.micro || []).length) $('#grid').insertAdjacentHTML('afterend', `<h2 class="micro-t">Micro app</h2><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))">${d.micro.map(tile).join('')}</div>`);
 })();
 </script>
 </body>
