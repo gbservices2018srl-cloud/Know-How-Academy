@@ -221,6 +221,9 @@ input.tv{width:96px;text-align:right;border:1.5px solid var(--line);background:v
 .nota{background:var(--danger-soft);color:var(--danger);border-radius:10px;padding:10px 12px;font-weight:600;margin-bottom:10px}
 .t tr.gia td{background:var(--danger-soft);color:var(--danger)}
 .giat{font-size:11.5px;font-weight:800;white-space:normal;max-width:150px;margin-left:auto}
+.t input.cmp{width:96px;font-weight:700}
+.t input.cmp.man{border-color:var(--warn);background:var(--warn-soft)}
+.arch{font-size:12.5px;font-weight:700;color:var(--muted)}
 .pg{display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--ok);font-weight:700}
 </style>
 <body>
@@ -262,11 +265,11 @@ async function boot() {
   tabs(); vai();
 }
 function tabs() {
-  const T = [S.st.admin && ['tabella', 'Compensi'], S.st.admin && ['tariffe', 'Tariffari'], S.st.medico && ['miei', 'I miei compensi']].filter(Boolean);
+  const T = [S.st.admin && ['tabella', 'Compensi'], S.st.admin && ['tariffe', 'Tariffari'], S.st.admin && ['archivio', 'Archivio'], S.st.medico && ['miei', 'I miei compensi']].filter(Boolean);
   $('#tabs').innerHTML = T.length > 1 ? T.map(([k, t]) => `<button class="tab ${S.v === k ? 'on' : ''}" data-v="${k}">${t}</button>`).join('') : '';
   $('#tabs').querySelectorAll('[data-v]').forEach(b => b.onclick = () => { S.v = b.dataset.v; tabs(); vai(); });
 }
-const vai = () => S.v === 'tabella' ? vTabella() : S.v === 'tariffe' ? vTariffe() : vMiei();
+const vai = () => S.v === 'tabella' ? vTabella() : S.v === 'tariffe' ? vTariffe() : S.v === 'archivio' ? vArchivio() : vMiei();
 function dialogo(html, wide) { const d = $('#dlg'); d.className = 'dlg' + (wide ? ' wide' : ''); d.innerHTML = html; d.showModal(); return d; }
 
 /* ---------- amministrazione ---------- */
@@ -276,18 +279,19 @@ async function vTabella() {
   if (!S.dal || S.dal.slice(0, 7) !== S.mese) { S.dal = S.mese + '-01'; const f = fineMese(S.mese); S.al = f < S.st.oggi ? f : S.st.oggi; if (S.al < S.dal) S.al = S.dal; }
   let d, cs, ops; try { [d, cs, ops] = await Promise.all([api('GET', `api/mese?anno=${a}&mese=${m}`), api('GET', 'api/calcola'), api('GET', 'api/operatori')]); S.d = d; } catch (x) { return toast(x.message); }
   const C = new Map(d.compensi.map(c => [c.medico + '|' + c.sede, c]));
-  const totM = {}; d.compensi.forEach(c => { totM[c.medico] = (totM[c.medico] || 0) + c.importo; });
-  const totale = d.compensi.reduce((s, c) => s + c.importo, 0);
+  const aperti = d.compensi.filter(c => c.stato !== 'pagato');   // i pagati sono in Archivio
+  const totM = {}; aperti.forEach(c => { totM[c.medico] = (totM[c.medico] || 0) + c.importo; });
+  const totale = aperti.reduce((s, c) => s + c.importo, 0);
   const cella = (md, s) => {
     const c = C.get(md.id + '|' + s.id);
     if (!c) return md.sedi.includes(s.id) ? `<td><button class="add" data-add="${esc(md.id + '|' + s.id)}" aria-label="Aggiungi a mano: ${esc(md.nome)}, ${esc(s.nome)}" title="Aggiungi a mano">+</button></td>` : '<td class="no"></td>';
+    if (c.stato === 'pagato') return `<td><span class="arch" title="Pagato: è in Archivio">✓ pagato</span></td>`;
     const tit = c.stato === 'bozza' ? 'Clic: manda al medico' : c.stato === 'rifiutato' ? 'Rifiutato: clic per leggere la nota' : STATI[c.stato][0];
     return `<td><span class="cel"><button class="amt ${c.stato}" data-c="${esc(c.id)}" title="${tit}">${fN(c.importo)}${c.stato === 'rifiutato' ? ' 📝' : ''}</button><button class="ib" data-i="${esc(c.id)}" aria-label="Dettaglio">i</button></span></td>`;
   };
   const pagabili = mid => d.compensi.filter(c => c.medico === mid && (c.stato === 'approvato' || c.stato === 'da_pagare'));
-  const colPag = md => { const P = pagabili(md.id), pg = d.compensi.filter(c => c.medico === md.id && c.stato === 'pagato');
-    return P.length ? `<td><button class="btn sm" data-pag="${esc(P.map(c => c.id).join(','))}" data-nome="${esc(md.nome)}">Pagato</button></td>`
-      : pg.length ? `<td><span class="pg" title="${pg.some(c => !c.finOk) ? 'Non arrivato in Analisi finanziaria' : 'In Analisi finanziaria'}">${pg.some(c => !c.finOk) ? '⚠' : '✓'} ${fD(pg[0].pagatoIl).slice(0, 5)}</span></td>` : '<td></td>'; };
+  const colPag = md => { const P = pagabili(md.id);
+    return P.length ? `<td><button class="btn sm" data-pag="${esc(P.map(c => c.id).join(','))}" data-nome="${esc(md.nome)}">Pagato</button></td>` : '<td></td>'; };
   const daMandare = d.compensi.filter(c => c.stato === 'bozza' && c.importo > 0);
   const errFin = d.compensi.filter(c => c.stato === 'pagato' && !c.finOk);
   const daColl = ops.operatori.filter(o => !o.medico);
@@ -305,7 +309,7 @@ async function vTabella() {
       ${!cs.inCorso && cs.esito && cs.mese === S.mese ? `<p class="muted" style="margin:10px 0 0;font-size:13.5px">Calcolati ${cs.esito.fatti}.${cs.esito.saltati.length ? ` Non toccati perché già dal medico: ${esc(cs.esito.saltati.join(', '))}.` : ''}${cs.esito.errori.length ? ` Errori: ${esc(cs.esito.errori.join(' · '))}.` : ''}${cs.esito.senzaSede.length ? ` Sede non trovata: ${esc(cs.esito.senzaSede.join(', '))}.` : ''}</p>` : ''}
       ${!cs.alfadocs ? '<p class="muted" style="margin:10px 0 0">AlfaDocs non è collegato (Collegamenti).</p>' : ''}
     </div>
-    ${daColl.length ? `<div class="card pad blocco"><h3>Medici di AlfaDocs da collegare</h3>${daColl.map(o => `<div class="chk"><span class="gr"><b>${esc(o.nome || 'Senza nome')}</b><div class="s">${esc(o.sedeNome)}</div></span><select class="es" data-op="${esc(o.sede + '|' + o.operatore)}"><option value="">— scegli —</option><option value="-">Non è un medico</option>${ops.medici.map(x => `<option value="${esc(x.id)}">${esc(x.nome)}</option>`).join('')}</select></div>`).join('')}</div>` : ''}
+    ${daColl.length ? `<details class="card pad blocco"><summary style="cursor:pointer;font-weight:700">Medici di AlfaDocs da collegare (${daColl.length})</summary>${daColl.map(o => `<div class="chk"><span class="gr"><b>${esc(o.nome || 'Senza nome')}</b><div class="s">${esc(o.sedeNome)}</div></span><select class="es" data-op="${esc(o.sede + '|' + o.operatore)}"><option value="">— scegli —</option><option value="-">Non è un medico</option>${ops.medici.map(x => `<option value="${esc(x.id)}">${esc(x.nome)}</option>`).join('')}</select></div>`).join('')}</details>` : ''}
     ${!d.medici.length ? '<div class="card empty blocco"><b>Nessun medico registrato</b></div>' : `
     <div class="card tw blocco"><table class="cm"><thead><tr><th>Medico</th>${d.sedi.map(s => `<th class="n">${esc(s.nome.toUpperCase())}</th>`).join('')}<th class="n">TOTALE</th><th>PAGATO</th></tr></thead>
       <tbody>${d.medici.map(x => `<tr><td class="nome" title="${esc(x.nome)}">${esc(x.nome)}</td>${d.sedi.map(s => cella(x, s)).join('')}<td class="tot">${totM[x.id] ? fE(totM[x.id]) : ''}</td>${colPag(x)}</tr>`).join('')}</tbody>
@@ -356,12 +360,14 @@ async function dettaglio(id) {
   const dl = dialogo(`<div class="dh"><h3 style="flex:1">${esc(admin ? c.medicoNome + ' · ' : '')}${esc(c.sedeNome)} · ${MESI[c.mese - 1]} ${c.anno}${per}</h3><b id="dtot">${fE(c.importo)}</b></div>
     <div class="db">${c.stato === 'rifiutato' ? `<div class="nota">📝 ${esc(c.motivo)}</div>` : ''}${aMan ? '<p class="muted" style="margin:0 0 8px;font-size:13.5px">Importo corretto a mano.</p>' : ''}
     ${r.righe.length ? `<div class="tw" style="max-height:60vh;overflow:auto"><table class="t"><thead><tr><th>Data</th><th>Paziente</th><th>Prestazione</th><th>Dente</th>${admin ? '<th class="n">Prezzo</th><th class="n">Lab.</th><th>Regola</th>' : ''}<th class="n">Compenso</th></tr></thead><tbody>
-      ${r.righe.map(x => `<tr class="${x.gia ? 'gia' : ''}"><td>${fD(x.data).slice(0, 5)}</td><td>${esc(x.paziente)}</td><td class="wrap">${esc(x.prestazione)}</td><td>${esc(x.elemento)}</td>${admin ? `<td class="n">${fN(x.prezzo)}</td><td class="n">${mod && x.tipo === 'perc' ? `<input class="lab" data-n="${x.n}" inputmode="decimal" value="${x.lab ? fN(x.lab) : ''}" aria-label="Costo laboratorio">` : x.lab ? fN(x.lab) : ''}</td><td>${REG(x)}</td>` : ''}<td class="n"><span id="cr${x.n}">${x.tolta ? 'tolta' : fN(x.compenso)}</span>${x.gia ? `<div class="giat">${esc(x.gia)}</div>` : ''}${mod && (x.gia || x.tolta) ? `<button class="link" data-togli="${x.n}" data-t="${x.tolta ? '0' : '1'}" style="min-height:0;padding:2px 0;font-size:12.5px">${x.tolta ? 'Rimetti nel totale' : 'Togli dal totale'}</button>` : ''}</td></tr>`).join('')}
+      ${r.righe.map(x => `<tr class="${x.gia ? 'gia' : ''}"><td>${fD(x.data).slice(0, 5)}</td><td>${esc(x.paziente)}</td><td class="wrap">${esc(x.prestazione)}</td><td>${esc(x.elemento)}</td>${admin ? `<td class="n">${fN(x.prezzo)}</td><td class="n">${mod && x.tipo === 'perc' ? `<input class="lab" data-n="${x.n}" inputmode="decimal" value="${x.lab ? fN(x.lab) : ''}" aria-label="Costo laboratorio">` : x.lab ? fN(x.lab) : ''}</td><td>${REG(x)}</td>` : ''}<td class="n">${mod && !x.tolta ? `<input class="lab cmp ${x.aMano ? 'man' : ''}" data-cn="${x.n}" inputmode="decimal" value="${fN(x.compenso)}" aria-label="Compenso della prestazione" title="${x.aMano ? 'Scritto a mano: svuota per tornare al listino' : 'Puoi cambiarlo'}">` : `<span id="cr${x.n}">${x.tolta ? 'tolta' : fN(x.compenso)}</span>`}${x.gia ? `<div class="giat">${esc(x.gia)}</div>` : ''}${mod && (x.gia || x.tolta) ? `<button class="link" data-togli="${x.n}" data-t="${x.tolta ? '0' : '1'}" style="min-height:0;padding:2px 0;font-size:12.5px">${x.tolta ? 'Rimetti nel totale' : 'Togli dal totale'}</button>` : ''}</td></tr>`).join('')}
     </tbody></table></div>` : '<p class="muted" style="margin:0">Inserito a mano.</p>'}</div>
-    <div class="df">${admin && mod ? `<button class="btn" id="dman">Correggi importo</button><button class="btn primary" id="dsend">Manda al medico</button>` : ''}<button class="btn" id="dchiudi">Chiudi</button></div>`, true);
-  $('#dchiudi').onclick = () => { dl.close(); if (admin) vTabella(); };
-  dl.querySelectorAll('input.lab').forEach(inp => inp.onchange = async () => { const v = parseE(inp.value); if (isNaN(v)) return toast('Importo non valido');
-    try { const k = await api('PUT', `api/dettaglio/${encodeURIComponent(c.id)}/${inp.dataset.n}`, { lab: v }); $('#cr' + inp.dataset.n).textContent = fN(k.compenso); $('#dtot').textContent = fE(k.totale); c.importo = k.totale; } catch (x) { toast(x.message); } });
+    <div class="df">${admin && mod ? `${r.righe.length ? '' : '<button class="btn" id="dman">Correggi importo</button>'}<button class="btn primary" id="dsend">Manda al medico</button>` : ''}<button class="btn" id="dchiudi">Chiudi</button></div>`, true);
+  $('#dchiudi').onclick = () => { dl.close(); if (S.v === 'tabella') vTabella(); };
+  dl.querySelectorAll('input.lab[data-n]').forEach(inp => inp.onchange = async () => { const v = parseE(inp.value); if (isNaN(v)) return toast('Importo non valido');
+    try { const k = await api('PUT', `api/dettaglio/${encodeURIComponent(c.id)}/${inp.dataset.n}`, { lab: v }); const cx = dl.querySelector(`[data-cn="${inp.dataset.n}"]`); if (cx) cx.value = fN(k.compenso); $('#dtot').textContent = fE(k.totale); c.importo = k.totale; } catch (x) { toast(x.message); } });
+  dl.querySelectorAll('input[data-cn]').forEach(inp => inp.onchange = async () => { const t = inp.value.trim(), v = t === '' ? '' : parseE(t); if (v !== '' && isNaN(v)) return toast('Importo non valido');
+    try { const k = await api('PUT', `api/dettaglio/${encodeURIComponent(c.id)}/${inp.dataset.cn}`, { compenso: v }); inp.value = fN(k.compenso); inp.classList.toggle('man', v !== ''); $('#dtot').textContent = fE(k.totale); c.importo = k.totale; } catch (x) { toast(x.message); } });
   dl.querySelectorAll('[data-togli]').forEach(b => b.onclick = async () => {
     try { await api('PUT', `api/dettaglio/${encodeURIComponent(c.id)}/${b.dataset.togli}`, { tolta: b.dataset.t === '1' }); dl.close(); dettaglio(c.id); } catch (x) { toast(x.message); } });
   $('#dman') && ($('#dman').onclick = () => { dl.close(); aMano(c.medico, c.sede, c.importo); });
@@ -392,6 +398,19 @@ async function vTariffe() {
   $('#main').querySelectorAll('input[data-perc]').forEach(i => i.onchange = async () => { try { await api('PUT', 'api/percentuale', { medico: i.dataset.perc, valore: i.value.trim() }); toast('Salvato.'); vTariffe(); } catch (x) { toast(x.message); } });
   $('#tm') && ($('#tm').onchange = e => { S.tm = e.target.value; vTariffe(); });
   $('#nm') && ($('#nm').onchange = $('#nmv').onchange = () => { const n = $('#nm').value, v = $('#nmv').value.trim(); if (n && v) salva(S.tm, n, v); });
+}
+
+/* ---------- archivio (amministrazione): i compensi pagati, mese per mese ---------- */
+async function vArchivio() {
+  let d; try { d = await api('GET', 'api/archivio'); } catch (x) { return toast(x.message); }
+  const g = new Map(); d.compensi.forEach(c => { const k = c.anno + '-' + String(c.mese).padStart(2, '0'); (g.get(k) || g.set(k, []).get(k)).push(c); });
+  $('#main').innerHTML = g.size ? [...g].map(([k, L]) => { const [a, m] = k.split('-').map(Number), gia = L.filter(c => c.gia).length;
+    return `<div class="card blocco"><div class="sez-t" style="padding:14px 16px 0"><h3>${MESI[m - 1]} ${a}</h3><span>${gia ? `<span class="tag ko">⚠ ${gia} con prestazioni già pagate prima</span> ` : ''}<b>${fE(L.reduce((s, c) => s + c.importo, 0))}</b></span></div>
+      <div class="tw"><table class="t"><thead><tr><th>Medico</th><th>Sede</th><th>Pagato il</th><th class="n">Compenso</th><th></th></tr></thead><tbody>
+      ${L.map(c => `<tr class="${c.gia ? 'gia' : ''}"><td>${esc(c.medicoNome)}</td><td>${esc(c.sedeNome)}</td><td>${fD(c.pagatoIl)}${c.finOk ? '' : ' <span class="tag ko" title="' + esc(c.finErrore) + '">non in Analisi fin.</span>'}</td>
+        <td class="n">${fN(c.importo)}${c.gia ? `<div class="giat">${c.gia} già pagat${c.gia === 1 ? 'a' : 'e'} prima</div>` : ''}</td><td><button class="ib" data-i="${esc(c.id)}" aria-label="Dettaglio">i</button></td></tr>`).join('')}
+      </tbody></table></div></div>`; }).join('') : '<div class="card empty"><b>Ancora nessun compenso pagato</b></div>';
+  $('#main').querySelectorAll('[data-i]').forEach(b => b.onclick = () => dettaglio(b.dataset.i));
 }
 
 /* ---------- medico ---------- */

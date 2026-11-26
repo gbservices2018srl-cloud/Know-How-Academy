@@ -50,6 +50,7 @@ async function migrate() {
       tipo text not null default '', valore numeric(12,2) not null default 0, fonte text not null default '', compenso numeric(12,2) not null default 0, primary key (compenso_id, n));
     alter table dettaglio add column if not exists lab_mano boolean not null default false;
     alter table dettaglio add column if not exists tolta boolean not null default false;  -- tolta dal totale dall'amministrazione (es. già pagata)
+    alter table dettaglio add column if not exists compenso_mano numeric(12,2);  -- compenso della prestazione scritto a mano (vince sul listino)
     alter table dettaglio add column if not exists paziente_id text not null default '';
     -- condizioni dei medici (il tariffario base è il Listino & margini di Analisi finanziaria); medico_id '' + chiave '*' = % per le prestazioni fuori listino
     create table if not exists tariffe (medico_id text not null default '', chiave text not null, nome text not null, tipo text not null, valore numeric(12,2) not null,
@@ -235,9 +236,12 @@ const calcolo = { inCorso: false, sede: '', fase: '', errore: '', esito: null, i
 async function calcolaCompensi({ anno, mese, dal, al, medico }, chi) {
   const [S, md, T, L] = await Promise.all([sedi(), medici(), tariffe(), listino().catch(e => { const x = new Error('LISTINO: ' + e.message); x.listino = true; throw x; })]);
   const esito = { fatti: 0, saltati: [], senzaSede: [], errori: [], daCollegare: 0 };
+  const solo = medico ? md.find(x => x.id === medico) : null;   // un medico solo: si cerca solo nelle sue sedi (anagrafica), più veloce
+  if (medico && !solo) throw new Error('Medico non trovato.');
   for (const sedeAD of AD.chiavi()) {
-    calcolo.sede = sedeAD; calcolo.fase = '';
     const sede = S.find(x => normS(x.nome) === normS(sedeAD));
+    if (solo && (!sede || !solo.sedi.includes(sede.id))) continue;
+    calcolo.sede = sedeAD; calcolo.fase = '';
     if (!sede) { esito.senzaSede.push(sedeAD); continue; }
     let r;
     try { r = await AD.eseguite(AD.chiaveDi(sedeAD), dal, al, f => { calcolo.fase = f; }); }
@@ -262,11 +266,14 @@ async function calcolaCompensi({ anno, mese, dal, al, medico }, chi) {
       if (p && !['bozza', 'rifiutato'].includes(p.stato)) { esito.saltati.push(`${m.nome} · ${sede.nome}`); continue; }
       // il costo di laboratorio corretto a mano resta, se si ricalcola (gli altri vengono dal Listino)
       // e anche le prestazioni tolte dal totale restano tolte
-      const lab = new Map(), tolte = new Set();
-      if (p) (await q('select entry_id, lab, lab_mano, tolta from dettaglio where compenso_id = $1 and entry_id <> $2 and (lab_mano or tolta)', [p.id, ''])).rows.forEach(d => { if (d.lab_mano) lab.set(d.entry_id, num(d.lab)); if (d.tolta) tolte.add(d.entry_id); });
+      // e anche i compensi delle singole prestazioni scritti a mano
+      const lab = new Map(), tolte = new Set(), aMano = new Map();
+      if (p) (await q('select entry_id, lab, lab_mano, tolta, compenso_mano from dettaglio where compenso_id = $1 and entry_id <> $2 and (lab_mano or tolta or compenso_mano is not null)', [p.id, ''])).rows
+        .forEach(d => { if (d.lab_mano) lab.set(d.entry_id, num(d.lab)); if (d.tolta) tolte.add(d.entry_id); if (d.compenso_mano != null) aMano.set(d.entry_id, num(d.compenso_mano)); });
       righe.sort((a, b) => a.data.localeCompare(b.data) || a.paziente.localeCompare(b.paziente, 'it'));
       const det = righe.map((x, i) => { const g = regola(T, L, mid, x.prestazione), mano = lab.has(x.id), l = mano ? lab.get(x.id) : g.lab;
-        return { ...x, n: i + 1, lab: l, mano, tolta: tolte.has(x.id), tipo: g.tipo, valore: g.valore, fonte: g.fonte, compenso: tolte.has(x.id) ? 0 : compensoDi(g.tipo, g.valore, x.prezzo, l) }; });
+        const man = aMano.has(x.id) ? aMano.get(x.id) : null;
+        return { ...x, n: i + 1, lab: l, mano, tolta: tolte.has(x.id), man, tipo: g.tipo, valore: g.valore, fonte: g.fonte, compenso: tolte.has(x.id) ? 0 : man != null ? man : compensoDi(g.tipo, g.valore, x.prezzo, l) }; });
       const tot = Math.round(det.reduce((s, x) => s + x.compenso, 0) * 100) / 100;
       const cl = await pool.connect();
       try {
@@ -276,8 +283,8 @@ async function calcolaCompensi({ anno, mese, dal, al, medico }, chi) {
           : await cl.query(`insert into compensi (id, medico_id, medico_nome, sede_id, sede_nome, anno, mese, importo, origine, stato, dal, al, creato_da, aggiornato_da) values ($1,$2,$3,$4,$5,$6,$7,$8,'alfadocs','bozza',$9,$10,$11,$11) returning *`,
             [crypto.randomUUID(), mid, m.nome, sede.id, sede.nome, anno, mese, tot, dal, al, chi]);
         await cl.query('delete from dettaglio where compenso_id = $1', [c.id]); // il dettaglio si rifà dal calcolo nuovo
-        for (const x of det) await cl.query(`insert into dettaglio (compenso_id, n, entry_id, data, paziente, paziente_id, prestazione, elemento, prezzo, lab, lab_mano, tolta, tipo, valore, fonte, compenso) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
-          [c.id, x.n, x.id, x.data, x.paziente, x.pazienteId || '', x.prestazione, x.elemento, x.prezzo, x.lab, x.mano, x.tolta, x.tipo, x.valore, x.fonte, x.compenso]);
+        for (const x of det) await cl.query(`insert into dettaglio (compenso_id, n, entry_id, data, paziente, paziente_id, prestazione, elemento, prezzo, lab, lab_mano, tolta, compenso_mano, tipo, valore, fonte, compenso) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+          [c.id, x.n, x.id, x.data, x.paziente, x.pazienteId || '', x.prestazione, x.elemento, x.prezzo, x.lab, x.mano, x.tolta, x.man, x.tipo, x.valore, x.fonte, x.compenso]);
         await cl.query('commit');
         log(p ? 'ricalcolato da AlfaDocs' : 'calcolato da AlfaDocs', c.id, chi, p ? { importo: num(p.importo) } : null, { importo: tot, dal, al, prestazioni: det.length });
         esito.fatti++;
@@ -315,6 +322,17 @@ app.put('/api/operatore', needAdmin, wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
+/* ---------- archivio: i compensi pagati, mese per mese; si segna chi ha prestazioni già pagate nei mesi prima ---------- */
+app.get('/api/archivio', needAdmin, wrap(async (req, res) => {
+  const { rows } = await q(`select c.*, (select count(*)::int from dettaglio d where d.compenso_id = c.id and d.elemento <> '' and exists (
+      select 1 from dettaglio d2 join compensi c2 on c2.id = d2.compenso_id
+      where c2.medico_id = c.medico_id and c2.id <> c.id and c2.stato = 'pagato' and c2.anno * 100 + c2.mese < c.anno * 100 + c.mese
+        and d2.elemento = d.elemento and lower(d2.prestazione) = lower(d.prestazione)
+        and (case when d.paziente_id <> '' and d2.paziente_id <> '' then d2.paziente_id = d.paziente_id else lower(d2.paziente) = lower(d.paziente) and d.paziente <> '' end))) gia
+    from compensi c where c.stato = 'pagato' order by c.anno desc, c.mese desc, c.medico_nome, c.sede_nome limit 3000`);
+  res.set('Cache-Control', 'no-store').json({ compensi: rows.map(r => ({ ...forma(r), gia: r.gia })) });
+}));
+
 /* ---------- dettaglio delle prestazioni (amministrazione, oppure il medico per i suoi compensi già mandati) ---------- */
 async function compensoVisibile(req, id) {
   const { rows: [c] } = await q('select * from compensi where id = $1', [str(id, 60)]);
@@ -334,7 +352,7 @@ app.get('/api/dettaglio/:id', needAny, wrap(async (req, res) => {
     from dettaglio d where d.compenso_id = $1 order by d.n`, [c.id, c.medico_id]);
   const admin = !!req.me.admin;
   res.set('Cache-Control', 'no-store').json({ compenso: forma(c), righe: rows.map(d => ({ n: d.n, data: d.data, paziente: d.paziente, prestazione: d.prestazione, elemento: d.elemento,
-    compenso: num(d.compenso), tolta: d.tolta, gia: d.gia ? (() => { const [am, st] = d.gia.split(':'), n = +am; return `${st === 'pagato' ? 'già pagato' : 'già accettato'} · ${MESI[n % 100 - 1]} ${Math.floor(n / 100)}`; })() : '', ...(admin ? { prezzo: num(d.prezzo), lab: num(d.lab), tipo: d.tipo, valore: num(d.valore), fonte: d.fonte } : {}) })) });
+    compenso: num(d.compenso), tolta: d.tolta, aMano: d.compenso_mano != null, gia: d.gia ? (() => { const [am, st] = d.gia.split(':'), n = +am; return `${st === 'pagato' ? 'già pagato' : 'già accettato'} · ${MESI[n % 100 - 1]} ${Math.floor(n / 100)}`; })() : '', ...(admin ? { prezzo: num(d.prezzo), lab: num(d.lab), tipo: d.tipo, valore: num(d.valore), fonte: d.fonte } : {}) })) });
 }));
 // costo di laboratorio (a mano) oppure «togli dal totale / rimetti» su una prestazione: si ricalcola il compenso della riga e il totale
 app.put('/api/dettaglio/:id/:n', needAdmin, wrap(async (req, res) => {
@@ -345,10 +363,14 @@ app.put('/api/dettaglio/:id/:n', needAdmin, wrap(async (req, res) => {
   if (!d) return bad(res, 404, 'Prestazione non trovata.');
   const togli = typeof req.body?.tolta === 'boolean' ? req.body.tolta : d.tolta;
   const lab = req.body?.lab == null ? num(d.lab) : euro(req.body.lab); if (lab == null) return bad(res, 400, 'Importo non valido.');
-  const comp = togli ? 0 : compensoDi(d.tipo, num(d.valore), num(d.prezzo), lab);
-  await q('update dettaglio set lab = $3, compenso = $4, lab_mano = lab_mano or $5, tolta = $6 where compenso_id = $1 and n = $2', [c.id, d.n, lab, comp, req.body?.lab != null, togli]);
+  // compenso della prestazione a mano: un importo; vuoto = torna al calcolo dal listino
+  let man = d.compenso_mano == null ? null : num(d.compenso_mano);
+  if ('compenso' in (req.body || {})) { const t = String(req.body.compenso ?? '').trim(); man = t === '' ? null : euro(t); if (t !== '' && man == null) return bad(res, 400, 'Importo non valido.'); }
+  const comp = togli ? 0 : man != null ? man : compensoDi(d.tipo, num(d.valore), num(d.prezzo), lab);
+  await q('update dettaglio set lab = $3, compenso = $4, lab_mano = lab_mano or $5, tolta = $6, compenso_mano = $7 where compenso_id = $1 and n = $2', [c.id, d.n, lab, comp, req.body?.lab != null, togli, man]);
   const { rows: [t] } = await q(`update compensi set importo = (select coalesce(sum(compenso), 0) from dettaglio where compenso_id = $1), origine = 'alfadocs', stato = 'bozza', aggiornato_da = $2, aggiornato_il = now() where id = $1 returning *`, [c.id, req.me.id]);
-  log(togli !== d.tolta ? (togli ? 'prestazione tolta dal totale' : 'prestazione rimessa nel totale') : 'costo laboratorio', c.id, req.me.nome, { lab: num(d.lab), tolta: d.tolta }, { lab, tolta: togli, riga: d.n });
+  log(togli !== d.tolta ? (togli ? 'prestazione tolta dal totale' : 'prestazione rimessa nel totale') : 'compenso' in (req.body || {}) ? 'compenso prestazione a mano' : 'costo laboratorio', c.id, req.me.nome,
+    { lab: num(d.lab), tolta: d.tolta, compenso: num(d.compenso) }, { lab, tolta: togli, compenso: comp, riga: d.n });
   res.json({ ok: true, compenso: comp, totale: num(t.importo) });
 }));
 
