@@ -237,13 +237,14 @@ app.post('/api/uscite/:id/annulla', needVedere, wrap(async (req, res) => {
 const formaC = r => ({ sede: r.sede_id, sedeNome: r.sede_nome, data: r.data, contanti: num(r.contanti), pos: num(r.pos), assegni: num(r.assegni),
   totale: num(r.contanti) + num(r.pos) + num(r.assegni), note: r.note, chi: r.aggiornato_nome || r.creato_nome, il: r.aggiornato_il });
 async function giorniCassa(ids, dal, al) {
-  const [{ rows: ch }, { rows: us }, { rows: vs }, { rows: pr }] = await Promise.all([
+  const [{ rows: ch }, { rows: us }, { rows: vs }, { rows: pr }, { rows: uc }] = await Promise.all([
     db.q(`select * from chiusure where sede_id = any($1) and data between $2 and $3`, [ids, dal, al]),
     db.q(`select sede_id, sede_nome, data, sum(importo) as t, sum(importo) filter (where metodo = 'contanti') as c, sum(importo) filter (where metodo = 'assegno') as a
       from uscite where sede_id = any($1) and data between $2 and $3 and not annullata group by sede_id, sede_nome, data`, [ids, dal, al]),
     db.q(`select sede_id, sede_nome, data, sum(contanti) as c, sum(assegni) as a from versamenti where sede_id = any($1) and data between $2 and $3 and stato = 'approvato'
       group by sede_id, sede_nome, data`, [ids, dal, al]),
     db.q(`select distinct on (sede_id) sede_id, contanti from chiusure where sede_id = any($1) and data < $2 order by sede_id, data desc`, [ids, dal]),
+    db.q(`select sede_id, data, nota, importo from uscite where sede_id = any($1) and data between $2 and $3 and not annullata and metodo = 'contanti' order by creato_il`, [ids, dal, al]),
   ]);
   const g = new Map(), k = (s, d) => s + '|' + d;
   const giorno = (s, nome, d) => { if (!g.has(k(s, d))) g.set(k(s, d), { sede: s, sedeNome: nome, data: d, fatta: false, inseriti: { contanti: 0, pos: 0, assegni: 0 },
@@ -252,6 +253,8 @@ async function giorniCassa(ids, dal, al) {
     note: r.note, chi: r.aggiornato_nome || r.creato_nome, il: r.aggiornato_il });
   for (const r of us) { const x = giorno(r.sede_id, r.sede_nome, r.data); x.usciteTot = num(r.t); x.uscite = { contanti: num(r.c), assegni: num(r.a) }; }
   for (const r of vs) giorno(r.sede_id, r.sede_nome, r.data).versati = { contanti: num(r.c), assegni: num(r.a) };
+  // le singole spese pagate in contanti del giorno (cosa e quanto), per vederle sotto i contanti
+  for (const r of uc) { const x = g.get(k(r.sede_id, r.data)); if (x) (x.speseContanti = x.speseContanti || []).push({ nota: r.nota, importo: num(r.importo) }); }
   // un giorno senza chiusura compare solo se ha tolto contanti/assegni (uscite o versamenti)
   const prima = new Map(pr.map(r => [r.sede_id, num(r.contanti)]));   // cassetto dell'ultima chiusura prima del periodo
   const L = [...g.values()].filter(x => x.fatta || x.uscite.contanti || x.uscite.assegni || x.versati.contanti || x.versati.assegni)

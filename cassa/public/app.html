@@ -232,10 +232,10 @@ const dettNet = (r, k) => { const ins = r.inseriti?.[k] || 0, u = r.usciteDett?.
   return `<div class="muted" style="font-size:11.5px;white-space:normal">${fE(ins)}${u ? ' − uscite ' + fE(u) : ''}${v ? ' − versati ' + fE(v) : ''}</div>`; };
 // contanti di un giorno: quello che c'era nel cassetto e, sotto, quanto è cambiato dalla chiusura prima
 // con le uscite pagate in contanti e i contanti versati in banca di quel giorno, così si capisce perché è sceso
-const cCont = r => { if (r.contanti == null) return r.usciteDett?.contanti || r.versati?.contanti ? `—${cPerche(r)}` : '—';
+const cCont = r => { if (r.contanti == null) return (r.speseContanti || []).length || r.versati?.contanti ? `—${cPerche(r)}` : '—';
   return fE(r.contanti) + (r.varContanti == null ? '' : `<div class="muted" style="font-size:11.5px">${r.varContanti >= 0 ? '+' : '−'}${fE(Math.abs(r.varContanti))}</div>`) + cPerche(r); };
-const cPerche = r => { const u = r.usciteDett?.contanti || 0, v = r.versati?.contanti || 0; if (!u && !v) return '';
-  return `<div style="font-size:11.5px;font-weight:700;color:var(--warn);white-space:normal">${u ? 'uscite ' + fE(u) : ''}${u && v ? ' · ' : ''}${v ? 'versati ' + fE(v) : ''}</div>`; };
+const cPerche = r => { const L = r.speseContanti || [], v = r.versati?.contanti || 0; if (!L.length && !v) return '';
+  return `<div style="font-size:11.5px;font-weight:700;color:var(--warn);white-space:normal;text-align:right">${L.map(x => `${esc(x.nota)} ${fE(x.importo)}`).join('<br>')}${L.length && v ? '<br>' : ''}${v ? 'versati in banca ' + fE(v) : ''}</div>`; };
 const STATO_V = { attesa: ['Da approvare', 'todo'], approvato: ['Approvato', 'ok'], rifiutato: ['Non approvato', 'ko'] };
 const rigaVers = (v, admin) => `<div class="riga"><div class="gr"><div class="t">Versamento in banca${admin ? ' · ' + esc(v.sedeNome) : ''}</div>
   <div class="s">${esc(fD(v.data))} · ${esc(fOra(v.il))} · ${esc(v.chi)}${v.nota ? ' · ' + esc(v.nota) : ''}</div>
