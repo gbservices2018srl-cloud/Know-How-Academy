@@ -231,17 +231,19 @@ app.post('/api/uscite/:id/annulla', needVedere, wrap(async (req, res) => {
 }));
 
 /* ============ CHIUSURA DI CASSA ============ */
-// Ogni giorno: contanti e assegni della chiusura MENO le uscite pagate in contanti/assegno e i versamenti in banca approvati
-// di quel giorno (i numeri scritti dall'operatore restano salvati: il netto si calcola). Il POS resta com'è.
+// Contanti: è quello che c'è davvero nel cassetto a fine giornata (già dopo uscite e versamenti): non si toglie niente.
+// Nel periodo i contanti NON si sommano: conta l'ultima chiusura; per ogni giorno si vede quanto è cambiato dal giorno prima.
+// Assegni: quelli della chiusura MENO le uscite pagate con assegno e gli assegni versati in banca (approvati). Il POS resta com'è.
 const formaC = r => ({ sede: r.sede_id, sedeNome: r.sede_nome, data: r.data, contanti: num(r.contanti), pos: num(r.pos), assegni: num(r.assegni),
   totale: num(r.contanti) + num(r.pos) + num(r.assegni), note: r.note, chi: r.aggiornato_nome || r.creato_nome, il: r.aggiornato_il });
 async function giorniCassa(ids, dal, al) {
-  const [{ rows: ch }, { rows: us }, { rows: vs }] = await Promise.all([
+  const [{ rows: ch }, { rows: us }, { rows: vs }, { rows: pr }] = await Promise.all([
     db.q(`select * from chiusure where sede_id = any($1) and data between $2 and $3`, [ids, dal, al]),
     db.q(`select sede_id, sede_nome, data, sum(importo) as t, sum(importo) filter (where metodo = 'contanti') as c, sum(importo) filter (where metodo = 'assegno') as a
       from uscite where sede_id = any($1) and data between $2 and $3 and not annullata group by sede_id, sede_nome, data`, [ids, dal, al]),
     db.q(`select sede_id, sede_nome, data, sum(contanti) as c, sum(assegni) as a from versamenti where sede_id = any($1) and data between $2 and $3 and stato = 'approvato'
       group by sede_id, sede_nome, data`, [ids, dal, al]),
+    db.q(`select distinct on (sede_id) sede_id, contanti from chiusure where sede_id = any($1) and data < $2 order by sede_id, data desc`, [ids, dal]),
   ]);
   const g = new Map(), k = (s, d) => s + '|' + d;
   const giorno = (s, nome, d) => { if (!g.has(k(s, d))) g.set(k(s, d), { sede: s, sedeNome: nome, data: d, fatta: false, inseriti: { contanti: 0, pos: 0, assegni: 0 },
@@ -251,12 +253,24 @@ async function giorniCassa(ids, dal, al) {
   for (const r of us) { const x = giorno(r.sede_id, r.sede_nome, r.data); x.usciteTot = num(r.t); x.uscite = { contanti: num(r.c), assegni: num(r.a) }; }
   for (const r of vs) giorno(r.sede_id, r.sede_nome, r.data).versati = { contanti: num(r.c), assegni: num(r.a) };
   // un giorno senza chiusura compare solo se ha tolto contanti/assegni (uscite o versamenti)
-  return [...g.values()].filter(x => x.fatta || x.uscite.contanti || x.uscite.assegni || x.versati.contanti || x.versati.assegni).map(x => {
-    x.contanti = x.inseriti.contanti - x.uscite.contanti - x.versati.contanti;
+  const prima = new Map(pr.map(r => [r.sede_id, num(r.contanti)]));   // cassetto dell'ultima chiusura prima del periodo
+  const L = [...g.values()].filter(x => x.fatta || x.uscite.contanti || x.uscite.assegni || x.versati.contanti || x.versati.assegni)
+    .sort((a, b) => a.sede.localeCompare(b.sede) || a.data.localeCompare(b.data));
+  for (const x of L) {
+    x.contanti = x.fatta ? x.inseriti.contanti : null;
+    const p = prima.get(x.sede);
+    x.varContanti = x.fatta && p != null ? Math.round((x.contanti - p) * 100) / 100 : null;   // + o − rispetto alla chiusura prima
+    if (x.fatta) prima.set(x.sede, x.contanti);
     x.assegni = x.inseriti.assegni - x.uscite.assegni - x.versati.assegni;
-    x.pos = x.inseriti.pos; x.totale = x.contanti + x.pos + x.assegni;
-    return x;
-  }).sort((a, b) => b.data.localeCompare(a.data) || a.sedeNome.localeCompare(b.sedeNome));
+    x.pos = x.inseriti.pos; x.totale = (x.contanti || 0) + x.pos + x.assegni;
+  }
+  return L.sort((a, b) => b.data.localeCompare(a.data) || a.sedeNome.localeCompare(b.sedeNome));
+}
+// contanti nel periodo: per ogni sede quelli dell'ultima chiusura (non la somma dei giorni)
+function cassetto(lista) {
+  const ult = new Map();
+  for (const x of lista) if (x.fatta && (!ult.has(x.sede) || x.data > ult.get(x.sede).data)) ult.set(x.sede, x);
+  return [...ult.values()].reduce((s, x) => s + x.contanti, 0);
 }
 app.get('/api/chiusure', needVedere, wrap(async (req, res) => {
   const sedi = sediRichieste(req); if (!sedi) return bad(res, 403, 'Sede non tua.');
@@ -264,7 +278,8 @@ app.get('/api/chiusure', needVedere, wrap(async (req, res) => {
   const lista = await giorniCassa(ids, p.dal, p.al);
   const { rows: [u] } = await db.q(`select coalesce(sum(importo),0) as t from uscite where sede_id = any($1) and data between $2 and $3 and not annullata`, [ids, p.dal, p.al]);
   const tot = f => lista.reduce((s, r) => s + f(r), 0);
-  res.json({ periodo: p.chiave, chiusure: lista.map(r => ({ ...r, usciteDett: r.uscite, uscite: r.usciteTot })), totali: { contanti: tot(r => r.contanti), pos: tot(r => r.pos), assegni: tot(r => r.assegni), totale: tot(r => r.totale),
+  const cont = cassetto(lista);
+  res.json({ periodo: p.chiave, chiusure: lista.map(r => ({ ...r, usciteDett: r.uscite, uscite: r.usciteTot })), totali: { contanti: cont, pos: tot(r => r.pos), assegni: tot(r => r.assegni), totale: cont + tot(r => r.pos) + tot(r => r.assegni),
     uscite: num(u.t), versatiContanti: tot(r => r.versati.contanti), versatiAssegni: tot(r => r.versati.assegni), giorni: lista.filter(r => r.fatta).length } });
 }));
 app.get('/api/chiusura', needUser, wrap(async (req, res) => {
@@ -349,7 +364,7 @@ app.post('/api/versamenti/:id/decidi', needAdmin, wrap(async (req, res) => {
     [req.params.id, ok ? 'approvato' : 'rifiutato', req.me.id, req.me.nome, nota || null]);
   if (!r) return bad(res, 400, 'Questo versamento non è più da approvare.');
   log(ok ? 'versamento approvato' : 'versamento rifiutato', r.id, req.me.nome, null, { nota });
-  avvisaCassa([r.creato_da], { title: ok ? 'Versamento approvato' : 'Versamento non approvato', body: `${r.sede_nome}, versamento del ${String(r.data).split('-').reverse().join('/')}: ${ok ? 'approvato, tolto dalla chiusura di cassa' : 'non approvato' + (nota ? ' (' + nota + ')' : '')}.`, url: 'https://appgestione.it/cassa/?v=uscite' });
+  avvisaCassa([r.creato_da], { title: ok ? 'Versamento approvato' : 'Versamento non approvato', body: `${r.sede_nome}, versamento del ${String(r.data).split('-').reverse().join('/')}: ${ok ? 'approvato' : 'non approvato' + (nota ? ' (' + nota + ')' : '')}.`, url: 'https://appgestione.it/cassa/?v=uscite' });
   res.json({ ok: true });
 }));
 
@@ -366,7 +381,7 @@ app.get('/api/pannello', needAdmin, wrap(async (req, res) => {
     const u = U.get(s.id) || {}, gg = giorni.filter(x => x.sede === s.id), somma = f => gg.reduce((a, x) => a + f(x), 0);
     const fatte = gg.filter(x => x.fatta);
     const r = { sede: s.id, nome: s.nome, uscite: num(u.t), usciteN: u.n || 0, usciteMetodo: { contanti: num(u.uc), pos: num(u.up), assegno: num(u.ua) },
-      contanti: somma(x => x.contanti), pos: somma(x => x.pos), assegni: somma(x => x.assegni), versati: somma(x => x.versati.contanti + x.versati.assegni),
+      contanti: cassetto(gg), pos: somma(x => x.pos), assegni: somma(x => x.assegni), versati: somma(x => x.versati.contanti + x.versati.assegni),
       giorni: fatte.length, ultima: fatte.length ? fatte.map(x => x.data).sort().pop() : null };
     r.incassi = r.contanti + r.pos + r.assegni;
     return r;

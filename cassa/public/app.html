@@ -230,6 +230,8 @@ const metTxt = (pm) => Object.entries(METODI).filter(([k]) => pm && pm[k]).map((
 // dettaglio del netto di un giorno: scritto in chiusura − uscite pagate così − versamenti approvati
 const dettNet = (r, k) => { const ins = r.inseriti?.[k] || 0, u = r.usciteDett?.[k] || 0, v = r.versati?.[k] || 0; if (!u && !v) return '';
   return `<div class="muted" style="font-size:11.5px;white-space:normal">${fE(ins)}${u ? ' − uscite ' + fE(u) : ''}${v ? ' − versati ' + fE(v) : ''}</div>`; };
+// contanti di un giorno: quello che c'era nel cassetto e, sotto, quanto è cambiato dalla chiusura prima
+const cCont = r => r.contanti == null ? '—' : fE(r.contanti) + (r.varContanti == null ? '' : `<div class="muted" style="font-size:11.5px">${r.varContanti >= 0 ? '+' : '−'}${fE(Math.abs(r.varContanti))}</div>`);
 const STATO_V = { attesa: ['Da approvare', 'todo'], approvato: ['Approvato', 'ok'], rifiutato: ['Non approvato', 'ko'] };
 const rigaVers = (v, admin) => `<div class="riga"><div class="gr"><div class="t">Versamento in banca${admin ? ' · ' + esc(v.sedeNome) : ''}</div>
   <div class="s">${esc(fD(v.data))} · ${esc(fOra(v.il))} · ${esc(v.chi)}${v.nota ? ' · ' + esc(v.nota) : ''}</div>
@@ -403,7 +405,7 @@ async function vChiusura() {
   const minD = S.st.admin ? '' : (() => { const x = new Date(S.st.oggi + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() - S.st.giorniChiusura); return x.toISOString().slice(0, 10); })();
   const T = lst.totali;
   $('#main').innerHTML = `
-  <div class="head"><div><h2 class="view">Chiusura di cassa</h2><p>Ogni sera: quanti soldi ci sono in cassa in contanti, POS e assegni. Le uscite pagate in contanti o con assegno e i versamenti in banca approvati si tolgono da soli.</p></div></div>
+  <div class="head"><div><h2 class="view">Chiusura di cassa</h2><p>Ogni sera: i contanti che ci sono nel cassetto, il POS e gli assegni del giorno. Le uscite pagate con assegno e gli assegni versati in banca si tolgono da soli.</p></div></div>
   ${barra(false)}
   ${tutte ? '' : `
   <form class="card pad form" id="fc" style="margin:0 0 16px" novalidate>
@@ -417,9 +419,8 @@ async function vChiusura() {
     </div>
     <div class="somma"><span>Totale della giornata</span><b id="c-tot">${fE(c ? c.totale : 0)}</b></div>
     <p class="muted" style="margin:-6px 0 12px;font-size:13.5px">Uscite di cassa registrate in questo giorno: <b>${fE(g.uscite)}</b>${g.usciteN ? ` (${g.usciteN})` : ''}</p>
-    ${g.usciteC || g.usciteA || g.versatiC || g.versatiA ? `<div class="avviso giallo" style="margin:-4px 0 12px;display:block">Dalla chiusura si tolgono da sole:
-      ${g.usciteC ? `<br>· uscite pagate in contanti <b>${fE(g.usciteC)}</b>` : ''}${g.usciteA ? `<br>· uscite pagate con assegno <b>${fE(g.usciteA)}</b>` : ''}
-      ${g.versatiC ? `<br>· contanti versati in banca (approvati) <b>${fE(g.versatiC)}</b>` : ''}${g.versatiA ? `<br>· assegni versati in banca (approvati) <b>${fE(g.versatiA)}</b>` : ''}
+    ${g.usciteA || g.versatiA ? `<div class="avviso giallo" style="margin:-4px 0 12px;display:block">Dagli assegni si tolgono da soli:
+      ${g.usciteA ? `<br>· uscite pagate con assegno <b>${fE(g.usciteA)}</b>` : ''}${g.versatiA ? `<br>· assegni versati in banca (approvati) <b>${fE(g.versatiA)}</b>` : ''}
       <br>Restano in cassa: contanti <b id="c-netC">—</b>, assegni <b id="c-netA">—</b></div>` : ''}
     <div class="field"><label for="c-note">Note (facoltative)</label><textarea id="c-note" maxlength="1000">${c ? esc(c.note) : ''}</textarea></div>
     <button class="btn primary wide" type="submit">${c ? 'Aggiorna la chiusura' : 'Salva la chiusura'}</button>
@@ -427,14 +428,14 @@ async function vChiusura() {
   <div class="card pad">
     <div class="sez-t"><h3>${esc(nomeP(lst.periodo))}${tutte ? ' · tutte le sedi' : ''}</h3><span class="muted" style="font-size:13.5px">${T.giorni} ${T.giorni === 1 ? 'chiusura' : 'chiusure'}</span></div>
     <div class="tiles" style="margin:8px 0 12px">
-      <div class="card tile"><div class="l">Contanti</div><div class="v">${fE(T.contanti)}</div></div>
+      <div class="card tile"><div class="l">Contanti in cassa</div><div class="v">${fE(T.contanti)}</div></div>
       <div class="card tile"><div class="l">POS</div><div class="v">${fE(T.pos)}</div></div>
       <div class="card tile"><div class="l">Assegni</div><div class="v">${fE(T.assegni)}</div></div>
       <div class="card tile fin"><div class="l">Totale del mese</div><div class="v">${fE(T.totale)}</div></div>
     </div>
     ${lst.chiusure.length ? `<div class="tw"><table class="t"><thead><tr><th>Giorno</th>${tutte ? '<th>Sede</th>' : ''}<th class="n">Contanti</th><th class="n">POS</th><th class="n">Assegni</th><th class="n">Totale</th><th class="n">Uscite</th><th>Note</th></tr></thead>
-      <tbody>${lst.chiusure.map(r => `<tr><td ${tutte ? '' : `class="click" data-giorno="${r.data}" title="Apri per correggere"`}>${esc(fD(r.data))}${r.fatta ? '' : '<div class="cnt">manca la chiusura</div>'}</td>${tutte ? `<td>${esc(r.sedeNome)}</td>` : ''}<td class="n">${fE(r.contanti)}${dettNet(r, 'contanti')}</td><td class="n">${fE(r.pos)}</td><td class="n">${fE(r.assegni)}${dettNet(r, 'assegni')}</td><td class="n"><b>${fE(r.totale)}</b></td><td class="n">${fE(r.uscite)}</td><td class="wrap">${esc(r.note)}</td></tr>`).join('')}</tbody>
-      <tfoot><tr><td>Totale</td>${tutte ? '<td></td>' : ''}<td class="n">${fE(T.contanti)}</td><td class="n">${fE(T.pos)}</td><td class="n">${fE(T.assegni)}</td><td class="n">${fE(T.totale)}</td><td class="n">${fE(T.uscite)}</td><td></td></tr></tfoot></table></div>`
+      <tbody>${lst.chiusure.map(r => `<tr><td ${tutte ? '' : `class="click" data-giorno="${r.data}" title="Apri per correggere"`}>${esc(fD(r.data))}${r.fatta ? '' : '<div class="cnt">manca la chiusura</div>'}</td>${tutte ? `<td>${esc(r.sedeNome)}</td>` : ''}<td class="n">${cCont(r)}</td><td class="n">${fE(r.pos)}</td><td class="n">${fE(r.assegni)}${dettNet(r, 'assegni')}</td><td class="n"><b>${fE(r.totale)}</b></td><td class="n">${fE(r.uscite)}</td><td class="wrap">${esc(r.note)}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td>Totale</td>${tutte ? '<td></td>' : ''}<td class="n">${fE(T.contanti)}<div class="muted" style="font-size:11.5px;font-weight:500">in cassa all'ultima chiusura</div></td><td class="n">${fE(T.pos)}</td><td class="n">${fE(T.assegni)}</td><td class="n">${fE(T.totale)}</td><td class="n">${fE(T.uscite)}</td><td></td></tr></tfoot></table></div>`
       : '<div class="empty"><b>Nessuna chiusura</b>In questo mese non ci sono chiusure di cassa.</div>'}
   </div>`;
   legaBarra(vChiusura);
@@ -493,7 +494,7 @@ async function vPannello() {
   ${tutte && !anno && d.senzaChiusuraIeri.length ? `<div class="avviso giallo" style="margin-bottom:14px">Senza chiusura di cassa ieri (${esc(fD(d.ieri))}): ${esc(d.senzaChiusuraIeri.join(', '))}</div>` : ''}
   <div class="tiles">
     <div class="card tile"><div class="l">Uscite di cassa</div><div class="v">${fE(us.totale)}</div><div class="b">${us.uscite.filter(u => !u.annullata).length} uscite${us.totale ? '<br>' + esc(metTxt(us.perMetodo)) : ''}</div></div>
-    <div class="card tile"><div class="l">Contanti</div><div class="v">${fE(C.contanti)}</div></div>
+    <div class="card tile"><div class="l">Contanti in cassa</div><div class="v">${fE(C.contanti)}</div></div>
     <div class="card tile"><div class="l">POS</div><div class="v">${fE(C.pos)}</div></div>
     <div class="card tile"><div class="l">Assegni</div><div class="v">${fE(C.assegni)}</div></div>
     <div class="card tile"><div class="l">Versato in banca</div><div class="v">${fE(C.versatiContanti + C.versatiAssegni)}</div><div class="b">contanti ${fE(C.versatiContanti)} · assegni ${fE(C.versatiAssegni)}</div></div>
@@ -520,8 +521,8 @@ async function vPannello() {
   </div>` : `<div class="card pad">
     <div class="sez-t"><h3>Chiusure di cassa · ${esc(nomeP(ch.periodo))}</h3><span class="muted" style="font-size:13.5px">${C.giorni} ${C.giorni === 1 ? 'chiusura' : 'chiusure'}</span></div>
     ${ch.chiusure.length ? `<div class="tw"><table class="t"><thead><tr><th>Giorno</th>${tutte ? '<th>Sede</th>' : ''}<th class="n">Contanti</th><th class="n">POS</th><th class="n">Assegni</th><th class="n">Totale</th><th class="n">Uscite</th><th>Fatta da</th><th>Note</th></tr></thead>
-      <tbody>${ch.chiusure.map(r => `<tr><td>${esc(fD(r.data))}${r.fatta ? '' : '<div class="cnt">manca la chiusura</div>'}</td>${tutte ? `<td>${esc(r.sedeNome)}</td>` : ''}<td class="n">${fE(r.contanti)}${dettNet(r, 'contanti')}</td><td class="n">${fE(r.pos)}</td><td class="n">${fE(r.assegni)}${dettNet(r, 'assegni')}</td><td class="n"><b>${fE(r.totale)}</b></td><td class="n">${fE(r.uscite)}</td><td>${esc(r.chi)}</td><td class="wrap">${esc(r.note)}</td></tr>`).join('')}</tbody>
-      <tfoot><tr><td>Totale</td>${tutte ? '<td></td>' : ''}<td class="n">${fE(C.contanti)}</td><td class="n">${fE(C.pos)}</td><td class="n">${fE(C.assegni)}</td><td class="n">${fE(C.totale)}</td><td class="n">${fE(C.uscite)}</td><td></td><td></td></tr></tfoot></table></div>`
+      <tbody>${ch.chiusure.map(r => `<tr><td>${esc(fD(r.data))}${r.fatta ? '' : '<div class="cnt">manca la chiusura</div>'}</td>${tutte ? `<td>${esc(r.sedeNome)}</td>` : ''}<td class="n">${cCont(r)}</td><td class="n">${fE(r.pos)}</td><td class="n">${fE(r.assegni)}${dettNet(r, 'assegni')}</td><td class="n"><b>${fE(r.totale)}</b></td><td class="n">${fE(r.uscite)}</td><td>${esc(r.chi)}</td><td class="wrap">${esc(r.note)}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td>Totale</td>${tutte ? '<td></td>' : ''}<td class="n">${fE(C.contanti)}<div class="muted" style="font-size:11.5px;font-weight:500">in cassa all'ultima chiusura</div></td><td class="n">${fE(C.pos)}</td><td class="n">${fE(C.assegni)}</td><td class="n">${fE(C.totale)}</td><td class="n">${fE(C.uscite)}</td><td></td><td></td></tr></tfoot></table></div>`
       : '<div class="empty"><b>Nessuna chiusura</b>In questo periodo non ci sono chiusure di cassa.</div>'}
   </div>`}`;
   $('#pSede').onchange = $('#pSede2').onchange = e => { PN.sede = e.target.value; vPannello(); };
