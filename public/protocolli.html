@@ -249,7 +249,7 @@ const adminArea = () => isAdmin(); // l'amministratore vede solo l'area admin, l
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const fmtD = s => s ? s.split('-').reverse().join('/') : '';
 const figNome = id => (S.figure.find(f => f.id === id) || {}).nome || id;
-function toast(m){ let t = document.querySelector('.toast'); if (!t) { t = document.createElement('div'); t.className = 'toast'; document.body.append(t); } t.textContent = m; clearTimeout(toastT); toastT = setTimeout(() => t.remove(), 3200); }
+function toast(m, ms = 3200){ if (!m) return; let t = document.querySelector('.toast'); if (!t) { t = document.createElement('div'); t.className = 'toast'; document.body.append(t); } t.textContent = m; clearTimeout(toastT); toastT = setTimeout(() => t.remove(), ms); }
 async function api(method, url, body, isForm){
   const o = { method, credentials: 'same-origin', headers: {} };
   if (body !== undefined) { if (isForm) o.body = body; else { o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(body); } }
@@ -593,13 +593,13 @@ function lettiDa(p){
 function renderContenitore(v){
   const cart = ['Tutte', ...new Set([...S.prot.map(p => p.cartella), ...(S.cartelle || [])])];
   const list = S.prot.filter(p => filtroCart === 'Tutte' || p.cartella === filtroCart);
-  const daRiad = S.prot.filter(p => !p.conforme).length;
-  v.innerHTML = `<div class="page-h"><h2>Contenitore protocolli</h2><button class="btn" data-nuovo>+ Scrivi protocollo</button><label class="btn primary" style="position:relative">+ Carica file e riadegua<input type="file" accept=".pdf,.docx,.txt,.md" data-file style="position:absolute;inset:0;opacity:0;cursor:pointer"></label></div>
-    <p class="sub">Ogni file caricato viene riscritto nel modello che hai impostato in “Modello e guida”: controlli e approvi prima di pubblicarlo.${daRiad ? ` <b>${daRiad} protocolli</b> sono da riadeguare al modello.` : ''}</p>
+  const daRiad = S.prot.filter(p => !p.conforme).length, daAppr = S.prot.filter(p => p.daApprovare).length;
+  v.innerHTML = `<div class="page-h"><h2>Contenitore protocolli</h2><button class="btn" data-nuovo>+ Scrivi protocollo</button><label class="btn" style="position:relative">+ Carica cartella<input type="file" webkitdirectory multiple data-file style="position:absolute;inset:0;opacity:0;cursor:pointer"></label><label class="btn primary" style="position:relative">+ Carica file e riadegua<input type="file" multiple accept=".pdf,.docx,.txt,.md" data-file style="position:absolute;inset:0;opacity:0;cursor:pointer"></label></div>
+    <p class="sub">Ogni file caricato viene riscritto nel modello che hai impostato in “Modello e guida”: controlli e approvi prima di pubblicarlo.${daAppr ? ` <b>${daAppr} da approvare</b>: aprili con «Modifica», controlla e salva.` : ''}${daRiad ? ` <b>${daRiad} protocolli</b> sono da riadeguare al modello.` : ''}</p>
     <div class="chips">${cart.map(c => `<button class="chip ${filtroCart === c ? 'on' : ''}" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div>
     <div class="card scroll" style="padding:4px 0"><table class="tbl"><thead><tr><th>Protocollo</th><th>Cartella</th><th>Mansioni</th><th>Modello</th><th>Aggiornato</th><th>Letto da</th><th></th></tr></thead><tbody>
     ${list.map(p => { const L = lettiDa(p); return `<tr><td><button class="btn small" style="border:0;padding:0;background:none;font-weight:700;text-align:left;white-space:normal" data-apri="${p.id}">${esc(p.titolo)}</button></td><td>${esc(p.cartella)}</td>
-      <td style="font-size:13px">${(p.mansioni || []).map(esc).join(', ') || '<span class="muted">nessuna</span>'}</td><td><span class="tag ${p.conforme ? 'ok' : 'warn'}">${p.conforme ? 'Conforme' : 'Da riadeguare'}</span></td>
+      <td style="font-size:13px">${(p.mansioni || []).map(esc).join(', ') || '<span class="muted">nessuna</span>'}</td><td>${p.daApprovare ? '<span class="tag warn">Da approvare</span>' : `<span class="tag ${p.conforme ? 'ok' : 'warn'}">${p.conforme ? 'Conforme' : 'Da riadeguare'}</span>`}</td>
       <td class="muted">${fmtD(p.agg)}</td><td>${L.pers.length ? L.letti.length + ' su ' + L.pers.length : '<span class="muted">—</span>'}</td>
       <td style="white-space:nowrap;text-align:right"><button class="btn small" data-mod="${p.id}">Modifica</button> <button class="btn small" data-riad="${p.id}" ${(S.ai || {}).prot_riadegua !== 'off' ? '' : 'disabled title="Riscrittura spenta negli interruttori AI"'}>Riadegua</button> <button class="btn small danger" data-del="${p.id}">Elimina</button></td></tr>`; }).join('') || '<tr><td colspan="7" class="empty">Nessun protocollo in questa cartella.</td></tr>'}
     </tbody></table></div>`;
@@ -614,13 +614,31 @@ function renderContenitore(v){
     const d = e.target.closest('[data-del]');
     if (d) { if (!armed(d, 'Conferma eliminazione')) return; try { await api('DELETE', '/api/p/prot/' + d.dataset.del); toast('Protocollo eliminato'); await refresh(); } catch (err) { toast(err.message); } }
   };
-  v.querySelector('[data-file]').onchange = async e => {
-    const f = e.target.files[0]; if (!f) return;
+  v.querySelectorAll('[data-file]').forEach(inp => inp.onchange = async e => {
+    const tutti = [...e.target.files], files = tutti.filter(f => /\.(pdf|docx|txt|md)$/i.test(f.name) && !f.name.startsWith('.'));
+    e.target.value = '';
+    if (!files.length) return toast(tutti.length ? 'Nessun file PDF, Word (.docx) o di testo da caricare.' : '');
     if ((S.ai || {}).prot_riadegua === 'off') return toast('La riscrittura automatica è spenta negli interruttori AI: usa “Scrivi protocollo” e incolla il testo.');
+    if (files.length > 1 || files[0].webkitRelativePath) return caricaInsieme(files);
+    const f = files[0];
     const w = layer(`<div class="modal-b"><div class="empty"><span class="spin"></span><p>Leggo “${esc(f.name)}” e lo riscrivo nel modello…<br><span class="muted" style="font-size:13px">Può richiedere fino a un minuto.</span></p></div></div>`);
     const fd = new FormData(); fd.append('file', f);
     try { const j = await api('POST', '/api/p/carica', fd, true); closeLayer(w); editor(null, j); } catch (err) { closeLayer(w); toast(err.message); }
-  };
+  });
+}
+// più file o una cartella: uno alla volta, ognuno riscritto e salvato «da approvare» nella cartella da cui viene
+async function caricaInsieme(files) {
+  const base = filtroCart && filtroCart !== 'Tutte' ? filtroCart : 'Generale';
+  const w = layer(`<div class="modal-b"><div class="empty"><span class="spin"></span><p id="ci-p"></p></div></div>`), errori = [];
+  let fatti = 0;
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i], parti = (f.webkitRelativePath || '').split('/'), cartella = parti.length > 1 ? parti[parti.length - 2] : base;
+    const p = w.querySelector('#ci-p'); if (p) p.innerHTML = `Riscrivo ${i + 1} di ${files.length}: “${esc(f.name)}”…<br><span class="muted" style="font-size:13px">I documenti lunghi richiedono qualche minuto. Non chiudere la pagina.</span>`;
+    const fd = new FormData(); fd.append('file', f); fd.append('cartella', cartella);
+    try { await api('POST', '/api/p/carica-insieme', fd, true); fatti++; } catch (err) { errori.push(`${f.name}: ${err.message}`); }
+  }
+  closeLayer(w); await refresh();
+  toast(`${fatti} ${fatti === 1 ? 'protocollo caricato' : 'protocolli caricati'}: sono «Da approvare».${errori.length ? ' Non riusciti: ' + errori.join(' · ') : ''}`, errori.length ? 12000 : 6000);
 }
 function editor(p, bozza){
   const mod = S.modello || [];
