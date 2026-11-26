@@ -506,7 +506,8 @@ async function vPannello() {
       <td class="n"><b>${fE(r.incassi)}</b></td><td class="n">${r.giorni}</td><td class="muted" style="font-size:12.5px">${r.ultima ? 'ultima ' + esc(fD(r.ultima)) : 'nessuna'}</td></tr>`).join('')}</tbody>
     <tfoot><tr><td>Totale</td><td class="n">${fE(T.uscite)}</td><td class="n">${fE(T.contanti)}</td><td class="n">${fE(T.pos)}</td><td class="n">${fE(T.assegni)}</td><td class="n">${fE(T.incassi)}</td><td class="n">${T.giorni}</td><td></td></tr></tfoot></table></div>
   </div>` : ''}
-  <div class="seg" style="margin:18px 0 10px"><button type="button" class="${PN.vista === 'uscite' ? 'on' : ''}" data-pvista="uscite">Uscite di cassa</button><button type="button" class="${PN.vista === 'chiusure' ? 'on' : ''}" data-pvista="chiusure">Chiusure di cassa</button><button type="button" class="${PN.vista === 'versamenti' ? 'on' : ''}" data-pvista="versamenti">Versamenti in banca</button></div>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:18px 0 10px"><div class="seg" style="margin:0"><button type="button" class="${PN.vista === 'uscite' ? 'on' : ''}" data-pvista="uscite">Uscite di cassa</button><button type="button" class="${PN.vista === 'chiusure' ? 'on' : ''}" data-pvista="chiusure">Chiusure di cassa</button><button type="button" class="${PN.vista === 'versamenti' ? 'on' : ''}" data-pvista="versamenti">Versamenti in banca</button></div>
+    <select id="pSede2" aria-label="Sede" style="border:1px solid var(--line);border-radius:9px;padding:7px 10px;min-height:40px;font-weight:600;background:var(--surface)">${opt('tutte', 'Tutte le sedi', tutte)}${sedi.map(x => opt(x.id, x.nome, x.id === PN.sede)).join('')}</select></div>
   ${PN.vista === 'versamenti' ? `<div class="card pad"><div class="sez-t"><h3>Versamenti in banca · ${esc(nomeP(vs.periodo))}</h3><div class="tot"><span>Approvati: contanti <b>${fE(C.versatiContanti)}</b> · assegni <b>${fE(C.versatiAssegni)}</b></span></div></div>
     ${vs.versamenti.length ? vs.versamenti.map(v => rigaVers(v, true)).join('') : '<div class="empty"><b>Nessun versamento</b>In questo periodo non ci sono versamenti in banca.</div>'}</div>` : ''}
   ${PN.vista === 'versamenti' ? '' : PN.vista === 'uscite' ? `<div class="card pad">
@@ -523,7 +524,7 @@ async function vPannello() {
       <tfoot><tr><td>Totale</td>${tutte ? '<td></td>' : ''}<td class="n">${fE(C.contanti)}</td><td class="n">${fE(C.pos)}</td><td class="n">${fE(C.assegni)}</td><td class="n">${fE(C.totale)}</td><td class="n">${fE(C.uscite)}</td><td></td><td></td></tr></tfoot></table></div>`
       : '<div class="empty"><b>Nessuna chiusura</b>In questo periodo non ci sono chiusure di cassa.</div>'}
   </div>`}`;
-  $('#pSede').onchange = e => { PN.sede = e.target.value; vPannello(); };
+  $('#pSede').onchange = $('#pSede2').onchange = e => { PN.sede = e.target.value; vPannello(); };
   $('#bMese').onchange = e => { if (e.target.value) { S.periodo = e.target.value; vPannello(); } };
   $('#bAnno').onclick = () => { S.periodo = anno ? S.st.oggi.slice(0, 7) : S.periodo.slice(0, 4); vPannello(); };
   $('#main').querySelectorAll('[data-psede]').forEach(td => td.onclick = () => { PN.sede = td.dataset.psede; vPannello(); scrollTo({ top: 0, behavior: 'smooth' }); });
