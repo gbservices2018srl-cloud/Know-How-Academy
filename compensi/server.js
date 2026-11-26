@@ -86,7 +86,7 @@ app.use(wrap(async (req, res, next) => {
   if (!c) return next();
   const u = c.user, role = u.owner ? 'admin' : c.apps[KEY];
   const spenta = !u.owner && (await store.appSpente()).has(KEY);
-  req.me = { id: u.id, nome: nomeU(u), admin: role === 'admin' && !spenta, medico: !!role && !spenta && u.figura === 'Medico' };
+  req.me = { id: u.id, nome: nomeU(u), admin: role === 'admin' && !spenta, medico: !!role && !spenta && ['Medico', 'Igienista'].includes(u.figura) };
   next();
 }));
 const needAny = (req, res, next) => req.me?.admin || req.me?.medico ? next() : bad(res, req.me ? 403 : 401, req.me ? 'Non sei abilitato a Compenso medici.' : 'Accesso richiesto');
@@ -98,9 +98,9 @@ const forma = r => ({ id: r.id, medico: r.medico_id, medicoNome: r.medico_nome, 
   importo: num(r.importo), origine: r.origine, stato: r.stato, motivo: r.motivo || '', decisoIl: r.deciso_il, daPagareIl: r.da_pagare_il,
   pagatoIl: r.pagato_il, finOk: !!r.fin_inviato_il, finErrore: r.fin_errore || '', dal: r.dal, al: r.al });
 
-// medici della tabella: le persone attive con figura Medico (più chi ha già un compenso, anche se poi è stato disattivato)
+// medici della tabella: le persone attive con figura Medico o Igienista (più chi ha già un compenso, anche se poi è stato disattivato)
 async function medici() {
-  const { rows } = await store.q(`select id, first_name, last_name, email, status, sedi from users where figura = 'Medico' and not owner and status <> 'pending'`);
+  const { rows } = await store.q(`select id, first_name, last_name, email, status, sedi from users where figura in ('Medico', 'Igienista') and not owner and status <> 'pending'`);
   return rows.map(u => ({ id: u.id, nome: nomeU(u), attivo: u.status === 'active', sedi: Array.isArray(u.sedi) ? u.sedi : [] }));
 }
 async function sedi() { return (await store.listSedi()).filter(s => s.attiva !== false).map(s => ({ id: s.id, nome: s.nome })); }
