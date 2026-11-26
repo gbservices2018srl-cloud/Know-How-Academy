@@ -665,7 +665,27 @@ function editor(p, bozza){
       <textarea class="inp" rows="${Math.min(14, Math.max(3, (s.t || '').split('\n').length + 1))}" data-t="${i}">${esc(s.t)}</textarea></div>`).join('');
     l.querySelector('.mans').innerHTML = S.figure.map(f => `<button class="chip ${mans.has(f.id) ? 'on' : ''}" data-m="${esc(f.id)}">${esc(f.id)}</button>`).join('');
   }
-  l.addEventListener('input', e => { const h = e.target.dataset.h, t = e.target.dataset.t; if (h !== undefined) sez[+h].h = e.target.value; if (t !== undefined) sez[+t].t = e.target.value; });
+  // elenchi numerati: se aggiungi o togli un passaggio, gli altri numeri si aggiornano da soli; «Invio» su un passaggio crea il numero dopo
+  const rinumera = ta => {
+    const v = ta.value, pos = ta.selectionStart; let n = 0, delta = 0, off = 0;
+    const out = v.split('\n').map(riga => {
+      const m = riga.match(/^(\s*)(\d+)([.)]\s)/); let nuova = riga;
+      if (m) { n++; nuova = m[1] + n + m[3] + riga.slice(m[0].length); }
+      if (off + riga.length < pos) delta += nuova.length - riga.length;
+      off += riga.length + 1; return nuova;
+    }).join('\n');
+    if (out !== v) { ta.value = out; ta.selectionStart = ta.selectionEnd = Math.max(0, pos + delta); }
+  };
+  l.addEventListener('keydown', e => {
+    const ta = e.target; if (e.key !== 'Enter' || ta.dataset.t === undefined || e.shiftKey) return;
+    const v = ta.value, pos = ta.selectionStart, inizio = v.lastIndexOf('\n', pos - 1) + 1, riga = v.slice(inizio, pos), m = riga.match(/^(\s*)(\d+)([.)]\s)/);
+    if (!m) return;
+    e.preventDefault();
+    if (riga.trim() === m[0].trim()) { ta.value = v.slice(0, inizio) + v.slice(pos); ta.selectionStart = ta.selectionEnd = inizio; }   // passaggio vuoto: fine dell'elenco
+    else { const ins = '\n' + m[1] + (+m[2] + 1) + m[3]; ta.value = v.slice(0, pos) + ins + v.slice(ta.selectionEnd); ta.selectionStart = ta.selectionEnd = pos + ins.length; }
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  l.addEventListener('input', e => { const h = e.target.dataset.h, t = e.target.dataset.t; if (h !== undefined) sez[+h].h = e.target.value; if (t !== undefined) { rinumera(e.target); sez[+t].t = e.target.value; } });
   l.addEventListener('click', async e => {
     const m = e.target.closest('[data-m]'); if (m) { mans.has(m.dataset.m) ? mans.delete(m.dataset.m) : mans.add(m.dataset.m); drawSez(); }
     const up = e.target.closest('[data-up]'); if (up && +up.dataset.up > 0) { const i = +up.dataset.up; [sez[i - 1], sez[i]] = [sez[i], sez[i - 1]]; drawSez(); }
