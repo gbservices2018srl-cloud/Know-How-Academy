@@ -1468,8 +1468,8 @@ const chiaveOk = (req, slug) => { const h = String(req.get('authorization') || '
 // per Gestione finanziaria (solo il servizio principale): elenco dei clienti e loro esportazione
 app.get('/api/_backup/clienti', wrap(async (req, res) => {
   if (require('../lib/suite').TENANT || !chiaveOk(req, '__')) return bad(res, 401, 'Non autorizzato');
-  const { rows } = await store.q(`select slug from suite.clienti where stato <> 'sospeso' order by slug`).catch(() => ({ rows: [] }));
-  res.json({ clienti: ['tosmile', ...rows.map(r => r.slug)] });
+  const { rows } = await store.q(`select slug from suite.clienti where stato <> 'sospeso' and slug <> 'tosmile' order by slug`).catch(() => ({ rows: [] }));
+  res.json({ clienti: ['tosmile', ...rows.map(r => r.slug)] });   // To Smile una volta sola (prima veniva copiata due volte)
 }));
 app.get('/api/_backup/esporta', wrap(async (req, res) => {
   const slug = String(req.query.cliente || 'tosmile').toLowerCase().replace(/[^a-z0-9]/g, '');
