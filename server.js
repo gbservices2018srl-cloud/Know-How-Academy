@@ -423,6 +423,8 @@ app.get('/login', (req, res, next) => {
   sso.toLogin(req, res, nx.startsWith('/') && !nx.startsWith('//') ? nx : '/');
 }, page('login.html'));
 app.get('/admin/login', (req, res) => res.redirect('/login?next=/admin'));
+// Protocolli senza internet: il «service worker» tiene sul dispositivo la pagina e l'ultima copia dei protocolli e dei flussi
+app.get('/sw-protocolli.js', (req, res) => { res.set({ 'Cache-Control': 'no-cache', 'Service-Worker-Allowed': '/' }); res.type('application/javascript').sendFile(path.join(__dirname, 'public', 'sw-protocolli.js')); });
 app.get('/', page('protocolli.html', 'view'));
 app.get('/admin', page('protocolli.html', 'admin'));
 // La vecchia mappa resta raggiungibile (dati intatti): /mappa in lettura, /admin/mappa per l'amministratore

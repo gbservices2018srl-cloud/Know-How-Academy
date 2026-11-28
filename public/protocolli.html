@@ -99,6 +99,9 @@ a.btn{text-decoration:none;color:inherit}
 label.f{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;color:var(--muted)}
 .inp{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 12px;font-size:15px;color:var(--fg);width:100%}
 textarea.inp{resize:vertical;min-height:90px;line-height:1.5}
+.rete{max-width:1200px;margin:10px auto 0;padding:9px 14px;border-radius:12px;font-weight:700;font-size:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.rete.off{background:#fbf0cf;color:#7a5b00}.rete.on{background:#e1efec;color:#2f6f66}
+.rete .pill{border:1px solid currentColor;border-radius:999px;padding:1px 9px;font-size:12.5px}
 
 /* elenchi */
 .group{display:flex;flex-direction:column;gap:8px}
@@ -253,12 +256,96 @@ function toast(m, ms = 3200){ if (!m) return; let t = document.querySelector('.t
 async function api(method, url, body, isForm){
   const o = { method, credentials: 'same-origin', headers: {} };
   if (body !== undefined) { if (isForm) o.body = body; else { o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(body); } }
-  const r = await fetch(url, o);
+  let r;
+  try { r = await fetch(url, o); }
+  catch (e) { throw Object.assign(new Error('Senza internet questa operazione non si può fare: riprova quando torna la rete.'), { rete: true }); }
+  if (method === 'GET' && /\/api\/(p\/)?state$/.test(url)) segnaRete(r.headers.get('X-Copia-Offline') === '1');
   let j = {}; try { j = await r.json(); } catch (e) {}
   if (r.status === 401) { location.reload(); throw new Error('Accesso scaduto'); }
-  if (!r.ok) throw new Error(j.error || 'Errore ' + r.status);
+  if (!r.ok) throw Object.assign(new Error(j.error || 'Errore ' + r.status), { status: r.status, dati: j });
   return j;
 }
+
+/* ---------- senza internet: copia sul dispositivo, modifiche e «letto» in coda finché torna la rete ---------- */
+let OFFLINE = false;
+const CODA = () => 'prot-coda-' + ((me && me.id) || 'x');
+const leggiCoda = () => { try { return JSON.parse(localStorage.getItem(CODA()) || '[]'); } catch { return []; } };
+const scriviCoda = c => { try { localStorage.setItem(CODA(), JSON.stringify(c)); } catch (e) { toast('Spazio del dispositivo pieno: la modifica non è stata salvata.'); } barraRete(); };
+function segnaRete(daCopia) {
+  OFFLINE = daCopia || !navigator.onLine;
+  if (!daCopia) try { localStorage.setItem('prot-copia-del', new Date().toISOString()); } catch {}
+  barraRete();
+}
+function barraRete() {
+  let b = document.getElementById('rete');
+  const n = me ? leggiCoda().length : 0, off = OFFLINE || !navigator.onLine;
+  if (!off && !n) { if (b) b.remove(); return; }
+  if (!b) { b = document.createElement('div'); b.id = 'rete'; document.getElementById('main').before(b); }
+  let del = ''; try { const t = localStorage.getItem('prot-copia-del'); if (t) del = new Date(t).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch {}
+  b.className = 'rete ' + (off ? 'off' : 'on');
+  b.innerHTML = off ? `📴 Sei offline${del ? ' · copia salvata il ' + esc(del) : ''}${n ? ` <span class="pill">${n} ${n === 1 ? 'modifica' : 'modifiche'} da inviare</span>` : ''}`
+    : `↻ Invio ${n} ${n === 1 ? 'modifica fatta' : 'modifiche fatte'} senza internet…`;
+}
+// salva un protocollo: con internet subito; senza, sul dispositivo (e nell'elenco) finché torna la rete
+async function salvaProt(body, p) {
+  const b = { ...body, base: p && p.aggTs ? p.aggTs : undefined };
+  try { await api('POST', '/api/p/prot', b); return 'ok'; }
+  catch (e) {
+    if (!e.rete) throw e;
+    const c = leggiCoda(), id = b.id || 'tmp-' + Date.now().toString(36);
+    if (!b.id) b.id = id;
+    const i = c.findIndex(x => x.tipo === 'salva' && x.body.id === id);
+    if (i >= 0) c[i].body = { ...b, base: c[i].body.base }; else c.push({ tipo: 'salva', body: b });
+    scriviCoda(c);
+    const loc = { ...(p || {}), id, titolo: b.titolo, cartella: b.cartella, sezioni: b.sezioni, mansioni: b.mansioni, conforme: b.conforme, offline: true, agg: new Date().toISOString().slice(0, 10) };
+    const j = S.prot.findIndex(x => x.id === id); if (j >= 0) S.prot[j] = loc; else S.prot.push(loc);
+    return 'coda';
+  }
+}
+let inInvio = false;
+async function inviaCoda() {
+  if (inInvio || !navigator.onLine || !me) return;
+  let c = leggiCoda(); if (!c.length) return;
+  inInvio = true; barraRete(); let fatti = 0;
+  try {
+    while (c.length) {
+      const x = c[0];
+      try {
+        if (x.tipo === 'letto') await api('POST', '/api/p/letto/' + x.id);
+        else {
+          const b = { ...x.body }; if (String(b.id).startsWith('tmp-')) { delete b.id; delete b.base; }
+          try { await api('POST', '/api/p/prot', b); }
+          catch (e) {
+            if (e.status !== 409) throw e;
+            const scelta = await sceltaConflitto(b, e.dati.conflitto);
+            if (scelta === 'mia') await api('POST', '/api/p/prot', { ...b, forza: true });
+            else if (scelta === 'tutte') await api('POST', '/api/p/prot', { ...b, id: undefined, base: undefined, titolo: b.titolo + ' (versione offline)', mansioni: [] });
+            else if (scelta === 'dopo') break;
+          }
+        }
+        fatti++;
+      } catch (e) { if (e.rete || !e.status || e.status >= 500) break; toast(e.message); }   // il server non risponde: si riprova dopo, niente si perde
+      c = leggiCoda(); c.shift(); scriviCoda(c);
+    }
+  } finally { inInvio = false; }
+  barraRete();
+  if (fatti) { toast(`Di nuovo online: ${fatti} ${fatti === 1 ? 'modifica inviata' : 'modifiche inviate'}.`, 5000); await refresh().catch(() => {}); }
+}
+const testoSez = sez => (sez || []).map(z => `<b>${esc(z.h)}</b><br>${esc(z.t).slice(0, 600).replace(/\n/g, '<br>')}`).join('<br><br>');
+function sceltaConflitto(b, alt) {
+  return new Promise(ok => {
+    const l = layer(`<div class="modal-h"><h3>«${esc(b.titolo)}» è stato cambiato mentre eri offline</h3></div>
+      <div class="modal-b"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px">
+        <div class="card" style="padding:12px;max-height:45vh;overflow:auto;font-size:13px"><b>Versione di adesso</b><br><br>${testoSez(alt.sezioni)}</div>
+        <div class="card" style="padding:12px;max-height:45vh;overflow:auto;font-size:13px"><b>La tua (fatta offline)</b><br><br>${testoSez(b.sezioni)}</div></div>
+        <p class="muted" style="font-size:13px">Non si perde niente finché non scegli.</p></div>
+      <div class="modal-f"><button class="btn" data-s="dopo">Decido dopo</button><button class="btn" data-s="sua">Tieni quella di adesso</button><button class="btn" data-s="tutte">Tienile tutte e due</button><button class="btn primary" data-s="mia">Tieni la mia</button></div>`, 'wide');
+    l.addEventListener('click', e => { const s = e.target.closest('[data-s]'); if (s) { closeLayer(l); ok(s.dataset.s); } });
+  });
+}
+window.addEventListener('online', () => { OFFLINE = false; barraRete(); inviaCoda(); });
+window.addEventListener('offline', () => { OFFLINE = true; barraRete(); });
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw-protocolli.js').catch(() => {});
 function layer(html, cls){
   const l = document.createElement('div'); l.className = 'layer';
   l.innerHTML = `<div class="modal ${cls || ''}" role="dialog" aria-modal="true">${html}</div>`;
@@ -376,7 +463,8 @@ function apriProt(id, terms){
   if (!corpo && p.hasFile) renderPdf(p.id, l.querySelector('.pdfh'));
   if (prot) ['copy', 'cut', 'contextmenu', 'dragstart', 'selectstart'].forEach(ev => w.addEventListener(ev, e => e.preventDefault()));
   const first = l.querySelector('mark'); if (first) setTimeout(() => first.scrollIntoView({block: 'center'}), 60);
-  if (!isAdmin()) api('POST', '/api/p/letto/' + p.id).then(() => { if (p.nuovo) { p.nuovo = false; if (view === 'prot' && !q) render(); } }).catch(() => {});
+  if (!isAdmin()) api('POST', '/api/p/letto/' + p.id).then(() => { if (p.nuovo) { p.nuovo = false; if (view === 'prot' && !q) render(); } })
+    .catch(e => { if (e.rete && !String(p.id).startsWith('tmp-')) { const c = leggiCoda(); if (!c.some(x => x.tipo === 'letto' && x.id === p.id)) { c.push({ tipo: 'letto', id: p.id }); scriviCoda(c); } if (p.nuovo) { p.nuovo = false; if (view === 'prot' && !q) render(); } } });
 }
 document.addEventListener('visibilitychange', () => document.querySelectorAll('.doc-wrap.protected').forEach(w => w.classList.toggle('shield', document.hidden)));
 function proteggi(){
@@ -599,7 +687,7 @@ function renderContenitore(v){
     <div class="chips">${cart.map(c => `<button class="chip ${filtroCart === c ? 'on' : ''}" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div>
     <div class="card scroll" style="padding:4px 0"><table class="tbl"><thead><tr><th>Protocollo</th><th>Cartella</th><th>Mansioni</th><th>Modello</th><th>Aggiornato</th><th>Letto da</th><th></th></tr></thead><tbody>
     ${list.map(p => { const L = lettiDa(p); return `<tr><td><button class="btn small" style="border:0;padding:0;background:none;font-weight:700;text-align:left;white-space:normal" data-apri="${p.id}">${esc(p.titolo)}</button></td><td>${esc(p.cartella)}</td>
-      <td style="font-size:13px">${(p.mansioni || []).map(esc).join(', ') || '<span class="muted">nessuna</span>'}</td><td>${p.daApprovare ? '<span class="tag warn">Da approvare</span>' : `<span class="tag ${p.conforme ? 'ok' : 'warn'}">${p.conforme ? 'Conforme' : 'Da riadeguare'}</span>`}</td>
+      <td style="font-size:13px">${(p.mansioni || []).map(esc).join(', ') || '<span class="muted">nessuna</span>'}</td><td>${p.offline ? '<span class="tag warn">Modificato offline</span>' : p.daApprovare ? '<span class="tag warn">Da approvare</span>' : `<span class="tag ${p.conforme ? 'ok' : 'warn'}">${p.conforme ? 'Conforme' : 'Da riadeguare'}</span>`}</td>
       <td class="muted">${fmtD(p.agg)}</td><td>${L.pers.length ? L.letti.length + ' su ' + L.pers.length : '<span class="muted">—</span>'}</td>
       <td style="white-space:nowrap;text-align:right"><button class="btn small" data-mod="${p.id}">Modifica</button> <button class="btn small" data-riad="${p.id}" ${(S.ai || {}).prot_riadegua !== 'off' ? '' : 'disabled title="Riscrittura spenta negli interruttori AI"'}>Riadegua</button> <button class="btn small danger" data-del="${p.id}">Elimina</button></td></tr>`; }).join('') || '<tr><td colspan="7" class="empty">Nessun protocollo in questa cartella.</td></tr>'}
     </tbody></table></div>`;
@@ -696,9 +784,10 @@ function editor(p, bozza){
       const titolo = l.querySelector('[data-tit]').value.trim(); if (!titolo) return toast('Manca il titolo.');
       sv.disabled = true;
       try {
-        await api('POST', '/api/p/prot', { id: p ? p.id : undefined, titolo, cartella: l.querySelector('[data-cart]').value, sezioni: sez, mansioni: [...mans],
-          conforme: bozza ? true : p ? p.conforme : true, ...(bozza ? { originale: bozza.originale || '' } : {}) });
-        closeLayer(l); toast('Protocollo salvato'); await refresh();
+        const esito = await salvaProt({ id: p ? p.id : undefined, titolo, cartella: l.querySelector('[data-cart]').value, sezioni: sez, mansioni: [...mans],
+          conforme: bozza ? true : p ? p.conforme : true, ...(bozza ? { originale: bozza.originale || '' } : {}) }, p);
+        closeLayer(l);
+        if (esito === 'coda') { toast('Salvato sul dispositivo: lo invio quando torna internet.', 5000); render(); } else { toast('Protocollo salvato'); await refresh(); }
       } catch (err) { sv.disabled = false; toast(err.message); }
     }
   });
@@ -1018,6 +1107,7 @@ function bottoneChat(){
     document.getElementById('who').innerHTML = `<span class="txt"><b>${esc(me.name || me.username)}</b><span>${esc(isAdmin() ? 'Amministratore' : (me.figura ? figNome(me.figura) : 'Collaboratore'))}</span></span><span class="av">${esc(iniz)}</span>`;
     view = adminArea() ? 'contenitore' : (new URLSearchParams(location.search).get('v') === 'test' ? 'mieitest' : 'prot');
     render(); if (!isAdmin() && S.chat) bottoneChat();
+    barraRete(); inviaCoda();
   } catch (e) { document.getElementById('main').innerHTML = `<div class="card empty">${esc(e.message)}</div>`; }
 })();
 async function refresh(){ const [p, f] = await Promise.all([api('GET', '/api/p/state'), api('GET', '/api/state')]); S = p; S.flows = f.flows; S.figureAcc = f.figure || []; render(); }
